@@ -112,17 +112,17 @@ final class AuthPhoneOtpFixture<TContext> {
   final AuthTestDeliveryLog<AuthPhoneNumberCodeDelivery<TContext>> deliveries =
       AuthTestDeliveryLog<AuthPhoneNumberCodeDelivery<TContext>>();
 
-  /// Creates a real phone plugin with in-memory storage.
+  /// Creates a real phone plugin.
   ///
   /// The digest key is intentionally public and fixture-only. Production code
-  /// must supply an application secret instead of copying this setup.
+  /// must supply an application secret instead of copying this setup. The
+  /// fixture's auth runtime must use an [AuthPhoneNumberBackend], such as
+  /// [InMemoryAuthStore].
   PhoneNumberPlugin<TContext> plugin({
-    AuthPhoneNumberStore? store,
     Duration expiresIn = const Duration(minutes: 5),
     int allowedAttempts = 3,
     bool allowSignUp = true,
   }) => PhoneNumberPlugin<TContext>(
-    store: store ?? InMemoryAuthPhoneNumberStore(),
     sendCode: deliveries.capture,
     codeHashKey: _testOnlyHashKey,
     generateCode: _nextCode,

@@ -1,175 +1,273 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 const _hashKey = '0123456789abcdef0123456789abcdef';
+final _now = DateTime.utc(2030, 1, 1);
 
 void main() {
-  group('AuthE164PhoneNumberPolicy', () {
-    const policy = AuthE164PhoneNumberPolicy();
-
-    test('accepts only canonical E.164 input', () {
-      expect(policy.normalize(' +18765551234 '), '+18765551234');
-      expect(policy.normalize('+12025550123'), '+12025550123');
-      for (final value in <String>[
-        '18765551234',
-        '+0123456789',
-        '+1 876 555 1234',
-        '+1-876-555-1234',
-        '+１２３４５６７８９',
-        '+1\u0000555',
-        '+1234567890123456',
-        '+1',
-      ]) {
-        expect(policy.normalize(value), isNull, reason: value);
-      }
-    });
-  });
-
-  group('InMemoryAuthPhoneNumberStore', () {
-    final now = DateTime.utc(2026, 8, 19, 12);
-
-    AuthPhoneNumberVerification verification({
-      String id = 'verification-1',
-      String digest = 'digest-1',
-      int attempts = 0,
-      int maxAttempts = 3,
-    }) => AuthPhoneNumberVerification(
-      id: id,
-      phoneNumber: '+18765551234',
-      codeDigest: digest,
-      createdAt: now,
-      expiresAt: now.add(const Duration(minutes: 5)),
-      maxAttempts: maxAttempts,
-      attempts: attempts,
-    );
-
-    test('rejects non-positive storage bounds at runtime', () {
+  group('AuthPhoneNumberBackend', () {
+    test('rejects unbounded process-local challenge configuration', () {
       expect(
-        () => InMemoryAuthPhoneNumberStore(maxVerifications: 0),
+        () => InMemoryAuthStore(maxPhoneNumberVerifications: 0),
         throwsArgumentError,
       );
     });
 
-    test('atomically consumes a challenge once', () async {
-      final store = InMemoryAuthPhoneNumberStore();
-      await store.saveVerification(verification());
+    test('persists only a digest and binds issue replays to payload', () async {
+      final backend = InMemoryAuthStore();
+      final command = _issue(id: 'issue-1', digest: 'digest-secret');
 
-      final results = await Future.wait(
-        List<Future<AuthPhoneNumberVerificationResult>>.generate(
-          32,
-          (_) =>
-              store.consumeVerification('+18765551234', 'digest-1', now: now),
-        ),
+      final first = await backend.issuePhoneNumberCode(command);
+      final replay = await backend.issuePhoneNumberCode(command);
+      final mismatch = await backend.issuePhoneNumberCode(
+        _issue(id: 'issue-1', digest: 'different-digest'),
       );
 
+      expect(first.status, AuthPhoneNumberIssueStatus.issued);
+      expect(replay.status, AuthPhoneNumberIssueStatus.replayed);
+      expect(mismatch.status, AuthPhoneNumberIssueStatus.replayMismatch);
+      final storage = first.verification!.toStorageJson();
+      expect(storage.keys, isNot(contains('code')));
+      expect(storage.values, isNot(contains('123456')));
+      expect(storage['code_digest'], 'digest-secret');
+    });
+
+    test('exactly one concurrent verifier consumes a challenge', () async {
+      final backend = InMemoryAuthStore();
+      await backend.issuePhoneNumberCode(_issue());
+      final command = _verify(candidateId: 'user-1');
+
+      final results = await Future.wait([
+        backend.verifyPhoneNumberCode(command),
+        backend.verifyPhoneNumberCode(command),
+        backend.verifyPhoneNumberCode(command),
+      ]);
+
       expect(
-        results.where(
-          (result) =>
-              result.status == AuthPhoneNumberVerificationStatus.verified,
-        ),
-        hasLength(1),
+        results
+            .where(
+              (result) => result.status == AuthPhoneNumberVerifyStatus.verified,
+            )
+            .length,
+        1,
       );
       expect(
-        results.where(
-          (result) =>
-              result.status == AuthPhoneNumberVerificationStatus.invalid,
-        ),
-        hasLength(31),
+        results
+            .where(
+              (result) => result.status == AuthPhoneNumberVerifyStatus.invalid,
+            )
+            .length,
+        2,
+      );
+      expect(
+        (await backend.findPhoneNumberIdentity('+18765551234'))!.userId,
+        'user-1',
       );
     });
 
-    test('locks a challenge after its bounded attempts', () async {
-      final store = InMemoryAuthPhoneNumberStore();
-      await store.saveVerification(verification(maxAttempts: 2));
+    test('wrong attempts lock the challenge at its bound', () async {
+      final backend = InMemoryAuthStore();
+      await backend.issuePhoneNumberCode(_issue(maxAttempts: 2));
 
-      expect(
-        (await store.consumeVerification(
-          '+18765551234',
-          'wrong',
-          now: now,
-        )).status,
-        AuthPhoneNumberVerificationStatus.invalid,
+      final first = await backend.verifyPhoneNumberCode(
+        _verify(digest: 'wrong-1'),
       );
-      expect(
-        (await store.consumeVerification(
-          '+18765551234',
-          'wrong',
-          now: now,
-        )).status,
-        AuthPhoneNumberVerificationStatus.tooManyAttempts,
+      final second = await backend.verifyPhoneNumberCode(
+        _verify(digest: 'wrong-2'),
       );
+      final correct = await backend.verifyPhoneNumberCode(_verify());
+
+      expect(first.status, AuthPhoneNumberVerifyStatus.invalid);
+      expect(second.status, AuthPhoneNumberVerifyStatus.tooManyAttempts);
+      expect(second.verification!.attempts, 2);
+      expect(second.verification!.lockedAt, _now);
+      expect(correct.status, AuthPhoneNumberVerifyStatus.tooManyAttempts);
+      expect(await backend.findPhoneNumberIdentity('+18765551234'), isNull);
+    });
+
+    test('expired challenges never consume or create users', () async {
+      final backend = InMemoryAuthStore();
+      await backend.issuePhoneNumberCode(
+        _issue(expiresAt: _now.add(const Duration(minutes: 1))),
+      );
+
+      final result = await backend.verifyPhoneNumberCode(
+        _verify(now: _now.add(const Duration(minutes: 1))),
+      );
+
+      expect(result.status, AuthPhoneNumberVerifyStatus.expired);
+      expect(await backend.users.findById('user-1'), isNull);
+    });
+
+    test('phone ownership and verified projection commit together', () async {
+      final backend = InMemoryAuthStore();
+      await backend.issuePhoneNumberCode(_issue());
+
+      final result = await backend.verifyPhoneNumberCode(
+        _verify(candidateId: 'user-1'),
+      );
+
+      expect(result.status, AuthPhoneNumberVerifyStatus.verified);
+      expect(result.identity!.phoneNumber, '+18765551234');
+      expect(result.identity!.userId, result.user!.id);
+      expect(result.user!.attributes, {
+        'phoneNumber': '+18765551234',
+        'phoneNumberVerified': true,
+      });
       expect(
-        (await store.consumeVerification(
-          '+18765551234',
-          'digest-1',
-          now: now,
-        )).status,
-        AuthPhoneNumberVerificationStatus.tooManyAttempts,
+        await backend.findPhoneNumberIdentityForUser('user-1'),
+        same(result.identity),
       );
     });
 
-    test('expires challenges at the exact configured deadline', () async {
-      final store = InMemoryAuthPhoneNumberStore();
-      await store.saveVerification(verification());
-
-      expect(
-        (await store.consumeVerification(
-          '+18765551234',
-          'digest-1',
-          now: now.add(const Duration(minutes: 5)),
-        )).status,
-        AuthPhoneNumberVerificationStatus.expired,
+    test('issue faults restore the prior active challenge', () async {
+      var armed = false;
+      final backend = InMemoryAuthStore(
+        phoneNumberFaultInjector: (point) {
+          if (armed &&
+              point ==
+                  AuthPhoneNumberInMemoryFaultPoint.issueAfterChallengeWrite) {
+            throw StateError('injected issue fault');
+          }
+        },
       );
-    });
-
-    test('conditional deletion cannot remove a newer issuance', () async {
-      final store = InMemoryAuthPhoneNumberStore();
-      await store.saveVerification(verification());
-      await store.saveVerification(
-        verification(id: 'verification-2', digest: 'digest-2'),
-      );
-
-      expect(
-        await store.deleteVerificationIfCurrent(
-          '+18765551234',
-          'verification-1',
+      await backend.issuePhoneNumberCode(_issue(id: 'original'));
+      armed = true;
+      await expectLater(
+        backend.issuePhoneNumberCode(
+          _issue(id: 'replacement', digest: 'replacement'),
         ),
-        isFalse,
+        throwsStateError,
       );
+      armed = false;
+
+      final original = await backend.verifyPhoneNumberCode(
+        _verify(candidateId: 'user-1'),
+      );
+      expect(original.status, AuthPhoneNumberVerifyStatus.verified);
+    });
+
+    for (final point in <AuthPhoneNumberInMemoryFaultPoint>[
+      AuthPhoneNumberInMemoryFaultPoint.verifyAfterChallengeConsumption,
+      AuthPhoneNumberInMemoryFaultPoint.verifyAfterUserWrite,
+      AuthPhoneNumberInMemoryFaultPoint.verifyAfterIdentityWrite,
+      AuthPhoneNumberInMemoryFaultPoint.verifyAfterUserProjection,
+    ]) {
+      test('$point rolls back the complete verification mutation', () async {
+        var armed = false;
+        final backend = InMemoryAuthStore(
+          phoneNumberFaultInjector: (current) {
+            if (armed && current == point) {
+              throw StateError('injected verification fault');
+            }
+          },
+        );
+        await backend.issuePhoneNumberCode(_issue());
+        armed = true;
+        await expectLater(
+          backend.verifyPhoneNumberCode(_verify(candidateId: 'user-1')),
+          throwsStateError,
+        );
+        armed = false;
+
+        expect(await backend.users.findById('user-1'), isNull);
+        expect(await backend.findPhoneNumberIdentity('+18765551234'), isNull);
+        final retry = await backend.verifyPhoneNumberCode(
+          _verify(candidateId: 'user-1'),
+        );
+        expect(retry.status, AuthPhoneNumberVerifyStatus.verified);
+      });
+    }
+
+    test('attempt-write faults do not consume an attempt', () async {
+      var armed = false;
+      final backend = InMemoryAuthStore(
+        phoneNumberFaultInjector: (point) {
+          if (armed &&
+              point ==
+                  AuthPhoneNumberInMemoryFaultPoint.verifyAfterAttemptWrite) {
+            throw StateError('injected attempt fault');
+          }
+        },
+      );
+      await backend.issuePhoneNumberCode(_issue(maxAttempts: 2));
+      armed = true;
+      await expectLater(
+        backend.verifyPhoneNumberCode(_verify(digest: 'wrong')),
+        throwsStateError,
+      );
+      armed = false;
+
+      final firstCommittedFailure = await backend.verifyPhoneNumberCode(
+        _verify(digest: 'wrong'),
+      );
+      expect(firstCommittedFailure.status, AuthPhoneNumberVerifyStatus.invalid);
+      expect(firstCommittedFailure.verification!.attempts, 1);
       expect(
-        (await store.consumeVerification(
-          '+18765551234',
-          'digest-2',
-          now: now,
+        (await backend.verifyPhoneNumberCode(
+          _verify(candidateId: 'user-1'),
         )).status,
-        AuthPhoneNumberVerificationStatus.verified,
+        AuthPhoneNumberVerifyStatus.verified,
       );
     });
 
-    test('deletes identity and outstanding challenges for a user', () async {
-      final store = InMemoryAuthPhoneNumberStore();
-      await store.bindIdentity(
-        AuthPhoneNumberIdentity(
-          phoneNumber: '+18765551234',
-          userId: 'user-1',
-          createdAt: now,
-          verifiedAt: now,
-        ),
-      );
-      await store.saveVerification(verification());
+    test(
+      'deletion rollback cannot overwrite concurrent phone issuance',
+      () async {
+        final deletionEntered = Completer<void>();
+        final releaseDeletion = Completer<void>();
+        var watchIssuance = false;
+        var issuanceEntered = false;
+        final backend = InMemoryAuthStore(
+          phoneNumberFaultInjector: (point) {
+            if (watchIssuance &&
+                point ==
+                    AuthPhoneNumberInMemoryFaultPoint
+                        .issueAfterChallengeWrite) {
+              issuanceEntered = true;
+            }
+          },
+          userDeletionFaultInjector: (point) async {
+            if (point != AuthUserDeletionFaultPoint.beforeMutation) return;
+            deletionEntered.complete();
+            await releaseDeletion.future;
+            throw StateError('injected deletion fault');
+          },
+        );
+        backend.bindUserDeletionPlanContributors(const []);
+        await backend.issuePhoneNumberCode(_issue());
+        expect(
+          (await backend.verifyPhoneNumberCode(
+            _verify(candidateId: 'user-1'),
+          )).status,
+          AuthPhoneNumberVerifyStatus.verified,
+        );
 
-      await store.deleteForUser('user-1');
+        final deletion = backend.userDeletionCoordinator.deleteUser('user-1');
+        await deletionEntered.future;
+        watchIssuance = true;
+        final issuance = backend.issuePhoneNumberCode(
+          _issue(id: 'replacement', digest: 'replacement'),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(issuanceEntered, isFalse);
 
-      expect(await store.findIdentity('+18765551234'), isNull);
-      expect(
-        (await store.consumeVerification(
-          '+18765551234',
-          'digest-1',
-          now: now,
-        )).status,
-        AuthPhoneNumberVerificationStatus.invalid,
-      );
-    });
+        releaseDeletion.complete();
+        await expectLater(deletion, throwsStateError);
+        expect((await issuance).status, AuthPhoneNumberIssueStatus.issued);
+        expect(issuanceEntered, isTrue);
+        expect(
+          (await backend.verifyPhoneNumberCode(
+            _verify(digest: 'replacement'),
+          )).status,
+          AuthPhoneNumberVerifyStatus.verified,
+        );
+      },
+    );
   });
 
   group('PhoneNumberPlugin', () {
@@ -177,7 +275,6 @@ void main() {
       'derives one bounded keyed limiter identifier from decoded requests',
       () {
         final plugin = PhoneNumberPlugin<Object>(
-          store: InMemoryAuthPhoneNumberStore(),
           sendCode: (_) {},
           codeHashKey: _hashKey,
         );
@@ -257,243 +354,345 @@ void main() {
       expect(response.toString(), isNot(contains('secret-jwt')));
     });
 
-    test('requires a production-strength code digest key', () {
+    test('requires a root backend and a production-strength digest key', () {
       expect(
-        () => PhoneNumberPlugin<Object>(
-          store: InMemoryAuthPhoneNumberStore(),
-          sendCode: (_) {},
-          codeHashKey: 'short',
-        ),
+        () => PhoneNumberPlugin<Object>(sendCode: (_) {}, codeHashKey: 'short'),
         throwsArgumentError,
+      );
+      final plugin = PhoneNumberPlugin<Object>(
+        sendCode: (_) {},
+        codeHashKey: _hashKey,
+      );
+      expect(
+        () => AuthRuntime<Object>(
+          options: AuthOptions<Object>(
+            providers: const [],
+            store: _StoreWithoutPhoneBackend(),
+            runtimeMode: AuthRuntimeMode.localDevelopment,
+            plugins: [plugin],
+          ),
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('AuthPhoneNumberBackend'),
+          ),
+        ),
       );
     });
 
-    test('delivers one raw code while persisting only a digest', () async {
-      final store = _CapturingPhoneStore();
-      String? delivered;
+    test('delivers raw code only after digest issuance commits', () async {
+      final delivered = <AuthPhoneNumberCodeDelivery<Object>>[];
+      final store = InMemoryAuthStore();
       final plugin = PhoneNumberPlugin<Object>(
-        store: store,
-        sendCode: (delivery) => delivered = delivery.code,
+        sendCode: delivered.add,
         codeHashKey: _hashKey,
         generateCode: (_) => '123456',
       );
-      _runtime(plugin);
+      _runtime(plugin, store);
 
       await plugin.issueCode(
         context: Object(),
         phoneNumber: ' +18765551234 ',
-        now: DateTime.utc(2026),
+        now: _now,
       );
 
-      expect(delivered, '123456');
-      final storage = store.lastVerification!.toStorageJson();
-      expect(storage.values, isNot(contains('123456')));
-      expect(storage.keys, isNot(contains('code')));
-      expect(store.lastVerification!.codeDigest, isNot('123456'));
+      expect(delivered.single.code, '123456');
+      final replay = await store.verifyPhoneNumberCode(
+        AuthPhoneNumberVerifyCodeCommand(
+          phoneNumber: '+18765551234',
+          codeDigest: _digest('+18765551234', '123456'),
+          now: _now,
+        ),
+      );
+      expect(replay.status, AuthPhoneNumberVerifyStatus.userNotFound);
     });
 
     test(
-      'signs up once, marks verification, and issues a named session',
+      'SMS failure is explicit postcommit state, not compensation',
       () async {
-        final store = InMemoryAuthPhoneNumberStore();
+        final store = InMemoryAuthStore();
         final plugin = PhoneNumberPlugin<Object>(
-          store: store,
-          sendCode: (_) {},
+          sendCode: (_) => throw StateError('SMS unavailable'),
           codeHashKey: _hashKey,
           allowSignUp: true,
           generateCode: (_) => '123456',
         );
-        final runtime = _runtime(plugin);
-
-        await plugin.issueCode(
-          context: Object(),
-          phoneNumber: '+18765551234',
-          now: DateTime.utc(2026),
-        );
-        final result = await plugin.verifyCode(
-          context: Object(),
-          phoneNumber: '+18765551234',
-          code: '123456',
-          name: 'Ada',
-          now: DateTime.utc(2026, 1, 1, 0, 1),
-        );
-
-        expect(result.user.name, 'Ada');
-        expect(result.user.attributes['phoneNumberVerified'], isTrue);
-        expect(runtime.hasPlugin(authPhoneNumberPluginId), isTrue);
-        await expectLater(
-          () => plugin.verifyCode(
-            context: Object(),
-            phoneNumber: '+18765551234',
-            code: '123456',
-            now: DateTime.utc(2026, 1, 1, 0, 1),
-          ),
-          _flow('invalid_phone_code'),
-        );
-      },
-    );
-
-    test(
-      'removes an undelivered challenge without deleting a replacement',
-      () async {
-        final store = InMemoryAuthPhoneNumberStore();
-        late PhoneNumberPlugin<Object> plugin;
-        plugin = PhoneNumberPlugin<Object>(
-          store: store,
-          codeHashKey: _hashKey,
-          generateCode: (_) => '123456',
-          sendCode: (delivery) async {
-            await store.saveVerification(
-              AuthPhoneNumberVerification(
-                id: 'replacement',
-                phoneNumber: delivery.phoneNumber,
-                codeDigest: 'replacement-digest',
-                createdAt: DateTime.utc(2026),
-                expiresAt: DateTime.utc(2026).add(const Duration(minutes: 5)),
-                maxAttempts: 3,
-              ),
-            );
-            throw StateError('provider unavailable');
-          },
-        );
-        _runtime(plugin);
+        _runtime(plugin, store);
 
         await expectLater(
-          () => plugin.issueCode(
+          plugin.issueCode(
             context: Object(),
             phoneNumber: '+18765551234',
-            now: DateTime.utc(2026),
+            now: _now,
           ),
           throwsStateError,
         );
-        expect(
-          await store.deleteVerificationIfCurrent(
-            '+18765551234',
-            'replacement',
-          ),
-          isTrue,
+        final verified = await plugin.verifyCode(
+          context: Object(),
+          phoneNumber: '+18765551234',
+          code: '123456',
+          now: _now,
         );
+        expect(verified.user.attributes['phoneNumberVerified'], isTrue);
       },
     );
 
-    test('keeps sign-up opt-in and rotates prior challenges', () async {
-      final store = InMemoryAuthPhoneNumberStore();
+    test('signs up once and rejects OTP replay', () async {
+      final store = InMemoryAuthStore();
+      final plugin = PhoneNumberPlugin<Object>(
+        sendCode: (_) {},
+        codeHashKey: _hashKey,
+        allowSignUp: true,
+        generateCode: (_) => '123456',
+      );
+      final runtime = _runtime(plugin, store);
+      await plugin.issueCode(
+        context: Object(),
+        phoneNumber: '+18765551234',
+        now: _now,
+      );
+
+      final result = await plugin.verifyCode(
+        context: Object(),
+        phoneNumber: '+18765551234',
+        code: '123456',
+        name: 'Ada',
+        now: _now,
+      );
+
+      expect(result.user.name, 'Ada');
+      expect(result.user.attributes['phoneNumber'], '+18765551234');
+      expect(runtime.hasPlugin(authPhoneNumberPluginId), isTrue);
+      await expectLater(
+        plugin.verifyCode(
+          context: Object(),
+          phoneNumber: '+18765551234',
+          code: '123456',
+          now: _now,
+        ),
+        _flow('invalid_phone_code'),
+      );
+    });
+
+    test('new issuance supersedes an earlier code', () async {
       final codes = <String>['111111', '222222'];
       final plugin = PhoneNumberPlugin<Object>(
-        store: store,
         sendCode: (_) {},
         codeHashKey: _hashKey,
         generateCode: (_) => codes.removeAt(0),
       );
-      _runtime(plugin);
+      _runtime(plugin, InMemoryAuthStore());
 
       await plugin.issueCode(
         context: Object(),
         phoneNumber: '+18765551234',
-        now: DateTime.utc(2026),
+        now: _now,
       );
       await plugin.issueCode(
         context: Object(),
         phoneNumber: '+18765551234',
-        now: DateTime.utc(2026, 1, 1, 0, 1),
+        now: _now.add(const Duration(seconds: 1)),
       );
       await expectLater(
-        () => plugin.verifyCode(
+        plugin.verifyCode(
           context: Object(),
           phoneNumber: '+18765551234',
           code: '111111',
-          now: DateTime.utc(2026, 1, 1, 0, 2),
+          now: _now.add(const Duration(seconds: 2)),
         ),
         _flow('invalid_phone_code'),
       );
       await expectLater(
-        () => plugin.verifyCode(
+        plugin.verifyCode(
           context: Object(),
           phoneNumber: '+18765551234',
           code: '222222',
-          now: DateTime.utc(2026, 1, 1, 0, 2),
+          now: _now.add(const Duration(seconds: 2)),
         ),
         _flow('user_not_found'),
       );
-      expect(await store.findIdentity('+18765551234'), isNull);
     });
 
-    test('participates in coordinated user deletion', () async {
-      final store = InMemoryAuthPhoneNumberStore();
-      final core = InMemoryAuthStore();
+    test(
+      'hard deletion scrubs phone identity, challenge, and receipt',
+      () async {
+        final store = InMemoryAuthStore();
+        final plugin = PhoneNumberPlugin<Object>(
+          sendCode: (_) {},
+          codeHashKey: _hashKey,
+          allowSignUp: true,
+          generateCode: (_) => '123456',
+          createUser: (_, _, _) => AuthUser(id: 'user-1'),
+        );
+        _runtime(plugin, store);
+        await plugin.issueCode(
+          context: Object(),
+          phoneNumber: '+18765551234',
+          now: _now,
+        );
+        await plugin.verifyCode(
+          context: Object(),
+          phoneNumber: '+18765551234',
+          code: '123456',
+          now: _now,
+        );
+        await plugin.issueCode(
+          context: Object(),
+          phoneNumber: '+18765551234',
+          now: _now.add(const Duration(seconds: 1)),
+        );
+
+        expect(
+          await store.userDeletionCoordinator.deleteUser('user-1'),
+          isTrue,
+        );
+        expect(await store.findPhoneNumberIdentity('+18765551234'), isNull);
+        expect(
+          (await store.verifyPhoneNumberCode(
+            AuthPhoneNumberVerifyCodeCommand(
+              phoneNumber: '+18765551234',
+              codeDigest: _digest('+18765551234', '123456'),
+              now: _now.add(const Duration(seconds: 2)),
+            ),
+          )).status,
+          AuthPhoneNumberVerifyStatus.invalid,
+        );
+        expect(
+          () => store.users.create(AuthUser(id: 'user-1')),
+          throwsStateError,
+        );
+      },
+    );
+
+    test('endpoint metadata advertises backend-atomic commands', () {
       final plugin = PhoneNumberPlugin<Object>(
-        store: store,
         sendCode: (_) {},
         codeHashKey: _hashKey,
       );
-      plugin.configure(AuthServerPluginContext<Object>(store: core));
-      core.bindUserDeletionPlanContributors([plugin]);
-      await core.users.create(AuthUser(id: 'user-1'));
-      final now = DateTime.utc(2026);
-      await store.bindIdentity(
-        AuthPhoneNumberIdentity(
-          phoneNumber: '+18765551234',
-          userId: 'user-1',
-          createdAt: now,
-          verifiedAt: now,
-        ),
+      final endpoints = {
+        for (final endpoint in plugin.endpoints) endpoint.id: endpoint,
+      };
+
+      for (final endpoint in endpoints.values) {
+        final semantics = endpoint.semantics as AuthMutationOperationSemantics;
+        expect(semantics.persistence.atomicity, AuthMutationAtomicity.atomic);
+        expect(
+          semantics.persistence.reference?.schemaId,
+          authPhoneNumberPluginId,
+        );
+      }
+      expect(endpoints['phoneNumber.issueCode'], isNull);
+      expect(
+        (endpoints['phoneNumber.sendCode']!.semantics
+                as AuthMutationOperationSemantics)
+            .persistence
+            .reference
+            ?.atomicOperationId,
+        'phoneNumber.issueCode',
       );
-      expect(await core.userDeletionCoordinator.deleteUser('user-1'), isTrue);
-      expect(await store.findIdentity('+18765551234'), isNull);
+      expect(
+        (endpoints['phoneNumber.verifyCode']!.semantics
+                as AuthMutationOperationSemantics)
+            .persistence
+            .reference
+            ?.atomicOperationId,
+        'phoneNumber.verifyCode',
+      );
     });
   });
 }
 
-AuthRuntime<Object> _runtime(PhoneNumberPlugin<Object> plugin) =>
-    AuthRuntime<Object>(
-      options: AuthOptions<Object>(
-        providers: const <AuthProvider>[],
-        store: InMemoryAuthStore(),
-        storeMode: AuthStoreMode.ephemeral,
-        plugins: <AuthServerPlugin<Object>>[plugin],
-      ),
-    );
+AuthRuntime<Object> _runtime(
+  PhoneNumberPlugin<Object> plugin,
+  InMemoryAuthStore store,
+) => AuthRuntime<Object>(
+  options: AuthOptions<Object>(
+    providers: const <AuthProvider>[],
+    store: store,
+    storeMode: AuthStoreMode.ephemeral,
+    plugins: <AuthServerPlugin<Object>>[plugin],
+  ),
+);
+
+AuthPhoneNumberIssueCodeCommand _issue({
+  String id = 'issue-1',
+  String digest = 'digest-1',
+  int maxAttempts = 3,
+  DateTime? expiresAt,
+}) => AuthPhoneNumberIssueCodeCommand(
+  verification: AuthPhoneNumberVerification(
+    id: id,
+    phoneNumber: '+18765551234',
+    codeDigest: digest,
+    createdAt: _now,
+    expiresAt: expiresAt ?? _now.add(const Duration(minutes: 5)),
+    maxAttempts: maxAttempts,
+  ),
+);
+
+AuthPhoneNumberVerifyCodeCommand _verify({
+  String digest = 'digest-1',
+  String? candidateId,
+  DateTime? now,
+}) => AuthPhoneNumberVerifyCodeCommand(
+  phoneNumber: '+18765551234',
+  codeDigest: digest,
+  now: now ?? _now,
+  candidateUser: candidateId == null ? null : AuthUser(id: candidateId),
+);
+
+String _digest(String phoneNumber, String code) {
+  // This mirrors the public plugin's HMAC input only to inspect postcommit
+  // state through the backend command API in a focused test.
+  final key = utf8.encode(_hashKey);
+  return base64UrlNoPadding(
+    Hmac(sha256, key).convert(utf8.encode('$phoneNumber\u0000$code')).bytes,
+  );
+}
 
 Matcher _flow(String code) => throwsA(
   isA<AuthFlowException>().having((error) => error.code, 'code', code),
 );
 
-final class _CapturingPhoneStore implements AuthPhoneNumberStore {
-  final InMemoryAuthPhoneNumberStore delegate = InMemoryAuthPhoneNumberStore();
-  AuthPhoneNumberVerification? lastVerification;
+final class _StoreWithoutPhoneBackend implements AuthStore {
+  final InMemoryAuthStore _delegate = InMemoryAuthStore();
 
   @override
-  Future<void> saveVerification(AuthPhoneNumberVerification verification) {
-    lastVerification = verification;
-    return delegate.saveVerification(verification);
-  }
+  AuthAccountStore get accounts => _delegate.accounts;
 
   @override
-  Future<AuthPhoneNumberVerificationResult> consumeVerification(
-    String phoneNumber,
-    String codeDigest, {
-    DateTime? now,
-  }) => delegate.consumeVerification(phoneNumber, codeDigest, now: now);
+  AuthCredentialStore get credentials => _delegate.credentials;
 
   @override
-  Future<bool> deleteVerificationIfCurrent(
-    String phoneNumber,
-    String verificationId,
-  ) => delegate.deleteVerificationIfCurrent(phoneNumber, verificationId);
+  AuthDeviceAuthorizationStore get deviceAuthorizations =>
+      _delegate.deviceAuthorizations;
 
   @override
-  Future<AuthPhoneNumberIdentity?> findIdentity(String phoneNumber) =>
-      delegate.findIdentity(phoneNumber);
+  AuthEmailChangeTokenStore get emailChangeTokens =>
+      _delegate.emailChangeTokens;
 
   @override
-  Future<AuthPhoneNumberIdentity?> findIdentityForUser(String userId) =>
-      delegate.findIdentityForUser(userId);
+  AuthEmailOtpStore get emailOtps => _delegate.emailOtps;
 
   @override
-  Future<AuthPhoneNumberIdentity> bindIdentity(
-    AuthPhoneNumberIdentity identity,
-  ) => delegate.bindIdentity(identity);
+  AuthJwtVersionStore get jwtVersions => _delegate.jwtVersions;
 
   @override
-  Future<void> deleteForUser(String userId) => delegate.deleteForUser(userId);
+  AuthOAuthChallengeStore get oauthChallenges => _delegate.oauthChallenges;
+
+  @override
+  AuthPasswordResetTokenStore get passwordResetTokens =>
+      _delegate.passwordResetTokens;
+
+  @override
+  AuthSessionStore get sessions => _delegate.sessions;
+
+  @override
+  AuthUserStore get users => _delegate.users;
+
+  @override
+  AuthVerificationTokenStore get verificationTokens =>
+      _delegate.verificationTokens;
 }

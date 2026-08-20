@@ -53,7 +53,6 @@ void main() {
               ),
               (
                 PhoneNumberPlugin<Object>(
-                  store: InMemoryAuthPhoneNumberStore(),
                   sendCode: (_) {},
                   codeHashKey: 'client-conformance-phone-key-32-bytes',
                 ),

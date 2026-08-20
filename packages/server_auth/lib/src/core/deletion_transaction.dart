@@ -319,20 +319,26 @@ final class AuthUserDeletionPreflight {
 }
 
 /// Coordinator implementation for process-local in-memory stores.
+typedef AuthInMemoryUserDeletionMutationSerializer =
+    Future<T> Function<T>(Future<T> Function() operation);
+
 final class AuthInMemoryUserDeletionCoordinator
     implements AuthUserDeletionCoordinator {
   AuthInMemoryUserDeletionCoordinator({
     required this.domain,
     required AuthInMemoryUserDeletionBackend backend,
     AuthUserDeletionFaultInjector? faultInjector,
+    AuthInMemoryUserDeletionMutationSerializer? mutationSerializer,
   }) : _backend = backend,
-       _faultInjector = faultInjector;
+       _faultInjector = faultInjector,
+       _mutationSerializer = mutationSerializer;
 
   @override
   final AuthInMemoryUserDeletionDomain domain;
 
   final AuthInMemoryUserDeletionBackend _backend;
   final AuthUserDeletionFaultInjector? _faultInjector;
+  final AuthInMemoryUserDeletionMutationSerializer? _mutationSerializer;
   List<AuthUserDeletionPlanContributor> _contributors = const [];
   bool _bound = false;
   Future<void> _tail = Future<void>.value();
@@ -400,6 +406,8 @@ final class AuthInMemoryUserDeletionCoordinator
   );
 
   Future<T> _serialize<T>(Future<T> Function() operation) async {
+    final serializer = _mutationSerializer;
+    if (serializer != null) return serializer(operation);
     final completer = Completer<T>();
     _tail = _tail.then((_) async {
       try {

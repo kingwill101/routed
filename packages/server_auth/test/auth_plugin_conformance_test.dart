@@ -40,7 +40,6 @@ void main() {
           storeMode: AuthStoreMode.ephemeral,
           plugins: <AuthServerPlugin<Object>>[
             PhoneNumberPlugin<Object>(
-              store: InMemoryAuthPhoneNumberStore(),
               sendCode: (_) {},
               codeHashKey: '0123456789abcdef0123456789abcdef',
             ),

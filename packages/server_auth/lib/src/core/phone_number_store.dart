@@ -1,7 +1,6 @@
 import 'dart:async';
 
-import 'deletion_transaction.dart';
-import 'tokens.dart' show constantTimeStringEquals;
+import 'models.dart';
 
 /// A verified E.164 phone number linked to one auth user.
 final class AuthPhoneNumberIdentity {
@@ -27,8 +26,8 @@ final class AuthPhoneNumberIdentity {
 
 /// A persisted phone verification challenge.
 ///
-/// [codeDigest] is a keyed digest. The raw verification code must only be
-/// supplied to the delivery provider and must never cross this store boundary.
+/// [codeDigest] is a keyed digest. A raw verification code must never cross
+/// the backend boundary or be persisted in an operation receipt.
 final class AuthPhoneNumberVerification {
   const AuthPhoneNumberVerification({
     required this.id,
@@ -38,6 +37,7 @@ final class AuthPhoneNumberVerification {
     required this.expiresAt,
     required this.maxAttempts,
     this.attempts = 0,
+    this.lockedAt,
     this.consumedAt,
   });
 
@@ -48,24 +48,30 @@ final class AuthPhoneNumberVerification {
   final DateTime expiresAt;
   final int maxAttempts;
   final int attempts;
+  final DateTime? lockedAt;
   final DateTime? consumedAt;
 
   bool get isConsumed => consumedAt != null;
+  bool get isLocked => lockedAt != null || attempts >= maxAttempts;
 
   bool isExpired({DateTime? now}) =>
       !(now ?? DateTime.now()).toUtc().isBefore(expiresAt.toUtc());
 
-  AuthPhoneNumberVerification copyWith({int? attempts, DateTime? consumedAt}) =>
-      AuthPhoneNumberVerification(
-        id: id,
-        phoneNumber: phoneNumber,
-        codeDigest: codeDigest,
-        createdAt: createdAt,
-        expiresAt: expiresAt,
-        maxAttempts: maxAttempts,
-        attempts: attempts ?? this.attempts,
-        consumedAt: consumedAt ?? this.consumedAt,
-      );
+  AuthPhoneNumberVerification copyWith({
+    int? attempts,
+    DateTime? lockedAt,
+    DateTime? consumedAt,
+  }) => AuthPhoneNumberVerification(
+    id: id,
+    phoneNumber: phoneNumber,
+    codeDigest: codeDigest,
+    createdAt: createdAt,
+    expiresAt: expiresAt,
+    maxAttempts: maxAttempts,
+    attempts: attempts ?? this.attempts,
+    lockedAt: lockedAt ?? this.lockedAt,
+    consumedAt: consumedAt ?? this.consumedAt,
+  );
 
   Map<String, dynamic> toStorageJson() => <String, dynamic>{
     'id': id,
@@ -75,252 +81,176 @@ final class AuthPhoneNumberVerification {
     'expires_at': expiresAt.toUtc().toIso8601String(),
     'max_attempts': maxAttempts,
     'attempts': attempts,
+    'locked_at': lockedAt?.toUtc().toIso8601String(),
     'consumed_at': consumedAt?.toUtc().toIso8601String(),
   };
 }
 
-enum AuthPhoneNumberVerificationStatus {
+enum AuthPhoneNumberIssueStatus { issued, replayed, replayMismatch }
+
+final class AuthPhoneNumberIssueResult {
+  const AuthPhoneNumberIssueResult(this.status, {this.verification});
+
+  final AuthPhoneNumberIssueStatus status;
+  final AuthPhoneNumberVerification? verification;
+
+  bool get committed =>
+      status == AuthPhoneNumberIssueStatus.issued ||
+      status == AuthPhoneNumberIssueStatus.replayed;
+}
+
+/// Atomically installs one digest-only phone challenge.
+///
+/// A repeated command with the same ID and payload returns a replay. Reusing
+/// the ID for different state must return
+/// [AuthPhoneNumberIssueStatus.replayMismatch].
+final class AuthPhoneNumberIssueCodeCommand {
+  AuthPhoneNumberIssueCodeCommand({required this.verification}) {
+    validateAuthPhoneNumberVerification(verification);
+  }
+
+  final AuthPhoneNumberVerification verification;
+}
+
+enum AuthPhoneNumberVerifyStatus {
   verified,
   invalid,
   expired,
   tooManyAttempts,
+  userNotFound,
+  userUnavailable,
+  conflict,
 }
 
-final class AuthPhoneNumberVerificationResult {
-  const AuthPhoneNumberVerificationResult(this.status, [this.verification]);
+final class AuthPhoneNumberVerifyResult {
+  const AuthPhoneNumberVerifyResult(
+    this.status, {
+    this.verification,
+    this.identity,
+    this.user,
+  });
 
-  final AuthPhoneNumberVerificationStatus status;
+  final AuthPhoneNumberVerifyStatus status;
   final AuthPhoneNumberVerification? verification;
+  final AuthPhoneNumberIdentity? identity;
+  final AuthUser? user;
+
+  bool get committed => status == AuthPhoneNumberVerifyStatus.verified;
 }
 
-/// Plugin-owned durable persistence for phone identities and challenges.
+/// Atomically verifies and consumes a phone challenge.
 ///
-/// Durable implementations must make [consumeVerification] atomic. Exactly one
-/// concurrent caller may receive [AuthPhoneNumberVerificationStatus.verified]
-/// for a challenge. [bindIdentity] must enforce unique phone-number ownership.
-abstract interface class AuthPhoneNumberStore {
-  FutureOr<void> saveVerification(AuthPhoneNumberVerification verification);
+/// [codeDigest] is the only code representation accepted by the backend.
+/// When no identity exists, [candidateUser] authorizes sign-up. The backend
+/// creates that user, binds the phone, projects verified phone attributes, and
+/// consumes the challenge in one transaction. A null candidate fails closed.
+final class AuthPhoneNumberVerifyCodeCommand {
+  AuthPhoneNumberVerifyCodeCommand({
+    required String phoneNumber,
+    required String codeDigest,
+    required DateTime now,
+    this.candidateUser,
+  }) : phoneNumber = validateAuthCanonicalPhoneNumber(phoneNumber),
+       codeDigest = _validateDigest(codeDigest),
+       now = now.toUtc() {
+    final candidate = candidateUser;
+    if (candidate != null) validateAuthPhoneNumberCandidateUser(candidate);
+  }
 
-  FutureOr<AuthPhoneNumberVerificationResult> consumeVerification(
-    String phoneNumber,
-    String codeDigest, {
-    DateTime? now,
-  });
-
-  /// Removes [verificationId] only if it is still the active challenge.
-  FutureOr<bool> deleteVerificationIfCurrent(
-    String phoneNumber,
-    String verificationId,
-  );
-
-  FutureOr<AuthPhoneNumberIdentity?> findIdentity(String phoneNumber);
-
-  /// Finds the verified phone identity currently owned by [userId].
-  FutureOr<AuthPhoneNumberIdentity?> findIdentityForUser(String userId);
-
-  /// Binds a phone number, returning the canonical identity if already bound.
-  FutureOr<AuthPhoneNumberIdentity> bindIdentity(
-    AuthPhoneNumberIdentity identity,
-  );
-
-  FutureOr<void> deleteForUser(String userId);
+  final String phoneNumber;
+  final String codeDigest;
+  final DateTime now;
+  final AuthUser? candidateUser;
 }
 
-/// Bounded process-local phone store for tests and local development.
-final class InMemoryAuthPhoneNumberStore
-    implements AuthPhoneNumberStore, AuthInMemoryUserDeletionStore {
-  InMemoryAuthPhoneNumberStore({this.maxVerifications = 2048}) {
-    if (maxVerifications <= 0) {
-      throw ArgumentError.value(
-        maxVerifications,
-        'maxVerifications',
-        'must be greater than zero',
-      );
-    }
-  }
-
-  final int maxVerifications;
-  final Map<String, AuthPhoneNumberVerification> _verifications =
-      <String, AuthPhoneNumberVerification>{};
-  final Map<String, AuthPhoneNumberIdentity> _identitiesByPhone =
-      <String, AuthPhoneNumberIdentity>{};
-  final Map<String, String> _phoneByUser = <String, String>{};
-
-  @override
-  Object captureDeletionState() => _PhoneNumberStoreCheckpoint(
-    verifications: Map<String, AuthPhoneNumberVerification>.of(_verifications),
-    identitiesByPhone: Map<String, AuthPhoneNumberIdentity>.of(
-      _identitiesByPhone,
-    ),
-    phoneByUser: Map<String, String>.of(_phoneByUser),
+/// Required backend-owned command capability for phone authentication.
+///
+/// Durable implementations must run each command in a real transaction. Code
+/// verification must atomically update attempts or lockout, consume one valid
+/// challenge, resolve or create the user, bind the phone identity, and update
+/// the user's verified-phone projection. Exactly one concurrent verifier may
+/// commit. Hard deletion must remove identities, challenges, and issue
+/// receipts in the same transaction as core user deletion.
+///
+/// SMS delivery, verification callbacks, and framework session/cookie issuance
+/// intentionally happen after these commands commit and are not rolled back by
+/// this API.
+abstract interface class AuthPhoneNumberBackend {
+  FutureOr<AuthPhoneNumberIssueResult> issuePhoneNumberCode(
+    AuthPhoneNumberIssueCodeCommand command,
   );
 
-  @override
-  void restoreDeletionState(Object checkpoint) {
-    final state = checkpoint as _PhoneNumberStoreCheckpoint;
-    _verifications
-      ..clear()
-      ..addAll(state.verifications);
-    _identitiesByPhone
-      ..clear()
-      ..addAll(state.identitiesByPhone);
-    _phoneByUser
-      ..clear()
-      ..addAll(state.phoneByUser);
-  }
+  FutureOr<AuthPhoneNumberVerifyResult> verifyPhoneNumberCode(
+    AuthPhoneNumberVerifyCodeCommand command,
+  );
 
-  @override
-  Future<void> saveVerification(
-    AuthPhoneNumberVerification verification,
-  ) async {
-    _validateVerification(verification);
-    _removeExpired(DateTime.now().toUtc());
-    while (_verifications.length >= maxVerifications &&
-        !_verifications.containsKey(verification.phoneNumber)) {
-      _verifications.remove(_verifications.keys.first);
-    }
-    _verifications[verification.phoneNumber] = verification;
-  }
-
-  @override
-  Future<AuthPhoneNumberVerificationResult> consumeVerification(
+  FutureOr<AuthPhoneNumberIdentity?> findPhoneNumberIdentity(
     String phoneNumber,
-    String codeDigest, {
-    DateTime? now,
-  }) async {
-    final existing = _verifications[phoneNumber];
-    final current = (now ?? DateTime.now()).toUtc();
-    if (existing == null || existing.isConsumed) {
-      return const AuthPhoneNumberVerificationResult(
-        AuthPhoneNumberVerificationStatus.invalid,
-      );
-    }
-    if (existing.isExpired(now: current)) {
-      return AuthPhoneNumberVerificationResult(
-        AuthPhoneNumberVerificationStatus.expired,
-        existing,
-      );
-    }
-    if (existing.attempts >= existing.maxAttempts) {
-      return AuthPhoneNumberVerificationResult(
-        AuthPhoneNumberVerificationStatus.tooManyAttempts,
-        existing,
-      );
-    }
+  );
 
-    final nextAttempts = existing.attempts + 1;
-    if (!constantTimeStringEquals(existing.codeDigest, codeDigest)) {
-      final updated = existing.copyWith(attempts: nextAttempts);
-      _verifications[phoneNumber] = updated;
-      return AuthPhoneNumberVerificationResult(
-        nextAttempts >= existing.maxAttempts
-            ? AuthPhoneNumberVerificationStatus.tooManyAttempts
-            : AuthPhoneNumberVerificationStatus.invalid,
-        updated,
-      );
-    }
-
-    final consumed = existing.copyWith(
-      attempts: nextAttempts,
-      consumedAt: current,
-    );
-    _verifications[phoneNumber] = consumed;
-    return AuthPhoneNumberVerificationResult(
-      AuthPhoneNumberVerificationStatus.verified,
-      consumed,
-    );
-  }
-
-  @override
-  Future<bool> deleteVerificationIfCurrent(
-    String phoneNumber,
-    String verificationId,
-  ) async {
-    final current = _verifications[phoneNumber];
-    if (current?.id != verificationId) return false;
-    _verifications.remove(phoneNumber);
-    return true;
-  }
-
-  @override
-  Future<AuthPhoneNumberIdentity?> findIdentity(String phoneNumber) async =>
-      _identitiesByPhone[phoneNumber];
-
-  @override
-  Future<AuthPhoneNumberIdentity?> findIdentityForUser(String userId) async {
-    final phone = _phoneByUser[userId.trim()];
-    return phone == null ? null : _identitiesByPhone[phone];
-  }
-
-  @override
-  Future<AuthPhoneNumberIdentity> bindIdentity(
-    AuthPhoneNumberIdentity identity,
-  ) async {
-    _validateIdentity(identity);
-    final existing = _identitiesByPhone[identity.phoneNumber];
-    if (existing != null) return existing;
-
-    final previousPhone = _phoneByUser[identity.userId];
-    if (previousPhone != null && previousPhone != identity.phoneNumber) {
-      _identitiesByPhone.remove(previousPhone);
-      _verifications.remove(previousPhone);
-    }
-    _identitiesByPhone[identity.phoneNumber] = identity;
-    _phoneByUser[identity.userId] = identity.phoneNumber;
-    return identity;
-  }
-
-  @override
-  Future<void> deleteForUser(String userId) async {
-    final normalized = userId.trim();
-    if (normalized.isEmpty) return;
-    final phone = _phoneByUser.remove(normalized);
-    if (phone != null) {
-      _identitiesByPhone.remove(phone);
-      _verifications.remove(phone);
-    }
-  }
-
-  @override
-  Future<void> deleteUserDataForDeletion(String userId) =>
-      deleteForUser(userId);
-
-  void _removeExpired(DateTime now) {
-    _verifications.removeWhere((_, value) => value.isExpired(now: now));
-  }
+  FutureOr<AuthPhoneNumberIdentity?> findPhoneNumberIdentityForUser(
+    String userId,
+  );
 }
 
-final class _PhoneNumberStoreCheckpoint {
-  const _PhoneNumberStoreCheckpoint({
-    required this.verifications,
-    required this.identitiesByPhone,
-    required this.phoneByUser,
-  });
-
-  final Map<String, AuthPhoneNumberVerification> verifications;
-  final Map<String, AuthPhoneNumberIdentity> identitiesByPhone;
-  final Map<String, String> phoneByUser;
+/// Deterministic fault points exposed by the process-local backend.
+enum AuthPhoneNumberInMemoryFaultPoint {
+  issueAfterChallengeWrite,
+  verifyAfterAttemptWrite,
+  verifyAfterChallengeConsumption,
+  verifyAfterUserWrite,
+  verifyAfterIdentityWrite,
+  verifyAfterUserProjection,
 }
 
-void _validateVerification(AuthPhoneNumberVerification verification) {
+typedef AuthPhoneNumberInMemoryFaultInjector =
+    FutureOr<void> Function(AuthPhoneNumberInMemoryFaultPoint point);
+
+String validateAuthCanonicalPhoneNumber(String value) {
+  if (!RegExp(r'^\+[1-9][0-9]{1,14}$').hasMatch(value)) {
+    throw ArgumentError.value(value, 'phoneNumber', 'must be canonical E.164');
+  }
+  return value;
+}
+
+void validateAuthPhoneNumberVerification(
+  AuthPhoneNumberVerification verification,
+) {
   if (verification.id.trim().isEmpty ||
-      !_isCanonicalE164(verification.phoneNumber) ||
+      verification.id != verification.id.trim() ||
+      verification.id.length > 256 ||
+      verification.id.runes.any((rune) => rune < 0x20 || rune == 0x7f) ||
       verification.codeDigest.trim().isEmpty ||
+      verification.codeDigest != verification.codeDigest.trim() ||
+      verification.codeDigest.length > 256 ||
       verification.maxAttempts <= 0 ||
+      verification.maxAttempts > 100 ||
       verification.attempts < 0 ||
       verification.attempts > verification.maxAttempts ||
-      !verification.expiresAt.toUtc().isAfter(verification.createdAt.toUtc())) {
+      !verification.expiresAt.toUtc().isAfter(verification.createdAt.toUtc()) ||
+      verification.consumedAt != null ||
+      verification.lockedAt != null) {
     throw ArgumentError.value(verification, 'verification', 'is invalid');
   }
+  validateAuthCanonicalPhoneNumber(verification.phoneNumber);
 }
 
-void _validateIdentity(AuthPhoneNumberIdentity identity) {
-  if (!_isCanonicalE164(identity.phoneNumber) ||
-      identity.userId.trim().isEmpty ||
-      identity.verifiedAt.toUtc().isBefore(identity.createdAt.toUtc())) {
-    throw ArgumentError.value(identity, 'identity', 'is invalid');
+void validateAuthPhoneNumberCandidateUser(AuthUser user) {
+  if (user.id.trim().isEmpty ||
+      user.id != user.id.trim() ||
+      user.id.length > 256 ||
+      user.id.runes.any((rune) => rune < 0x20 || rune == 0x7f) ||
+      user.isAnonymous) {
+    throw ArgumentError.value(user, 'candidateUser', 'is invalid');
   }
 }
 
-bool _isCanonicalE164(String value) =>
-    RegExp(r'^\+[1-9][0-9]{1,14}$').hasMatch(value);
+String _validateDigest(String value) {
+  if (value.trim().isEmpty ||
+      value != value.trim() ||
+      value.length > 256 ||
+      value.runes.any((rune) => rune < 0x20 || rune == 0x7f)) {
+    throw ArgumentError.value(value, 'codeDigest', 'is invalid');
+  }
+  return value;
+}

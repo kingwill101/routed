@@ -11,7 +11,6 @@ import 'models.dart';
 import 'phone_number_store.dart';
 import 'plugin.dart';
 import 'rate_limit.dart';
-import 'store.dart';
 import 'tokens.dart' show base64UrlNoPadding, secureRandomToken;
 import 'users.dart' show authUserIsDisabled;
 
@@ -49,6 +48,11 @@ final class AuthE164PhoneNumberPolicy implements AuthPhoneNumberPolicy {
 typedef AuthPhoneNumberCodeSender<TContext> =
     FutureOr<void> Function(AuthPhoneNumberCodeDelivery<TContext> delivery);
 
+/// Builds candidate user data for backend-owned sign-up.
+///
+/// This callback must not persist the user or perform other durable side
+/// effects. [AuthPhoneNumberBackend.verifyPhoneNumberCode] owns creation,
+/// phone binding, verified projection, and challenge consumption atomically.
 typedef AuthPhoneNumberUserFactory<TContext> =
     FutureOr<AuthUser> Function(
       TContext context,
@@ -181,7 +185,6 @@ final class PhoneNumberPlugin<TContext>
         AuthAuthenticationMethodInventoryBinding,
         AuthUserDeletionPlanContributor {
   PhoneNumberPlugin({
-    required this.store,
     required this.sendCode,
     required String codeHashKey,
     this.phoneNumberPolicy = const AuthE164PhoneNumberPolicy(),
@@ -215,7 +218,6 @@ final class PhoneNumberPlugin<TContext>
     }
   }
 
-  final AuthPhoneNumberStore store;
   final AuthPhoneNumberCodeSender<TContext> sendCode;
   final AuthPhoneNumberPolicy phoneNumberPolicy;
   final int codeLength;
@@ -227,7 +229,7 @@ final class PhoneNumberPlugin<TContext>
   final List<int> _codeHashKey;
   final String Function(int length) _generateCode;
 
-  late AuthUserStore _users;
+  late AuthPhoneNumberBackend _backend;
   late AuthUserDeletionDomain _deletionDomain;
   bool _configured = false;
 
@@ -241,7 +243,7 @@ final class PhoneNumberPlugin<TContext>
   String get authenticationMethodNamespace => authPhoneNumberPluginId;
 
   @override
-  Object get authenticationMethodStore => store;
+  Object get authenticationMethodStore => _backend;
 
   @override
   Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
@@ -253,7 +255,7 @@ final class PhoneNumberPlugin<TContext>
     String userId,
   ) async {
     _ensureConfigured();
-    final identity = await store.findIdentityForUser(userId);
+    final identity = await _backend.findPhoneNumberIdentityForUser(userId);
     return AuthAuthenticationMethodSnapshot.complete([
       if (identity != null)
         AuthAuthenticationMethod.phone(identity.phoneNumber),
@@ -262,8 +264,14 @@ final class PhoneNumberPlugin<TContext>
 
   @override
   void configure(AuthServerPluginContext<TContext> context) {
-    _users = context.store.users;
     final host = context.store;
+    if (host is! AuthPhoneNumberBackend) {
+      throw StateError(
+        'PhoneNumberPlugin requires an AuthPhoneNumberBackend. Durable '
+        'topologies must provide transactional phone commands; no in-memory '
+        'fallback is installed.',
+      );
+    }
     if (host is! AuthUserDeletionCoordinatorHost) {
       throw StateError(
         'PhoneNumberPlugin requires a deletion-coordinator host store.',
@@ -272,6 +280,7 @@ final class PhoneNumberPlugin<TContext>
     _deletionDomain = (host as AuthUserDeletionCoordinatorHost)
         .userDeletionCoordinator
         .domain;
+    _backend = host as AuthPhoneNumberBackend;
     _configured = true;
   }
 
@@ -287,7 +296,13 @@ final class PhoneNumberPlugin<TContext>
           method: AuthOperationMethod.post,
           path: const AuthRoutePath('/phone-number/send-code'),
           semantics: const AuthOperationSemantics.mutation(
-            persistence: AuthMutationPersistence.external(),
+            persistence: AuthMutationPersistence.durable(
+              atomicity: AuthMutationAtomicity.atomic,
+              reference: AuthPersistenceOperationReference(
+                schemaId: authPhoneNumberPluginId,
+                atomicOperationId: 'phoneNumber.issueCode',
+              ),
+            ),
             replaySafety: AuthMutationReplaySafety.repeatable,
           ),
           requestCodec: _sendRequestCodec,
@@ -316,9 +331,10 @@ final class PhoneNumberPlugin<TContext>
           path: const AuthRoutePath('/phone-number/verify-code'),
           semantics: const AuthOperationSemantics.mutation(
             persistence: AuthMutationPersistence.durable(
-              atomicity: AuthMutationAtomicity.nonAtomic,
+              atomicity: AuthMutationAtomicity.atomic,
               reference: AuthPersistenceOperationReference(
                 schemaId: authPhoneNumberPluginId,
+                atomicOperationId: 'phoneNumber.verifyCode',
               ),
             ),
             replaySafety: AuthMutationReplaySafety.singleUse,
@@ -375,61 +391,77 @@ final class PhoneNumberPlugin<TContext>
       ];
 
   @override
-  Iterable<AuthPersistenceSchema> get persistenceSchemas =>
-      const <AuthPersistenceSchema>[
-        AuthPersistenceSchema(
-          id: authPhoneNumberPluginId,
-          entities: <AuthEntityDescriptor>[
-            AuthEntityDescriptor(
-              id: 'auth_phone_number_identity',
-              fields: <AuthFieldDescriptor>[
-                AuthFieldDescriptor(name: 'phoneNumber', kind: 'e164'),
-                AuthFieldDescriptor(name: 'userId', kind: 'id'),
-                AuthFieldDescriptor(name: 'createdAt', kind: 'datetime'),
-                AuthFieldDescriptor(name: 'verifiedAt', kind: 'datetime'),
-              ],
-              uniqueConstraints: <List<String>>[
-                <String>['phoneNumber'],
-                <String>['userId'],
-              ],
-              indexes: <List<String>>[
-                <String>['userId'],
-              ],
-            ),
-            AuthEntityDescriptor(
-              id: 'auth_phone_number_verification',
-              fields: <AuthFieldDescriptor>[
-                AuthFieldDescriptor(name: 'id', kind: 'id'),
-                AuthFieldDescriptor(name: 'phoneNumber', kind: 'e164'),
-                AuthFieldDescriptor(name: 'codeDigest', kind: 'secret_digest'),
-                AuthFieldDescriptor(name: 'createdAt', kind: 'datetime'),
-                AuthFieldDescriptor(name: 'expiresAt', kind: 'datetime'),
-                AuthFieldDescriptor(name: 'maxAttempts', kind: 'integer'),
-                AuthFieldDescriptor(name: 'attempts', kind: 'integer'),
-                AuthFieldDescriptor(name: 'consumedAt', kind: 'datetime'),
-              ],
-              uniqueConstraints: <List<String>>[
-                <String>['phoneNumber'],
-              ],
-              indexes: <List<String>>[
-                <String>['expiresAt'],
-              ],
-            ),
+  Iterable<AuthPersistenceSchema>
+  get persistenceSchemas => const <AuthPersistenceSchema>[
+    AuthPersistenceSchema(
+      id: authPhoneNumberPluginId,
+      entities: <AuthEntityDescriptor>[
+        AuthEntityDescriptor(
+          id: 'auth_phone_number_identity',
+          fields: <AuthFieldDescriptor>[
+            AuthFieldDescriptor(name: 'phoneNumber', kind: 'e164'),
+            AuthFieldDescriptor(name: 'userId', kind: 'id'),
+            AuthFieldDescriptor(name: 'createdAt', kind: 'datetime'),
+            AuthFieldDescriptor(name: 'verifiedAt', kind: 'datetime'),
           ],
-          atomicOperations: <AuthAtomicOperationDescriptor>[
-            AuthAtomicOperationDescriptor(
-              id: 'phoneNumber.consumeVerification',
-              description:
-                  'Increment attempts and consume a matching active code once.',
-            ),
-            AuthAtomicOperationDescriptor(
-              id: 'phoneNumber.bindIdentity',
-              description:
-                  'Bind one unique E.164 phone number to one auth user.',
-            ),
+          uniqueConstraints: <List<String>>[
+            <String>['phoneNumber'],
+            <String>['userId'],
+          ],
+          indexes: <List<String>>[
+            <String>['userId'],
           ],
         ),
-      ];
+        AuthEntityDescriptor(
+          id: 'auth_phone_number_verification',
+          fields: <AuthFieldDescriptor>[
+            AuthFieldDescriptor(name: 'id', kind: 'id'),
+            AuthFieldDescriptor(name: 'phoneNumber', kind: 'e164'),
+            AuthFieldDescriptor(name: 'codeDigest', kind: 'secret_digest'),
+            AuthFieldDescriptor(name: 'createdAt', kind: 'datetime'),
+            AuthFieldDescriptor(name: 'expiresAt', kind: 'datetime'),
+            AuthFieldDescriptor(name: 'maxAttempts', kind: 'integer'),
+            AuthFieldDescriptor(name: 'attempts', kind: 'integer'),
+            AuthFieldDescriptor(name: 'lockedAt', kind: 'datetime'),
+            AuthFieldDescriptor(name: 'consumedAt', kind: 'datetime'),
+          ],
+          uniqueConstraints: <List<String>>[
+            <String>['phoneNumber'],
+          ],
+          indexes: <List<String>>[
+            <String>['expiresAt'],
+          ],
+        ),
+        AuthEntityDescriptor(
+          id: 'auth_phone_number_issue_receipt',
+          fields: <AuthFieldDescriptor>[
+            AuthFieldDescriptor(name: 'operationId', kind: 'id'),
+            AuthFieldDescriptor(name: 'fingerprint', kind: 'secret_digest'),
+            AuthFieldDescriptor(name: 'phoneNumber', kind: 'e164'),
+            AuthFieldDescriptor(name: 'createdAt', kind: 'datetime'),
+          ],
+          uniqueConstraints: <List<String>>[
+            <String>['operationId'],
+          ],
+          indexes: <List<String>>[
+            <String>['phoneNumber'],
+          ],
+        ),
+      ],
+      atomicOperations: <AuthAtomicOperationDescriptor>[
+        AuthAtomicOperationDescriptor(
+          id: 'phoneNumber.issueCode',
+          description:
+              'Install one digest-only challenge and its replay binding atomically.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'phoneNumber.verifyCode',
+          description:
+              'Update attempts or lockout and atomically consume, bind, and project one verified phone identity.',
+        ),
+      ],
+    ),
+  ];
 
   Future<AuthPhoneNumberCodeIssued> issueCode({
     required TContext context,
@@ -451,20 +483,20 @@ final class PhoneNumberPlugin<TContext>
       expiresAt: current.add(expiresIn),
       maxAttempts: allowedAttempts,
     );
-    await store.saveVerification(verification);
-    try {
-      await sendCode(
-        AuthPhoneNumberCodeDelivery<TContext>(
-          context: context,
-          phoneNumber: normalized,
-          code: rawCode,
-          expiresAt: verification.expiresAt,
-        ),
-      );
-    } catch (_) {
-      await store.deleteVerificationIfCurrent(normalized, verification.id);
-      rethrow;
+    final issued = await _backend.issuePhoneNumberCode(
+      AuthPhoneNumberIssueCodeCommand(verification: verification),
+    );
+    if (!issued.committed) {
+      throw AuthFlowException('phone_code_issue_unavailable');
     }
+    await sendCode(
+      AuthPhoneNumberCodeDelivery<TContext>(
+        context: context,
+        phoneNumber: normalized,
+        code: rawCode,
+        expiresAt: verification.expiresAt,
+      ),
+    );
     return AuthPhoneNumberCodeIssued(expiresAt: verification.expiresAt);
   }
 
@@ -484,34 +516,14 @@ final class PhoneNumberPlugin<TContext>
       throw AuthFlowException('invalid_phone_code');
     }
     final current = (now ?? DateTime.now()).toUtc();
-    final verification = await store.consumeVerification(
-      normalized,
-      _digest(normalized, normalizedCode),
-      now: current,
-    );
-    switch (verification.status) {
-      case AuthPhoneNumberVerificationStatus.invalid:
-        throw AuthFlowException('invalid_phone_code');
-      case AuthPhoneNumberVerificationStatus.expired:
-        throw AuthFlowException('phone_code_expired');
-      case AuthPhoneNumberVerificationStatus.tooManyAttempts:
-        throw AuthFlowException('phone_code_too_many_attempts');
-      case AuthPhoneNumberVerificationStatus.verified:
-        break;
-    }
-
-    var identity = await store.findIdentity(normalized);
-    var user = identity == null ? null : await _users.findById(identity.userId);
-    if (identity != null && user == null) {
-      throw AuthFlowException('user_not_found');
-    }
-    if (user == null) {
-      if (!allowSignUp) throw AuthFlowException('user_not_found');
+    AuthUser? candidate;
+    final knownIdentity = await _backend.findPhoneNumberIdentity(normalized);
+    if (allowSignUp && knownIdentity == null) {
       final requestedName = name?.trim();
       if (requestedName != null && requestedName.length > 256) {
         throw AuthFlowException('invalid_request');
       }
-      final candidate = await Future.sync(
+      candidate = await Future.sync(
         () =>
             createUser?.call(
               context,
@@ -521,78 +533,47 @@ final class PhoneNumberPlugin<TContext>
             AuthUser(
               id: secureRandomToken(length: 24),
               name: requestedName?.isEmpty == true ? null : requestedName,
-              attributes: const <String, dynamic>{'phoneNumberVerified': true},
             ),
       );
-      final created = await _users.create(candidate);
-      final requestedIdentity = AuthPhoneNumberIdentity(
-        phoneNumber: normalized,
-        userId: created.id,
-        createdAt: current,
-        verifiedAt: current,
-      );
-      try {
-        identity = await store.bindIdentity(requestedIdentity);
-      } catch (_) {
-        await _users.delete(created.id);
-        rethrow;
-      }
-      if (identity.userId != created.id) {
-        await _users.delete(created.id);
-        user = await _users.findById(identity.userId);
-      } else {
-        user = created;
-      }
     }
+    final verification = await _backend.verifyPhoneNumberCode(
+      AuthPhoneNumberVerifyCodeCommand(
+        phoneNumber: normalized,
+        codeDigest: _digest(normalized, normalizedCode),
+        now: current,
+        candidateUser: candidate,
+      ),
+    );
+    switch (verification.status) {
+      case AuthPhoneNumberVerifyStatus.invalid:
+        throw AuthFlowException('invalid_phone_code');
+      case AuthPhoneNumberVerifyStatus.expired:
+        throw AuthFlowException('phone_code_expired');
+      case AuthPhoneNumberVerifyStatus.tooManyAttempts:
+        throw AuthFlowException('phone_code_too_many_attempts');
+      case AuthPhoneNumberVerifyStatus.userNotFound:
+      case AuthPhoneNumberVerifyStatus.userUnavailable:
+        throw AuthFlowException('user_not_found');
+      case AuthPhoneNumberVerifyStatus.conflict:
+        throw AuthFlowException('phone_account_conflict');
+      case AuthPhoneNumberVerifyStatus.verified:
+        break;
+    }
+    final user = verification.user;
     if (user == null || authUserIsDisabled(user)) {
       throw AuthFlowException('user_not_found');
-    }
-    if (user.attributes['phoneNumberVerified'] != true) {
-      final verifiedUser = AuthUser(
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        image: user.image,
-        roles: user.roles,
-        isAnonymous: user.isAnonymous,
-        attributes: <String, dynamic>{
-          ...user.attributes,
-          'phoneNumberVerified': true,
-        },
-      );
-      user = await _users.update(verifiedUser) ?? verifiedUser;
     }
     await onVerified?.call(context, normalized, user);
     return AuthPhoneNumberSignInResult(phoneNumber: normalized, user: user);
   }
 
   @override
-  Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) {
+  AuthUserDeletionPlan createUserDeletionPlan(AuthUser user) {
     _ensureConfigured();
-    final deletionStore = store;
-    if (deletionStore is AuthUserDeletionPlanFactory) {
-      return Future.sync(
-        () => (deletionStore as AuthUserDeletionPlanFactory).createDeletionPlan(
-          domain: _deletionDomain,
-          user: user,
-          namespace: userDataNamespace,
-        ),
-      );
-    }
-    if (_deletionDomain is! AuthInMemoryUserDeletionDomain ||
-        deletionStore is! AuthInMemoryUserDeletionStore) {
-      throw StateError('The phone-number adapter has no plan for this domain.');
-    }
-    return Future.value(
-      AuthInMemoryUserDeletionPlan(
-        domain: _deletionDomain as AuthInMemoryUserDeletionDomain,
-        userId: user.id,
-        namespace: userDataNamespace,
-        operation: AuthInMemoryStoreDeletionOperation(
-          store: deletionStore as AuthInMemoryUserDeletionStore,
-          userId: user.id,
-        ),
-      ),
+    return AuthNoopUserDeletionPlan(
+      domain: _deletionDomain,
+      userId: user.id,
+      namespace: userDataNamespace,
     );
   }
 

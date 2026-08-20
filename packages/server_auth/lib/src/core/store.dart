@@ -10,6 +10,7 @@ import 'email_change_token_store.dart';
 import 'models.dart';
 import 'oauth_challenge_store.dart';
 import 'password_reset_token_store.dart';
+import 'phone_number_store.dart';
 import 'tokens.dart' show constantTimeStringEquals, hashOpaqueToken;
 import 'verification_token_store.dart';
 import 'jwt_version_store.dart';
@@ -379,6 +380,10 @@ typedef _InMemoryAuthCoreDeletionState = ({
   Object emailOtps,
   Map<String, _AuthAnonymousMutationReceipt> anonymousReceipts,
   Map<String, AuthMagicLinkRecord> magicLinks,
+  Map<String, AuthPhoneNumberVerification> phoneVerifications,
+  Map<String, AuthPhoneNumberIdentity> phoneIdentitiesByPhone,
+  Map<String, String> phoneByUser,
+  Map<String, _AuthPhoneNumberIssueReceipt> phoneIssueReceipts,
 });
 
 final class _AuthAnonymousMutationReceipt {
@@ -428,6 +433,21 @@ AuthEmailOtpUserTransitionResult? _emailOtpRejectedTransition(
     ),
 };
 
+final class _AuthPhoneNumberIssueReceipt {
+  const _AuthPhoneNumberIssueReceipt({
+    required this.fingerprint,
+    required this.phoneNumber,
+    required this.createdAt,
+  });
+
+  final String fingerprint;
+  final String phoneNumber;
+  final DateTime createdAt;
+}
+
+String _phoneIssueFingerprint(AuthPhoneNumberIssueCodeCommand command) =>
+    hashOpaqueToken(jsonEncode(command.verification.toStorageJson()));
+
 /// In-memory store for tests, examples, and local development.
 ///
 /// This implementation deliberately keeps password hashes outside [AuthUser]
@@ -441,6 +461,7 @@ class InMemoryAuthStore
         AuthAnonymousAccountMutationStore,
         AuthMagicLinkBackend,
         AuthEmailOtpBackend,
+        AuthPhoneNumberBackend,
         AuthAdminStoreCapabilities,
         AuthWebAuthnStoreCapabilities,
         AuthAccountStateStore,
@@ -451,6 +472,8 @@ class InMemoryAuthStore
   InMemoryAuthStore({
     this.anonymousFaultInjector,
     this.emailBackendFaultInjector,
+    this.phoneNumberFaultInjector,
+    this.maxPhoneNumberVerifications = 2048,
     AuthUsernameFaultInjector? usernameFaultInjector,
     AuthUserDeletionFaultInjector? userDeletionFaultInjector,
   }) : users = _InMemoryUserStore(),
@@ -469,11 +492,19 @@ class InMemoryAuthStore
        _deletionDomain = AuthInMemoryUserDeletionDomain(),
        _accountStates = InMemoryAuthAccountStateStore(),
        _usernameFaultInjector = usernameFaultInjector {
+    if (maxPhoneNumberVerifications <= 0) {
+      throw ArgumentError.value(
+        maxPhoneNumberVerifications,
+        'maxPhoneNumberVerifications',
+        'must be greater than zero',
+      );
+    }
     (credentials as _InMemoryCredentialStore).users = users;
     _deletionCoordinator = AuthInMemoryUserDeletionCoordinator(
       domain: _deletionDomain,
       backend: this,
       faultInjector: userDeletionFaultInjector,
+      mutationSerializer: _serializePhoneNumberMutation,
     );
   }
 
@@ -522,11 +553,21 @@ class InMemoryAuthStore
   final InMemoryAuthAccountStateStore _accountStates;
   final AuthUsernameFaultInjector? _usernameFaultInjector;
   final AuthAnonymousInMemoryFaultInjector? anonymousFaultInjector;
+  final AuthPhoneNumberInMemoryFaultInjector? phoneNumberFaultInjector;
+  final int maxPhoneNumberVerifications;
   final AuthInMemoryUserDeletionDomain _deletionDomain;
   late final AuthInMemoryUserDeletionCoordinator _deletionCoordinator;
   final Map<String, _AuthAnonymousMutationReceipt> _anonymousReceipts =
       <String, _AuthAnonymousMutationReceipt>{};
   Future<void> _anonymousMutationTail = Future<void>.value();
+  Future<void> _phoneNumberMutationTail = Future<void>.value();
+  final Map<String, AuthPhoneNumberVerification> _phoneVerifications =
+      <String, AuthPhoneNumberVerification>{};
+  final Map<String, AuthPhoneNumberIdentity> _phoneIdentitiesByPhone =
+      <String, AuthPhoneNumberIdentity>{};
+  final Map<String, String> _phoneByUser = <String, String>{};
+  final Map<String, _AuthPhoneNumberIssueReceipt> _phoneIssueReceipts =
+      <String, _AuthPhoneNumberIssueReceipt>{};
   final Map<String, Future<void>> _authenticationMethodMutationTails =
       <String, Future<void>>{};
   final Map<String, Future<void>> _usernameMutationTails =
@@ -1053,6 +1094,298 @@ class InMemoryAuthStore
       _deletionCoordinator;
 
   @override
+  Future<AuthPhoneNumberIssueResult> issuePhoneNumberCode(
+    AuthPhoneNumberIssueCodeCommand command,
+  ) => _serializePhoneNumberMutation(() async {
+    final verification = command.verification;
+    validateAuthPhoneNumberVerification(verification);
+    final fingerprint = _phoneIssueFingerprint(command);
+    final receipt = _phoneIssueReceipts[verification.id];
+    if (receipt != null) {
+      if (receipt.fingerprint != fingerprint ||
+          receipt.phoneNumber != verification.phoneNumber) {
+        return const AuthPhoneNumberIssueResult(
+          AuthPhoneNumberIssueStatus.replayMismatch,
+        );
+      }
+      final active = _phoneVerifications[verification.phoneNumber];
+      return active != null &&
+              active.id == verification.id &&
+              !active.isConsumed
+          ? AuthPhoneNumberIssueResult(
+              AuthPhoneNumberIssueStatus.replayed,
+              verification: active,
+            )
+          : const AuthPhoneNumberIssueResult(
+              AuthPhoneNumberIssueStatus.replayMismatch,
+            );
+    }
+
+    final previous = _phoneVerifications[verification.phoneNumber];
+    _phoneVerifications[verification.phoneNumber] = verification;
+    _phoneIssueReceipts[verification.id] = _AuthPhoneNumberIssueReceipt(
+      fingerprint: fingerprint,
+      phoneNumber: verification.phoneNumber,
+      createdAt: verification.createdAt.toUtc(),
+    );
+    try {
+      await phoneNumberFaultInjector?.call(
+        AuthPhoneNumberInMemoryFaultPoint.issueAfterChallengeWrite,
+      );
+      _prunePhoneNumberVerifications(verification.createdAt.toUtc());
+      while (_phoneVerifications.length > maxPhoneNumberVerifications) {
+        _phoneVerifications.remove(_phoneVerifications.keys.first);
+      }
+      while (_phoneIssueReceipts.length > maxPhoneNumberVerifications * 2) {
+        final oldest = _phoneIssueReceipts.entries.reduce(
+          (left, right) => left.value.createdAt.isBefore(right.value.createdAt)
+              ? left
+              : right,
+        );
+        _phoneIssueReceipts.remove(oldest.key);
+      }
+      return AuthPhoneNumberIssueResult(
+        AuthPhoneNumberIssueStatus.issued,
+        verification: verification,
+      );
+    } catch (error, stackTrace) {
+      if (identical(
+        _phoneVerifications[verification.phoneNumber],
+        verification,
+      )) {
+        if (previous == null) {
+          _phoneVerifications.remove(verification.phoneNumber);
+        } else {
+          _phoneVerifications[verification.phoneNumber] = previous;
+        }
+      }
+      final currentReceipt = _phoneIssueReceipts[verification.id];
+      if (currentReceipt?.fingerprint == fingerprint) {
+        _phoneIssueReceipts.remove(verification.id);
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  });
+
+  @override
+  Future<AuthPhoneNumberVerifyResult> verifyPhoneNumberCode(
+    AuthPhoneNumberVerifyCodeCommand command,
+  ) => _serializePhoneNumberMutation(() async {
+    final existing = _phoneVerifications[command.phoneNumber];
+    if (existing == null || existing.isConsumed) {
+      return const AuthPhoneNumberVerifyResult(
+        AuthPhoneNumberVerifyStatus.invalid,
+      );
+    }
+    if (existing.isExpired(now: command.now)) {
+      return AuthPhoneNumberVerifyResult(
+        AuthPhoneNumberVerifyStatus.expired,
+        verification: existing,
+      );
+    }
+    if (existing.isLocked) {
+      return AuthPhoneNumberVerifyResult(
+        AuthPhoneNumberVerifyStatus.tooManyAttempts,
+        verification: existing,
+      );
+    }
+
+    final attempts = existing.attempts + 1;
+    if (!constantTimeStringEquals(existing.codeDigest, command.codeDigest)) {
+      final updated = existing.copyWith(
+        attempts: attempts,
+        lockedAt: attempts >= existing.maxAttempts ? command.now : null,
+      );
+      _phoneVerifications[command.phoneNumber] = updated;
+      try {
+        await phoneNumberFaultInjector?.call(
+          AuthPhoneNumberInMemoryFaultPoint.verifyAfterAttemptWrite,
+        );
+      } catch (error, stackTrace) {
+        if (identical(_phoneVerifications[command.phoneNumber], updated)) {
+          _phoneVerifications[command.phoneNumber] = existing;
+        }
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+      return AuthPhoneNumberVerifyResult(
+        updated.isLocked
+            ? AuthPhoneNumberVerifyStatus.tooManyAttempts
+            : AuthPhoneNumberVerifyStatus.invalid,
+        verification: updated,
+      );
+    }
+
+    final consumed = existing.copyWith(
+      attempts: attempts,
+      consumedAt: command.now,
+    );
+    _phoneVerifications[command.phoneNumber] = consumed;
+    try {
+      await phoneNumberFaultInjector?.call(
+        AuthPhoneNumberInMemoryFaultPoint.verifyAfterChallengeConsumption,
+      );
+    } catch (error, stackTrace) {
+      if (identical(_phoneVerifications[command.phoneNumber], consumed)) {
+        _phoneVerifications[command.phoneNumber] = existing;
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+
+    final currentIdentity = _phoneIdentitiesByPhone[command.phoneNumber];
+    AuthPhoneNumberIdentity? identity = currentIdentity;
+    AuthUser? previousUser;
+    AuthUser? committedUser;
+    var createdUser = false;
+    var wroteIdentity = false;
+    try {
+      if (identity != null) {
+        previousUser = _users._usersById[identity.userId];
+        if (previousUser == null) {
+          return AuthPhoneNumberVerifyResult(
+            AuthPhoneNumberVerifyStatus.userNotFound,
+            verification: consumed,
+            identity: identity,
+          );
+        }
+        if (authUserIsDisabled(previousUser)) {
+          return AuthPhoneNumberVerifyResult(
+            AuthPhoneNumberVerifyStatus.userUnavailable,
+            verification: consumed,
+            identity: identity,
+          );
+        }
+      } else {
+        final candidate = command.candidateUser;
+        if (candidate == null) {
+          return AuthPhoneNumberVerifyResult(
+            AuthPhoneNumberVerifyStatus.userNotFound,
+            verification: consumed,
+          );
+        }
+        if (_users.contains(candidate.id) ||
+            _users.wasHardDeleted(candidate.id)) {
+          return AuthPhoneNumberVerifyResult(
+            AuthPhoneNumberVerifyStatus.conflict,
+            verification: consumed,
+          );
+        }
+        final email = candidate.email;
+        if (email != null && _users._usersByEmail.containsKey(email)) {
+          return AuthPhoneNumberVerifyResult(
+            AuthPhoneNumberVerifyStatus.conflict,
+            verification: consumed,
+          );
+        }
+        committedUser = _phoneVerifiedUser(candidate, command.phoneNumber);
+        await _users.create(committedUser);
+        createdUser = true;
+        await phoneNumberFaultInjector?.call(
+          AuthPhoneNumberInMemoryFaultPoint.verifyAfterUserWrite,
+        );
+        identity = AuthPhoneNumberIdentity(
+          phoneNumber: command.phoneNumber,
+          userId: committedUser.id,
+          createdAt: command.now,
+          verifiedAt: command.now,
+        );
+        _phoneIdentitiesByPhone[command.phoneNumber] = identity;
+        _phoneByUser[committedUser.id] = command.phoneNumber;
+        wroteIdentity = true;
+        await phoneNumberFaultInjector?.call(
+          AuthPhoneNumberInMemoryFaultPoint.verifyAfterIdentityWrite,
+        );
+      }
+
+      previousUser ??= _users._usersById[identity.userId];
+      if (previousUser == null || authUserIsDisabled(previousUser)) {
+        return AuthPhoneNumberVerifyResult(
+          AuthPhoneNumberVerifyStatus.userUnavailable,
+          verification: consumed,
+          identity: identity,
+        );
+      }
+      committedUser ??= _phoneVerifiedUser(previousUser, command.phoneNumber);
+      if (!identical(committedUser, previousUser)) {
+        _users._usersById[committedUser.id] = committedUser;
+        if (previousUser.email != null) {
+          _users._usersByEmail[previousUser.email!] = committedUser;
+        }
+      }
+      await phoneNumberFaultInjector?.call(
+        AuthPhoneNumberInMemoryFaultPoint.verifyAfterUserProjection,
+      );
+      if (!identical(_users._usersById[committedUser.id], committedUser) ||
+          !identical(_phoneIdentitiesByPhone[command.phoneNumber], identity)) {
+        throw StateError(
+          'Phone identity was deleted before verification committed',
+        );
+      }
+      return AuthPhoneNumberVerifyResult(
+        AuthPhoneNumberVerifyStatus.verified,
+        verification: consumed,
+        identity: identity,
+        user: committedUser,
+      );
+    } catch (error, stackTrace) {
+      if (identical(_phoneVerifications[command.phoneNumber], consumed)) {
+        _phoneVerifications[command.phoneNumber] = existing;
+      }
+      if (wroteIdentity &&
+          identical(_phoneIdentitiesByPhone[command.phoneNumber], identity)) {
+        _phoneIdentitiesByPhone.remove(command.phoneNumber);
+        if (_phoneByUser[identity!.userId] == command.phoneNumber) {
+          _phoneByUser.remove(identity.userId);
+        }
+      }
+      if (createdUser &&
+          committedUser != null &&
+          identical(_users._usersById[committedUser.id], committedUser)) {
+        await _users.delete(committedUser.id);
+      } else if (previousUser != null &&
+          committedUser != null &&
+          identical(_users._usersById[committedUser.id], committedUser) &&
+          !_users.wasHardDeleted(previousUser.id)) {
+        _users._usersById[previousUser.id] = previousUser;
+        if (previousUser.email != null) {
+          _users._usersByEmail[previousUser.email!] = previousUser;
+        }
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  });
+
+  @override
+  Future<AuthPhoneNumberIdentity?> findPhoneNumberIdentity(
+    String phoneNumber,
+  ) async => _phoneIdentitiesByPhone[phoneNumber];
+
+  @override
+  Future<AuthPhoneNumberIdentity?> findPhoneNumberIdentityForUser(
+    String userId,
+  ) async {
+    final phoneNumber = _phoneByUser[userId.trim()];
+    return phoneNumber == null ? null : _phoneIdentitiesByPhone[phoneNumber];
+  }
+
+  Future<T> _serializePhoneNumberMutation<T>(Future<T> Function() operation) {
+    final completer = Completer<T>();
+    _phoneNumberMutationTail = _phoneNumberMutationTail.then((_) async {
+      try {
+        completer.complete(await operation());
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    return completer.future;
+  }
+
+  void _prunePhoneNumberVerifications(DateTime now) {
+    _phoneVerifications.removeWhere((_, verification) {
+      return verification.isExpired(now: now);
+    });
+  }
+
+  @override
   Future<AuthAnonymousMutationResult> createAnonymousAccount(
     AuthAnonymousCreateAccountCommand command,
   ) => _serializeAnonymousMutation(() async {
@@ -1336,6 +1669,17 @@ class InMemoryAuthStore
         .deleteUserDataForDeletion(id);
     await deviceAuthorizations.deleteForUser(id);
     await _accountStates.delete(id);
+    final phoneNumber = _phoneByUser.remove(id);
+    if (phoneNumber != null) {
+      _phoneIdentitiesByPhone.remove(phoneNumber);
+      final verification = _phoneVerifications.remove(phoneNumber);
+      if (verification != null) {
+        _phoneIssueReceipts.remove(verification.id);
+      }
+      _phoneIssueReceipts.removeWhere(
+        (_, receipt) => receipt.phoneNumber == phoneNumber,
+      );
+    }
     if (user.email != null) {
       await emailOtps.deleteForEmail(user.email!);
       await verificationTokens.delete(user.email!);
@@ -1383,6 +1727,16 @@ class InMemoryAuthStore
       _anonymousReceipts,
     ),
     magicLinks: Map<String, AuthMagicLinkRecord>.of(_magicLinks),
+    phoneVerifications: Map<String, AuthPhoneNumberVerification>.of(
+      _phoneVerifications,
+    ),
+    phoneIdentitiesByPhone: Map<String, AuthPhoneNumberIdentity>.of(
+      _phoneIdentitiesByPhone,
+    ),
+    phoneByUser: Map<String, String>.of(_phoneByUser),
+    phoneIssueReceipts: Map<String, _AuthPhoneNumberIssueReceipt>.of(
+      _phoneIssueReceipts,
+    ),
   );
 
   @override
@@ -1440,6 +1794,18 @@ class InMemoryAuthStore
     _magicLinks
       ..clear()
       ..addAll(value.magicLinks);
+    _phoneVerifications
+      ..clear()
+      ..addAll(value.phoneVerifications);
+    _phoneIdentitiesByPhone
+      ..clear()
+      ..addAll(value.phoneIdentitiesByPhone);
+    _phoneByUser
+      ..clear()
+      ..addAll(value.phoneByUser);
+    _phoneIssueReceipts
+      ..clear()
+      ..addAll(value.phoneIssueReceipts);
   }
 
   @override
@@ -1463,6 +1829,14 @@ class InMemoryAuthStore
       await verificationTokens.delete(user.email!);
       final email = normalizeAuthEmail(user.email!);
       _magicLinks.removeWhere((_, record) => record.email == email);
+    }
+    final phoneNumber = _phoneByUser.remove(id);
+    if (phoneNumber != null) {
+      _phoneIdentitiesByPhone.remove(phoneNumber);
+      _phoneVerifications.remove(phoneNumber);
+      _phoneIssueReceipts.removeWhere(
+        (_, receipt) => receipt.phoneNumber == phoneNumber,
+      );
     }
     _users.replaceWithTombstone(id, timestamp);
     return true;
@@ -1503,6 +1877,26 @@ AuthUser _usernameProjection(
     roles: user.roles,
     isAnonymous: user.isAnonymous,
     attributes: attributes,
+  );
+}
+
+AuthUser _phoneVerifiedUser(AuthUser user, String phoneNumber) {
+  if (user.attributes['phoneNumber'] == phoneNumber &&
+      user.attributes['phoneNumberVerified'] == true) {
+    return user;
+  }
+  return AuthUser(
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    image: user.image,
+    roles: user.roles,
+    isAnonymous: user.isAnonymous,
+    attributes: <String, dynamic>{
+      ...user.attributes,
+      'phoneNumber': phoneNumber,
+      'phoneNumberVerified': true,
+    },
   );
 }
 

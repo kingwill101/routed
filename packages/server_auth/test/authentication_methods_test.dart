@@ -9,13 +9,15 @@ const _hashKey = '0123456789abcdef0123456789abcdef';
 void main() {
   test('composes every built-in and future plugin method type', () async {
     final store = InMemoryAuthStore();
-    final phoneStore = InMemoryAuthPhoneNumberStore();
     final apiKeyStore = InMemoryAuthApiKeyStore();
     final webAuthn = _webAuthnPlugin();
     final phone = PhoneNumberPlugin<Object>(
-      store: phoneStore,
       sendCode: (_) {},
       codeHashKey: _hashKey,
+      allowSignUp: true,
+      generateCode: (_) => '123456',
+      createUser: (_, _, _) =>
+          AuthUser(id: 'user-1', email: 'user@example.com'),
     );
     final emailOtp = EmailOtpPlugin<Object>(sendCode: (_) {}, secret: _hashKey);
     final magicLink = MagicLinkPlugin<Object>(sendMagicLink: (_) {});
@@ -52,7 +54,17 @@ void main() {
       ),
     );
     final now = DateTime.utc(2026, 8, 20);
-    await store.users.create(AuthUser(id: 'user-1', email: 'user@example.com'));
+    await phone.issueCode(
+      context: Object(),
+      phoneNumber: '+18765551234',
+      now: now,
+    );
+    await phone.verifyCode(
+      context: Object(),
+      phoneNumber: '+18765551234',
+      code: '123456',
+      now: now,
+    );
     await store.upsertCredentialForAdministration(
       AuthPasswordCredential(
         id: 'password-1',
@@ -78,14 +90,6 @@ void main() {
         providerId: 'github',
         providerAccountId: 'github-1',
         userId: 'user-1',
-      ),
-    );
-    await phoneStore.bindIdentity(
-      AuthPhoneNumberIdentity(
-        phoneNumber: '+18765551234',
-        userId: 'user-1',
-        createdAt: now,
-        verifiedAt: now,
       ),
     );
     await store.webAuthnAuthenticators.create(

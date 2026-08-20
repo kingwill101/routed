@@ -64,7 +64,6 @@ void main() {
 
   test('property: hostile phone inputs remain stable public errors', () async {
     final plugin = PhoneNumberPlugin<Object>(
-      store: InMemoryAuthPhoneNumberStore(),
       sendCode: (_) {},
       codeHashKey: _hashKey,
       generateCode: (_) => '123456',
@@ -101,7 +100,6 @@ void main() {
     final runner = PropertyTestRunner<String>(_hostileCodes(), (input) async {
       if (RegExp(r'^\s*123456\s*$').hasMatch(input)) return;
       final plugin = PhoneNumberPlugin<Object>(
-        store: InMemoryAuthPhoneNumberStore(),
         sendCode: (_) {},
         codeHashKey: _hashKey,
         generateCode: (_) => '123456',
@@ -139,7 +137,6 @@ void main() {
     'property: limiter keys are bounded and independent of OTP input',
     () async {
       final plugin = PhoneNumberPlugin<Object>(
-        store: InMemoryAuthPhoneNumberStore(),
         sendCode: (_) {},
         codeHashKey: _hashKey,
       );
@@ -174,6 +171,152 @@ void main() {
         expect(identifier, isNot(contains('+18765551234')));
         if (code.isNotEmpty) expect(identifier, isNot(contains(code)));
       }, PropertyConfig(numTests: 500, seed: 20260823));
+
+      final result = await runner.run();
+      expect(result.success, isTrue, reason: _report(result));
+    },
+  );
+
+  test(
+    'property: hostile state sequences preserve OTP transaction invariants',
+    () async {
+      final generator = Gen.integer(
+        min: -0x7fffffff,
+        max: 0x7fffffff,
+      ).list(minLength: 1, maxLength: 100);
+      final runner = PropertyTestRunner<List<int>>(generator, (
+        operations,
+      ) async {
+        final backend = InMemoryAuthStore(maxPhoneNumberVerifications: 16);
+        backend.bindUserDeletionPlanContributors(const []);
+        final now = DateTime.utc(2030, 1, 1);
+        var activeDigest = 'digest-initial';
+        var issueSequence = 0;
+        var verifiedForActiveIssue = 0;
+        String? activeUserId;
+
+        for (var index = 0; index < operations.length; index++) {
+          final shape = operations[index].abs() % 7;
+          switch (shape) {
+            case 0:
+              issueSequence++;
+              activeDigest = 'digest-$issueSequence-${operations[index]}';
+              verifiedForActiveIssue = 0;
+              await backend.issuePhoneNumberCode(
+                AuthPhoneNumberIssueCodeCommand(
+                  verification: AuthPhoneNumberVerification(
+                    id: 'issue-$issueSequence',
+                    phoneNumber: '+18765551234',
+                    codeDigest: activeDigest,
+                    createdAt: now,
+                    expiresAt: now.add(const Duration(minutes: 5)),
+                    maxAttempts: 3,
+                  ),
+                ),
+              );
+            case 1:
+              final userId = activeUserId ?? 'state-user-$issueSequence';
+              final result = await backend.verifyPhoneNumberCode(
+                AuthPhoneNumberVerifyCodeCommand(
+                  phoneNumber: '+18765551234',
+                  codeDigest: activeDigest,
+                  now: now,
+                  candidateUser: AuthUser(id: userId),
+                ),
+              );
+              if (result.status == AuthPhoneNumberVerifyStatus.verified) {
+                verifiedForActiveIssue++;
+                activeUserId = result.user!.id;
+              }
+            case 2:
+              final result = await backend.verifyPhoneNumberCode(
+                AuthPhoneNumberVerifyCodeCommand(
+                  phoneNumber: '+18765551234',
+                  codeDigest: 'hostile-$index-${operations[index]}',
+                  now: now,
+                ),
+              );
+              expect(
+                result.verification?.attempts ?? 0,
+                inInclusiveRange(0, 3),
+              );
+            case 3:
+              final candidateId = activeUserId ?? 'state-user-$issueSequence';
+              final results = await Future.wait([
+                backend.verifyPhoneNumberCode(
+                  AuthPhoneNumberVerifyCodeCommand(
+                    phoneNumber: '+18765551234',
+                    codeDigest: activeDigest,
+                    now: now,
+                    candidateUser: AuthUser(id: candidateId),
+                  ),
+                ),
+                backend.verifyPhoneNumberCode(
+                  AuthPhoneNumberVerifyCodeCommand(
+                    phoneNumber: '+18765551234',
+                    codeDigest: activeDigest,
+                    now: now,
+                    candidateUser: AuthUser(id: candidateId),
+                  ),
+                ),
+              ]);
+              verifiedForActiveIssue += results
+                  .where(
+                    (result) =>
+                        result.status == AuthPhoneNumberVerifyStatus.verified,
+                  )
+                  .length;
+              final verified = results
+                  .where(
+                    (result) =>
+                        result.status == AuthPhoneNumberVerifyStatus.verified,
+                  )
+                  .firstOrNull;
+              activeUserId ??= verified?.user?.id;
+            case 4:
+              await backend.verifyPhoneNumberCode(
+                AuthPhoneNumberVerifyCodeCommand(
+                  phoneNumber: '+18765551234',
+                  codeDigest: activeDigest,
+                  now: now.add(const Duration(hours: 1)),
+                ),
+              );
+            case 5:
+              final userId = activeUserId;
+              if (userId != null) {
+                await backend.userDeletionCoordinator.deleteUser(userId);
+                activeUserId = null;
+              }
+            case 6:
+              final hostilePhone = operations[index].isEven
+                  ? '+1\r\nSet-Cookie: attacker=true'
+                  : '+１２３４５６';
+              expect(
+                () => AuthPhoneNumberVerifyCodeCommand(
+                  phoneNumber: hostilePhone,
+                  codeDigest: activeDigest,
+                  now: now,
+                ),
+                throwsArgumentError,
+              );
+          }
+
+          expect(verifiedForActiveIssue, lessThanOrEqualTo(1));
+          final identity = await backend.findPhoneNumberIdentity(
+            '+18765551234',
+          );
+          if (identity != null) {
+            expect(
+              await backend.findPhoneNumberIdentityForUser(identity.userId),
+              same(identity),
+            );
+            final user = await backend.users.findById(identity.userId);
+            expect(user, isNotNull);
+            expect(user!.attributes['phoneNumber'], identity.phoneNumber);
+            expect(user.attributes['phoneNumberVerified'], isTrue);
+          }
+        }
+      }, PropertyConfig(numTests: 250, seed: 20260824));
 
       final result = await runner.run();
       expect(result.success, isTrue, reason: _report(result));
