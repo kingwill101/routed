@@ -13,6 +13,7 @@ funding:
 
 false_secrets:
   - /test/oauth_provider_mode_test.dart
+  - /test/fixtures/saml_xmldsig/idp-private.pem
 
 resolution: workspace
 
