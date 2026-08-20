@@ -316,6 +316,40 @@ final class DefaultLiveD1ConformanceExecutor
         }
       }
 
+      final apiKeySuite = AuthApiKeyStoreConformanceSuite(({
+        int maxRecords = 10000,
+      }) async {
+        final schema = await newSchema();
+        final store = CloudflareD1AuthStore(
+          database,
+          schema: schema,
+          apiKeyMaxRecords: maxRecords,
+          clock: _clock,
+        );
+        return AuthApiKeyStoreConformanceFixture(
+          store: store.apiKeys,
+          faults: const _LiveD1ApiKeyFaultController(),
+          dispose: () => disposeSchema(schema),
+        );
+      });
+      for (final conformanceCase in apiKeySuite.cases.where(
+        (candidate) => candidate.id != 'rotation_rollback',
+      )) {
+        final id = 'api_key.${conformanceCase.id}';
+        try {
+          await conformanceCase.run();
+          results.add(LiveD1ConformanceCaseResult(id: id, passed: true));
+        } catch (error) {
+          results.add(
+            LiveD1ConformanceCaseResult(
+              id: id,
+              passed: false,
+              error: _safeError(error),
+            ),
+          );
+        }
+      }
+
       results.add(
         await _runAdapterCase('username.atomic', () async {
           final schema = await newSchema();
@@ -470,6 +504,16 @@ final class _LiveD1AnonymousFaultController
 
   @override
   void failNext(AuthAnonymousStoreConformanceFaultPoint point) {
+    throw StateError('Live D1 rollback fault injection is not configured.');
+  }
+}
+
+final class _LiveD1ApiKeyFaultController
+    implements AuthApiKeyStoreConformanceFaultController {
+  const _LiveD1ApiKeyFaultController();
+
+  @override
+  void failNext(AuthApiKeyStoreConformanceFaultPoint point) {
     throw StateError('Live D1 rollback fault injection is not configured.');
   }
 }
