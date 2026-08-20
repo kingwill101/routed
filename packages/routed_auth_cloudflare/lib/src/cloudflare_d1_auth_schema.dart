@@ -22,7 +22,7 @@ final class CloudflareD1AuthSchema {
   /// underscores are accepted because SQLite cannot bind identifiers.
   final String tablePrefix;
 
-  static const int currentVersion = 1;
+  static const int currentVersion = 2;
 
   String table(String suffix) {
     final prefix = tablePrefix.trim();
@@ -46,7 +46,18 @@ final class CloudflareD1AuthSchema {
 
   List<CloudflareD1AuthMigration> get migrations => [
     CloudflareD1AuthMigration(version: 1, statements: _versionOne),
+    CloudflareD1AuthMigration(version: 2, statements: _versionTwo),
   ];
+
+  List<String> get _versionTwo {
+    final deletionReceipts = table('deletion_receipts');
+    return [
+      '''CREATE TABLE IF NOT EXISTS $deletionReceipts (
+        user_id_hash TEXT PRIMARY KEY,
+        deleted_at TEXT NOT NULL
+      )''',
+    ];
+  }
 
   List<String> get _versionOne {
     final users = table('users');
@@ -199,6 +210,7 @@ final class CloudflareD1AuthSchema {
   /// retain migration history and never call it during normal operation.
   Future<void> dropAll(CloudflareD1Database database) async {
     final suffixes = [
+      'deletion_receipts',
       'email_otps',
       'device_authorizations',
       'email_change_tokens',

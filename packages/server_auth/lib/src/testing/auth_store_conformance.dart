@@ -1233,6 +1233,16 @@ Future<void> _verifyAccountDeletionTransaction(AuthStore store) async {
     await Future.sync(() => store.jwtVersions.current(user.id)) == 1,
     'account deletion did not invalidate JWTs',
   );
+  Object? reuseError;
+  try {
+    await Future.sync(() => store.users.create(user));
+  } catch (error) {
+    reuseError = error;
+  }
+  _check(
+    reuseError != null,
+    'account deletion allowed the same explicit user ID to be reused',
+  );
 }
 
 final class _FaultingDeletionContributor

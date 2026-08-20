@@ -115,6 +115,12 @@ void main() {
     );
     expect(await store.users.findById('delete-me'), isNotNull);
     expect(database.select('SELECT * FROM plugin_data'), hasLength(1));
+    expect(
+      database.select(
+        'SELECT * FROM ${store.schema.table('deletion_receipts')}',
+      ),
+      isEmpty,
+    );
 
     final results = await Future.wait([
       coordinator.confirmAndDeleteUser(
@@ -131,6 +137,16 @@ void main() {
     expect(results.where((value) => value), hasLength(1));
     expect(await store.users.findById('delete-me'), isNull);
     expect(database.select('SELECT * FROM plugin_data'), isEmpty);
+    expect(
+      database.select(
+        'SELECT * FROM ${store.schema.table('deletion_receipts')}',
+      ),
+      hasLength(1),
+    );
+    await expectLater(
+      store.users.create(AuthUser(id: 'delete-me')),
+      throwsStateError,
+    );
   });
 
   test('D1 rejects a foreign deletion domain before mutation', () async {
@@ -227,6 +243,62 @@ void main() {
     expect(
       database.select('SELECT * FROM ${schema.table('email_otps')}'),
       isEmpty,
+    );
+  });
+
+  test('D1 deletes core substores after their plugins are removed', () async {
+    final database = FakeCloudflareD1Database();
+    addTearDown(database.close);
+    final now = DateTime.utc(2026, 8, 20, 12);
+    const schema = CloudflareD1AuthSchema();
+    final store = await CloudflareD1AuthStore.open(
+      database,
+      schema: schema,
+      clock: () => now,
+    );
+    final user = AuthUser(id: 'removed-plugin-user', email: 'old@example.com');
+    await store.users.create(user);
+    await store.deviceAuthorizations.create(
+      AuthDeviceAuthorization(
+        id: 'device-removed',
+        deviceCodeHash: 'device-removed-hash',
+        userCodeHash: 'user-removed-hash',
+        clientId: 'client-1',
+        scopes: const ['openid'],
+        createdAt: now,
+        expiresAt: now.add(const Duration(minutes: 10)),
+        interval: const Duration(seconds: 5),
+        userId: user.id,
+        status: AuthDeviceAuthorizationStatus.approved,
+        approvedAt: now,
+      ),
+    );
+    await store.emailOtps.save(
+      AuthEmailOtp(
+        id: 'otp-removed',
+        email: user.email!,
+        codeHash: hashAuthEmailOtpCode('123456'),
+        type: AuthEmailOtpType.signIn,
+        createdAt: now,
+        expiresAt: now.add(const Duration(minutes: 5)),
+        maxAttempts: 3,
+      ),
+    );
+    store.bindUserDeletionPlanContributors(const []);
+
+    expect(await store.userDeletionCoordinator.deleteUser(user.id), isTrue);
+
+    expect(
+      database.select('SELECT * FROM ${schema.table('device_authorizations')}'),
+      isEmpty,
+    );
+    expect(
+      database.select('SELECT * FROM ${schema.table('email_otps')}'),
+      isEmpty,
+    );
+    await expectLater(
+      store.users.create(AuthUser(id: user.id, email: 'new@example.com')),
+      throwsStateError,
     );
   });
 

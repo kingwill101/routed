@@ -6,6 +6,7 @@ import 'email_change_token_store.dart';
 import 'models.dart';
 import 'oauth_challenge_store.dart';
 import 'password_reset_token_store.dart';
+import 'tokens.dart' show hashOpaqueToken;
 import 'verification_token_store.dart';
 import 'jwt_version_store.dart';
 import 'webauthn_store.dart';
@@ -394,6 +395,7 @@ abstract interface class AuthAdminStoreCapabilities {
 typedef _InMemoryAuthCoreDeletionState = ({
   Map<String, AuthUser> usersById,
   Map<String, AuthUser> usersByEmail,
+  Set<String> deletedUserIdHashes,
   Map<String, AuthPasswordCredential> credentialsById,
   Map<String, String> credentialIdsByIdentifier,
   Map<(String, String), AuthAccount> accounts,
@@ -403,6 +405,10 @@ typedef _InMemoryAuthCoreDeletionState = ({
   Object emailChangeTokens,
   Object jwtVersions,
   Object accountStates,
+  Object webAuthnChallenges,
+  Object webAuthnAuthenticators,
+  Object deviceAuthorizations,
+  Object emailOtps,
 });
 
 /// In-memory store for tests, examples, and local development.
@@ -614,9 +620,17 @@ class InMemoryAuthStore
     await passwordResetTokens.deleteForUser(id);
     await verificationTokens.delete(id);
     await emailChangeTokens.deleteForUser(id);
+    await webAuthnChallenges.deleteForUser(id);
+    await (webAuthnAuthenticators as AuthInMemoryUserDeletionStore)
+        .deleteUserDataForDeletion(id);
+    await deviceAuthorizations.deleteForUser(id);
     await _accountStates.delete(id);
-    if (user.email != null) await verificationTokens.delete(user.email!);
+    if (user.email != null) {
+      await emailOtps.deleteForEmail(user.email!);
+      await verificationTokens.delete(user.email!);
+    }
     await jwtVersions.rotate(id);
+    _users.recordHardDeletion(id);
     _users.delete(id);
     return true;
   }
@@ -625,6 +639,7 @@ class InMemoryAuthStore
   Object captureDeletionState() => (
     usersById: Map<String, AuthUser>.of(_users._usersById),
     usersByEmail: Map<String, AuthUser>.of(_users._usersByEmail),
+    deletedUserIdHashes: Set<String>.of(_users._deletedUserIdHashes),
     credentialsById: Map<String, AuthPasswordCredential>.of(
       _credentials._credentialsById,
     ),
@@ -642,6 +657,14 @@ class InMemoryAuthStore
     jwtVersions: (jwtVersions as AuthInMemoryDeletionState)
         .captureDeletionState(),
     accountStates: _accountStates.captureDeletionState(),
+    webAuthnChallenges: (webAuthnChallenges as AuthInMemoryDeletionState)
+        .captureDeletionState(),
+    webAuthnAuthenticators:
+        (webAuthnAuthenticators as AuthInMemoryDeletionState)
+            .captureDeletionState(),
+    deviceAuthorizations: (deviceAuthorizations as AuthInMemoryDeletionState)
+        .captureDeletionState(),
+    emailOtps: (emailOtps as AuthInMemoryDeletionState).captureDeletionState(),
   );
 
   @override
@@ -653,6 +676,9 @@ class InMemoryAuthStore
     _users._usersByEmail
       ..clear()
       ..addAll(value.usersByEmail);
+    _users._deletedUserIdHashes
+      ..clear()
+      ..addAll(value.deletedUserIdHashes);
     _credentials._credentialsById
       ..clear()
       ..addAll(value.credentialsById);
@@ -678,6 +704,18 @@ class InMemoryAuthStore
       value.jwtVersions,
     );
     _accountStates.restoreDeletionState(value.accountStates);
+    (webAuthnChallenges as AuthInMemoryDeletionState).restoreDeletionState(
+      value.webAuthnChallenges,
+    );
+    (webAuthnAuthenticators as AuthInMemoryDeletionState).restoreDeletionState(
+      value.webAuthnAuthenticators,
+    );
+    (deviceAuthorizations as AuthInMemoryDeletionState).restoreDeletionState(
+      value.deviceAuthorizations,
+    );
+    (emailOtps as AuthInMemoryDeletionState).restoreDeletionState(
+      value.emailOtps,
+    );
   }
 
   @override
@@ -1029,9 +1067,17 @@ class _CallbackOAuthChallengeStore implements AuthOAuthChallengeStore {
 class _InMemoryUserStore implements AuthUserStore {
   final Map<String, AuthUser> _usersById = <String, AuthUser>{};
   final Map<String, AuthUser> _usersByEmail = <String, AuthUser>{};
+  final Set<String> _deletedUserIdHashes = <String>{};
 
   Iterable<AuthUser> get values => _usersById.values;
   bool contains(String id) => _usersById.containsKey(id);
+
+  bool wasHardDeleted(String id) =>
+      _deletedUserIdHashes.contains(hashOpaqueToken(id.trim()));
+
+  void recordHardDeletion(String id) {
+    _deletedUserIdHashes.add(hashOpaqueToken(id.trim()));
+  }
 
   @override
   Future<bool> delete(String id) async {
@@ -1060,6 +1106,9 @@ class _InMemoryUserStore implements AuthUserStore {
   @override
   Future<AuthUser> create(AuthUser user) async {
     validateAuthUserForPersistence(user);
+    if (wasHardDeleted(user.id)) {
+      throw StateError('Auth user ID is permanently unavailable');
+    }
     if (_usersById.containsKey(user.id)) {
       throw StateError('Auth user ID already exists');
     }
@@ -1077,6 +1126,9 @@ class _InMemoryUserStore implements AuthUserStore {
   @override
   Future<AuthUserCreateResult> createOrFindByEmail(AuthUser user) async {
     validateAuthUserForPersistence(user);
+    if (wasHardDeleted(user.id)) {
+      throw StateError('Auth user ID is permanently unavailable');
+    }
     final existingById = _usersById[user.id];
     if (existingById != null) {
       return AuthUserCreateResult(user: existingById, created: false);

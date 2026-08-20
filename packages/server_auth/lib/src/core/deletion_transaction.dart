@@ -203,6 +203,14 @@ abstract interface class AuthUserDeletionPlanFactory {
 }
 
 /// A store that owns a deletion domain and coordinates its configured plans.
+///
+/// Active contributors are not a durable inventory of data written by plugins
+/// that were enabled in an earlier deployment. A durable host must therefore
+/// either enumerate and require every historical external namespace before
+/// deletion, or fail closed. Backend-owned optional substores should be
+/// cleaned unconditionally, and a hard-deletion receipt should prevent an
+/// omitted external credential from becoming active through user-ID reuse.
+/// `server_auth` cannot discover a removed third-party store on its own.
 abstract interface class AuthUserDeletionCoordinatorHost {
   AuthUserDeletionCoordinator get userDeletionCoordinator;
 

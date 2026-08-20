@@ -14,6 +14,102 @@ void main() {
       expect(await store.users.findById('user-1'), isNotNull);
     });
 
+    test(
+      'deletes core-owned plugin stores when plugins are no longer active',
+      () async {
+        final store = InMemoryAuthStore();
+        final now = DateTime.now().toUtc();
+        final user = AuthUser(id: 'user-1', email: 'user@example.com');
+        await store.users.create(user);
+        await store.webAuthnChallenges.save(
+          AuthWebAuthnChallenge(
+            id: 'challenge-1',
+            challengeHash: 'challenge-hash',
+            ceremony: AuthWebAuthnCeremony.authentication,
+            relyingPartyId: 'example.com',
+            origin: 'https://example.com',
+            createdAt: now,
+            expiresAt: now.add(const Duration(minutes: 5)),
+            userId: user.id,
+          ),
+        );
+        await store.webAuthnAuthenticators.create(
+          WebAuthnAuthenticator(
+            credentialId: 'credential-1',
+            publicKey: 'public-key',
+            counter: 0,
+            userId: user.id,
+            createdAt: now,
+          ),
+        );
+        await store.deviceAuthorizations.create(
+          AuthDeviceAuthorization(
+            id: 'device-1',
+            deviceCodeHash: 'device-hash',
+            userCodeHash: 'user-hash',
+            clientId: 'client-1',
+            scopes: const ['openid'],
+            createdAt: now,
+            expiresAt: now.add(const Duration(minutes: 5)),
+            interval: const Duration(seconds: 5),
+            status: AuthDeviceAuthorizationStatus.approved,
+            userId: user.id,
+            approvedAt: now,
+          ),
+        );
+        await store.emailOtps.save(
+          AuthEmailOtp(
+            id: 'otp-1',
+            email: user.email!,
+            codeHash: hashAuthEmailOtpCode('123456'),
+            type: AuthEmailOtpType.signIn,
+            createdAt: now,
+            expiresAt: now.add(const Duration(minutes: 5)),
+            maxAttempts: 3,
+          ),
+        );
+        store.bindUserDeletionPlanContributors(const []);
+
+        expect(await store.userDeletionCoordinator.deleteUser(user.id), isTrue);
+
+        expect(
+          await store.webAuthnAuthenticators.listForUser(user.id),
+          isEmpty,
+        );
+        expect(
+          await store.webAuthnChallenges.consume(
+            challengeHash: 'challenge-hash',
+            ceremony: AuthWebAuthnCeremony.authentication,
+            relyingPartyId: 'example.com',
+            origin: 'https://example.com',
+            userId: user.id,
+            now: now,
+          ),
+          isNull,
+        );
+        expect(
+          (await store.deviceAuthorizations.poll(
+            'device-hash',
+            now: now,
+          )).status,
+          AuthDeviceAuthorizationPollStatus.invalid,
+        );
+        expect(
+          (await store.emailOtps.verify(
+            user.email!,
+            AuthEmailOtpType.signIn,
+            '123456',
+            now: now,
+          )).status,
+          AuthEmailOtpVerificationStatus.invalid,
+        );
+        await expectLater(
+          store.users.create(AuthUser(id: user.id, email: 'new@example.com')),
+          throwsStateError,
+        );
+      },
+    );
+
     test('rejects foreign plans before any mutation', () async {
       final first = InMemoryAuthStore();
       final second = InMemoryAuthStore();

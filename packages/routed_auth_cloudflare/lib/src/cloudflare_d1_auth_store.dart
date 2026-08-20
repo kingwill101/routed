@@ -140,6 +140,13 @@ final class CloudflareD1UserDeletionPlan implements AuthUserDeletionPlan {
 }
 
 /// D1-owned coordinator for atomic core and plugin user deletion.
+///
+/// The coordinator submits one `D1Database.batch`; Cloudflare documents a D1
+/// batch as a SQL transaction whose complete sequence is rolled back when one
+/// statement fails. The adapter always cleans its device-authorization and
+/// email-OTP tables and retains a user-ID digest receipt. A removed external
+/// plugin's private D1 tables remain undiscoverable unless its adapter keeps a
+/// historical namespace inventory and contributes cleanup independently.
 final class CloudflareD1UserDeletionCoordinator
     implements AuthUserDeletionCoordinator {
   CloudflareD1UserDeletionCoordinator._({
@@ -282,7 +289,7 @@ final class CloudflareD1UserDeletionCoordinator
     for (final statement in statements) {
       batch.add(_prepareGuarded(statement, guard, guardValues));
     }
-    batch.addAll(_coreDeletionStatements(user, guard, guardValues));
+    batch.addAll(_coreDeletionStatements(user, guard, guardValues, current));
     final userDeleteIndex = batch.length;
     batch.add(
       _sql.database.prepare('DELETE FROM $users WHERE id = ? AND $guard').bind([
@@ -311,6 +318,7 @@ final class CloudflareD1UserDeletionCoordinator
     AuthUser user,
     String guard,
     List<Object?> guardValues,
+    DateTime deletedAt,
   ) sync* {
     final id = user.id;
     for (final entry in <(String, String)>[
@@ -319,6 +327,7 @@ final class CloudflareD1UserDeletionCoordinator
       (schema.table('sessions'), 'user_id'),
       (schema.table('password_reset_tokens'), 'user_id'),
       (schema.table('email_change_tokens'), 'user_id'),
+      (schema.table('device_authorizations'), 'user_id'),
     ]) {
       yield _sql.database
           .prepare('DELETE FROM ${entry.$1} WHERE ${entry.$2} = ? AND $guard')
@@ -332,6 +341,12 @@ final class CloudflareD1UserDeletionCoordinator
       yield _sql.database
           .prepare('DELETE FROM $verification WHERE identifier = ? AND $guard')
           .bind([email, ...guardValues]);
+      yield _sql.database
+          .prepare(
+            'DELETE FROM ${schema.table('email_otps')} '
+            'WHERE email = ? AND $guard',
+          )
+          .bind([email, ...guardValues]);
     }
     final jwtVersions = schema.table('jwt_versions');
     yield _sql.database
@@ -339,6 +354,12 @@ final class CloudflareD1UserDeletionCoordinator
              SELECT ?, 1 WHERE $guard
              ON CONFLICT(user_id) DO UPDATE SET version = version + 1''')
         .bind([id, ...guardValues]);
+    final deletionReceipts = schema.table('deletion_receipts');
+    yield _sql.database
+        .prepare('''INSERT INTO $deletionReceipts (user_id_hash, deleted_at)
+             SELECT ?, ? WHERE $guard
+             ON CONFLICT(user_id_hash) DO NOTHING''')
+        .bind([hashOpaqueToken(id), _date(deletedAt), ...guardValues]);
   }
 
   CloudflareD1PreparedStatement _prepareGuarded(
@@ -441,6 +462,7 @@ final class _D1Users implements AuthUserStore {
   final _D1 sql;
   final CloudflareD1AuthSchema schema;
   String get table => schema.table('users');
+  String get deletionReceipts => schema.table('deletion_receipts');
 
   @override
   Future<AuthUser?> findById(String id) => sql.first(
@@ -459,11 +481,18 @@ final class _D1Users implements AuthUserStore {
   @override
   Future<AuthUser> create(AuthUser user) async {
     validateAuthUserForPersistence(user);
-    await sql.run('INSERT INTO $table (id, email, payload) VALUES (?, ?, ?)', [
-      user.id.trim(),
-      _nullableEmail(user.email),
-      _encodeUser(user),
-    ]);
+    final id = user.id.trim();
+    final result = await sql.run(
+      '''INSERT INTO $table (id, email, payload)
+         SELECT ?, ?, ?
+         WHERE NOT EXISTS (
+           SELECT 1 FROM $deletionReceipts WHERE user_id_hash = ?
+         )''',
+      [id, _nullableEmail(user.email), _encodeUser(user), hashOpaqueToken(id)],
+    );
+    if ((result.meta?.changes ?? 0) != 1) {
+      throw StateError('Auth user ID is permanently unavailable.');
+    }
     return user;
   }
 
@@ -471,20 +500,27 @@ final class _D1Users implements AuthUserStore {
   Future<AuthUserCreateResult> createOrFindByEmail(AuthUser user) async {
     validateAuthUserForPersistence(user);
     final email = _nullableEmail(user.email);
+    final id = user.id.trim();
     if (email == null) {
       return AuthUserCreateResult(user: await create(user), created: true);
     }
     final inserted = await sql.run(
-      '''INSERT INTO $table (id, email, payload) VALUES (?, ?, ?)
+      '''INSERT INTO $table (id, email, payload)
+         SELECT ?, ?, ?
+         WHERE NOT EXISTS (
+           SELECT 1 FROM $deletionReceipts WHERE user_id_hash = ?
+         )
          ON CONFLICT(email) DO NOTHING''',
-      [user.id.trim(), email, _encodeUser(user)],
+      [id, email, _encodeUser(user), hashOpaqueToken(id)],
     );
     if ((inserted.meta?.changes ?? 0) == 1) {
       return AuthUserCreateResult(user: user, created: true);
     }
     final existing = await findByEmail(email);
     if (existing == null) {
-      throw StateError('D1 lost the canonical user after an email conflict.');
+      throw StateError(
+        'D1 refused a deleted user ID or lost the canonical email user.',
+      );
     }
     return AuthUserCreateResult(user: existing, created: false);
   }
@@ -550,19 +586,34 @@ final class _D1Credentials
         credential.passwordHash.trim().isEmpty) {
       throw ArgumentError('Credential ownership and hash must be valid.');
     }
-    await sql.batch([
+    final userId = user.id.trim();
+    final deletionReceipts = schema.table('deletion_receipts');
+    final results = await sql.batch([
       sql.database
-          .prepare(
-            'INSERT INTO ${schema.table('users')} (id, email, payload) '
-            'VALUES (?, ?, ?)',
-          )
-          .bind([user.id, _nullableEmail(user.email), _encodeUser(user)]),
+          .prepare('''INSERT INTO ${schema.table('users')} (id, email, payload)
+               SELECT ?, ?, ?
+               WHERE NOT EXISTS (
+                 SELECT 1 FROM $deletionReceipts WHERE user_id_hash = ?
+               )''')
+          .bind([
+            userId,
+            _nullableEmail(user.email),
+            _encodeUser(user),
+            hashOpaqueToken(userId),
+          ]),
       sql.database
           .prepare('''INSERT INTO $table
                (id, user_id, identifier, password_hash, created_at, updated_at, enabled)
-               VALUES (?, ?, ?, ?, ?, ?, ?)''')
-          .bind(_credentialValues(credential)),
+               SELECT ?, ?, ?, ?, ?, ?, ?
+               WHERE EXISTS (
+                 SELECT 1 FROM ${schema.table('users')} WHERE id = ?
+               )''')
+          .bind([..._credentialValues(credential), userId]),
     ]);
+    if ((results.first.meta?.changes ?? 0) != 1 ||
+        (results.last.meta?.changes ?? 0) != 1) {
+      return null;
+    }
     return user;
   }
 
