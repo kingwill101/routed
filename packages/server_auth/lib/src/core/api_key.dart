@@ -206,6 +206,10 @@ abstract interface class AuthApiKeyStore {
   });
 
   /// Atomically revokes the old key and creates [replacement].
+  ///
+  /// Returns `null` without mutation when the old key is unavailable or
+  /// inactive, or when the replacement is inactive, belongs to another user,
+  /// or collides with an existing key ID.
   FutureOr<AuthApiKeyRecord?> rotateForUser({
     required String userId,
     required String id,
@@ -225,11 +229,47 @@ abstract interface class AuthApiKeyUserAccessRevocationStore {
   FutureOr<int> revokeAllForUser(String userId, {DateTime? revokedAt});
 }
 
+/// Complete input to an exact primary API-key revocation transaction.
+final class AuthApiKeyPrimaryRevocationCommand {
+  AuthApiKeyPrimaryRevocationCommand({
+    required this.userId,
+    required this.keyId,
+    required this.revokedAt,
+    required this.loadInventory,
+  }) {
+    if (_required(userId, 'userId') != userId ||
+        _required(keyId, 'keyId') != keyId) {
+      throw ArgumentError('API-key revocation identifiers must be canonical.');
+    }
+  }
+
+  final String userId;
+  final String keyId;
+  final DateTime revokedAt;
+
+  /// Loads the bounded composed topology as evidence for the backend command.
+  ///
+  /// Durable stores must recheck every supported fallback inside their own
+  /// transaction. This callback is not itself a transaction boundary.
+  final AuthAuthenticationMethodInventoryLoader loadInventory;
+}
+
+/// Optional exact transaction used when API keys count as primary methods.
+///
+/// Stores that cannot join the complete authentication-method topology must
+/// return [AuthAuthenticationMethodMutationResult.atomicityUnavailable].
+abstract interface class AuthApiKeyPrimaryMutationStore {
+  FutureOr<AuthAuthenticationMethodMutationResult> revokePrimaryKeyIfSafe(
+    AuthApiKeyPrimaryRevocationCommand command,
+  );
+}
+
 /// Bounded in-memory API-key store for tests and local development.
 final class InMemoryAuthApiKeyStore
     implements
         AuthApiKeyStore,
         AuthApiKeyUserAccessRevocationStore,
+        AuthApiKeyPrimaryMutationStore,
         AuthInMemoryUserDeletionStore {
   InMemoryAuthApiKeyStore({this.maxRecords = 10000}) {
     if (maxRecords <= 0) {
@@ -327,6 +367,33 @@ final class InMemoryAuthApiKeyStore
   }
 
   @override
+  Future<AuthAuthenticationMethodMutationResult> revokePrimaryKeyIfSafe(
+    AuthApiKeyPrimaryRevocationCommand command,
+  ) async {
+    final snapshot = await command.loadInventory();
+    if (!snapshot.isComplete) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+    final target = AuthAuthenticationMethod.apiKey(command.keyId);
+    if (!snapshot.methods.contains(target)) {
+      return AuthAuthenticationMethodMutationResult.notFound;
+    }
+    if (!snapshot.methods.any(
+      (method) => method.canAuthenticate && method != target,
+    )) {
+      return AuthAuthenticationMethodMutationResult.lastAuthenticationMethod;
+    }
+    final revoked = await revokeForUser(
+      command.userId,
+      command.keyId,
+      revokedAt: command.revokedAt,
+    );
+    return revoked == null
+        ? AuthAuthenticationMethodMutationResult.notFound
+        : AuthAuthenticationMethodMutationResult.mutated;
+  }
+
+  @override
   Future<AuthApiKeyRecord?> rotateForUser({
     required String userId,
     required String id,
@@ -338,6 +405,8 @@ final class InMemoryAuthApiKeyStore
     if (current == null ||
         current.userId != userId ||
         !current.isActive(now: now) ||
+        replacement.userId != userId ||
+        !replacement.isActive(now: now) ||
         _records.containsKey(replacement.id)) {
       return null;
     }
@@ -599,21 +668,22 @@ final class AuthApiKeyPlugin<TContext>
     final normalizedId = _required(id, 'id');
     AuthApiKeyRecord? revoked;
     if (countsAsPrimaryAuthenticationMethod) {
-      final result = await _authenticationMethods.removeIfSafe(
-        userId: normalizedUserId,
-        target: AuthAuthenticationMethod.apiKey(normalizedId),
-        mutate: () async {
-          revoked = await store.revokeForUser(
-            normalizedUserId,
-            normalizedId,
-            revokedAt: current,
-          );
-          return revoked != null;
-        },
-      );
+      final result = switch (store) {
+        AuthApiKeyPrimaryMutationStore primaryStore =>
+          await primaryStore.revokePrimaryKeyIfSafe(
+            AuthApiKeyPrimaryRevocationCommand(
+              userId: normalizedUserId,
+              keyId: normalizedId,
+              revokedAt: current,
+              loadInventory: () =>
+                  _authenticationMethods.snapshotForUser(normalizedUserId),
+            ),
+          ),
+        _ => AuthAuthenticationMethodMutationResult.atomicityUnavailable,
+      };
       switch (result) {
         case AuthAuthenticationMethodMutationResult.mutated:
-          break;
+          revoked = await store.findById(normalizedId);
         case AuthAuthenticationMethodMutationResult.notFound:
           return null;
         case AuthAuthenticationMethodMutationResult.lastAuthenticationMethod:
