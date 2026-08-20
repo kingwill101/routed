@@ -276,7 +276,7 @@ final class WebAuthnAttestationTrustPolicy {
 /// This plugin supports `none` attestation plus cryptographically verified
 /// packed self-attestation with EdDSA/Ed25519 (`alg: -8`), ES256 (`alg: -7`),
 /// and RS256 (`alg: -257`) passkeys, X.509 certificate-backed ES256 and RS256
-/// attestation, and FIDO U2F attestation.
+/// attestation, Android Key attestation, and FIDO U2F attestation.
 /// It deliberately rejects unsupported attestation formats and COSE
 /// algorithms instead of accepting an assertion that has not been verified.
 /// Certificate verification alone does not establish trusted hardware
@@ -1124,6 +1124,13 @@ final class WebAuthnPlugin<TContext>
         credentialId: parsed.credentialId!,
         credentialPublicKey: parsed.publicKeyCose!,
       );
+    } else if (format == 'android-key') {
+      verifiedStatement = await _verifyAndroidKeyAttestation(
+        statement: statement,
+        authenticatorData: authDataBytes,
+        clientDataHash: clientDataHash,
+        credentialPublicKey: parsed.publicKeyCose!,
+      );
     } else {
       throw AuthFlowException('webauthn_attestation_unsupported');
     }
@@ -1294,6 +1301,196 @@ final class WebAuthnPlugin<TContext>
     );
   }
 
+  Future<_VerifiedAttestationStatement> _verifyAndroidKeyAttestation({
+    required Map statement,
+    required Uint8List authenticatorData,
+    required Uint8List clientDataHash,
+    required Uint8List credentialPublicKey,
+  }) async {
+    if (statement.length != 3 ||
+        !statement.containsKey('alg') ||
+        !statement.containsKey('sig') ||
+        !statement.containsKey('x5c')) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    final algorithm = statement['alg'];
+    final signatureValue = statement['sig'];
+    if (algorithm is! int ||
+        (algorithm != -8 && algorithm != -7 && algorithm != -257)) {
+      throw AuthFlowException('webauthn_attestation_unsupported');
+    }
+    if (signatureValue is! List ||
+        signatureValue.isEmpty ||
+        signatureValue.length > 1024 ||
+        signatureValue.any(
+          (value) => value is! int || value < 0 || value > 255,
+        )) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+
+    final certificates = _parseAndroidKeyCertificateChain(statement['x5c']);
+    final leaf = certificates.first;
+    final credentialKey = _decodeCosePublicKey(credentialPublicKey);
+    if (leaf.publicKey.algorithm != algorithm ||
+        credentialKey.algorithm != algorithm ||
+        !_cosePublicKeysEqual(leaf.publicKey, credentialKey)) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    for (var index = 0; index + 1 < certificates.length; index++) {
+      final certificate = certificates[index];
+      final issuer = certificates[index + 1];
+      if (!_constantTimeBytesEqual(certificate.issuer, issuer.subject) ||
+          !issuer.hasBasicConstraints ||
+          !issuer.isCertificateAuthority ||
+          !await _verifyCertificateSignature(certificate, issuer.publicKey)) {
+        throw AuthFlowException('webauthn_attestation_invalid');
+      }
+    }
+
+    final signedData = Uint8List.fromList(<int>[
+      ...authenticatorData,
+      ...clientDataHash,
+    ]);
+    if (!await _verifySignatureWithKey(
+      key: leaf.publicKey,
+      algorithm: algorithm,
+      message: signedData,
+      signature: Uint8List.fromList(signatureValue.cast<int>()),
+      derOnly: algorithm == -7,
+    )) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    _validateAndroidKeyAttestationExtension(
+      leaf.androidKeyAttestationExtension,
+      clientDataHash: clientDataHash,
+    );
+
+    return _VerifiedAttestationStatement(
+      kind: WebAuthnAttestationKind.certificate,
+      certificateTrustPath: certificates
+          .map((certificate) => certificate.derBytes)
+          .toList(growable: false),
+    );
+  }
+
+  List<_PackedAttestationCertificate> _parseAndroidKeyCertificateChain(
+    Object? value,
+  ) {
+    if (value is! List || value.isEmpty || value.length > 8) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    try {
+      final certificates = <_PackedAttestationCertificate>[];
+      for (final item in value) {
+        if (item is! List ||
+            item.isEmpty ||
+            item.length > 16384 ||
+            item.any((byte) => byte is! int || byte < 0 || byte > 255)) {
+          throw const FormatException();
+        }
+        certificates.add(
+          _parsePackedCertificate(Uint8List.fromList(item.cast<int>())),
+        );
+      }
+      if (certificates.first.androidKeyAttestationExtension == null) {
+        throw const FormatException();
+      }
+      return certificates;
+    } catch (_) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+  }
+
+  void _validateAndroidKeyAttestationExtension(
+    Uint8List? extension, {
+    required Uint8List clientDataHash,
+  }) {
+    try {
+      if (extension == null || extension.isEmpty || extension.length > 16384) {
+        throw const FormatException();
+      }
+      final description = _DerReader(extension).readSingle();
+      final fields = _derChildren(
+        description,
+        universalTag: 16,
+        maxElements: 8,
+      );
+      if (fields.length != 8) throw const FormatException();
+      _derUnsignedInteger(fields[0], universalTag: 2);
+      _derUnsignedInteger(fields[1], universalTag: 10);
+      _derUnsignedInteger(fields[2], universalTag: 2);
+      _derUnsignedInteger(fields[3], universalTag: 10);
+      final challenge = _derOctets(fields[4]);
+      _derOctets(fields[5]);
+      if (!_constantTimeBytesEqual(challenge, clientDataHash)) {
+        throw const FormatException();
+      }
+      final software = _parseAndroidAuthorizationList(fields[6]);
+      final tee = _parseAndroidAuthorizationList(fields[7]);
+      if (software.hasAllApplications || tee.hasAllApplications) {
+        throw const FormatException();
+      }
+      final origins = <int>{
+        if (software.origin != null) software.origin!,
+        if (tee.origin != null) tee.origin!,
+      };
+      if (origins.length != 1 || origins.single != 0) {
+        throw const FormatException();
+      }
+      final purposes = <int>{...software.purposes, ...tee.purposes};
+      if (purposes.length != 1 || purposes.single != 2) {
+        throw const FormatException();
+      }
+    } catch (_) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+  }
+
+  _AndroidAuthorizationList _parseAndroidAuthorizationList(_DerValue value) {
+    final fields = _derChildren(value, universalTag: 16, maxElements: 64);
+    final seenTags = <int>{};
+    var hasAllApplications = false;
+    int? origin;
+    var purposes = const <int>{};
+    for (final field in fields) {
+      if (field.tagClass != 2 || !field.constructed || field.tagNumber > 4096) {
+        throw const FormatException();
+      }
+      if (!seenTags.add(field.tagNumber)) throw const FormatException();
+      final explicitValue = _DerReader(field.value).readSingle();
+      switch (field.tagNumber) {
+        case 1:
+          final values = _derChildren(
+            explicitValue,
+            universalTag: 17,
+            maxElements: 16,
+          );
+          final parsed = <int>{};
+          for (final purpose in values) {
+            if (!parsed.add(_derUnsignedInteger(purpose, universalTag: 2))) {
+              throw const FormatException();
+            }
+          }
+          purposes = Set<int>.unmodifiable(parsed);
+        case 600:
+          if (explicitValue.tagClass != 0 ||
+              explicitValue.tagNumber != 5 ||
+              explicitValue.constructed ||
+              explicitValue.value.isNotEmpty) {
+            throw const FormatException();
+          }
+          hasAllApplications = true;
+        case 702:
+          origin = _derUnsignedInteger(explicitValue, universalTag: 2);
+      }
+    }
+    return _AndroidAuthorizationList(
+      purposes: purposes,
+      origin: origin,
+      hasAllApplications: hasAllApplications,
+    );
+  }
+
   _CosePublicKey _parseFidoU2fAttestationCertificate(Uint8List bytes) {
     try {
       final parser = ASN1Parser(bytes);
@@ -1452,6 +1649,7 @@ final class WebAuthnPlugin<TContext>
       var hasBasicConstraints = false;
       var isCertificateAuthority = false;
       Uint8List? certificateAaguid;
+      Uint8List? androidKeyAttestationExtension;
       for (final element in elements.skip(offset + 6)) {
         if (element.tag != 0xa3) continue;
         final extensionParser = ASN1Parser(element.valueBytes);
@@ -1511,6 +1709,15 @@ final class WebAuthnPlugin<TContext>
               throw const FormatException();
             }
             certificateAaguid = Uint8List.fromList(encodedAaguid.octets!);
+          } else if (identifier.objectIdentifierAsString ==
+              '1.3.6.1.4.1.11129.2.1.17') {
+            if (androidKeyAttestationExtension != null ||
+                value.octets == null ||
+                value.octets!.isEmpty ||
+                value.octets!.length > 16384) {
+              throw const FormatException();
+            }
+            androidKeyAttestationExtension = Uint8List.fromList(value.octets!);
           }
         }
       }
@@ -1530,6 +1737,7 @@ final class WebAuthnPlugin<TContext>
         organizationalUnit: names['2.5.4.11'],
         commonName: names['2.5.4.3'],
         aaguid: certificateAaguid,
+        androidKeyAttestationExtension: androidKeyAttestationExtension,
       );
     } catch (_) {
       throw AuthFlowException('webauthn_attestation_invalid');
@@ -1599,6 +1807,7 @@ final class WebAuthnPlugin<TContext>
         .objectIdentifierAsString) {
       '1.2.840.10045.4.3.2' => -7,
       '1.2.840.113549.1.1.11' => -257,
+      '1.3.101.112' => -8,
       _ => throw const FormatException(),
     };
   }
@@ -1666,7 +1875,44 @@ final class WebAuthnPlugin<TContext>
         exponent: exponentBytes,
       );
     }
+    if (identifier == '1.3.101.112') {
+      if (algorithmElements.length != 1 || keyBytes.length != 32) {
+        throw const FormatException();
+      }
+      return _CosePublicKey(
+        algorithm: -8,
+        ed25519PublicKey: Uint8List.fromList(keyBytes),
+      );
+    }
     throw const FormatException();
+  }
+
+  bool _cosePublicKeysEqual(_CosePublicKey first, _CosePublicKey second) {
+    if (first.algorithm != second.algorithm) return false;
+    return switch (first.algorithm) {
+      -8 =>
+        first.ed25519PublicKey != null &&
+            second.ed25519PublicKey != null &&
+            _constantTimeBytesEqual(
+              first.ed25519PublicKey!,
+              second.ed25519PublicKey!,
+            ),
+      -7 =>
+        first.x != null &&
+            first.y != null &&
+            second.x != null &&
+            second.y != null &&
+            _constantTimeBytesEqual(first.x!, second.x!) &&
+            _constantTimeBytesEqual(first.y!, second.y!),
+      -257 =>
+        first.modulus != null &&
+            first.exponent != null &&
+            second.modulus != null &&
+            second.exponent != null &&
+            _constantTimeBytesEqual(first.modulus!, second.modulus!) &&
+            _constantTimeBytesEqual(first.exponent!, second.exponent!),
+      _ => false,
+    };
   }
 
   Future<bool> _verifyCertificateSignature(
@@ -2153,6 +2399,7 @@ final class _PackedAttestationCertificate {
     this.organizationalUnit,
     this.commonName,
     this.aaguid,
+    this.androidKeyAttestationExtension,
   });
 
   final Uint8List derBytes;
@@ -2170,6 +2417,146 @@ final class _PackedAttestationCertificate {
   final String? organizationalUnit;
   final String? commonName;
   final Uint8List? aaguid;
+  final Uint8List? androidKeyAttestationExtension;
+}
+
+final class _AndroidAuthorizationList {
+  const _AndroidAuthorizationList({
+    required this.purposes,
+    required this.origin,
+    required this.hasAllApplications,
+  });
+
+  final Set<int> purposes;
+  final int? origin;
+  final bool hasAllApplications;
+}
+
+final class _DerValue {
+  const _DerValue({
+    required this.tagClass,
+    required this.constructed,
+    required this.tagNumber,
+    required this.value,
+  });
+
+  final int tagClass;
+  final bool constructed;
+  final int tagNumber;
+  final Uint8List value;
+}
+
+final class _DerReader {
+  _DerReader(this._bytes);
+
+  final Uint8List _bytes;
+  var _offset = 0;
+
+  _DerValue readSingle() {
+    final value = read();
+    if (_offset != _bytes.length) throw const FormatException();
+    return value;
+  }
+
+  _DerValue read() {
+    if (_offset >= _bytes.length) throw const FormatException();
+    final identifier = _bytes[_offset++];
+    final tagClass = identifier >> 6;
+    final constructed = identifier & 0x20 != 0;
+    var tagNumber = identifier & 0x1f;
+    if (tagNumber == 0x1f) {
+      tagNumber = 0;
+      var octets = 0;
+      while (true) {
+        if (_offset >= _bytes.length || octets == 5) {
+          throw const FormatException();
+        }
+        final byte = _bytes[_offset++];
+        if (octets == 0 && byte == 0x80) throw const FormatException();
+        tagNumber = (tagNumber << 7) | (byte & 0x7f);
+        octets++;
+        if (byte & 0x80 == 0) break;
+      }
+      if (tagNumber < 31) throw const FormatException();
+    }
+    if (_offset >= _bytes.length) throw const FormatException();
+    final firstLength = _bytes[_offset++];
+    int length;
+    if (firstLength & 0x80 == 0) {
+      length = firstLength;
+    } else {
+      final lengthOctets = firstLength & 0x7f;
+      if (lengthOctets == 0 ||
+          lengthOctets > 4 ||
+          _offset + lengthOctets > _bytes.length ||
+          _bytes[_offset] == 0) {
+        throw const FormatException();
+      }
+      length = 0;
+      for (var index = 0; index < lengthOctets; index++) {
+        length = (length << 8) | _bytes[_offset++];
+      }
+      if (length < 128) throw const FormatException();
+    }
+    if (length < 0 || _offset + length > _bytes.length) {
+      throw const FormatException();
+    }
+    final value = Uint8List.fromList(_bytes.sublist(_offset, _offset + length));
+    _offset += length;
+    return _DerValue(
+      tagClass: tagClass,
+      constructed: constructed,
+      tagNumber: tagNumber,
+      value: value,
+    );
+  }
+
+  bool get hasNext => _offset < _bytes.length;
+}
+
+List<_DerValue> _derChildren(
+  _DerValue value, {
+  required int universalTag,
+  required int maxElements,
+}) {
+  if (value.tagClass != 0 ||
+      value.tagNumber != universalTag ||
+      !value.constructed) {
+    throw const FormatException();
+  }
+  final reader = _DerReader(value.value);
+  final result = <_DerValue>[];
+  while (reader.hasNext) {
+    if (result.length == maxElements) throw const FormatException();
+    result.add(reader.read());
+  }
+  return result;
+}
+
+int _derUnsignedInteger(_DerValue value, {required int universalTag}) {
+  if (value.tagClass != 0 ||
+      value.tagNumber != universalTag ||
+      value.constructed ||
+      value.value.isEmpty ||
+      value.value.length > 8 ||
+      value.value.first & 0x80 != 0 ||
+      (value.value.length > 1 &&
+          value.value.first == 0 &&
+          value.value[1] & 0x80 == 0)) {
+    throw const FormatException();
+  }
+  var result = 0;
+  for (final byte in value.value) {
+    result = (result << 8) | byte;
+  }
+  return result;
+}
+
+Uint8List _derOctets(_DerValue value) {
+  if (value.tagClass != 0 || value.tagNumber != 4 || value.constructed) {
+    throw const FormatException();
+  }
+  return Uint8List.fromList(value.value);
 }
 
 final class _CosePublicKey {

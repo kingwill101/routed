@@ -464,6 +464,294 @@ void main() {
     );
 
     test(
+      'registers browser-shaped Android Key attestation through trust policy',
+      () async {
+        WebAuthnAttestationMetadata? observed;
+        final fixture = _Fixture(
+          attestationTrustPolicy: WebAuthnAttestationTrustPolicy(
+            evaluateCertificate: (metadata) {
+              observed = metadata;
+              return WebAuthnAttestationTrustDecision.accept;
+            },
+          ),
+        );
+        await fixture.store.users.create(fixture.user);
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        final saved = await fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _androidKeyRegistrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            purposeInSoftware: true,
+          ),
+        );
+
+        expect(saved.name, 'Android passkey');
+        expect(observed?.format, 'android-key');
+        expect(observed?.kind, WebAuthnAttestationKind.certificate);
+        expect(observed?.certificateTrustPath, hasLength(2));
+        expect(observed?.certificateTrustPath.first.derBytes, isNotEmpty);
+
+        final authentication = await fixture.feature.beginAuthentication(
+          context: fixture.context,
+          userId: fixture.user.id,
+        );
+        final result = await fixture.feature.finishAuthentication(
+          context: fixture.context,
+          credential: _assertionCredential(
+            challenge: authentication.challenge,
+            credentialId: saved.credentialId,
+            keyPair: fixture.keyPair,
+            counter: 1,
+          ),
+          userId: fixture.user.id,
+        );
+        expect(result.authenticator.counter, 1);
+      },
+    );
+
+    test(
+      'rejects forged Android Key statement and certificate signatures',
+      () async {
+        Future<void> expectInvalid(
+          Map<String, dynamic> Function(String challenge, _KeyPair keyPair)
+          credential,
+        ) async {
+          final fixture = _Fixture();
+          final registration = await fixture.feature.beginRegistration(
+            context: fixture.context,
+            user: fixture.user,
+          );
+          await expectLater(
+            () => fixture.feature.finishRegistration(
+              context: fixture.context,
+              user: fixture.user,
+              credential: credential(registration.challenge, fixture.keyPair),
+            ),
+            throwsA(
+              isA<AuthFlowException>()
+                  .having(
+                    (error) => error.code,
+                    'code',
+                    'webauthn_attestation_invalid',
+                  )
+                  .having(
+                    (error) => error.toString(),
+                    'public representation',
+                    isNot(contains('certificate')),
+                  ),
+            ),
+          );
+        }
+
+        await expectInvalid(
+          (challenge, keyPair) => _androidKeyRegistrationCredential(
+            challenge: challenge,
+            keyPair: keyPair,
+            corruptSignature: true,
+          ),
+        );
+        await expectInvalid(
+          (challenge, keyPair) => _androidKeyRegistrationCredential(
+            challenge: challenge,
+            keyPair: keyPair,
+            certificateIssuerKey: _KeyPair.create(
+              privateValue: BigInt.from(19),
+            ),
+          ),
+        );
+      },
+    );
+
+    test(
+      'rejects Android Key leaf keys that differ from credentialPublicKey',
+      () async {
+        final fixture = _Fixture();
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        final otherKey = _KeyPair.create(privateValue: BigInt.two);
+
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: _androidKeyRegistrationCredential(
+              challenge: registration.challenge,
+              keyPair: fixture.keyPair,
+              certificateKey: otherKey,
+              statementSigningKey: otherKey,
+            ),
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'webauthn_attestation_invalid',
+            ),
+          ),
+        );
+      },
+    );
+
+    test(
+      'rejects invalid Android Key authorization extension semantics',
+      () async {
+        final cases =
+            <
+              String,
+              Map<String, dynamic> Function(String challenge, _KeyPair keyPair)
+            >{
+              'challenge': (challenge, keyPair) =>
+                  _androidKeyRegistrationCredential(
+                    challenge: challenge,
+                    keyPair: keyPair,
+                    extensionChallenge: List<int>.filled(32, 0),
+                  ),
+              'software allApplications': (challenge, keyPair) =>
+                  _androidKeyRegistrationCredential(
+                    challenge: challenge,
+                    keyPair: keyPair,
+                    softwareAllApplications: true,
+                  ),
+              'tee allApplications': (challenge, keyPair) =>
+                  _androidKeyRegistrationCredential(
+                    challenge: challenge,
+                    keyPair: keyPair,
+                    teeAllApplications: true,
+                  ),
+              'missing origin': (challenge, keyPair) =>
+                  _androidKeyRegistrationCredential(
+                    challenge: challenge,
+                    keyPair: keyPair,
+                    includeOrigin: false,
+                  ),
+              'imported origin': (challenge, keyPair) =>
+                  _androidKeyRegistrationCredential(
+                    challenge: challenge,
+                    keyPair: keyPair,
+                    origin: 2,
+                  ),
+              'missing purpose': (challenge, keyPair) =>
+                  _androidKeyRegistrationCredential(
+                    challenge: challenge,
+                    keyPair: keyPair,
+                    includePurpose: false,
+                  ),
+              'additional purpose': (challenge, keyPair) =>
+                  _androidKeyRegistrationCredential(
+                    challenge: challenge,
+                    keyPair: keyPair,
+                    purposes: const <int>{2, 3},
+                  ),
+            };
+
+        for (final MapEntry(key: name, value: credential) in cases.entries) {
+          final fixture = _Fixture();
+          final registration = await fixture.feature.beginRegistration(
+            context: fixture.context,
+            user: fixture.user,
+          );
+          await expectLater(
+            () => fixture.feature.finishRegistration(
+              context: fixture.context,
+              user: fixture.user,
+              credential: credential(registration.challenge, fixture.keyPair),
+            ),
+            throwsA(
+              isA<AuthFlowException>().having(
+                (error) => error.code,
+                'code for $name',
+                'webauthn_attestation_invalid',
+              ),
+            ),
+          );
+        }
+      },
+    );
+
+    test('rejects malformed and oversized Android Key extension DER', () async {
+      final malformedExtensions = <List<int>>[
+        <int>[0x30, 0x80, 0x00, 0x00],
+        <int>[0x30, 0x03, 0x02, 0x02, 0x01],
+        <int>[..._androidKeyDescription(challenge: List<int>.filled(32, 1)), 0],
+        List<int>.filled(16385, 0),
+      ];
+      for (final extension in malformedExtensions) {
+        final fixture = _Fixture();
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: _androidKeyRegistrationCredential(
+              challenge: registration.challenge,
+              keyPair: fixture.keyPair,
+              extensionOverride: extension,
+            ),
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'webauthn_attestation_invalid',
+            ),
+          ),
+        );
+      }
+    });
+
+    test('rejects missing extension, raw ES256, and unbounded x5c', () async {
+      final cases =
+          <Map<String, dynamic> Function(String challenge, _KeyPair keyPair)>[
+            (challenge, keyPair) => _androidKeyRegistrationCredential(
+              challenge: challenge,
+              keyPair: keyPair,
+              omitAndroidKeyExtension: true,
+            ),
+            (challenge, keyPair) => _androidKeyRegistrationCredential(
+              challenge: challenge,
+              keyPair: keyPair,
+              rawStatementSignature: true,
+            ),
+            (challenge, keyPair) => _androidKeyRegistrationCredential(
+              challenge: challenge,
+              keyPair: keyPair,
+              certificateChain: <Object?>[List<int>.filled(16385, 0)],
+            ),
+          ];
+      for (final credential in cases) {
+        final fixture = _Fixture();
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: credential(registration.challenge, fixture.keyPair),
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'webauthn_attestation_invalid',
+            ),
+          ),
+        );
+      }
+    });
+
+    test(
       'registers and authenticates a browser-shaped FIDO U2F attestation',
       () async {
         final fixture = _Fixture();
@@ -1850,6 +2138,119 @@ Map<String, dynamic> _registrationCredential({
   };
 }
 
+Map<String, dynamic> _androidKeyRegistrationCredential({
+  required String challenge,
+  required _KeyPair keyPair,
+  _KeyPair? rootKey,
+  _KeyPair? certificateKey,
+  _KeyPair? certificateIssuerKey,
+  _KeyPair? statementSigningKey,
+  List<int>? extensionChallenge,
+  List<int>? extensionOverride,
+  bool includePurpose = true,
+  Set<int> purposes = const <int>{2},
+  bool purposeInSoftware = false,
+  bool includeOrigin = true,
+  int origin = 0,
+  bool originInSoftware = false,
+  bool softwareAllApplications = false,
+  bool teeAllApplications = false,
+  bool corruptSignature = false,
+  bool rawStatementSignature = false,
+  bool omitAndroidKeyExtension = false,
+  List<Object?>? certificateChain,
+}) {
+  final credentialId = Uint8List.fromList(
+    List<int>.generate(16, (index) => index + 1),
+  );
+  final coseKey = cbor.cbor.encode(<Object?, Object?>{
+    1: 2,
+    3: -7,
+    -1: 1,
+    -2: keyPair.x.toList(growable: false),
+    -3: keyPair.y.toList(growable: false),
+  });
+  final rpIdHash = crypto.sha256.convert(utf8.encode('example.com')).bytes;
+  final authData = <int>[
+    ...rpIdHash,
+    0x41,
+    0,
+    0,
+    0,
+    0,
+    ...List<int>.filled(16, 0),
+    credentialId.length >> 8,
+    credentialId.length & 0xff,
+    ...credentialId,
+    ...coseKey,
+  ];
+  final clientDataJson = _clientData(
+    type: 'webauthn.create',
+    challenge: challenge,
+    origin: 'https://example.com',
+  );
+  final clientDataHash = crypto.sha256.convert(clientDataJson).bytes;
+  final effectiveRootKey =
+      rootKey ?? _KeyPair.create(privateValue: BigInt.from(0x11));
+  final effectiveCertificateKey = certificateKey ?? keyPair;
+  final extension =
+      extensionOverride ??
+      _androidKeyDescription(
+        challenge: extensionChallenge ?? clientDataHash,
+        includePurpose: includePurpose,
+        purposes: purposes,
+        purposeInSoftware: purposeInSoftware,
+        includeOrigin: includeOrigin,
+        origin: origin,
+        originInSoftware: originInSoftware,
+        softwareAllApplications: softwareAllApplications,
+        teeAllApplications: teeAllApplications,
+      );
+  final rootCertificate = _androidTestCertificate(
+    subjectKey: effectiveRootKey,
+    issuerKey: effectiveRootKey,
+    subjectOrganizationalUnit: 'Android Attestation Root',
+    issuerOrganizationalUnit: 'Android Attestation Root',
+    isCertificateAuthority: true,
+  );
+  final leafCertificate = _androidTestCertificate(
+    subjectKey: effectiveCertificateKey,
+    issuerKey: certificateIssuerKey ?? effectiveRootKey,
+    subjectOrganizationalUnit: 'Android Keystore Key',
+    issuerOrganizationalUnit: 'Android Attestation Root',
+    androidKeyExtension: omitAndroidKeyExtension ? null : extension,
+  );
+  final derSignature = _signEs256(
+    statementSigningKey ?? effectiveCertificateKey,
+    <int>[...authData, ...clientDataHash],
+  );
+  final signature = rawStatementSignature
+      ? _rawEs256Signature(derSignature)
+      : derSignature;
+  if (corruptSignature) signature[signature.length - 1] ^= 0x01;
+  final attestationObject = cbor.cbor.encode(<String, Object?>{
+    'fmt': 'android-key',
+    'authData': authData,
+    'attStmt': <String, Object?>{
+      'alg': -7,
+      'sig': signature,
+      'x5c': certificateChain ?? <Object?>[leafCertificate, rootCertificate],
+    },
+  });
+  final encodedId = base64UrlNoPadding(credentialId);
+  return <String, dynamic>{
+    'id': encodedId,
+    'rawId': encodedId,
+    'type': 'public-key',
+    'response': <String, dynamic>{
+      'clientDataJSON': base64UrlNoPadding(clientDataJson),
+      'attestationObject': base64UrlNoPadding(attestationObject),
+      'transports': <String>['internal'],
+    },
+    'name': 'Android passkey',
+  };
+}
+
 Map<String, dynamic> _u2fRegistrationCredential({
   required String challenge,
   required _KeyPair keyPair,
@@ -2199,6 +2600,151 @@ Uint8List _packedAttestationCertificate(
           ..add(ASN1BitString(stringValues: signature)))
         .encode(),
   );
+}
+
+Uint8List _androidKeyDescription({
+  required List<int> challenge,
+  bool includePurpose = true,
+  Set<int> purposes = const <int>{2},
+  bool purposeInSoftware = false,
+  bool includeOrigin = true,
+  int origin = 0,
+  bool originInSoftware = false,
+  bool softwareAllApplications = false,
+  bool teeAllApplications = false,
+}) {
+  Uint8List authorizationList({required bool software}) {
+    final fields = <int>[];
+    if (includePurpose && purposeInSoftware == software) {
+      final purposeSet = ASN1Set();
+      for (final purpose in purposes.toList()..sort()) {
+        purposeSet.add(ASN1Integer(BigInt.from(purpose)));
+      }
+      fields.addAll(_derExplicitContext(1, purposeSet.encode()));
+    }
+    if ((software && softwareAllApplications) ||
+        (!software && teeAllApplications)) {
+      fields.addAll(_derExplicitContext(600, ASN1Null().encode()));
+    }
+    if (includeOrigin && originInSoftware == software) {
+      fields.addAll(
+        _derExplicitContext(702, ASN1Integer(BigInt.from(origin)).encode()),
+      );
+    }
+    return _derValue(<int>[0x30], fields);
+  }
+
+  return _derValue(
+    <int>[0x30],
+    <int>[
+      ...ASN1Integer(BigInt.from(300)).encode(),
+      ...ASN1Integer(BigInt.one, tag: 0x0a).encode(),
+      ...ASN1Integer(BigInt.from(300)).encode(),
+      ...ASN1Integer(BigInt.one, tag: 0x0a).encode(),
+      ...ASN1OctetString(octets: Uint8List.fromList(challenge)).encode(),
+      ...ASN1OctetString(octets: Uint8List(0)).encode(),
+      ...authorizationList(software: true),
+      ...authorizationList(software: false),
+    ],
+  );
+}
+
+Uint8List _androidTestCertificate({
+  required _KeyPair subjectKey,
+  required _KeyPair issuerKey,
+  required String subjectOrganizationalUnit,
+  required String issuerOrganizationalUnit,
+  bool isCertificateAuthority = false,
+  List<int>? androidKeyExtension,
+}) {
+  final signatureAlgorithm = ASN1Sequence()
+    ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.10045.4.3.2'));
+  final subject = _certificateName(subjectOrganizationalUnit);
+  final issuer = _certificateName(issuerOrganizationalUnit);
+  final publicKeyAlgorithm = ASN1Sequence()
+    ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.10045.2.1'))
+    ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.10045.3.1.7'));
+  final subjectPublicKeyInfo = ASN1Sequence()
+    ..add(publicKeyAlgorithm)
+    ..add(
+      ASN1BitString(
+        stringValues: <int>[0x04, ...subjectKey.x, ...subjectKey.y],
+      ),
+    );
+  final basicConstraints = ASN1Sequence();
+  if (isCertificateAuthority) basicConstraints.add(ASN1Boolean(true));
+  final extensions = ASN1Sequence()
+    ..add(
+      ASN1Sequence()
+        ..add(ASN1ObjectIdentifier.fromIdentifierString('2.5.29.19'))
+        ..add(ASN1Boolean(true))
+        ..add(ASN1OctetString(octets: basicConstraints.encode())),
+    );
+  if (androidKeyExtension != null) {
+    extensions.add(
+      ASN1Sequence()
+        ..add(
+          ASN1ObjectIdentifier.fromIdentifierString('1.3.6.1.4.1.11129.2.1.17'),
+        )
+        ..add(ASN1OctetString(octets: Uint8List.fromList(androidKeyExtension))),
+    );
+  }
+  final tbsCertificate = ASN1Sequence()
+    ..add(_explicitAsn1(0xa0, ASN1Integer(BigInt.two).encode()))
+    ..add(ASN1Integer(BigInt.from(androidKeyExtension == null ? 20 : 21)))
+    ..add(signatureAlgorithm)
+    ..add(issuer)
+    ..add(
+      ASN1Sequence()
+        ..add(ASN1UtcTime(DateTime.utc(2020, 1, 1)))
+        ..add(ASN1UtcTime(DateTime.utc(2040, 1, 1))),
+    )
+    ..add(subject)
+    ..add(subjectPublicKeyInfo)
+    ..add(_explicitAsn1(0xa3, extensions.encode()));
+  final signature = _signEs256(issuerKey, tbsCertificate.encode());
+  return Uint8List.fromList(
+    (ASN1Sequence()
+          ..add(tbsCertificate)
+          ..add(signatureAlgorithm)
+          ..add(ASN1BitString(stringValues: signature)))
+        .encode(),
+  );
+}
+
+Uint8List _derExplicitContext(int tagNumber, List<int> value) {
+  final identifier = <int>[0xa0];
+  if (tagNumber < 31) {
+    identifier[0] |= tagNumber;
+  } else {
+    identifier[0] |= 0x1f;
+    final encodedTag = <int>[tagNumber & 0x7f];
+    var remaining = tagNumber >> 7;
+    while (remaining != 0) {
+      encodedTag.insert(0, 0x80 | (remaining & 0x7f));
+      remaining >>= 7;
+    }
+    identifier.addAll(encodedTag);
+  }
+  return _derValue(identifier, value);
+}
+
+Uint8List _derValue(List<int> identifier, List<int> value) {
+  final length = <int>[];
+  if (value.length < 128) {
+    length.add(value.length);
+  } else {
+    final encodedLength = <int>[];
+    var remaining = value.length;
+    while (remaining != 0) {
+      encodedLength.insert(0, remaining & 0xff);
+      remaining >>= 8;
+    }
+    length
+      ..add(0x80 | encodedLength.length)
+      ..addAll(encodedLength);
+  }
+  return Uint8List.fromList(<int>[...identifier, ...length, ...value]);
 }
 
 Uint8List _packedRsaAttestationCertificate(_RsaKeyPair keyPair) {
