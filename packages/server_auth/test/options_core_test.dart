@@ -72,6 +72,37 @@ void main() {
       );
     });
 
+    test('production browser origins exactly match the typed boundary', () {
+      expect(
+        () => AuthOptions<String>(
+          providers: const <AuthProvider>[],
+          store: _DurableAuthStore(),
+          productionBoundary: _productionBoundary(),
+          browserProtection: AuthBrowserProtectionOptions.production(
+            trustedOrigins: const <String>[
+              'https://app.example.com',
+              'https://unexpected.example.com',
+            ],
+          ),
+        ),
+        throwsArgumentError,
+      );
+
+      final options = AuthOptions<String>(
+        providers: const <AuthProvider>[],
+        store: _DurableAuthStore(),
+        productionBoundary: _productionBoundary(),
+        browserProtection: const AuthBrowserProtectionOptions(
+          allowedOrigins: <String>['https://app.example.com'],
+          requireOrigin: true,
+          enforceReferrer: true,
+          requireContentType: true,
+        ),
+      );
+
+      expect(options.runtimeMode, AuthRuntimeMode.production);
+    });
+
     test('production JWT sessions require algorithm-sized secrets', () {
       expect(
         () => AuthOptions<String>(

@@ -466,18 +466,20 @@ void _validateProductionBrowserPolicy(
           'Referer fallback, and Content-Type checks',
     );
   }
-  final trusted = policy.trustedOrigins.toSet();
-  if (!trusted.containsAll(boundary.trustedOrigins)) {
-    throw ArgumentError.value(
-      policy.trustedOrigins,
-      'browserProtection.trustedOrigins',
-      'must include every production boundary origin',
-    );
-  }
-  for (final value in <String>{
+  final configuredOrigins = <String>{
     ...policy.allowedOrigins,
     ...policy.trustedOrigins,
-  }) {
+  };
+  final boundaryOrigins = boundary.trustedOrigins.toSet();
+  if (configuredOrigins.length != boundaryOrigins.length ||
+      !configuredOrigins.containsAll(boundaryOrigins)) {
+    throw ArgumentError.value(
+      configuredOrigins,
+      'browserProtection',
+      'allowed and trusted origins must exactly match the production boundary',
+    );
+  }
+  for (final value in configuredOrigins) {
     final origin = Uri.tryParse(value);
     if (origin == null ||
         normalizeAuthOrigin(origin, requireHttps: true) != value) {
