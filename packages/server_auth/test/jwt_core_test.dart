@@ -63,6 +63,27 @@ void main() {
     expect(jwtIssuedAtUtc(999999999999999999), isNull);
   });
 
+  test('jwtAuthenticationTimeUtc prefers auth_time and fails closed', () {
+    expect(
+      jwtAuthenticationTimeUtc(<String, dynamic>{
+        'auth_time': 1_700_000_000,
+        'iat': 1_800_000_000,
+      }),
+      DateTime.fromMillisecondsSinceEpoch(1_700_000_000_000, isUtc: true),
+    );
+    expect(
+      jwtAuthenticationTimeUtc(<String, dynamic>{'iat': 1_700_000_000}),
+      DateTime.fromMillisecondsSinceEpoch(1_700_000_000_000, isUtc: true),
+    );
+    expect(
+      jwtAuthenticationTimeUtc(<String, dynamic>{
+        'auth_time': 'bad',
+        'iat': 1_800_000_000,
+      }),
+      isNull,
+    );
+  });
+
   test('shouldRefreshJwtByIssuedAt respects update age threshold', () {
     final now = DateTime.utc(2026, 2, 24, 12);
     final issuedAtSeconds =
@@ -268,6 +289,10 @@ void main() {
     final verifier = JwtVerifier(options: options.toVerifierOptions());
     final payload = await verifier.verifyToken(issued.token);
     expect(payload.subject, equals('user-1'));
+    expect(
+      payload.claims[authJwtAuthenticationTimeClaim],
+      payload.claims['iat'],
+    );
   });
 
   test(
@@ -294,6 +319,9 @@ void main() {
       final now = DateTime.utc(2026, 2, 24, 12);
       final claims = <String, dynamic>{
         'sub': 'user-1',
+        authJwtAuthenticationTimeClaim: _secondsSinceEpoch(
+          now.subtract(const Duration(hours: 1)),
+        ),
         'iat': _secondsSinceEpoch(now.subtract(const Duration(minutes: 10))),
       };
 
@@ -302,7 +330,11 @@ void main() {
         claims: claims,
         updateAge: const Duration(minutes: 5),
         now: now,
-        resolveClaims: (token) => <String, dynamic>{...token, 'plan': 'pro'},
+        resolveClaims: (token) => <String, dynamic>{
+          ...token,
+          'plan': 'pro',
+          authJwtAuthenticationTimeClaim: _secondsSinceEpoch(now),
+        },
       );
 
       expect(refreshed, isNotNull);
@@ -316,6 +348,10 @@ void main() {
       );
       final payload = await verifier.verifyToken(refreshed.token);
       expect(payload.claims['plan'], equals('pro'));
+      expect(
+        payload.claims[authJwtAuthenticationTimeClaim],
+        _secondsSinceEpoch(now.subtract(const Duration(hours: 1))),
+      );
     },
   );
 

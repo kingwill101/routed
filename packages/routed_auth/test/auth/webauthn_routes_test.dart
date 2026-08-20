@@ -26,6 +26,8 @@ SessionConfig _sessionConfig() {
 Future<_PasswordlessUnlinkFixture> _passwordlessUnlinkFixture({
   DateTime Function()? clock,
   bool supportsAtomicMutation = true,
+  AuthSessionStrategy sessionStrategy = AuthSessionStrategy.session,
+  DateTime? jwtAuthenticatedAt,
 }) async {
   final user = AuthUser(id: 'user-1', email: 'user@example.com');
   final memoryStore = InMemoryAuthStore();
@@ -70,6 +72,8 @@ Future<_PasswordlessUnlinkFixture> _passwordlessUnlinkFixture({
       plugins: <AuthServerPlugin<EngineContext>>[
         WebAuthnPlugin<EngineContext>(provider: webAuthnProvider),
       ],
+      sessionStrategy: sessionStrategy,
+      jwtOptions: const JwtSessionOptions(secret: 'passwordless-jwt-test'),
       enforceCsrf: false,
     ),
     clock: clock,
@@ -77,6 +81,25 @@ Future<_PasswordlessUnlinkFixture> _passwordlessUnlinkFixture({
   final engine = _engine(manager);
   await engine.initialize();
   final client = TestClient(RoutedRequestHandler(engine));
+  if (sessionStrategy == AuthSessionStrategy.jwt) {
+    final issued = issueAuthJwtToken(
+      options: manager.options.jwtOptions,
+      claims: <String, dynamic>{
+        ...authJwtClaimsForUser(user),
+        authJwtVersionClaim: 0,
+        if (jwtAuthenticatedAt != null)
+          'auth_time':
+              jwtAuthenticatedAt.toUtc().millisecondsSinceEpoch ~/ 1000,
+      },
+    );
+    return _PasswordlessUnlinkFixture(
+      client: client,
+      store: memoryStore,
+      sessionHeaders: <String, List<String>>{
+        HttpHeaders.cookieHeader: [_cookieHeader(issued.cookie)],
+      },
+    );
+  }
   final csrfResponse = await client.get('/auth/csrf');
   final csrf = csrfResponse.json()['csrfToken'] as String;
   final initialCookie = csrfResponse.cookie('test_session')!;
@@ -331,6 +354,35 @@ void main() {
     expect(response.json()['error'], 'recent_authentication_required');
     expect(await fixture.store.accounts.find('github', 'github-1'), isNotNull);
   });
+
+  test(
+    'fresh JWT iat cannot renew stale passwordless authentication',
+    () async {
+      final fixture = await _passwordlessUnlinkFixture(
+        sessionStrategy: AuthSessionStrategy.jwt,
+        jwtAuthenticatedAt: DateTime.now().toUtc().subtract(
+          const Duration(hours: 1),
+        ),
+      );
+      addTearDown(fixture.client.close);
+
+      final response = await fixture.client.postJson(
+        '/auth/accounts/unlink',
+        const <String, dynamic>{
+          'providerId': 'github',
+          'providerAccountId': 'github-1',
+        },
+        headers: fixture.sessionHeaders,
+      );
+
+      response.assertStatus(HttpStatus.forbidden);
+      expect(response.json()['error'], 'recent_authentication_required');
+      expect(
+        await fixture.store.accounts.find('github', 'github-1'),
+        isNotNull,
+      );
+    },
+  );
 
   test('unlink is unavailable when the store cannot join atomically', () async {
     final fixture = await _passwordlessUnlinkFixture(

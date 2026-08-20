@@ -44,7 +44,7 @@ import 'package:server_auth/server_auth.dart'
         AuthTwoFactorStepUpToken,
         authJwtVersionClaim,
         jwtClaimsAttribute,
-        jwtIssuedAtUtc,
+        jwtAuthenticationTimeUtc,
         AuthFlowException,
         AuthPasswordResetRequest,
         AuthPasswordResetResult,
@@ -1381,7 +1381,9 @@ class AuthManager {
         break;
       case AuthSessionStrategy.jwt:
         final claims = ctx.get<Map<String, dynamic>>(jwtClaimsAttribute);
-        authenticatedAt = jwtIssuedAtUtc(claims?['iat']);
+        authenticatedAt = claims == null
+            ? null
+            : jwtAuthenticationTimeUtc(claims);
         break;
     }
     if (policy.allowsSensitiveAction(

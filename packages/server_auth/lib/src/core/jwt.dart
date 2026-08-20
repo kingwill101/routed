@@ -28,6 +28,9 @@ const String jwtSubjectAttribute = 'auth.jwt.subject';
 /// Claim carrying the per-user JWT session version.
 const String authJwtVersionClaim = 'auth_version';
 
+/// OIDC authentication-time claim preserved across JWT refreshes.
+const String authJwtAuthenticationTimeClaim = 'auth_time';
+
 const int _maxJwksResponseCharacters = 1024 * 1024;
 const int _maxJwksKeys = 128;
 
@@ -44,6 +47,19 @@ DateTime? jwtIssuedAtUtc(Object? value) {
   } on ArgumentError {
     return null;
   }
+}
+
+/// Resolves the original authentication time for a JWT session.
+///
+/// New tokens carry [authJwtAuthenticationTimeClaim]. Tokens issued before
+/// that claim existed fall back to `iat` until their first refresh. A present
+/// but malformed `auth_time` fails closed instead of falling back to a newer
+/// issuance timestamp.
+DateTime? jwtAuthenticationTimeUtc(Map<String, dynamic> claims) {
+  if (claims.containsKey(authJwtAuthenticationTimeClaim)) {
+    return jwtIssuedAtUtc(claims[authJwtAuthenticationTimeClaim]);
+  }
+  return jwtIssuedAtUtc(claims['iat']);
 }
 
 /// Returns true when a JWT should be refreshed based on its `iat` claim.
@@ -161,6 +177,10 @@ Future<AuthIssuedJwtToken?> refreshAuthJwtTokenIfNeeded({
   final nextClaims = await Future<Map<String, dynamic>>.value(
     resolveClaims(Map<String, dynamic>.from(claims)),
   );
+  nextClaims[authJwtAuthenticationTimeClaim] =
+      claims.containsKey(authJwtAuthenticationTimeClaim)
+      ? claims[authJwtAuthenticationTimeClaim]
+      : claims['iat'];
   return issueAuthJwtToken(options: options, claims: nextClaims);
 }
 
@@ -696,13 +716,18 @@ class JwtIssuer {
   /// Issues a signed JWT containing the given [claims].
   String issue(Map<String, dynamic> claims) {
     final now = DateTime.now();
+    final issuedAt = now.millisecondsSinceEpoch ~/ 1000;
     final exp = now.add(options.maxAge).millisecondsSinceEpoch ~/ 1000;
 
     final key = jwtSecretKey(options.secret);
     final builder = JsonWebSignatureBuilder()
       ..jsonContent = {
         ...claims,
-        'iat': now.millisecondsSinceEpoch ~/ 1000,
+        authJwtAuthenticationTimeClaim:
+            claims.containsKey(authJwtAuthenticationTimeClaim)
+            ? claims[authJwtAuthenticationTimeClaim]
+            : issuedAt,
+        'iat': issuedAt,
         'exp': exp,
         if (options.issuer != null) 'iss': options.issuer,
         if (options.audience != null) 'aud': options.audience,
