@@ -19,7 +19,11 @@ storage/
 
 # Test artifacts
 **/templates/test/logs/
-packages/routed_hotwire/test/logs/
+packages/routed_hotwire/test/logs/*
+!packages/routed_hotwire/test/logs/browser_test-2026-01-18.log
+!packages/routed_hotwire/test/logs/browser_test-2026-08-15.log
+!packages/routed_hotwire/test/logs/server_testing-2026-01-18.log
+!packages/routed_hotwire/test/logs/server_testing-2026-08-15.log
 **/coverage/
 packages/server_testing/server_testing/test_screenshots/
 
