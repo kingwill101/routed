@@ -115,12 +115,15 @@ The work is intentionally split between framework-agnostic capabilities in
 - [x] Add packed self/certificate attestation with ES256 and RS256 plus FIDO U2F
   attestation, including browser DER signatures and bounded certificate/chain
   validation.
+- [x] Add strict Android Key, Apple Anonymous, and TPM 2.0 attestation with
+  challenge or nonce binding, authenticator-key matching, certificate
+  validation, and fail-closed malformed-input handling.
 - [x] Expose the registration, assertion, listing, and deletion contracts
   through the typed plugin registry, Routed routes, and `AuthClient`.
 - [ ] Finish the broader WebAuthn subsystem. Session issuance, passkey rename,
-  Ed25519, and an explicit accept/reject/downgrade attestation-root trust policy
-  are implemented, but FIDO metadata and the remaining attestation formats are
-  still pending.
+  Ed25519, Android Key, Apple Anonymous, TPM 2.0, and an explicit
+  accept/reject/downgrade attestation-root trust policy are implemented, but
+  FIDO metadata and deprecated attestation formats are still pending.
 - [x] Add an optional native `TwoFactorPlugin` with TOTP enrollment
   verification, protected-secret and typed-store boundaries, recovery-code
   hashing and atomic one-time consumption, lockout handling, disablement, and
@@ -200,7 +203,7 @@ account, session, client, and plugin contracts above:
 - [x] Add email OTP as a separate one-time-code flow alongside magic links.
 - [x] Add phone-number authentication with provider-owned delivery and
   verification boundaries.
-- [ ] Add username-first authentication and explicit identifier policy.
+- [x] Add username-first authentication and explicit identifier policy.
 - [x] Add anonymous/guest sessions with safe account upgrade/linking rules.
 - [ ] Track the last successful authentication method without storing secrets.
 - [x] Add captcha and breached-password checks as opt-in security plugins.

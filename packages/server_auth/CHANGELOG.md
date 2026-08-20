@@ -3,12 +3,21 @@
 - Add opt-in phone-number authentication with strict E.164 identifiers,
   digest-at-rest one-time codes, bounded replay attempts, provider-owned
   delivery, session issuance, lifecycle deletion, and a typed client plugin.
+- Add opt-in username authentication with an explicit typed identifier policy,
+  atomic normalized-identifier ownership, generic public failures, session and
+  two-factor integration, and a separately selected typed client plugin.
 - Add opt-in captcha and breached-password policy plugins with bounded,
   fail-closed application provider contracts, generic public failures,
   property coverage, and a captcha-aware credentials client plugin.
 - Add an explicit WebAuthn attestation trust policy with
   accept/reject/downgrade decisions and exact local trust roots, plus strict
   Ed25519 registration, packed self-attestation, and assertion verification.
+- Add strict Android Key, Apple Anonymous, and TPM 2.0 WebAuthn attestation
+  verification with browser-shaped fixtures, certificate-chain validation,
+  public-key binding, and fail-closed malformed-input handling.
+- Include pending two-factor recovery challenges in plugin-owned hard deletion
+  and rollback checkpoints so account removal cannot leave reusable recovery
+  state behind.
 - Extend the public durable-store conformance suite with contention cases for
   users, credentials, accounts, sessions, tokens, OAuth challenges, JWT
   versions, device authorization, and email OTP.
@@ -55,9 +64,10 @@
 
 - Add the opt-in typed `WebAuthnPlugin` with digest-at-rest one-time challenges,
   durable authenticator/counter contracts, `none`, packed self/certificate, and
-  FIDO U2F attestation, browser DER ES256 assertions, ES256/RS256 packed
-  verification, exact origin/RP-ID binding, and replay-safe counters. Remaining
-  attestation formats and FIDO metadata remain explicit follow-up work.
+  FIDO U2F, Android Key, Apple Anonymous, and TPM 2.0 attestation, browser DER
+  ES256 assertions, ES256/RS256 packed verification, exact origin/RP-ID binding,
+  and replay-safe counters. FIDO metadata and deprecated attestation formats
+  remain explicit follow-up work.
 - Make password reset/change fail closed by rotating JWT versions and revoking
   server sessions before replacing credentials.
 - Derive `AuthStoreMode` when framework composition replaces the configured

@@ -2,6 +2,9 @@
 
 - Mount phone-number send/verify operations from the opt-in server plugin and
   issue normal Routed sessions after successful verification.
+- Mount opt-in username registration and sign-in operations with typed
+  identifier policy, normal session/two-factor handling, and an independently
+  selected username client plugin.
 - Apply opt-in captcha checks to credential sign-in/registration and
   breached-password checks to registration, reset, and password change while
   preserving generic HTTP failures and existing rate limits.
