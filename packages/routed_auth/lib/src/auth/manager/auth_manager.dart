@@ -52,11 +52,11 @@ import 'package:server_auth/server_auth.dart'
         AuthEmailChangeRequest,
         AuthAccountDeletionDelivery,
         AuthAccountDeletionConfirmed,
-        AuthAccountDeletionStore,
         AuthAdminStoreCapabilities,
         AuthAuthenticationLifecycleEvent,
         AuthAuthenticationLifecycleEventType,
-        AuthUserDataDeletionContributor,
+        AuthUserAccessRevocationContributor,
+        AuthUserDeletionCoordinatorHost,
         AuthUser,
         AuthRuntime,
         AdminPlugin,
@@ -821,27 +821,14 @@ class AuthManager {
       action: AuthRateLimitAction.accountDeletion,
       identifier: session.user.id,
     );
-    final deletionStore = store is AuthAccountDeletionStore
-        ? store as AuthAccountDeletionStore
+    final deletionHost = store is AuthUserDeletionCoordinatorHost
+        ? store as AuthUserDeletionCoordinatorHost
         : null;
-    if (deletionStore == null) {
+    if (deletionHost == null) {
       throw AuthFlowException('account_deletion_unavailable');
     }
-    final contributors = runtime.registry.values
-        .whereType<AuthUserDataDeletionContributor>()
-        .toList(growable: false);
-    for (final contributor in contributors) {
-      await contributor.validateUserDeletion(session.user.id);
-    }
-    final deleted = await deletionStore.confirmAndDeleteUser(
-      userId: session.user.id,
-      token: token,
-      deleteContributedData: () async {
-        for (final contributor in contributors) {
-          await contributor.deleteUserData(session.user.id);
-        }
-      },
-    );
+    final deleted = await deletionHost.userDeletionCoordinator
+        .confirmAndDeleteUser(userId: session.user.id, token: token);
     if (!deleted) throw AuthFlowException('invalid_deletion_token');
     await sessionAuth.logout(ctx);
     if (ctx.hasSession) ctx.session.destroy();
@@ -969,13 +956,10 @@ class AuthManager {
       throw AuthFlowException('account_deletion_unavailable');
     }
     final contributors = runtime.registry.values
-        .whereType<AuthUserDataDeletionContributor>()
+        .whereType<AuthUserAccessRevocationContributor>()
         .toList(growable: false);
     for (final contributor in contributors) {
-      await contributor.validateUserDeletion(user.id);
-    }
-    for (final contributor in contributors) {
-      await contributor.deleteUserData(user.id);
+      await contributor.revokeUserAccess(user.id);
     }
     await store.sessions.revokeAllForUser(user.id);
     await store.jwtVersions.rotate(user.id);

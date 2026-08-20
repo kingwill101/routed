@@ -1012,8 +1012,10 @@ void main() {
 final class _FailOnceDeletionPlugin
     implements
         AuthServerPlugin<EngineContext>,
-        AuthUserDataDeletionContributor {
+        AuthUserDeletionPlanContributor,
+        AuthInMemoryUserDeletionOperation {
   int deleteAttempts = 0;
+  late AuthInMemoryUserDeletionDomain _domain;
 
   @override
   String get id => 'fail_once_deletion';
@@ -1022,14 +1024,30 @@ final class _FailOnceDeletionPlugin
   String get userDataNamespace => id;
 
   @override
-  void configure(AuthServerPluginContext<EngineContext> context) {}
+  void configure(AuthServerPluginContext<EngineContext> context) {
+    final host = context.store as AuthUserDeletionCoordinatorHost;
+    _domain =
+        host.userDeletionCoordinator.domain as AuthInMemoryUserDeletionDomain;
+  }
 
   @override
-  Future<void> validateUserDeletion(String userId) async {}
+  AuthUserDeletionPlan createUserDeletionPlan(AuthUser user) =>
+      AuthInMemoryUserDeletionPlan(
+        domain: _domain,
+        userId: user.id,
+        namespace: userDataNamespace,
+        operation: this,
+      );
 
   @override
-  Future<void> deleteUserData(String userId) async {
+  Object captureState() => Object();
+
+  @override
+  Future<void> apply() async {
     deleteAttempts += 1;
     if (deleteAttempts == 1) throw AuthFlowException('cleanup_failed');
   }
+
+  @override
+  void restoreState(Object state) {}
 }
