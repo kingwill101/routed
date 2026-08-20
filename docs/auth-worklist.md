@@ -246,9 +246,11 @@ native auth model.
   executed with core deletion by one storage transaction. Include anonymous,
   email-OTP, API-key, WebAuthn, two-factor, and organization-owned state, and
   fail closed when contributors use another persistence domain.
-- [ ] Make organization last-owner checks transactional and retain a
-  non-personal revocation receipt so explicit user-ID reuse cannot reactivate
-  credentials or JWTs after hard deletion.
+- [x] Make organization last-owner checks transactional across removal,
+  demotion, role replacement, leave, and user-deletion paths, with reusable
+  durable-store conformance and contention coverage.
+- [ ] Retain a non-personal revocation receipt so explicit user-ID reuse cannot
+  reactivate credentials or JWTs after hard deletion.
 
 ## Required test coverage
 

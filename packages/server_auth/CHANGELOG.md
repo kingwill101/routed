@@ -23,6 +23,9 @@
 - Make public WebAuthn authentication options enrollment-indistinguishable and
   validate certificate paths against configured trust anchors even when the
   authenticator omits the root from `x5c`.
+- Preserve an organization owner through atomic, snapshot-checked membership
+  removal, leave, demotion, role replacement, role mutation, and user-deletion
+  operations, with a public durable-store ownership conformance helper.
 - Extend the public durable-store conformance suite with contention cases for
   users, credentials, accounts, sessions, tokens, OAuth challenges, JWT
   versions, device authorization, and email OTP.
