@@ -2,6 +2,10 @@
 library;
 
 export 'server_auth.dart';
+export 'src/testing/auth_provider_fixtures.dart';
+export 'src/testing/auth_test_endpoint.dart';
+export 'src/testing/auth_test_http.dart';
+export 'src/testing/auth_test_primitives.dart';
 export 'src/testing/auth_plugin_conformance.dart';
 export 'src/testing/auth_store_conformance.dart';
 export 'src/testing/organization_store_conformance.dart';
