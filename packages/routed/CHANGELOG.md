@@ -1,13 +1,10 @@
-## Unreleased
-
-- **Breaking security change:** proxy support requires explicit trusted proxy
-  networks and no longer trusts all forwarded addresses by default.
-
 ## 0.5.0
 
 - **Breaking:** Consolidate provider and registry imports on
   `package:routed/routed.dart` and `package:routed_core/routed_core.dart`;
   remove the redundant `routed_core/providers.dart` sub-barrel.
+- **Breaking security change:** proxy support requires explicit trusted proxy
+  networks and no longer trusts all forwarded addresses by default.
 
 ## 0.4.0
 
