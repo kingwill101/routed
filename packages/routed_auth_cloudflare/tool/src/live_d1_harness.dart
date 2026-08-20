@@ -350,6 +350,34 @@ final class DefaultLiveD1ConformanceExecutor
         }
       }
 
+      final webAuthnSuite = AuthWebAuthnStoreConformanceSuite(() async {
+        final schema = await newSchema();
+        final store = CloudflareD1AuthStore(
+          database,
+          schema: schema,
+          clock: _clock,
+        );
+        return AuthWebAuthnStoreConformanceFixture(
+          capabilities: store,
+          dispose: () => disposeSchema(schema),
+        );
+      });
+      for (final conformanceCase in webAuthnSuite.cases) {
+        final id = 'webauthn.${conformanceCase.id}';
+        try {
+          await conformanceCase.run();
+          results.add(LiveD1ConformanceCaseResult(id: id, passed: true));
+        } catch (error) {
+          results.add(
+            LiveD1ConformanceCaseResult(
+              id: id,
+              passed: false,
+              error: _safeError(error),
+            ),
+          );
+        }
+      }
+
       results.add(
         await _runAdapterCase('username.atomic', () async {
           final schema = await newSchema();
