@@ -160,14 +160,14 @@ final class MagicLinkPlugin<TContext> extends AuthProvider
     _hostEndpoint(
       id: 'magicLink.$id.send',
       method: AuthOperationMethod.post,
-      path: '/signin/$id',
+      path: AuthRoutePath('/signin/$id'),
       operation: authMagicLinkSendRateLimitOperation,
       replaySafety: AuthMutationReplaySafety.repeatable,
     ),
     _hostEndpoint(
       id: 'magicLink.$id.verify',
       method: AuthOperationMethod.get,
-      path: '/callback/$id',
+      path: AuthRoutePath('/callback/$id'),
       operation: authMagicLinkVerifyRateLimitOperation,
       replaySafety: AuthMutationReplaySafety.singleUse,
     ),
@@ -177,7 +177,7 @@ final class MagicLinkPlugin<TContext> extends AuthProvider
   _hostEndpoint({
     required String id,
     required AuthOperationMethod method,
-    required String path,
+    required AuthRoutePath path,
     required AuthRateLimitOperation operation,
     required AuthMutationReplaySafety replaySafety,
   }) => TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
