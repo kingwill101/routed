@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:server_auth/testing.dart';
 import 'package:test/test.dart';
 
@@ -53,6 +55,48 @@ void main() {
       ]),
     );
   });
+
+  test(
+    'concurrent hard deletion cannot leave a creation replay receipt',
+    () async {
+      final reachedWrite = Completer<void>();
+      final resumeCreate = Completer<void>();
+      final store = InMemoryAuthStore(
+        anonymousFaultInjector: (point) async {
+          if (point != AuthAnonymousInMemoryFaultPoint.afterCreateWrite) return;
+          reachedWrite.complete();
+          await resumeCreate.future;
+        },
+      );
+      AuthRuntime<Object>(
+        options: AuthOptions<Object>(
+          providers: const [],
+          store: store,
+          storeMode: AuthStoreMode.ephemeral,
+          plugins: [AnonymousPlugin<Object>()],
+        ),
+      );
+      final command = AuthAnonymousCreateAccountCommand(
+        operationId: 'concurrent-hard-delete-create',
+        user: AuthUser(id: 'concurrent-hard-delete-user', isAnonymous: true),
+      );
+
+      final creation = store.createAnonymousAccount(command);
+      await reachedWrite.future;
+      expect(
+        await store.userDeletionCoordinator.deleteUser(command.user.id),
+        isTrue,
+      );
+      resumeCreate.complete();
+
+      await expectLater(creation, throwsStateError);
+      expect(await store.users.findById(command.user.id), isNull);
+      await expectLater(
+        store.createAnonymousAccount(command),
+        throwsStateError,
+      );
+    },
+  );
 }
 
 final class _FaultController

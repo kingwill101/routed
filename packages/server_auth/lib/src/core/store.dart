@@ -778,11 +778,21 @@ class InMemoryAuthStore
         user: user,
         subjectUserId: user.id,
       );
+      if (!identical(await users.findById(user.id), user)) {
+        throw StateError(
+          'Anonymous account was deleted before creation committed',
+        );
+      }
       return AuthAnonymousMutationResult(
         AuthAnonymousMutationStatus.applied,
         user: user,
       );
     } catch (error, stackTrace) {
+      final receipt = _anonymousReceipts[command.operationId];
+      if (receipt?.fingerprint == fingerprint &&
+          receipt?.subjectUserId == command.user.id) {
+        _anonymousReceipts.remove(command.operationId);
+      }
       if (created) {
         final current = await users.findById(command.user.id);
         if (identical(current, command.user)) {
