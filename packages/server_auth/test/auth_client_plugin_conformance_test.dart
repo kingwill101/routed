@@ -249,28 +249,31 @@ void main() {
       },
     );
 
-    test('executes the installed API and both codec boundaries', () async {
-      const plugin = _EchoClientPlugin();
-      final suite = _suite(<AuthInstalledClientOperationContract>[
-        AuthInstalledClientOperationContract(
-          endpointId: 'echo.read',
-          plugin: plugin,
-          invoke: (api) => (api as _EchoClient).read('request-value'),
-          response: const AuthClientConformanceResponse.json(<String, Object?>{
-            'value': 'response-value',
-          }),
-          malformedResponses: const <AuthClientConformanceResponse>[
-            AuthClientConformanceResponse.raw('[]'),
-            AuthClientConformanceResponse.json(<String, Object?>{}),
-          ],
-          verifyResponse: (value) => expect(value, 'response-value'),
-        ),
-      ]);
+    test(
+      'executes the installed API against server and client contracts',
+      () async {
+        const plugin = _EchoClientPlugin();
+        final suite = _suite(<AuthInstalledClientOperationContract>[
+          AuthInstalledClientOperationContract(
+            endpointId: 'echo.read',
+            plugin: plugin,
+            invoke: (api) => (api as _EchoClient).read('request-value'),
+            response: const AuthClientConformanceResponse.json(
+              <String, Object?>{'value': 'response-value'},
+            ),
+            malformedResponses: const <AuthClientConformanceResponse>[
+              AuthClientConformanceResponse.raw('[]'),
+              AuthClientConformanceResponse.json(<String, Object?>{}),
+            ],
+            verifyResponse: (value) => expect(value, 'response-value'),
+          ),
+        ]);
 
-      final result = await _case(suite, 'clients.installed-contracts').run();
+        final result = await _case(suite, 'clients.installed-contracts').run();
 
-      expect(result.isPassed, isTrue);
-    });
+        expect(result.isPassed, isTrue);
+      },
+    );
 
     test('rejects duplicate executable operation IDs', () async {
       const plugin = _EchoClientPlugin();
