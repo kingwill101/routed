@@ -55,6 +55,55 @@ void main() {
     );
   });
 
+  test('D1 username store satisfies public atomic conformance', () async {
+    final database = FakeCloudflareD1Database();
+    addTearDown(database.close);
+    final store = await CloudflareD1AuthStore.open(database);
+
+    await verifyAuthUsernameStoreConformance(
+      AuthUsernameStoreConformanceFixture(
+        store: store,
+        armFault: (point) =>
+            database.failNextBatchAfterStatements(switch (point) {
+              AuthUsernameFaultPoint.registrationAfterUserWrite => 2,
+              AuthUsernameFaultPoint.changeAfterCredentialWrite => 2,
+              AuthUsernameFaultPoint.changeAfterUserWrite => 3,
+              AuthUsernameFaultPoint.removalAfterUserWrite => 2,
+              AuthUsernameFaultPoint.removalAfterCredentialWrite => 3,
+            }),
+      ),
+    );
+    expect(
+      database.select(
+        'SELECT operation_key FROM routed_auth_username_mutation_guards',
+      ),
+      isEmpty,
+    );
+
+    store.bindUserDeletionPlanContributors(const []);
+    final now = DateTime.utc(2030);
+    final user = AuthUser(
+      id: 'd1-username-delete-user',
+      attributes: const <String, dynamic>{'username': 'd1-username-delete'},
+    );
+    final deletedRegistration = await store.registerUsername(
+      AuthUsernameRegistrationCommand(
+        user: user,
+        credential: AuthPasswordCredential(
+          id: 'd1-username-delete-credential',
+          userId: user.id,
+          identifier: 'd1-username-delete',
+          passwordHash: 'encoded-hash',
+          createdAt: now,
+          updatedAt: now,
+        ),
+      ),
+    );
+    expect(deletedRegistration.succeeded, isTrue);
+    expect(await store.userDeletionCoordinator.deleteUser(user.id), isTrue);
+    expect(await store.findByUsername('d1-username-delete'), isNull);
+  });
+
   test('D1 unlink excludes the exact provider and account pair', () async {
     final database = FakeCloudflareD1Database();
     addTearDown(database.close);

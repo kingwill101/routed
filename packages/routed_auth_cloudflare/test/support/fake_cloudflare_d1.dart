@@ -22,6 +22,14 @@ final class FakeCloudflareD1Database implements CloudflareD1Database {
   }
 
   final Database _database;
+  int? _failBatchAfterStatements;
+
+  void failNextBatchAfterStatements(int statementCount) {
+    if (statementCount <= 0) {
+      throw ArgumentError.value(statementCount, 'statementCount');
+    }
+    _failBatchAfterStatements = statementCount;
+  }
 
   FakeCloudflareD1BatchFaultInjector? batchFaultInjector;
 
@@ -56,6 +64,10 @@ final class FakeCloudflareD1Database implements CloudflareD1Database {
         results.add(statement.runSync<T>(decode: decode));
         batchFaultInjector?.call(statementIndex, statement);
         statementIndex++;
+        if (_failBatchAfterStatements == results.length) {
+          _failBatchAfterStatements = null;
+          throw StateError('Injected D1 batch fault.');
+        }
       }
       _database.execute('COMMIT');
       return results;

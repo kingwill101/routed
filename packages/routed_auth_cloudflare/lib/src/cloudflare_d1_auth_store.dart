@@ -14,6 +14,7 @@ import 'cloudflare_d1_auth_schema.dart';
 final class CloudflareD1AuthStore
     implements
         AuthStore,
+        AuthUsernameStore,
         AuthUserDeletionCoordinatorHost,
         AuthOAuthAccountMutationStore,
         AuthAuthenticationMethodTopologyStore {
@@ -114,7 +115,9 @@ final class CloudflareD1AuthStore
         authoritative = false;
         continue;
       }
-      final allowedKinds = identical(binding.authenticationMethodStore, users)
+      final allowedKinds = identical(binding.authenticationMethodStore, this)
+          ? const {AuthAuthenticationMethodKind.username}
+          : identical(binding.authenticationMethodStore, users)
           ? const {AuthAuthenticationMethodKind.emailLink}
           : identical(binding.authenticationMethodStore, credentials)
           ? const {
@@ -239,6 +242,449 @@ final class CloudflareD1AuthStore
     return existing?.userId == userId
         ? AuthAuthenticationMethodMutationResult.lastAuthenticationMethod
         : AuthAuthenticationMethodMutationResult.notFound;
+  }
+
+  _D1Credentials get _usernameCredentials => credentials as _D1Credentials;
+  String get _usernameMutationGuards =>
+      schema.table('username_mutation_guards');
+
+  String _usernameMutationKey(String operation, Iterable<String> values) =>
+      '$operation:${hashOpaqueToken(values.join('\u0000'))}';
+
+  @override
+  Future<AuthPasswordCredential?> findByUsername(String username) =>
+      _usernameCredentials.findByUsername(username);
+
+  @override
+  Future<AuthPasswordCredential?> findUsernameForUser(String userId) =>
+      _usernameCredentials.findUsernameForUser(userId);
+
+  @override
+  Future<AuthUsernameMutationResult> registerUsername(
+    AuthUsernameRegistrationCommand command,
+  ) async {
+    final user = command.user;
+    final credential = command.credential;
+    validateAuthUserForPersistence(user);
+    final userId = user.id.trim();
+    final email = _nullableEmail(user.email);
+    final usersTable = schema.table('users');
+    final credentialsTable = schema.table('credentials');
+    final deletionReceipts = schema.table('deletion_receipts');
+    final operationKey = _usernameMutationKey('register', [
+      userId,
+      credential.id,
+      credential.identifier,
+    ]);
+    try {
+      final results = await _sql.batch([
+        _database
+            .prepare('''INSERT INTO $_usernameMutationGuards
+                 (operation_key, operation, user_id, credential_id,
+                  expected_username, target_username, created_at)
+                 SELECT ?, 'register', ?, ?, NULL, ?, ?
+                 WHERE NOT EXISTS (SELECT 1 FROM $usersTable WHERE id = ?)
+                   AND (? IS NULL OR NOT EXISTS (
+                     SELECT 1 FROM $usersTable WHERE email = ?
+                   ))
+                   AND NOT EXISTS (
+                     SELECT 1 FROM $credentialsTable WHERE id = ?
+                   )
+                   AND NOT EXISTS (
+                     SELECT 1 FROM $credentialsTable WHERE identifier = ?
+                   )
+                   AND NOT EXISTS (
+                     SELECT 1 FROM $deletionReceipts WHERE user_id_hash = ?
+                   )''')
+            .bind([
+              operationKey,
+              userId,
+              credential.id,
+              credential.identifier,
+              _date(_clock()),
+              userId,
+              email,
+              email,
+              credential.id,
+              credential.identifier,
+              hashOpaqueToken(userId),
+            ]),
+        _database
+            .prepare('''INSERT INTO $usersTable (id, email, payload)
+                 SELECT ?, ?, ?
+                 WHERE EXISTS (
+                   SELECT 1 FROM $_usernameMutationGuards
+                   WHERE operation_key = ?
+                 )''')
+            .bind([userId, email, _encodeUser(user), operationKey]),
+        _database
+            .prepare('''INSERT INTO $credentialsTable
+                 (id, user_id, identifier, password_hash, created_at, updated_at, enabled)
+                 SELECT ?, ?, ?, ?, ?, ?, ?
+                 WHERE EXISTS (
+                   SELECT 1 FROM $_usernameMutationGuards
+                   WHERE operation_key = ?
+                 )''')
+            .bind([..._credentialValues(credential), operationKey]),
+        _database
+            .prepare(
+              'DELETE FROM $_usernameMutationGuards WHERE operation_key = ?',
+            )
+            .bind([operationKey]),
+      ]);
+      if ((results.first.meta?.changes ?? 0) == 1 &&
+          (results[1].meta?.changes ?? 0) == 1 &&
+          (results[2].meta?.changes ?? 0) == 1 &&
+          (results.last.meta?.changes ?? 0) == 1) {
+        return AuthUsernameMutationResult(
+          status: AuthUsernameMutationStatus.created,
+          user: user,
+          credential: credential,
+        );
+      }
+    } catch (_) {
+      if (!await _hasUsernameRegistrationConflict(command)) rethrow;
+    }
+    return const AuthUsernameMutationResult(
+      status: AuthUsernameMutationStatus.conflict,
+    );
+  }
+
+  Future<bool> _hasUsernameRegistrationConflict(
+    AuthUsernameRegistrationCommand command,
+  ) async {
+    final user = command.user;
+    final credential = command.credential;
+    return await users.findById(user.id) != null ||
+        (user.email != null && await users.findByEmail(user.email!) != null) ||
+        await _usernameCredentials.findById(credential.id) != null ||
+        await findByUsername(credential.identifier) != null;
+  }
+
+  @override
+  Future<AuthUsernameMutationResult> changeUsername(
+    AuthUsernameChangeCommand command,
+  ) async {
+    final existing = await _readUsernameChangeResult(
+      command,
+      AuthUsernameMutationStatus.unchanged,
+    );
+    if (existing.succeeded) return existing;
+    final usersTable = schema.table('users');
+    final credentialsTable = schema.table('credentials');
+    final operationKey = _usernameMutationKey('change', [
+      command.userId,
+      command.credentialId,
+      command.expectedUsername,
+      command.username,
+    ]);
+    const available = '''
+      COALESCE(json_extract(payload, '\$.attributes.disabled'), 0) <> 1
+      AND COALESCE(json_extract(payload, '\$.attributes.accountDisabled'), 0) <> 1
+      AND json_extract(payload, '\$.attributes.deletedAt') IS NULL''';
+    try {
+      final results = await _sql.batch([
+        _database
+            .prepare('''INSERT INTO $_usernameMutationGuards
+                 (operation_key, operation, user_id, credential_id,
+                  expected_username, target_username, created_at)
+                 SELECT ?, 'change', ?, ?, ?, ?, ?
+                 WHERE EXISTS (
+                   SELECT 1 FROM $usersTable
+                   WHERE id = ? AND $available
+                     AND json_extract(payload, '\$.attributes.username') = ?
+                 )
+                   AND EXISTS (
+                     SELECT 1 FROM $credentialsTable
+                     WHERE id = ? AND user_id = ? AND identifier = ?
+                       AND instr(identifier, '@') = 0
+                   )
+                   AND NOT EXISTS (
+                     SELECT 1 FROM $credentialsTable
+                     WHERE identifier = ? AND id <> ?
+                   )''')
+            .bind([
+              operationKey,
+              command.userId,
+              command.credentialId,
+              command.expectedUsername,
+              command.username,
+              _date(_clock()),
+              command.userId,
+              command.expectedUsername,
+              command.credentialId,
+              command.userId,
+              command.expectedUsername,
+              command.username,
+              command.credentialId,
+            ]),
+        _database
+            .prepare('''UPDATE $credentialsTable
+                 SET identifier = ?, updated_at = ?
+                 WHERE id = ? AND user_id = ? AND identifier = ?
+                   AND EXISTS (
+                     SELECT 1 FROM $_usernameMutationGuards
+                     WHERE operation_key = ?
+                   )''')
+            .bind([
+              command.username,
+              _date(command.updatedAt),
+              command.credentialId,
+              command.userId,
+              command.expectedUsername,
+              operationKey,
+            ]),
+        _database
+            .prepare('''UPDATE $usersTable
+                 SET payload = json_set(
+                   payload,
+                   '\$.attributes.username', ?,
+                   '\$.name', CASE
+                     WHEN json_extract(payload, '\$.name') = ? THEN ?
+                     ELSE json_extract(payload, '\$.name')
+                   END
+                 )
+                 WHERE id = ? AND $available
+                   AND json_extract(payload, '\$.attributes.username') = ?
+                   AND EXISTS (
+                     SELECT 1 FROM $_usernameMutationGuards
+                     WHERE operation_key = ?
+                   )''')
+            .bind([
+              command.username,
+              command.expectedUsername,
+              command.username,
+              command.userId,
+              command.expectedUsername,
+              operationKey,
+            ]),
+        _database
+            .prepare(
+              'DELETE FROM $_usernameMutationGuards WHERE operation_key = ?',
+            )
+            .bind([operationKey]),
+      ]);
+      if ((results.first.meta?.changes ?? 0) == 1 &&
+          (results[1].meta?.changes ?? 0) == 1 &&
+          (results[2].meta?.changes ?? 0) == 1 &&
+          (results.last.meta?.changes ?? 0) == 1) {
+        return await _readUsernameChangeResult(
+          command,
+          AuthUsernameMutationStatus.changed,
+        );
+      }
+    } catch (_) {
+      final replay = await _readUsernameChangeResult(
+        command,
+        AuthUsernameMutationStatus.unchanged,
+      );
+      if (replay.succeeded) return replay;
+      if (await findByUsername(command.username) == null) rethrow;
+    }
+    final replay = await _readUsernameChangeResult(
+      command,
+      AuthUsernameMutationStatus.unchanged,
+    );
+    if (replay.succeeded) return replay;
+    final user = await users.findById(command.userId);
+    if (user == null) {
+      return const AuthUsernameMutationResult(
+        status: AuthUsernameMutationStatus.notFound,
+      );
+    }
+    if (authUserIsDisabled(user)) {
+      return const AuthUsernameMutationResult(
+        status: AuthUsernameMutationStatus.userUnavailable,
+      );
+    }
+    return const AuthUsernameMutationResult(
+      status: AuthUsernameMutationStatus.conflict,
+    );
+  }
+
+  Future<AuthUsernameMutationResult> _readUsernameChangeResult(
+    AuthUsernameChangeCommand command,
+    AuthUsernameMutationStatus status,
+  ) async {
+    final user = await users.findById(command.userId);
+    final credential = await _usernameCredentials.findById(
+      command.credentialId,
+    );
+    if (user?.attributes['username'] != command.username ||
+        credential?.userId != command.userId ||
+        credential?.identifier != command.username) {
+      return const AuthUsernameMutationResult(
+        status: AuthUsernameMutationStatus.conflict,
+      );
+    }
+    return AuthUsernameMutationResult(
+      status: status,
+      user: user,
+      credential: credential,
+    );
+  }
+
+  @override
+  Future<AuthAuthenticationMethodMutationResult> removeUsernameIfSafe(
+    AuthUsernameRemovalCommand command,
+  ) async {
+    final userId = command.userId;
+    final credentialId = command.credentialId;
+    if (!_authenticationMethodTopologyBound ||
+        !_authenticationMethodInventoryAuthoritative) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+    final snapshot = await command.loadInventory();
+    if (!snapshot.isComplete) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+    final target = AuthAuthenticationMethod.username(credentialId);
+    if (!snapshot.methods.contains(target)) {
+      return AuthAuthenticationMethodMutationResult.notFound;
+    }
+    final fallbacks = snapshot.methods
+        .where((method) => method.canAuthenticate && method != target)
+        .toList(growable: false);
+    if (fallbacks.isEmpty) {
+      return AuthAuthenticationMethodMutationResult.lastAuthenticationMethod;
+    }
+
+    var hasCredentialFallback = false;
+    var hasEmailFallback = false;
+    final oauthProviderIds = <String>{};
+    for (final method in fallbacks) {
+      switch (method.kind) {
+        case AuthAuthenticationMethodKind.password:
+        case AuthAuthenticationMethodKind.username:
+          hasCredentialFallback = true;
+        case AuthAuthenticationMethodKind.oauthProvider:
+          final id = method.providerId;
+          if (id == null || method.providerAccountId == null) {
+            return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+          }
+          oauthProviderIds.add(id);
+        case AuthAuthenticationMethodKind.emailOtp:
+        case AuthAuthenticationMethodKind.emailLink:
+          hasEmailFallback = true;
+        case AuthAuthenticationMethodKind.passkey:
+        case AuthAuthenticationMethodKind.phone:
+        case AuthAuthenticationMethodKind.apiKey:
+        case AuthAuthenticationMethodKind.plugin:
+          return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+      }
+    }
+
+    final clauses = <String>[];
+    final fallbackValues = <Object?>[];
+    if (hasCredentialFallback) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('credentials')}
+           WHERE user_id = ? AND id <> ? AND enabled = 1)''');
+      fallbackValues.addAll([userId, credentialId]);
+    }
+    if (oauthProviderIds.isNotEmpty) {
+      final parameters = List.filled(oauthProviderIds.length, '?').join(', ');
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('accounts')}
+           WHERE user_id = ? AND provider_id IN ($parameters))''');
+      fallbackValues.addAll([userId, ...oauthProviderIds]);
+    }
+    if (hasEmailFallback) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('users')}
+           WHERE id = ? AND email IS NOT NULL AND email <> '')''');
+      fallbackValues.add(userId);
+    }
+    if (clauses.isEmpty) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+
+    final credential = await _usernameCredentials.findById(credentialId);
+    if (credential == null || credential.userId != userId) {
+      return AuthAuthenticationMethodMutationResult.notFound;
+    }
+    final usersTable = schema.table('users');
+    final credentialsTable = schema.table('credentials');
+    final operationKey = _usernameMutationKey('remove', [
+      userId,
+      credentialId,
+      credential.identifier,
+    ]);
+    const available = '''
+      COALESCE(json_extract(payload, '\$.attributes.disabled'), 0) <> 1
+      AND COALESCE(json_extract(payload, '\$.attributes.accountDisabled'), 0) <> 1
+      AND json_extract(payload, '\$.attributes.deletedAt') IS NULL''';
+    final guard = clauses.join(' OR ');
+    final results = await _sql.batch([
+      _database
+          .prepare('''INSERT INTO $_usernameMutationGuards
+               (operation_key, operation, user_id, credential_id,
+                expected_username, target_username, created_at)
+               SELECT ?, 'remove', ?, ?, ?, NULL, ?
+               WHERE EXISTS (
+                 SELECT 1 FROM $usersTable
+                 WHERE id = ? AND $available
+                   AND json_extract(payload, '\$.attributes.username') = ?
+               )
+                 AND EXISTS (
+                   SELECT 1 FROM $credentialsTable
+                   WHERE id = ? AND user_id = ? AND identifier = ?
+                     AND instr(identifier, '@') = 0
+                 )
+                 AND ($guard)''')
+          .bind([
+            operationKey,
+            userId,
+            credentialId,
+            credential.identifier,
+            _date(_clock()),
+            userId,
+            credential.identifier,
+            credentialId,
+            userId,
+            credential.identifier,
+            ...fallbackValues,
+          ]),
+      _database
+          .prepare('''UPDATE $usersTable
+               SET payload = json_set(
+                 json_remove(payload, '\$.attributes.username'),
+                 '\$.name', CASE
+                   WHEN json_extract(payload, '\$.name') = ? THEN NULL
+                   ELSE json_extract(payload, '\$.name')
+                 END
+               )
+               WHERE id = ?
+                 AND EXISTS (
+                   SELECT 1 FROM $_usernameMutationGuards
+                   WHERE operation_key = ?
+                 )''')
+          .bind([credential.identifier, userId, operationKey]),
+      _database
+          .prepare('''DELETE FROM $credentialsTable
+               WHERE id = ? AND user_id = ?
+                 AND EXISTS (
+                   SELECT 1 FROM $_usernameMutationGuards
+                   WHERE operation_key = ?
+                 )''')
+          .bind([credentialId, userId, operationKey]),
+      _database
+          .prepare(
+            'DELETE FROM $_usernameMutationGuards WHERE operation_key = ?',
+          )
+          .bind([operationKey]),
+    ]);
+    if ((results.first.meta?.changes ?? 0) == 1 &&
+        (results[1].meta?.changes ?? 0) == 1 &&
+        (results[2].meta?.changes ?? 0) == 1 &&
+        (results.last.meta?.changes ?? 0) == 1) {
+      return AuthAuthenticationMethodMutationResult.mutated;
+    }
+    final existing = await _usernameCredentials.findById(credentialId);
+    if (existing == null) {
+      return AuthAuthenticationMethodMutationResult.notFound;
+    }
+    final user = await users.findById(userId);
+    return user == null || authUserIsDisabled(user)
+        ? AuthAuthenticationMethodMutationResult.atomicityUnavailable
+        : AuthAuthenticationMethodMutationResult.lastAuthenticationMethod;
   }
 
   @override
@@ -1246,12 +1692,30 @@ final class _D1Credentials
         identifier.trim().toLowerCase(),
       ], _decodeCredential);
 
+  Future<AuthPasswordCredential?> findByUsername(String username) =>
+      findByIdentifier(username);
+
+  Future<AuthPasswordCredential?> findById(String id) => sql.first(
+    'SELECT * FROM $table WHERE id = ?',
+    [id.trim()],
+    _decodeCredential,
+  );
+
   @override
   Future<AuthPasswordCredential?> findForUser(String userId) => sql.first(
     'SELECT * FROM $table WHERE user_id = ? ORDER BY created_at LIMIT 1',
     [userId.trim()],
     _decodeCredential,
   );
+
+  Future<AuthPasswordCredential?> findUsernameForUser(String userId) =>
+      sql.first(
+        '''SELECT * FROM $table
+           WHERE user_id = ? AND instr(identifier, '@') = 0
+           ORDER BY created_at LIMIT 1''',
+        [userId.trim()],
+        _decodeCredential,
+      );
 
   @override
   Future<AuthUser?> register(

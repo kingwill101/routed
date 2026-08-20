@@ -49,6 +49,7 @@ final class CloudflareD1AuthSchema {
     CloudflareD1AuthMigration(version: 2, statements: _versionTwo),
     CloudflareD1AuthMigration(version: 3, statements: _versionThree),
     CloudflareD1AuthMigration(version: 4, statements: _versionFour),
+    CloudflareD1AuthMigration(version: 5, statements: _versionFive),
   ];
 
   List<String> get _versionFour {
@@ -111,6 +112,21 @@ final class CloudflareD1AuthSchema {
           'ON $accessTokens(client_id)',
       'CREATE INDEX IF NOT EXISTS ${accessTokens}_expiry '
           'ON $accessTokens(expires_at, refresh_token_expires_at)',
+    ];
+  }
+
+  List<String> get _versionFive {
+    final guards = table('username_mutation_guards');
+    return [
+      '''CREATE TABLE IF NOT EXISTS $guards (
+        operation_key TEXT PRIMARY KEY,
+        operation TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        credential_id TEXT NOT NULL,
+        expected_username TEXT,
+        target_username TEXT,
+        created_at TEXT NOT NULL
+      )''',
     ];
   }
 
@@ -289,6 +305,7 @@ final class CloudflareD1AuthSchema {
       'oauth_access_tokens',
       'oauth_authorization_codes',
       'oauth_clients',
+      'username_mutation_guards',
       'deletion_receipts',
       'email_otps',
       'device_authorizations',
