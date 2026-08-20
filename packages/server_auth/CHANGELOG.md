@@ -7,6 +7,13 @@
   explicitly.
 - Revalidate production posture in `AuthRuntime` and keep deployment proxy
   policy identical to the boundary carried by `AuthOptions`.
+- Add an opt-in HTTPS FIDO MDS 3.1.1 downloader with bounded same-origin
+  redirects, response limits, one per-hop connect/headers/body deadline, one
+  non-resetting total refresh deadline, conditional refreshes, source-bound
+  fresh 304 reuse, and monotonic blob enforcement. Add built-in ES256/RS256 JWS
+  verification over exact pinned RFC 5280 paths with strict certificate
+  constraints and fail-closed application-owned revocation for every non-anchor
+  certificate.
 - Replace callback-based hard deletion with immutable, backend-bound plugin
   plans executed alongside core deletion by one storage coordinator. Freeze
   the deletion topology, reject incomplete or foreign-domain plans before

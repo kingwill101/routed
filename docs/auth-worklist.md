@@ -120,11 +120,12 @@ The work is intentionally split between framework-agnostic capabilities in
   validation, and fail-closed malformed-input handling.
 - [x] Expose the registration, assertion, listing, and deletion contracts
   through the typed plugin registry, Routed routes, and `AuthClient`.
-- [ ] Finish the broader WebAuthn subsystem. Session issuance, passkey rename,
-  Ed25519, Android Key, Apple Anonymous, TPM 2.0, an explicit
-  accept/reject/downgrade attestation-root trust policy, and offline FIDO MDS
-  3.1.1 evaluation are implemented; deprecated attestation formats and a
-  built-in MDS downloader/JWS-PKIX verifier remain out of scope or pending.
+- [x] Finish the supported WebAuthn subsystem: session issuance, passkey rename,
+  Ed25519, Android Key, Apple Anonymous, TPM 2.0, explicit
+  accept/reject/downgrade attestation-root trust policy, offline FIDO MDS 3.1.1
+  evaluation, and an opt-in bounded HTTPS downloader with built-in ES256/RS256
+  JWS and pinned PKIX verification. Deprecated attestation formats and remote
+  `x5u` chain discovery remain intentionally unsupported.
 - [x] Add an optional native `TwoFactorPlugin` with TOTP enrollment
   verification, protected-secret and typed-store boundaries, recovery-code
   hashing and atomic one-time consumption, lockout handling, disablement, and

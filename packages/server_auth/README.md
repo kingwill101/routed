@@ -285,23 +285,34 @@ plaintext protector is intended only for tests and ephemeral examples.
 
 ## Optional FIDO metadata trust evaluation
 
-`FidoMetadataBlobLoader` parses a caller-downloaded MDS 3.1.1 compact JWT with
-bounded inputs, monotonic blob checks, and optional freshness enforcement.
-The application must verify the JWS signature, RFC 5280 certificate path, and
-revocation state through `FidoMetadataJwsVerifier`; the package performs no
-network requests and does not silently trust `x5u`:
+`FidoMetadataDownloader` is an opt-in MDS 3.1.1 client. It accepts only HTTPS,
+follows a bounded number of same-origin redirects, bounds response bodies and
+headers, gives connect + headers + full body one `perRequestTimeout` budget,
+and gives the complete multi-hop refresh one non-resetting
+`totalRefreshTimeout` budget. It uses ETag validators, rejects stale or foreign
+304 cache state, and requires every downloaded blob number to increase. Its
+built-in ES256/RS256 verifier terminates at an exact pinned trust anchor and
+validates certificate signatures, names, validity, CA constraints, key usage,
+path length, supported critical extensions, and metadata-signing extended key
+usage.
+
+Certificate revocation remains application-owned and fail-closed. The checker
+is called for every non-anchor certificate and must return `good`; `revoked`,
+`unknown`, exceptions, and timeouts reject the blob. Copy the current MDS trust
+anchor from the FIDO Alliance into application-owned DER bytes and keep the
+revocation data current:
 
 ```dart
-final blob = await FidoMetadataBlobLoader(
-  trustAnchors: mdsSigningTrustAnchors,
-  verifyJws: verifyMdsJwsAndCertificatePath,
-).load(
-  downloadedCompactJwt,
-  now: DateTime.now().toUtc(),
-  previousBlobNumber: cachedBlobNumber,
+final mdsTrust = FidoMetadataPkixTrust(
+  trustAnchors: [globalSignR3Der],
+  checkRevocation: checkMdsCertificateRevocation,
 );
+final mds = FidoMetadataDownloader(trust: mdsTrust);
 
-final metadata = FidoMetadataWebAuthnTrustEvaluator(blob: blob);
+FidoMetadataRefreshResult? cachedMds;
+cachedMds = await mds.refresh(previous: cachedMds);
+
+final metadata = FidoMetadataWebAuthnTrustEvaluator(blob: cachedMds.blob);
 final passkeys = WebAuthnPlugin<MyRequestContext>(
   provider: WebAuthnProvider(
     getUserInfo: resolvePasskeyUser,
@@ -313,7 +324,18 @@ final passkeys = WebAuthnPlugin<MyRequestContext>(
   ),
   attestationTrustPolicy: metadata.asWebAuthnTrustPolicy(),
 );
+
+// Close the downloader when the application shuts down.
+mds.close();
 ```
+
+The refresh result is immutable in-memory cache state bound to its source and
+trust anchors. Persisting and restoring compact blobs is still
+application-owned; re-verify restored bytes before use. Remote `x5u`
+certificate-chain discovery is intentionally rejected, so the built-in client
+accepts the inline `x5c` profile used by the official service. Applications
+with a different metadata source can continue to use
+`FidoMetadataBlobLoader` with an application-owned `FidoMetadataJwsVerifier`.
 
 ## Optional admin plugin
 
