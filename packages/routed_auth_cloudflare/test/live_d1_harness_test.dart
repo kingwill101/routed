@@ -223,6 +223,8 @@ void main() {
           containsAll([
             'users.create-find',
             'sessions.rotation-contention',
+            'scim.create_replay',
+            'scim.rotate_atomic',
             'd1.batch-rollback',
             'd1.migration-prefix-isolation',
           ]),

@@ -261,6 +261,30 @@ final class DefaultLiveD1ConformanceExecutor
         }
       }
 
+      final scimSuite = AuthScimConnectionStoreConformanceSuite(() async {
+        final schema = await newSchema();
+        final store = CloudflareD1AuthStore(database, schema: schema);
+        return AuthScimConnectionStoreConformanceFixture(
+          store: store.scimConnectionStore,
+          dispose: () => disposeSchema(schema),
+        );
+      });
+      for (final conformanceCase in scimSuite.cases) {
+        final id = 'scim.${conformanceCase.id}';
+        try {
+          await conformanceCase.run();
+          results.add(LiveD1ConformanceCaseResult(id: id, passed: true));
+        } catch (error) {
+          results.add(
+            LiveD1ConformanceCaseResult(
+              id: id,
+              passed: false,
+              error: _safeError(error),
+            ),
+          );
+        }
+      }
+
       results.add(
         await _runAdapterCase(
           'd1.batch-rollback',
