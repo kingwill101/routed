@@ -1,5 +1,15 @@
 ## 0.1.0
 
+- Add a plugin-scoped D1 managed-SCIM connection store with exact tenant and
+  organization lookup, digest-only bearer credentials, database-constrained
+  issuance replay identity, atomic rotation and disablement, and typed replay
+  lifetime configuration.
+- Add schema migration version 5 for SCIM connections, credentials, and replay
+  metadata. Foreign-key cascades join direct subject/tenant cleanup and guarded
+  user deletion to the same D1 transaction domain.
+- Run the public managed-SCIM adapter conformance suite locally and from the
+  opt-in live-D1 executor, with property, contention, digest-persistence, and
+  injected rollback tests. No deployed D1 run is claimed by this release.
 - Add prefix-isolated D1 OAuth client, authorization-code, access-token, and
   refresh-token persistence with digest-only secrets and credentials.
 - Add a backend-native atomic authorization-code exchange that revalidates all

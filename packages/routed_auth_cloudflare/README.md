@@ -46,6 +46,43 @@ batch to revalidate every binding, insert the prepared token-digest record,
 and consume the code. A durable runtime rejects in-memory, foreign-database,
 or otherwise split OAuth store topologies instead of falling back.
 
+Managed SCIM is an independently selected server plugin. Its D1 store is
+obtained from the same opened adapter, so connection management, bearer
+resolution, replay metadata, and coordinated user deletion share one durable
+transaction domain:
+
+```dart
+final store = await authStore(env);
+final scimConnections = AuthScimConnectionPlugin<MyRequestContext>(
+  store: store.scimConnectionStore,
+  authorize: (request) async {
+    final user = request.invocation.user;
+    if (user == null) return null;
+    final access = await loadDirectoryAccess(
+      request.invocation.context,
+      request.organizationId,
+    );
+    if (access == null) return null;
+    return AuthScimConnectionManagementPrincipal(
+      tenantId: access.tenantId,
+      organizationId: access.organizationId,
+      subjectId: user.id,
+    );
+  },
+);
+
+final options = AuthOptions<MyRequestContext>(
+  store: store,
+  plugins: [scimConnections],
+);
+```
+
+Only bearer digests and safe credential metadata are stored. Connection
+creation, issuance, and rotation write their replay identity in the same D1
+batch, so a committed retry returns metadata without reconstructing the raw
+secret. The default replay lifetime is one day and can be changed with the
+typed `scimReplayTtl` argument to `CloudflareD1AuthStore.open`.
+
 The local tests run `AuthStoreConformanceSuite` and
 `verifyOAuthAuthorizationCodeExchangeStoreConformance` against a deterministic
 SQLite-backed implementation of the public `CloudflareD1Database` API. They
