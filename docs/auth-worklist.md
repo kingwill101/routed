@@ -332,7 +332,10 @@ account, session, client, and plugin contracts above:
   applicable host runtimes. Provider-free flows now run across IO, Node, and
   Cloudflare Fetch, and deterministic external-provider callbacks run across
   IO, portable/native Node, and portable/native Cloudflare Fetch, including
-  successful browser-shaped WebAuthn ceremonies. A deployed Worker run remains.
+  successful browser-shaped WebAuthn ceremonies. An opt-in, token-protected
+  deployed Worker harness now compiles and runs every suite without invoking
+  Cloudflare control-plane APIs; an authorized run against an actual deployed
+  Worker remains.
 - [x] Security-sensitive defaults are safe without requiring users to discover
   undocumented configuration switches. Durable options fail closed as
   production posture and require an exact HTTPS origin/proxy boundary, secure
