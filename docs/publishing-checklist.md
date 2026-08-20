@@ -24,11 +24,14 @@ Uploaded from this snapshot so far:
 - `routed_security` `0.1.0`
 - `routed_validation` `0.1.0`
 - `routed_openapi` `0.1.0`
+- `routed_openapi_builder` `0.1.0`
+- `routed` `0.5.0`
+- `routed_cli` `0.3.0`
 
-Next pending packages in this snapshot are `routed_openapi_builder` `0.1.0`,
-`routed` `0.5.0`, and `routed_cli` `0.3.0`. The `server_*` versions used by
-this pre-auth snapshot were already hosted; `server_auth` `0.2.0` belongs to
-the separate auth-era release line.
+All publishable packages selected for this pre-auth snapshot are now uploaded
+and visible on pub.dev. The `server_*` versions used by this snapshot were
+already hosted; `server_auth` `0.2.0` belongs to the separate auth-era release
+line.
 
 ## Pre-flight
 - [ ] Ensure the workspace is on a clean commit (no modified or untracked files).
