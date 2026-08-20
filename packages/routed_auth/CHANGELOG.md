@@ -4,6 +4,9 @@
   transaction only after Routed has issued the authenticated target session.
   Remove callback-based migration orchestration and keep failed session
   issuance from deleting the anonymous source.
+- Mount portable auth endpoints from their typed route and explicit mount
+  contracts, preserve path/query/body namespaces through dispatch, and forward
+  only the allowlisted Authorization header to portable handlers.
 - Route Admin mutations through backend-owned typed commands, consume
   impersonation source sessions once before host replacement-session creation,
   and preserve the explicit host-session and post-commit audit boundary.

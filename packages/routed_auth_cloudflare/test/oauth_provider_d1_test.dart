@@ -237,30 +237,34 @@ void main() {
       final redirect =
           await authorize.invoke(
                 AuthOperationInvocation<Object>(context: Object(), user: user),
-                const <String, dynamic>{
-                  'client_id': 'provider-client',
-                  'redirect_uri': 'https://provider.example.test/callback',
-                  'response_type': 'code',
-                  'scope': 'profile',
-                  'code_challenge':
-                      'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
-                  'code_challenge_method': 'S256',
-                },
+                AuthEndpointRequest(
+                  query: const <String, dynamic>{
+                    'client_id': 'provider-client',
+                    'redirect_uri': 'https://provider.example.test/callback',
+                    'response_type': 'code',
+                    'scope': 'profile',
+                    'code_challenge':
+                        'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
+                    'code_challenge_method': 'S256',
+                  },
+                ),
               )
               as AuthEndpointRedirect;
       final rawCode = redirect.location.queryParameters['code']!;
       final response =
           await token.invoke(
                 AuthOperationInvocation<Object>(context: Object(), user: null),
-                <String, dynamic>{
-                  'grant_type': 'authorization_code',
-                  'client_id': 'provider-client',
-                  'client_secret': 'provider-secret',
-                  'redirect_uri': 'https://provider.example.test/callback',
-                  'code': rawCode,
-                  'code_verifier':
-                      'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',
-                },
+                AuthEndpointRequest(
+                  body: <String, dynamic>{
+                    'grant_type': 'authorization_code',
+                    'client_id': 'provider-client',
+                    'client_secret': 'provider-secret',
+                    'redirect_uri': 'https://provider.example.test/callback',
+                    'code': rawCode,
+                    'code_verifier':
+                        'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',
+                  },
+                ),
               )
               as Map<String, dynamic>;
       final rawAccessToken = response['access_token']! as String;

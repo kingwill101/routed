@@ -258,7 +258,9 @@ final class _CollisionEndpoint
   @override
   AuthOperationMethod get method => AuthOperationMethod.get;
   @override
-  String get path => '/providers';
+  AuthRoutePath get path => const AuthRoutePath('/providers');
+  @override
+  AuthEndpointMount get mount => AuthEndpointMount.auth;
   @override
   AuthOperationSemantics get semantics =>
       const AuthOperationSemantics.readOnly();
@@ -275,6 +277,6 @@ final class _CollisionEndpoint
   @override
   Object? invoke(
     AuthOperationInvocation<EngineContext> invocation,
-    Map<String, dynamic> input,
+    AuthEndpointRequest request,
   ) => const {'ok': true};
 }

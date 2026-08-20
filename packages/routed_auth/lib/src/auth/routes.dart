@@ -7,6 +7,9 @@ import 'package:server_auth/server_auth.dart'
     show
         AuthCredentials,
         AuthEndpointDescriptor,
+        AuthEndpointMount,
+        AuthEndpointRequest,
+        AuthRoutePath,
         AuthEndpointRateLimitIdentifierDescriptor,
         AuthEndpointAuthenticationIntent,
         AuthEndpointHttpResponse,
@@ -19,6 +22,9 @@ import 'package:server_auth/server_auth.dart'
         AuthServerPluginSessionControl,
         AuthOperationMethod,
         AuthOperationOriginPolicy,
+        authSignInProviderRoute,
+        authRegisterProviderRoute,
+        authCallbackProviderRoute,
         AuthCallbackRouteKind,
         authErrorStatusCode,
         authProviderSummaries,
@@ -150,10 +156,10 @@ class AuthRoutes {
         .where((endpoint) => !endpoint.serverOnly)
         .toList(growable: false);
     final rootPluginEndpoints = allPluginEndpoints
-        .where((endpoint) => endpoint.path.startsWith('/.well-known/'))
+        .where((endpoint) => endpoint.mount == AuthEndpointMount.root)
         .toList(growable: false);
     final pluginEndpoints = allPluginEndpoints
-        .where((endpoint) => !endpoint.path.startsWith('/.well-known/'))
+        .where((endpoint) => endpoint.mount == AuthEndpointMount.auth)
         .toList(growable: false);
     for (final endpoint in rootPluginEndpoints) {
       Future<Response> handler(EngineContext ctx) =>
@@ -163,63 +169,126 @@ class AuthRoutes {
     router.group(
       path: root,
       builder: (auth) {
-        auth.get('/providers', _providers);
-        auth.get('/csrf', _csrf);
-        auth.get('/session', _session);
-        auth.post('/signin/{provider}', _signIn);
-        auth.get('/signin/{provider}', _signIn);
-        auth.post('/register/{provider}', _register);
-        auth.get('/callback/{provider}', _callback);
-        auth.post('/callback/{provider}', _callback);
-        auth.post('/signout', _signOut);
+        auth.get(const AuthRoutePath('/providers').template, _providers);
+        auth.get(const AuthRoutePath('/csrf').template, _csrf);
+        auth.get(const AuthRoutePath('/session').template, _session);
+        auth.post(authSignInProviderRoute.template, _signIn);
+        auth.get(authSignInProviderRoute.template, _signIn);
+        auth.post(authRegisterProviderRoute.template, _register);
+        auth.get(authCallbackProviderRoute.template, _callback);
+        auth.post(authCallbackProviderRoute.template, _callback);
+        auth.post(const AuthRoutePath('/signout').template, _signOut);
         if (manager.options.passwordResetSender != null) {
-          auth.post('/password-reset/request', _passwordResetRequest);
-          auth.post('/password-reset/confirm', _passwordResetConfirm);
+          auth.post(
+            const AuthRoutePath('/password-reset/request').template,
+            _passwordResetRequest,
+          );
+          auth.post(
+            const AuthRoutePath('/password-reset/confirm').template,
+            _passwordResetConfirm,
+          );
         }
-        auth.post('/password/change', _passwordChange);
+        auth.post(
+          const AuthRoutePath('/password/change').template,
+          _passwordChange,
+        );
         if (manager.options.emailChangeSender != null) {
-          auth.post('/email/change/request', _emailChangeRequest);
-          auth.post('/email/change/confirm', _emailChangeConfirm);
+          auth.post(
+            const AuthRoutePath('/email/change/request').template,
+            _emailChangeRequest,
+          );
+          auth.post(
+            const AuthRoutePath('/email/change/confirm').template,
+            _emailChangeConfirm,
+          );
         }
-        auth.get('/accounts', _accounts);
-        auth.post('/accounts/link', _linkAccount);
-        auth.post('/accounts/unlink', _unlinkAccount);
-        auth.post('/account/delete', _deleteAccount);
+        auth.get(const AuthRoutePath('/accounts').template, _accounts);
+        auth.post(const AuthRoutePath('/accounts/link').template, _linkAccount);
+        auth.post(
+          const AuthRoutePath('/accounts/unlink').template,
+          _unlinkAccount,
+        );
+        auth.post(
+          const AuthRoutePath('/account/delete').template,
+          _deleteAccount,
+        );
         if (manager.options.accountDeletionSender != null) {
-          auth.post('/account/delete/request', _accountDeletionRequest);
-          auth.post('/account/delete/confirm', _accountDeletionConfirm);
+          auth.post(
+            const AuthRoutePath('/account/delete/request').template,
+            _accountDeletionRequest,
+          );
+          auth.post(
+            const AuthRoutePath('/account/delete/confirm').template,
+            _accountDeletionConfirm,
+          );
         }
         if (manager.options.sessionStrategy == AuthSessionStrategy.session) {
-          auth.get('/sessions', _sessions);
-          auth.post('/sessions/revoke', _revokeSession);
-          auth.post('/sessions/revoke-others', _revokeOtherSessions);
+          auth.get(const AuthRoutePath('/sessions').template, _sessions);
+          auth.post(
+            const AuthRoutePath('/sessions/revoke').template,
+            _revokeSession,
+          );
+          auth.post(
+            const AuthRoutePath('/sessions/revoke-others').template,
+            _revokeOtherSessions,
+          );
         }
         if (manager.twoFactor != null) {
-          auth.get('/2fa/status', _twoFactorStatus);
-          auth.post('/2fa/enroll', _twoFactorEnroll);
-          auth.post('/2fa/enroll/verify', _twoFactorVerifyEnrollment);
-          auth.post('/2fa/verify', _twoFactorVerify);
-          auth.post('/2fa/recovery-code', _twoFactorRecoveryCode);
+          auth.get(
+            const AuthRoutePath('/2fa/status').template,
+            _twoFactorStatus,
+          );
           auth.post(
-            '/2fa/recovery-codes/regenerate',
+            const AuthRoutePath('/2fa/enroll').template,
+            _twoFactorEnroll,
+          );
+          auth.post(
+            const AuthRoutePath('/2fa/enroll/verify').template,
+            _twoFactorVerifyEnrollment,
+          );
+          auth.post(
+            const AuthRoutePath('/2fa/verify').template,
+            _twoFactorVerify,
+          );
+          auth.post(
+            const AuthRoutePath('/2fa/recovery-code').template,
+            _twoFactorRecoveryCode,
+          );
+          auth.post(
+            const AuthRoutePath('/2fa/recovery-codes/regenerate').template,
             _twoFactorRegenerateRecoveryCodes,
           );
-          auth.post('/2fa/disable', _twoFactorDisable);
-          auth.post('/2fa/challenge/verify', _twoFactorChallengeVerify);
           auth.post(
-            '/2fa/challenge/recovery-code',
+            const AuthRoutePath('/2fa/disable').template,
+            _twoFactorDisable,
+          );
+          auth.post(
+            const AuthRoutePath('/2fa/challenge/verify').template,
+            _twoFactorChallengeVerify,
+          );
+          auth.post(
+            const AuthRoutePath('/2fa/challenge/recovery-code').template,
             _twoFactorRecoveryChallengeVerify,
           );
           auth.post(
-            '/2fa/trusted-devices/revoke',
+            const AuthRoutePath('/2fa/trusted-devices/revoke').template,
             _twoFactorRevokeTrustedDevices,
           );
-          auth.post('/2fa/step-up', _twoFactorStepUp);
-          auth.post('/2fa/step-up/revoke', _twoFactorStepUpRevoke);
+          auth.post(
+            const AuthRoutePath('/2fa/step-up').template,
+            _twoFactorStepUp,
+          );
+          auth.post(
+            const AuthRoutePath('/2fa/step-up/revoke').template,
+            _twoFactorStepUpRevoke,
+          );
         }
         if (manager.apiKeys?.sessionExchangeEnabled == true &&
             manager.options.sessionStrategy == AuthSessionStrategy.session) {
-          auth.post('/api-keys/exchange', _apiKeyExchange);
+          auth.post(
+            const AuthRoutePath('/api-keys/exchange').template,
+            _apiKeyExchange,
+          );
         }
         for (final endpoint in pluginEndpoints) {
           Future<Response> handler(EngineContext ctx) =>
@@ -243,17 +312,22 @@ class AuthRoutes {
       }
     }
     if (endpoint == null) return _errorResponse(ctx, 'operation_not_found');
-    Map<String, dynamic> payload;
+    late AuthEndpointRequest request;
     try {
-      payload = <String, dynamic>{
-        ...await _payload(ctx),
-        ...ctx.queryCache,
-        ...ctx.params,
-      };
+      final body = await _payload(ctx);
+      final query = Map<String, dynamic>.from(ctx.queryCache);
+      final path = endpoint.path.bind(Map<String, Object?>.from(ctx.params));
+      final headers = <String, String>{};
       final authorization = ctx.request.headers.value('authorization');
       if (authorization != null) {
-        payload = {...payload, '_authorization': authorization};
+        headers['authorization'] = authorization;
       }
+      request = AuthEndpointRequest(
+        path: path,
+        query: query,
+        body: body,
+        headers: headers,
+      );
     } catch (_) {
       return _pluginPublicError(
         ctx,
@@ -267,7 +341,10 @@ class AuthRoutes {
       if (browserError != null) return _errorResponse(ctx, browserError);
     }
     if (endpoint.csrfPolicy == AuthOperationCsrfPolicy.required &&
-        !liveManager.validateCsrf(ctx, payload)) {
+        !liveManager.validateCsrf(ctx, <String, dynamic>{
+          ...request.query,
+          ...request.body,
+        })) {
       return ctx.json({
         'error': 'invalid_csrf',
       }, statusCode: HttpStatus.forbidden);
@@ -289,7 +366,7 @@ class AuthRoutes {
             ? endpoint as AuthEndpointRateLimitIdentifierDescriptor
             : null;
         final endpointIdentifier = identifierResolver
-            ?.resolveRateLimitIdentifier(payload);
+            ?.resolveRateLimitIdentifier(request);
         await liveManager.enforceRateLimitOperation(
           ctx,
           operation: operation,
@@ -317,6 +394,7 @@ class AuthRoutes {
         AuthOperationInvocation<EngineContext>(
           context: ctx,
           user: session?.user,
+          request: request,
           emailVerified: session?.user.attributes['emailVerified'] == true,
           activeOrganizationId: activeOrganizationId,
           activeTeamId: activeTeamId,
@@ -336,7 +414,7 @@ class AuthRoutes {
               : null,
           sessionControl: pluginSessionControl,
         ),
-        payload,
+        request,
       );
       if (response is AuthEndpointRedirect) {
         response.headers.forEach(
@@ -383,7 +461,8 @@ class AuthRoutes {
         'expiresAt': error.challenge.expiresAt.toUtc().toIso8601String(),
       }, statusCode: HttpStatus.accepted);
     } on AuthFlowException catch (error) {
-      if (!payload.containsKey('organizationId') &&
+      if (!request.body.containsKey('organizationId') &&
+          !request.query.containsKey('organizationId') &&
           ctx.hasSession &&
           (error.code == 'organization_not_found' ||
               error.code == 'organization_forbidden')) {
@@ -452,15 +531,15 @@ class AuthRoutes {
   ) {
     switch (endpoint.method) {
       case AuthOperationMethod.get:
-        router.get(endpoint.path, handler);
+        router.get(endpoint.path.template, handler);
       case AuthOperationMethod.post:
-        router.post(endpoint.path, handler);
+        router.post(endpoint.path.template, handler);
       case AuthOperationMethod.put:
-        router.put(endpoint.path, handler);
+        router.put(endpoint.path.template, handler);
       case AuthOperationMethod.patch:
-        router.patch(endpoint.path, handler);
+        router.patch(endpoint.path.template, handler);
       case AuthOperationMethod.delete:
-        router.delete(endpoint.path, handler);
+        router.delete(endpoint.path.template, handler);
     }
   }
 

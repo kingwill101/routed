@@ -164,6 +164,78 @@ void main() {
       'https://new-auth.example.test/oauth/token',
     );
   });
+
+  test('Routed preserves path, query, and body namespaces', () async {
+    final manager = AuthManager(
+      AuthOptions<EngineContext>(
+        providers: const [],
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
+        plugins: const <AuthServerPlugin<EngineContext>>[_NamespacePlugin()],
+      ),
+    );
+    final engine = testEngine();
+    AuthRoutes(manager).register(engine.defaultRouter);
+    await engine.initialize();
+    final client = TestClient(RoutedRequestHandler(engine));
+    addTearDown(client.close);
+
+    final response = await client.postJson(
+      '/auth/namespaces/a%2Fb%20%3F%23%25%3Fid=query?id=query&query=visible',
+      <String, dynamic>{'id': 'body', 'value': 'payload'},
+    );
+
+    response.assertStatus(HttpStatus.ok);
+    expect(response.json(), <String, dynamic>{
+      'path': 'a/b ?#%?id=query',
+      'query': <String, dynamic>{'id': 'query', 'query': 'visible'},
+      'body': <String, dynamic>{'id': 'body', 'value': 'payload'},
+    });
+  });
+}
+
+const AuthRouteParameterKey _namespaceId = AuthRouteParameterKey('id');
+
+final class _NamespacePlugin
+    implements
+        AuthServerPlugin<EngineContext>,
+        AuthEndpointContributor<EngineContext> {
+  const _NamespacePlugin();
+
+  @override
+  String get id => 'namespace-test';
+
+  @override
+  void configure(AuthServerPluginContext<EngineContext> context) {}
+
+  @override
+  Iterable<AuthEndpointDescriptor<EngineContext>> get endpoints => [
+    TypedAuthEndpointDescriptor<EngineContext, Map<String, dynamic>, Object?>(
+      id: 'namespace-test.echo',
+      method: AuthOperationMethod.post,
+      path: const AuthRoutePath(
+        '/namespaces/{id}',
+        parameters: <AuthRouteParameterKey>[_namespaceId],
+      ),
+      semantics: const AuthOperationSemantics.readOnly(),
+      requestCodec: AuthOperationCodec<Map<String, dynamic>>(
+        decode: (value) => value,
+        encode: (value) => value,
+      ),
+      responseCodec: AuthOperationCodec<Object?>(
+        decode: (value) => value,
+        encode: (value) => value,
+      ),
+      authentication: AuthOperationAuthentication.none,
+      originPolicy: AuthOperationOriginPolicy.none,
+      csrfPolicy: AuthOperationCsrfPolicy.none,
+      handler: (invocation, body) => <String, dynamic>{
+        'path': invocation.request.requirePath(_namespaceId),
+        'query': invocation.request.query,
+        'body': body,
+      },
+    ),
+  ];
 }
 
 final class _RedirectPlugin
@@ -181,7 +253,7 @@ final class _RedirectPlugin
     TypedAuthEndpointDescriptor<EngineContext, Map<String, dynamic>, Object?>(
       id: 'redirect-test.endpoint',
       method: AuthOperationMethod.get,
-      path: '/redirect',
+      path: const AuthRoutePath('/redirect'),
       semantics: const AuthOperationSemantics.readOnly(),
       requestCodec: AuthOperationCodec<Map<String, dynamic>>(
         decode: (value) => value,

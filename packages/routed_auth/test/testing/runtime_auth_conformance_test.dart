@@ -41,12 +41,11 @@ void main() {
     test('plugin support reports a stable flow identifier', () {
       Future<AuthRuntimeConformanceResponse> unavailable(
         AuthRuntimeConformanceRequest _,
-      ) async =>
-          const AuthRuntimeConformanceResponse(
-            statusCode: 503,
-            headers: <String, List<String>>{},
-            body: 'unavailable',
-          );
+      ) async => const AuthRuntimeConformanceResponse(
+        statusCode: 503,
+        headers: <String, List<String>>{},
+        body: 'unavailable',
+      );
 
       expect(
         () => verifyAuthPluginRuntimeConformance(
