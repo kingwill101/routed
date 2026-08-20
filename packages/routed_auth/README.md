@@ -27,24 +27,22 @@ dependencies:
 
 ```dart
 import 'package:routed/routed.dart';
-import 'package:server_auth/server_auth.dart';
+import 'package:routed_auth/routed_auth.dart';
 
 void main() async {
-  final options = AuthOptions<EngineContext>(
-    store: InMemoryAuthStore(), // Replace with a durable AuthStore in production.
-    storeMode: AuthStoreMode.ephemeral,
-    providers: const <AuthProvider>[],
+  final auth = AuthDeploymentPresets.localDevelopment<EngineContext>(
+    providers: [CredentialsProvider()],
+    trustedOrigins: [Uri.parse('http://localhost:8080')],
   );
 
-  // Bind typed options before providers boot so AuthServiceProvider creates
-  // the manager and registers AuthRoutes during initialization.
   final engine = Engine(
+    config: auth.engineConfig(),
     providers: [
       ...Engine.defaultProviders,
-      AuthServiceProvider(),
+      auth.serviceProvider(),
     ],
   );
-  engine.container.instance<AuthOptions<EngineContext>>(options);
+  auth.bindTo(engine);
   await engine.initialize();
 
   engine.get(
@@ -57,9 +55,15 @@ void main() async {
 }
 ```
 
-For production, use a durable `AuthStore` and set
-`AuthServiceProvider(requireDurableStore: true)` so startup rejects an
-accidental in-memory store.
+`localDevelopment` deliberately uses ephemeral storage and development cookie
+settings. For production, choose `secureSessionProduction`,
+`jwtApiProduction`, or `serviceApiKeyProduction`. Those typed presets require a
+durable `AuthStore`, a rate limiter, exact HTTPS origins, an explicit direct or
+trusted-proxy policy, a verified-email choice, and explicit lifecycle delivery
+callbacks (or `AuthLifecycleDelivery.disabled()`). `engineConfig()` applies the
+proxy choice to Routed, `serviceProvider()` carries the typed auth
+configuration, and `bindTo()` installs the matching runtime options before
+provider boot.
 
 For a slim composition, import `routed_auth` directly and add
 `AuthServiceProvider()` after `Engine.defaultProviders`. Add typed provider
@@ -75,26 +79,23 @@ import 'package:server_auth/server_auth.dart';
 import 'package:server_rate_limit/server_rate_limit.dart';
 
 final authRateLimitService = RateLimitService(const []);
-final options = AuthOptions<EngineContext>(
-  providers: const <AuthProvider>[],
-  store: InMemoryAuthStore(),
-  storeMode: AuthStoreMode.ephemeral,
-  browserProtection: const AuthBrowserProtectionOptions(
-    allowedOrigins: ['https://app.example.com'],
-  ),
+final auth = AuthDeploymentPresets.localDevelopment<EngineContext>(
+  providers: [CredentialsProvider()],
+  trustedOrigins: [Uri.parse('http://localhost:3000')],
   rateLimiter: RoutedAuthRateLimiter(authRateLimitService),
 );
 
 final engine = Engine(
+  config: auth.engineConfig(),
   providers: [
     ...Engine.defaultProviders,
-    AuthServiceProvider(),
+    auth.serviceProvider(),
     RoutedRateLimitProvider(
       RateLimitConfig(service: authRateLimitService),
     ),
   ],
 );
-engine.container.instance<AuthOptions<EngineContext>>(options);
+auth.bindTo(engine);
 await engine.initialize();
 ```
 

@@ -41,11 +41,20 @@ final google = googleProvider(
   ),
 );
 
-final providers = <AuthProvider>[google];
+final deployment = AuthDeploymentPresets.localDevelopment<MyRequestContext>(
+  providers: <AuthProvider>[google],
+  trustedOrigins: [Uri.parse('http://localhost:3000')],
+);
 ```
 
-Use `providers` with your framework adapter to wire callback routes, session
-handling, and auth lifecycle.
+Bind `deployment.options` to the framework adapter, pass
+`deployment.configuration` to its auth provider, and apply
+`deployment.proxyPolicy` at the HTTP boundary. Production applications should
+instead choose `secureSessionProduction`, `jwtApiProduction`, or
+`serviceApiKeyProduction`; those presets require the durable store, trusted
+origin/proxy decision, rate limiter, verified-email policy, and lifecycle
+delivery choices explicitly. Providers and plugins remain opt-in inputs to
+every preset.
 
 ## Typed Dart client
 
