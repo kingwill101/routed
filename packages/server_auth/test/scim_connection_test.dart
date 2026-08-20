@@ -335,6 +335,51 @@ void main() {
         isNull,
       );
     });
+
+    test('participates in coordinated hard user deletion', () async {
+      final clock = _Clock();
+      final store = InMemoryAuthScimConnectionStore();
+      final core = InMemoryAuthStore();
+      final principal = AuthScimConnectionManagementPrincipal(
+        tenantId: 'tenant-a',
+        organizationId: 'organization-a',
+        subjectId: 'user-1',
+      );
+      var connectionSequence = 0;
+      var credentialSequence = 0;
+      var secretSequence = 0;
+      final plugin = AuthScimConnectionPlugin<Object>(
+        store: store,
+        authorize: (_) => principal,
+        clock: clock.call,
+        connectionIdGenerator: ({length = 0}) =>
+            'connection-${++connectionSequence}-abcdefgh',
+        credentialIdGenerator: ({length = 0}) =>
+            'credential-${++credentialSequence}-abcdefgh',
+        secretGenerator: ({length = 0}) =>
+            'secret-${++secretSequence}-abcdefghijklmnopqrstuvwxyz',
+      );
+      plugin.configure(AuthServerPluginContext<Object>(store: core));
+      core.bindUserDeletionPlanContributors(<AuthUserDeletionPlanContributor>[
+        plugin,
+      ]);
+      await core.users.create(AuthUser(id: principal.subjectId));
+      final created = await plugin.create(
+        principal: principal,
+        name: 'User-owned directory',
+        provisioningDomainId: 'employees',
+        scopes: const <AuthScimScope>{AuthScimScope.usersWrite},
+        credentialName: 'Primary',
+        idempotencyKey: 'create',
+      );
+
+      expect(
+        await core.userDeletionCoordinator.deleteUser(principal.subjectId),
+        isTrue,
+      );
+      expect(await _resolve(store, clock, created.issuance.secret!), isNull);
+      expect((await plugin.list(principal: principal)).total, 0);
+    });
   });
 }
 
