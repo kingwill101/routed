@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:routed_auth/testing.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_node/routed_node.dart';
 import 'package:test/test.dart';
 
@@ -135,4 +136,84 @@ void main() {
       },
     );
   });
+
+  test('Node portable adapter satisfies the auth plugin contract', () async {
+    final engine = createAuthPluginRuntimeConformanceEngine();
+    final engineWithoutTwoFactor = createAuthPluginRuntimeConformanceEngine(
+      includeTwoFactor: false,
+    );
+    await engine.initialize();
+    await engineWithoutTwoFactor.initialize();
+    addTearDown(() async {
+      await engine.close();
+      await engineWithoutTwoFactor.close();
+    });
+
+    await verifyAuthPluginRuntimeConformance(
+      origin: Uri.parse(_origin),
+      send: (source) => _dispatchNode(engine, source),
+      sendWithoutTwoFactor: (source) =>
+          _dispatchNode(engineWithoutTwoFactor, source),
+    );
+  });
+
+  test(
+    'mocked Cloudflare Fetch edge satisfies the auth plugin contract',
+    () async {
+      final engine = createAuthPluginRuntimeConformanceEngine();
+      final engineWithoutTwoFactor = createAuthPluginRuntimeConformanceEngine(
+        includeTwoFactor: false,
+      );
+      await engine.initialize();
+      await engineWithoutTwoFactor.initialize();
+      addTearDown(() async {
+        await engine.close();
+        await engineWithoutTwoFactor.close();
+      });
+
+      await verifyAuthPluginRuntimeConformance(
+        origin: Uri.parse(_origin),
+        send: (source) => _dispatchFetch(engine, source),
+        sendWithoutTwoFactor: (source) =>
+            _dispatchFetch(engineWithoutTwoFactor, source),
+      );
+    },
+  );
+}
+
+Future<AuthRuntimeConformanceResponse> _dispatchNode(
+  Engine engine,
+  AuthRuntimeConformanceRequest source,
+) async {
+  final outgoing = _NodeOutgoing();
+  await dispatchNodeExchange(
+    engine,
+    _NodeIncoming(source),
+    outgoing,
+    baseUri: Uri.parse(_origin),
+  );
+  return AuthRuntimeConformanceResponse(
+    statusCode: outgoing.statusCode,
+    headers: outgoing.responseHeaders,
+    body: utf8.decode(outgoing.body.takeBytes()),
+  );
+}
+
+Future<AuthRuntimeConformanceResponse> _dispatchFetch(
+  Engine engine,
+  AuthRuntimeConformanceRequest source,
+) async {
+  final response = await dispatchFetchExchange(
+    engine,
+    _FetchRequest(source),
+    runtime: const RoutedNodeRuntimeInfo(
+      runtime: RoutedNodeRuntime.cloudflare,
+      capabilities: cloudflareCapabilities,
+    ),
+  );
+  return AuthRuntimeConformanceResponse(
+    statusCode: response.statusCode,
+    headers: response.headers,
+    body: await utf8.decodeStream(response.body),
+  );
 }

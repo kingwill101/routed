@@ -37,5 +37,29 @@ void main() {
         ),
       );
     });
+
+    test('plugin support reports a stable flow identifier', () {
+      Future<AuthRuntimeConformanceResponse> unavailable(
+        AuthRuntimeConformanceRequest _,
+      ) async =>
+          const AuthRuntimeConformanceResponse(
+            statusCode: 503,
+            headers: <String, List<String>>{},
+            body: 'unavailable',
+          );
+
+      expect(
+        () => verifyAuthPluginRuntimeConformance(
+          origin: Uri.parse('https://runtime.example'),
+          send: unavailable,
+          sendWithoutTwoFactor: unavailable,
+        ),
+        throwsA(
+          isA<AuthRuntimeConformanceFailure>()
+              .having((failure) => failure.caseId, 'caseId', 'email-otp.send')
+              .having((failure) => failure.message, 'message', contains('503')),
+        ),
+      );
+    });
   });
 }

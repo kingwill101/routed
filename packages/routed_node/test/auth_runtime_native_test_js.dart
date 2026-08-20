@@ -33,6 +33,44 @@ void runNativeAuthRuntimeTests() {
     }
   });
 
+  test('native Node listener satisfies the auth plugin contract', () async {
+    final engine = createAuthPluginRuntimeConformanceEngine();
+    final engineWithoutTwoFactor = createAuthPluginRuntimeConformanceEngine(
+      includeTwoFactor: false,
+    );
+    await engine.initialize();
+    await engineWithoutTwoFactor.initialize();
+    final handle = await serveNode(
+      engine,
+      host: '127.0.0.1',
+      port: 0,
+      echo: false,
+    );
+    final handleWithoutTwoFactor = await serveNode(
+      engineWithoutTwoFactor,
+      host: '127.0.0.1',
+      port: 0,
+      echo: false,
+    );
+    final origin = Uri.parse('$_nodeOrigin:${handle.port}');
+    final originWithoutTwoFactor = Uri.parse(
+      '$_nodeOrigin:${handleWithoutTwoFactor.port}',
+    );
+    try {
+      await verifyAuthPluginRuntimeConformance(
+        origin: origin,
+        send: (request) => _sendWithFetch(origin, request),
+        sendWithoutTwoFactor: (request) =>
+            _sendWithFetch(originWithoutTwoFactor, request),
+      );
+    } finally {
+      await handle.close(force: true);
+      await handleWithoutTwoFactor.close(force: true);
+      await engine.close();
+      await engineWithoutTwoFactor.close();
+    }
+  });
+
   test(
     'native Cloudflare Fetch export satisfies the auth runtime contract',
     () async {
@@ -46,6 +84,34 @@ void runNativeAuthRuntimeTests() {
         );
       } finally {
         await engine.close();
+      }
+    },
+  );
+
+  test(
+    'native Cloudflare Fetch export satisfies the auth plugin contract',
+    () async {
+      final engine = createAuthPluginRuntimeConformanceEngine();
+      final engineWithoutTwoFactor = createAuthPluginRuntimeConformanceEngine(
+        includeTwoFactor: false,
+      );
+      await engine.initialize();
+      await engineWithoutTwoFactor.initialize();
+      try {
+        await verifyAuthPluginRuntimeConformance(
+          origin: Uri.parse(_cloudflareOrigin),
+          send: (request) {
+            defineCloudflareFetch(engine);
+            return _sendToCloudflareExport(request);
+          },
+          sendWithoutTwoFactor: (request) {
+            defineCloudflareFetch(engineWithoutTwoFactor);
+            return _sendToCloudflareExport(request);
+          },
+        );
+      } finally {
+        await engine.close();
+        await engineWithoutTwoFactor.close();
       }
     },
   );

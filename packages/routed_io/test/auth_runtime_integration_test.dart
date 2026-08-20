@@ -28,6 +28,46 @@ void main() {
       send: (request) => _send(client, origin, request),
     );
   });
+
+  test('dart:io listener satisfies the auth plugin runtime contract', () async {
+    final engine = createAuthPluginRuntimeConformanceEngine();
+    final engineWithoutTwoFactor = createAuthPluginRuntimeConformanceEngine(
+      includeTwoFactor: false,
+    );
+    await engine.initialize();
+    await engineWithoutTwoFactor.initialize();
+    final handle = await serveIo(
+      engine,
+      host: '127.0.0.1',
+      port: 0,
+      echo: false,
+    );
+    final handleWithoutTwoFactor = await serveIo(
+      engineWithoutTwoFactor,
+      host: '127.0.0.1',
+      port: 0,
+      echo: false,
+    );
+    final client = HttpClient();
+    addTearDown(() async {
+      client.close(force: true);
+      await handle.close(force: true);
+      await handleWithoutTwoFactor.close(force: true);
+      await engine.close();
+      await engineWithoutTwoFactor.close();
+    });
+    final origin = Uri.parse('http://127.0.0.1:${handle.port}');
+    final originWithoutTwoFactor = Uri.parse(
+      'http://127.0.0.1:${handleWithoutTwoFactor.port}',
+    );
+
+    await verifyAuthPluginRuntimeConformance(
+      origin: origin,
+      send: (request) => _send(client, origin, request),
+      sendWithoutTwoFactor: (request) =>
+          _send(client, originWithoutTwoFactor, request),
+    );
+  });
 }
 
 Future<AuthRuntimeConformanceResponse> _send(
