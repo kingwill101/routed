@@ -41,6 +41,14 @@ void main() {
             200,
           );
         }
+        if (request.url.path == '/auth/email-otp/check-verification-otp') {
+          expect(jsonDecode(request.body), {
+            'email': 'ada@example.com',
+            'type': 'sign-in',
+            'otp': '123456',
+          });
+          return http.Response(jsonEncode({'valid': true}), 200);
+        }
         if (request.url.path == '/auth/csrf') {
           return http.Response(jsonEncode({'csrfToken': 'csrf-1'}), 200);
         }
@@ -66,6 +74,11 @@ void main() {
     await client.sendVerificationOtp(
       email: 'ada@example.com',
       type: AuthEmailOtpType.signIn,
+    );
+    await client.checkVerificationOtp(
+      email: 'ada@example.com',
+      type: AuthEmailOtpType.signIn,
+      otp: '123456',
     );
     final session = await client.signIn(
       email: 'ada@example.com',

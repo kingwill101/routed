@@ -31,6 +31,14 @@ void main() {
                 '_csrf': 'csrf-1',
               });
               return http.Response(jsonEncode(_sessionJson), 200);
+            case '/auth/register/credentials':
+              expect(jsonDecode(request.body), {
+                'email': 'grace@example.com',
+                'password': 'another correct horse battery staple',
+                'name': 'Grace',
+                '_csrf': 'csrf-1',
+              });
+              return http.Response(jsonEncode(_sessionJson), 200);
             case '/auth/session':
               return http.Response(jsonEncode(_sessionJson), 200);
             case '/auth/sessions':
@@ -76,6 +84,11 @@ void main() {
         email: 'ada@example.com',
         password: 'correct horse battery staple',
       );
+      final registered = await credentials.register(
+        email: 'grace@example.com',
+        password: 'another correct horse battery staple',
+        attributes: const {'name': 'Grace'},
+      );
       final current = await sessions.current();
       final listed = await sessions.list();
       await sessions.revoke('session-1');
@@ -83,6 +96,7 @@ void main() {
       await sessions.signOut();
 
       expect(signedIn.user.id, 'user-1');
+      expect(registered.user.id, 'user-1');
       expect(current?.user.id, 'user-1');
       expect(listed.single.id, 'session-1');
       expect(revoked, 2);
