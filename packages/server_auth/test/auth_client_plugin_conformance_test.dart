@@ -275,6 +275,38 @@ void main() {
       },
     );
 
+    test(
+      'rejects responses that violate server schema values or types',
+      () async {
+        final invalidResponses = <Map<String, Object?>>[
+          <String, Object?>{'value': 'response', 'status': 'wrong'},
+          <String, Object?>{'value': 42},
+        ];
+
+        for (final response in invalidResponses) {
+          final suite = _suite(<AuthInstalledClientOperationContract>[
+            AuthInstalledClientOperationContract(
+              endpointId: 'echo.read',
+              plugin: const _EchoClientPlugin(),
+              invoke: (api) => (api as _EchoClient).read('request-value'),
+              response: AuthClientConformanceResponse.json(response),
+            ),
+          ]);
+
+          await expectLater(
+            _case(suite, 'clients.installed-contracts').run,
+            throwsA(
+              isA<AuthPluginConformanceFailure>().having(
+                (failure) => failure.cause.toString(),
+                'cause',
+                contains('server response contract'),
+              ),
+            ),
+          );
+        }
+      },
+    );
+
     test('rejects duplicate executable operation IDs', () async {
       const plugin = _EchoClientPlugin();
       final operation = AuthInstalledClientOperationContract(
@@ -480,6 +512,10 @@ final class _EchoServerPlugin
             schema: const <String, Object?>{
               'type': 'object',
               'required': <String>['value'],
+              'properties': <String, Object?>{
+                'value': <String, Object?>{'type': 'string'},
+                'status': <String, Object?>{'const': 'ok'},
+              },
             },
           ),
           rateLimitOperation: const AuthRateLimitOperation('echo', 'read'),

@@ -717,10 +717,60 @@ void _verifyObservedRequest<TContext>(
 }
 
 void _verifyJsonShape(
-  Map<String, dynamic> value,
+  Object? value,
   Map<String, Object?> schema,
   String label,
 ) {
+  if (schema.containsKey('const') &&
+      jsonEncode(value) != jsonEncode(schema['const'])) {
+    _fail('$label does not match its constant value.');
+  }
+
+  final allowedValues = schema['enum'];
+  if (allowedValues is List &&
+      !allowedValues.any(
+        (candidate) => jsonEncode(candidate) == jsonEncode(value),
+      )) {
+    _fail('$label is not one of its allowed values.');
+  }
+
+  final oneOf = schema['oneOf'];
+  if (oneOf is List) {
+    var matches = 0;
+    for (final candidate in oneOf.whereType<Map>()) {
+      try {
+        _verifyJsonShape(value, Map<String, Object?>.from(candidate), label);
+        matches++;
+      } on _AuthPluginExpectationFailure {
+        // A oneOf candidate is expected to reject non-matching values.
+      }
+    }
+    if (matches != 1) _fail('$label does not match exactly one schema.');
+  }
+
+  final rawTypes = schema['type'];
+  final types = switch (rawTypes) {
+    String type => <String>[type],
+    List values => values.whereType<String>().toList(growable: false),
+    _ => const <String>[],
+  };
+  if (types.isNotEmpty && !types.any((type) => _matchesJsonType(value, type))) {
+    _fail('$label has an invalid JSON type.');
+  }
+
+  if (value is! Map) {
+    if (value is List) {
+      final items = schema['items'];
+      if (items is Map) {
+        final itemSchema = Map<String, Object?>.from(items);
+        for (var index = 0; index < value.length; index++) {
+          _verifyJsonShape(value[index], itemSchema, '$label[$index]');
+        }
+      }
+    }
+    return;
+  }
+
   final required = schema['required'];
   if (required is List) {
     for (final key in required.whereType<String>()) {
@@ -733,7 +783,31 @@ void _verifyJsonShape(
     final unknown = value.keys.toSet().difference(allowed);
     if (unknown.isNotEmpty) _fail('$label contains unknown properties.');
   }
+  if (properties is Map) {
+    for (final entry in properties.entries) {
+      final key = entry.key;
+      final propertySchema = entry.value;
+      if (key is String && value.containsKey(key) && propertySchema is Map) {
+        _verifyJsonShape(
+          value[key],
+          Map<String, Object?>.from(propertySchema),
+          '$label.$key',
+        );
+      }
+    }
+  }
 }
+
+bool _matchesJsonType(Object? value, String type) => switch (type) {
+  'null' => value == null,
+  'object' => value is Map,
+  'array' => value is List,
+  'string' => value is String,
+  'boolean' => value is bool,
+  'integer' => value is int,
+  'number' => value is num && value is! bool,
+  _ => false,
+};
 
 void _verifyPublicResultSecrets(
   AuthInstalledClientOperationContract operation,
