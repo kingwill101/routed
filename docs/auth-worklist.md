@@ -83,10 +83,10 @@ The work is intentionally split between framework-agnostic capabilities in
 
 ## P1: complete the account lifecycle
 
-- [ ] Finish the email/password account lifecycle. Registration, sign-in,
-  duplicate-account handling, email verification, and opt-in
-  disabled/unverified-account policy now exist; email change, deletion, and
-  complete lifecycle coverage remain.
+- [x] Complete the email/password account lifecycle: registration, sign-in,
+  duplicate-account handling, email verification, opt-in
+  disabled/unverified-account policy, password reset/change, email change,
+  account deletion, and session/JWT revocation.
 - [x] Add Routed password-reset request and confirmation routes with generic
   account responses, rate limits, application-owned notification delivery,
   server-session revocation, and JWT version rotation.
@@ -96,11 +96,11 @@ The work is intentionally split between framework-agnostic capabilities in
 - [x] Add an authenticated password-change flow with reauthentication,
   server-session revocation, trusted-device revocation, and JWT version
   rotation.
-- [ ] Add email change, account deletion, and linked-account list/link/unlink
-  operations with reauthentication where needed. Email-change request and
-  confirmation plus authenticated account listing, unlinking, and deletion
-  are now implemented; typed tombstone retention/purge is available, while
-  broader credential fallback rules remain.
+- [ ] Finish linked-account fallback rules so unlinking cannot strand an
+  account across password, OAuth, passkey, phone, email-OTP, username, or
+  future plugin credentials. Email change, account deletion, authenticated
+  account listing/unlinking, reauthentication, and typed tombstone
+  retention/purge are implemented.
 - [x] Add a first-class server-session management API: list current sessions
   with device metadata, revoke one session, revoke all other sessions, and
   rotate credentials after sensitive changes. JWT session management remains a
@@ -210,18 +210,6 @@ account, session, client, and plugin contracts above:
 - [x] Add captcha and breached-password checks as opt-in security plugins.
 - [ ] Add SSO/SAML and SCIM integrations when enterprise tenancy requirements
   justify them.
-
-## Optional: interoperability
-
-These capabilities may help applications migrate from or coexist with other
-authentication systems, but they are not part of the core `server_auth`
-product direction and must not introduce an external-auth dependency into the
-native auth model.
-
-- [ ] Add an optional interoperability path for consuming external Better Auth
-  or OIDC identity through JWT verification or OAuth introspection.
-- [ ] Keep external identity resolution separate from `AuthStore`, local
-  account provisioning, and local session ownership.
 
 ## Active security-audit remediation
 
