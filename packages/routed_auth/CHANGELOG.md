@@ -1,5 +1,9 @@
 ## 0.2.0 - 2026-08-20
 
+- Finalize anonymous-account upgrades through the plugin's typed backend
+  transaction only after Routed has issued the authenticated target session.
+  Remove callback-based migration orchestration and keep failed session
+  issuance from deleting the anonymous source.
 - Route Admin mutations through backend-owned typed commands, consume
   impersonation source sessions once before host replacement-session creation,
   and preserve the explicit host-session and post-commit audit boundary.

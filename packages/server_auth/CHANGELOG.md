@@ -1,5 +1,14 @@
 ## 0.2.0 - 2026-08-20
 
+- Breaking: move anonymous creation, authenticated deletion, and account-
+  upgrade finalization behind `AuthAnonymousAccountMutationStore`. Remove the
+  arbitrary link callback; durable adapters now fail configuration unless they
+  provide backend transactions and replay receipts, while session issuance
+  remains host-owned.
+- Add atomic in-memory anonymous mutations, rollback fault injection, public
+  durable-adapter conformance, and property coverage for contention, replay,
+  deletion rollback, operation binding, generated-name bounds, control
+  characters, and privilege-bearing anonymous records.
 - Bind managed SCIM authorization principals to the authenticated session user
   so credential ownership and coordinated deletion cannot be assigned to a
   different account by a faulty application authorizer.

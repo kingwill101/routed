@@ -221,6 +221,36 @@ CSRF, rate-limit keys, redirects, session/JWT projection, and generic public
 errors. `server_auth` defines the portable descriptors; a framework adapter is
 responsible for enforcing that contract.
 
+## Anonymous accounts
+
+Anonymous authentication is an explicit server plugin. The root store must
+implement both `AuthAnonymousAccountMutationStore` and
+`AuthUserDeletionCoordinatorHost` in the same persistence topology:
+
+```dart
+final store = MyDurableAuthStore(database);
+
+final options = AuthOptions<MyRequestContext>(
+  providers: const [],
+  store: store,
+  plugins: [AnonymousPlugin<MyRequestContext>()],
+);
+```
+
+The mutation store owns typed transactions for anonymous creation,
+authenticated deletion, and upgrade finalization. It persists the operation
+receipt in the same transaction so retries cannot duplicate creation or bind
+an upgrade to another target. Deletion and upgrade scrub creation receipts
+that contain user data and retain only digest-bound completion receipts. The
+framework host authenticates the target and issues its replacement session
+before upgrade finalization; the plugin never creates or serializes sessions.
+
+`InMemoryAuthStore` implements the contract for tests and local development.
+A durable adapter that does not implement it fails during plugin
+configuration. In particular, selecting `AnonymousPlugin` with the current D1
+adapter is unsupported until D1 adds these transactions; there is no
+process-local fallback.
+
 ## Optional SCIM 2.0 provisioning plugin
 
 SCIM is a server-to-server protocol, so selecting the server plugin does not

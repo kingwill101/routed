@@ -176,6 +176,29 @@ await authClient.plugins.use(captchaClient).signIn(
 Installing a server plugin does not add unrelated client methods, and omitting
 a server plugin means its routes are not mounted.
 
+Anonymous auth follows the same composition rule:
+
+```dart
+final store = MyDurableAuthStore(database); // Implements the anonymous mutation and deletion contracts.
+final anonymous = AnonymousPlugin<EngineContext>();
+
+final deployment = AuthDeploymentPresets.secureSessionProduction<EngineContext>(
+  store: store,
+  providers: const [],
+  boundary: productionBoundary,
+  lifecycleDelivery: const AuthLifecycleDelivery.disabled(),
+  rateLimiter: authRateLimiter,
+  requireVerifiedEmail: false,
+  plugins: [anonymous],
+);
+```
+
+Routed issues the normal session or JWT. When an authenticated anonymous user
+signs in as a permanent identity, Routed issues the replacement session first
+and then submits the typed replay-bound upgrade finalizer. Stores lacking
+`AuthAnonymousAccountMutationStore` fail at boot, including the current D1
+adapter; Routed never substitutes `InMemoryAuthStore` for a durable topology.
+
 SAML follows the same composition rule. Add `AuthSamlPlugin<EngineContext>` to
 the deployment's `plugins` list after supplying an application-owned
 connection catalog, durable replay store, assertion verifier, identity
