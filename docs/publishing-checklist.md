@@ -2,6 +2,34 @@
 
 This checklist captures the steps we followed to validate that the core packages are ready for pub.dev and the order to release them.
 
+## Active pre-auth release snapshot
+
+The isolated release is being published from
+`release/publish-pre-auth-2026-08-20`, based on the recovery anchor
+`release/pre-auth-2026-08-18` at `f665d2eb` (`chore: prepare packages for
+release`). The publish branch currently ends at `6b6caba9` and contains only
+release metadata fixes; the auth-era `master` work is not part of this
+snapshot.
+
+Uploaded from this snapshot so far:
+
+- `routed_sessions` `0.2.0`
+- `routed_storage` `0.2.0`
+- `routed_views` `0.2.0`
+- `routed_cache` `0.2.0`
+- `routed_auth` `0.2.0`
+- `routed_hotwire` `0.1.4` and corrective `0.1.5`
+- `routed_observability` `0.1.0`
+- `routed_rate_limit` `0.1.0`
+- `routed_security` `0.1.0`
+- `routed_validation` `0.1.0`
+- `routed_openapi` `0.1.0`
+
+Next pending packages in this snapshot are `routed_openapi_builder` `0.1.0`,
+`routed` `0.5.0`, and `routed_cli` `0.3.0`. The `server_*` versions used by
+this pre-auth snapshot were already hosted; `server_auth` `0.2.0` belongs to
+the separate auth-era release line.
+
 ## Pre-flight
 - [ ] Ensure the workspace is on a clean commit (no modified or untracked files).
 - [ ] Verify `resolution: workspace` remains in each package so local development keeps working.
