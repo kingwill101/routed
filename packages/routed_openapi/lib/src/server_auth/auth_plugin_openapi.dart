@@ -35,7 +35,6 @@ final class AuthPluginOpenApiConfig {
     this.csrfHeaderName = 'x-csrf-token',
     this.apiKeyHeaderName = 'x-api-key',
     this.operationIdPrefix = 'auth',
-    this.absolutePathPrefixes = const <String>['/.well-known/'],
   });
 
   /// Prefix applied to plugin-relative endpoint paths.
@@ -58,9 +57,6 @@ final class AuthPluginOpenApiConfig {
 
   /// Prefix used for stable, generated-client-safe operation IDs.
   final String operationIdPrefix;
-
-  /// Endpoint path prefixes that remain rooted instead of using [basePath].
-  final List<String> absolutePathPrefixes;
 }
 
 /// A composition error that would make generated auth clients ambiguous.
@@ -144,7 +140,7 @@ final class AuthPluginOpenApiGenerator<TContext> {
     for (final endpoint in registry.publicEndpoints) {
       if (endpoint.serverOnly && !config.includeServerOnly) continue;
 
-      final path = _resolvePath(endpoint.path);
+      final path = _resolvePath(endpoint.path, endpoint.mount);
       final method = endpoint.method.name.toUpperCase();
       final routeKey = '$method $path';
       if (!routeKeys.add(routeKey)) {
@@ -176,7 +172,15 @@ final class AuthPluginOpenApiGenerator<TContext> {
         breachedPasswordPlugin: breachedPasswordPlugin,
         breachedPasswordConfig: breachedPasswordConfig,
       );
-      schemas[requestSchemaName] = Map<String, Object?>.from(request.schema);
+      final pathParameters = _pathParameters(
+        endpoint.path,
+        contracts.request.schema,
+      );
+      final requestSchema = _withoutPathProperties(
+        request.schema,
+        endpoint.path.parameters,
+      );
+      schemas[requestSchemaName] = requestSchema;
       schemas[responseSchemaName] = _publicResponseSchema(
         contracts.response.schema,
       );
@@ -191,11 +195,10 @@ final class AuthPluginOpenApiGenerator<TContext> {
           );
       hasTwoFactorChallenge |= hasChallengeAlternative;
 
-      final pathParameters = _pathParameters(path, contracts.request.schema);
       final parameters = <OpenApiParameter>[
         ...pathParameters,
         if (endpoint.method == AuthOperationMethod.get)
-          ..._queryParameters(request.schema, pathParameters),
+          ..._queryParameters(requestSchema, pathParameters),
         if (endpoint.originPolicy == AuthOperationOriginPolicy.browser)
           const OpenApiParameter(
             name: 'Origin',
@@ -403,9 +406,9 @@ final class AuthPluginOpenApiGenerator<TContext> {
     };
   }
 
-  String _resolvePath(String endpointPath) {
-    final endpoint = _normalizePath(endpointPath);
-    if (config.absolutePathPrefixes.any(endpoint.startsWith)) return endpoint;
+  String _resolvePath(AuthRoutePath route, AuthEndpointMount mount) {
+    final endpoint = route.validate();
+    if (mount == AuthEndpointMount.root) return endpoint;
     final base = _normalizePath(config.basePath);
     if (base == '/') return endpoint;
     return '$base${endpoint == '/' ? '' : endpoint}';
@@ -760,13 +763,12 @@ final class _DefaultAuthOperationContract implements AuthOperationContract {
 }
 
 List<OpenApiParameter> _pathParameters(
-  String path,
+  AuthRoutePath path,
   Map<String, Object?> schema,
 ) {
   final properties = _schemaProperties(schema);
-  return RegExp(r'\{([^}]+)\}')
-      .allMatches(path)
-      .map((match) => match.group(1)!)
+  return path.parameters
+      .map((parameter) => parameter.name)
       .map(
         (name) => OpenApiParameter(
           name: name,
@@ -776,6 +778,34 @@ List<OpenApiParameter> _pathParameters(
         ),
       )
       .toList(growable: false);
+}
+
+Map<String, Object?> _withoutPathProperties(
+  Map<String, Object?> schema,
+  Iterable<AuthRouteParameterKey> parameters,
+) {
+  final names = parameters.map((parameter) => parameter.name).toSet();
+  if (names.isEmpty) return Map<String, Object?>.from(schema);
+  final result = Map<String, Object?>.from(schema);
+  if (schema['properties'] case final Map properties) {
+    result['properties'] = <String, Object?>{
+      for (final entry in properties.entries)
+        if (!names.contains(entry.key.toString()))
+          entry.key.toString(): entry.value,
+    };
+  }
+  if (schema['required'] case final List required) {
+    final remaining = required
+        .whereType<String>()
+        .where((name) => !names.contains(name))
+        .toList(growable: false);
+    if (remaining.isEmpty) {
+      result.remove('required');
+    } else {
+      result['required'] = remaining;
+    }
+  }
+  return result;
 }
 
 List<OpenApiParameter> _queryParameters(

@@ -1,7 +1,5 @@
-
 import 'package:routed_openapi/routed_openapi.dart';
 import 'package:test/test.dart';
-
 
 void main() {
   group('RouteSchema serialization', () {

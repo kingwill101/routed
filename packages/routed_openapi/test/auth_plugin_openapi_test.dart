@@ -225,6 +225,9 @@ void main() {
               id: 'tokens.inspect',
               method: AuthOperationMethod.get,
               path: '/tokens/{id}',
+              pathParameters: <AuthRouteParameterKey>[
+                AuthRouteParameterKey('id'),
+              ],
               semantics: AuthOperationSemantics.readOnly(),
               requestSchema: <String, Object?>{
                 'type': 'object',
@@ -262,6 +265,47 @@ void main() {
       expect(operation.requestBody, isNull);
     });
 
+    test('keeps path parameters out of mutation request bodies', () {
+      final spec = _registry(<AuthServerPlugin<Object>>[
+        const _ContractPlugin(
+          id: 'tokens',
+          endpoints: <_EndpointContract>[
+            _EndpointContract(
+              id: 'tokens.update',
+              method: AuthOperationMethod.post,
+              path: '/tokens/{id}',
+              pathParameters: <AuthRouteParameterKey>[
+                AuthRouteParameterKey('id'),
+              ],
+              semantics: AuthOperationSemantics.mutation(
+                persistence: AuthMutationPersistence.external(),
+                replaySafety: AuthMutationReplaySafety.idempotent,
+              ),
+              requestRequired: true,
+              requestSchema: <String, Object?>{
+                'type': 'object',
+                'properties': <String, Object?>{
+                  'id': <String, Object?>{'type': 'string'},
+                  'value': <String, Object?>{'type': 'string'},
+                },
+                'required': <String>['id', 'value'],
+              },
+              responseSchema: <String, Object?>{'type': 'object'},
+            ),
+          ],
+        ),
+      ]).toOpenApi31(info: _info);
+
+      final operation = spec.paths['/auth/tokens/{id}']!.post!;
+      expect(
+        operation.parameters.map((parameter) => parameter.name),
+        contains('id'),
+      );
+      final schema = spec.components!.schemas['AuthTokensUpdateRequest']!;
+      expect((schema['properties']! as Map), isNot(contains('id')));
+      expect(schema['required'], <String>['value']);
+    });
+
     test('keeps well-known plugin endpoints at the root', () {
       final registry = _registry(<AuthServerPlugin<Object>>[
         const _ContractPlugin(
@@ -271,6 +315,7 @@ void main() {
               id: 'metadata.discovery',
               method: AuthOperationMethod.get,
               path: '/.well-known/auth',
+              mount: AuthEndpointMount.root,
               semantics: AuthOperationSemantics.readOnly(),
               requestSchema: <String, Object?>{},
               responseSchema: <String, Object?>{'type': 'object'},
@@ -764,6 +809,8 @@ final class _EndpointContract {
     this.requestRequired = false,
     this.csrfRequired = false,
     this.serverOnly = false,
+    this.pathParameters = const <AuthRouteParameterKey>[],
+    this.mount = AuthEndpointMount.auth,
   });
 
   final String id;
@@ -775,12 +822,15 @@ final class _EndpointContract {
   final bool requestRequired;
   final bool csrfRequired;
   final bool serverOnly;
+  final List<AuthRouteParameterKey> pathParameters;
+  final AuthEndpointMount mount;
 
   AuthEndpointDescriptor<Object> get descriptor =>
       TypedAuthEndpointDescriptor<Object, Map<String, dynamic>, Object?>(
         id: id,
         method: method,
-        path: path,
+        path: AuthRoutePath(path, parameters: pathParameters),
+        mount: mount,
         semantics: semantics,
         requestCodec: AuthOperationCodec<Map<String, dynamic>>(
           decode: (value) => value,

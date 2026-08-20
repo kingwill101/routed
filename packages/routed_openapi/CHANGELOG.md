@@ -1,5 +1,8 @@
 ## 0.1.0
 
+- Generate auth paths and path parameters from typed `AuthRoutePath`
+  declarations and explicit root/auth mounts, keeping path fields out of query
+  and request-body schemas.
 - Generate managed SCIM connection and credential operations with session
   security, CSRF headers, bounded request/response schemas, one-time secret
   marking, and exact durable atomic-operation and replay-safety metadata.
