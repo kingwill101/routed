@@ -1,4 +1,4 @@
-## Unreleased
+## 0.2.0 - 2026-08-20
 
 - Add opt-in phone-number authentication with strict E.164 identifiers,
   digest-at-rest one-time codes, bounded replay attempts, provider-owned

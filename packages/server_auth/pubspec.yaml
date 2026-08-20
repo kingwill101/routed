@@ -1,6 +1,6 @@
 name: server_auth
 description: Framework-agnostic authentication runtime capabilities for server ecosystems.
-version: 0.1.0
+version: 0.2.0
 repository: https://github.com/kingwill101/routed/tree/master/packages/server_auth
 tags:
   - server
@@ -10,6 +10,9 @@ tags:
 
 funding:
   - https://www.buymeacoffee.com/kingwill101
+
+false_secrets:
+  - /test/oauth_provider_mode_test.dart
 
 resolution: workspace
 

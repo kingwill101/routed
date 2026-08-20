@@ -1,4 +1,4 @@
-## Unreleased
+## 0.2.0 - 2026-08-20
 
 - Mount phone-number send/verify operations from the opt-in server plugin and
   issue normal Routed sessions after successful verification.
