@@ -5,6 +5,13 @@
 - New projects now get a typed `lib/config.dart` bootstrap. `lib/app.dart`
   consumes that bootstrap so CLI route inspection, OpenAPI generation, and
   deployment use the same provider composition as the application runtime.
+- Typed scaffolds now keep their shared config generic and compose only the
+  providers selected by the template. Web starters use public typed view,
+  storage, and static-mount constructors without YAML or implicit registries.
+- `routed create --auth-plugin username` opts into the username-first server
+  plugin with typed auth deployment wiring; unselected auth plugins stay out.
+- Scaffold regression coverage now analyzes and compiles every generated
+  project and executes its route-manifest entrypoint.
 - API and full-stack templates now accept any `routed_testing` 0.x minor from
   `0.4.0` up to (but not including) `1.0.0`.
 - Cloudflare deploys now generate Container Durable Object wrappers and

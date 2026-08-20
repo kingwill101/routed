@@ -26,6 +26,39 @@ Add provider-owned configuration there and let `lib/app.dart` continue to own
 routes. The CLI loads `createEngine()`, so route inspection, OpenAPI generation,
 and deployment use the same typed provider setup as the running application.
 
+Template selection controls optional provider composition. `basic` and `api`
+start with only `CoreServiceProvider` and `RoutingServiceProvider`; `fullstack`
+adds `ViewServiceProvider`; and `web` adds typed view, storage, and static-mount
+providers. The generated config imports each provider's public package and
+constructs it explicitly:
+
+```dart
+import 'package:routed_core/routed_core.dart';
+import 'package:routed_storage/routed_storage.dart';
+
+AppConfig config() => AppConfig(
+  providers: [
+    CoreServiceProvider(),
+    RoutingServiceProvider(),
+    RoutedStorageProvider(
+      configuration: StorageConfig(root: 'storage/app'),
+    ),
+  ],
+);
+```
+
+Add authentication and its server/client plugins only when the application
+uses them. Configuration is ordinary typed Dart code: generated projects do
+not use YAML files, string-key lookups, or a global driver registry.
+
+The username-first server plugin can be selected at creation time; no other
+auth plugin is added with it:
+
+```bash
+dart run routed_cli:routed create --name my_app \
+  --auth-plugin username
+```
+
 For a Cloudflare Durable Object, pass each binding as `BINDING=ClassName`.
 Routed generates the Dart factory registration, Wrangler binding, SQLite
 migration, and named Worker class export:

@@ -5,10 +5,15 @@ import 'package:routed_cli/src/console/create/templates_embedded.dart';
 typedef FileBuilder = String Function(TemplateContext context);
 
 class TemplateContext {
-  TemplateContext({required this.packageName, required this.humanName});
+  TemplateContext({
+    required this.packageName,
+    required this.humanName,
+    Iterable<String> authPlugins = const [],
+  }) : authPlugins = Set<String>.unmodifiable(authPlugins);
 
   final String packageName;
   final String humanName;
+  final Set<String> authPlugins;
 
   String get sampleTodosJson => jsonEncode(<Map<String, dynamic>>[
     {'id': 1, 'title': 'Ship Routed starter', 'completed': false},
@@ -63,10 +68,15 @@ class Templates {
     'web': _buildTemplate(
       id: 'web',
       description: 'Server-rendered pages with HTML helpers.',
+      extraDependencies: const {
+        'routed_storage': '>=0.2.0 <1.0.0',
+        'routed_views': '>=0.2.0 <1.0.0',
+      },
     ),
     'fullstack': _buildTemplate(
       id: 'fullstack',
       description: 'Combined HTML + JSON starter, handy for SPAs or HTMX.',
+      extraDependencies: const {'routed_views': '>=0.2.0 <1.0.0'},
       extraDevDependencies: const {
         'routed_testing': '>=0.4.0 <1.0.0',
         'server_testing': '^0.4.0',
@@ -102,7 +112,7 @@ ScaffoldTemplate _buildTemplate({
     description: description,
     files: files,
     readme: readmeBuilder,
-    extraDependencies: extraDependencies,
+    extraDependencies: {'routed_core': '>=0.5.0 <1.0.0', ...?extraDependencies},
     extraDevDependencies: extraDevDependencies,
   );
 }
@@ -131,70 +141,117 @@ Map<String, FileBuilder> _buildFileBuilders(String templateId) {
     (dest, source) => MapEntry(dest, (TemplateContext context) {
       final rendered = _renderTemplateFile(source, context);
       return dest == 'lib/app.dart'
-          ? _wireApplicationConfig(rendered)
+          ? _wireApplicationConfig(rendered, templateId: templateId)
           : rendered;
     }),
   );
 
-  builders['lib/config.dart'] = _renderConfigTemplate;
+  builders['lib/config.dart'] = (context) =>
+      _renderConfigTemplate(context, templateId: templateId);
   return builders;
 }
 
-String _renderConfigTemplate(TemplateContext context) => '''
-import 'package:routed/routed.dart';
+String _renderConfigTemplate(
+  TemplateContext context, {
+  required String templateId,
+}) {
+  final imports = <String>[
+    "import 'package:routed_core/routed_core.dart';",
+    if (context.authPlugins.isNotEmpty)
+      "import 'package:routed_auth/routed_auth.dart' "
+          'show RoutedAuthDeploymentBinding;',
+    if (context.authPlugins.isNotEmpty)
+      "import 'package:server_auth/server_auth.dart' "
+          'show AuthDeploymentPresets, UsernamePlugin;',
+    if (templateId == 'web')
+      "import 'package:routed_storage/routed_storage.dart';",
+    if (templateId == 'web' || templateId == 'fullstack')
+      "import 'package:routed_views/routed_views.dart';",
+  ];
+
+  final optionalProviders = switch (templateId) {
+    'web' =>
+      '''
+      RoutedStorageProvider(),
+      ViewServiceProvider(
+        RoutedViewConfig(directory: 'templates'),
+      ),
+      RoutedStaticProvider(
+        StaticConfig(
+          enabled: true,
+          mounts: const [
+            StaticMountConfig(route: '/assets', root: 'public'),
+          ],
+        ),
+      ),''',
+    'fullstack' =>
+      '''
+      ViewServiceProvider(
+        RoutedViewConfig(directory: 'templates'),
+      ),''',
+    _ => '',
+  };
+  final hasUsername = context.authPlugins.contains('username');
+  final authSetup = hasUsername
+      ? '''
+  final auth = AuthDeploymentPresets.localDevelopment<EngineContext>(
+    providers: const [],
+    plugins: [UsernamePlugin<EngineContext>()],
+    trustedOrigins: [Uri.parse('http://localhost:8080')],
+  );
+'''
+      : '';
+  final authProvider = hasUsername ? '      auth.serviceProvider(),\n' : '';
+  final authArguments = hasUsername
+      ? '''    engineConfig: auth.engineConfig(),
+    options: [auth.bindTo],
+'''
+      : '';
+
+  return '''
+${imports.join('\n')}
 
 /// Typed application wiring shared by the runtime and Routed CLI flows.
 ///
-/// Return fresh provider instances here. The CLI may construct a separate
-/// engine for route inspection, OpenAPI generation, or deployment.
+/// Keep provider-owned configuration beside its provider constructor. Return
+/// fresh instances because CLI inspection and deployment may build an engine
+/// separately from the running server.
 final class AppConfig {
   AppConfig({
     required Iterable<ServiceProvider> providers,
-    this.auth,
     this.engineConfig,
     RuntimeContext? runtime,
+    Iterable<EngineOpt> options = const [],
   }) : providers = List<ServiceProvider>.unmodifiable(providers),
-       runtime = runtime ?? RuntimeContext();
+       runtime = runtime ?? RuntimeContext(),
+       options = List<EngineOpt>.unmodifiable(options);
 
   final List<ServiceProvider> providers;
   final RuntimeContext runtime;
   final EngineConfig? engineConfig;
+  final List<EngineOpt> options;
 
-  /// Optional typed auth deployment. No auth provider or plugin is enabled
-  /// unless the application supplies one here.
-  final AuthDeployment<EngineContext>? auth;
-
-  Engine buildEngine() {
-    final authDeployment = auth;
-    final engine = Engine(
-      config: authDeployment?.engineConfig(engineConfig) ?? engineConfig,
-      runtime: runtime,
-      providers: [
-        ...providers,
-        if (authDeployment != null) authDeployment.serviceProvider(),
-      ],
-    );
-    authDeployment?.bindTo(engine);
-    return engine;
-  }
+  Engine buildEngine() => Engine(
+    config: engineConfig,
+    runtime: runtime,
+    providers: providers,
+    options: options,
+  );
 }
 
-AppConfig config() => AppConfig(
-  providers: [
-    CoreServiceProvider(),
-    RoutingServiceProvider(),
-  ],
-
-  // Auth is opt-in. To enable credentials auth, uncomment this typed preset.
-  // Add only the auth plugins this application actually needs via `plugins`.
-  // auth: AuthDeploymentPresets.localDevelopment<EngineContext>(
-  //   providers: [CredentialsProvider()],
-  //   trustedOrigins: [Uri.parse('http://localhost:3000')],
-  // ),
-);
+AppConfig config() {
+$authSetup  return AppConfig(
+    providers: [
+      CoreServiceProvider(),
+      RoutingServiceProvider(),
+$optionalProviders
+$authProvider    ],
+$authArguments  );
+}
 ''';
+}
 
-String _wireApplicationConfig(String content) {
+String _wireApplicationConfig(String content, {required String templateId}) {
   const configuredBlock = '''  final setup = config();
   final engine = setup.buildEngine();''';
 
@@ -215,18 +272,67 @@ String _wireApplicationConfig(String content) {
     );
   }
 
-  return "import 'config.dart';\n\n$content".replaceFirst(
+  var source = content;
+  if (templateId == 'api') {
+    source = source.replaceFirst("import 'dart:io';\n\n", '');
+  }
+
+  var configured = "import 'config.dart';\n\n$source".replaceFirst(
     providerBlock,
     configuredBlock,
   );
+
+  if (templateId == 'web' || templateId == 'fullstack') {
+    configured = configured.replaceFirst(
+      "  engine.useViewEngine(LiquidViewEngine(directory: 'templates'));\n\n",
+      '',
+    );
+  }
+  if (templateId == 'web') {
+    configured = configured.replaceFirst(
+      "  engine.static('/assets', 'public');\n\n",
+      '',
+    );
+  }
+
+  return configured;
 }
 
 FileBuilder _resolveReadme(String templateId) {
   final path = '$templateId/README.md';
   if (scaffoldTemplateBytes.containsKey(path)) {
-    return (context) => _renderTemplateFile(path, context);
+    return (context) => _withTypedConfigGuide(
+      _renderTemplateFile(path, context),
+      templateId: templateId,
+    );
   }
-  return _defaultReadme;
+  return (context) =>
+      _withTypedConfigGuide(_defaultReadme(context), templateId: templateId);
+}
+
+String _withTypedConfigGuide(String readme, {required String templateId}) {
+  final selectedProviders = switch (templateId) {
+    'web' =>
+      '`ViewServiceProvider`, `RoutedStorageProvider`, and '
+          '`RoutedStaticProvider`',
+    'fullstack' => '`ViewServiceProvider`',
+    _ => 'only the core and routing providers',
+  };
+
+  return '''
+${readme.trimRight()}
+
+## Typed application configuration
+
+`lib/config.dart` is the single public composition point used by the server and
+Routed CLI tooling. This template selects $selectedProviders. Add another
+provider by importing its public package and constructing it there with its
+typed configuration. Add auth server and client plugins only when the
+application uses them; the scaffold does not install optional auth behavior.
+
+Do not add YAML configuration or a driver registry. Environment values and
+secrets should be read by application code and passed into typed constructors.
+''';
 }
 
 String _defaultReadme(TemplateContext context) => '# ${context.humanName}\n';
@@ -236,8 +342,28 @@ String _renderTemplateFile(String sourcePath, TemplateContext context) {
   if (bytes == null) {
     throw ArgumentError('Template not found: $sourcePath');
   }
-  final content = utf8.decode(bytes);
-  return _applyReplacements(content, context.replacements);
+  var content = utf8.decode(bytes).replaceFirst(RegExp(r'\x00+$'), '');
+  if (sourcePath.endsWith('/test/api_test.dart')) {
+    content = content.replaceFirst("import 'package:test/test.dart';\n\n", '');
+  }
+  if (sourcePath == 'fullstack/lib/app.dart') {
+    content = content.replaceFirst(
+      '''          () async => todos.firstWhere(
+            (item) => item['id'].toString() == id,
+            orElse: () => null,
+          ),''',
+      '''          () async {
+            for (final item in todos) {
+              if (item['id'].toString() == id) return item;
+            }
+            return null;
+          },''',
+    );
+  }
+  return _applyReplacements(
+    content,
+    context.replacements,
+  ).replaceAll('https://routed.dev', 'https://kingwill101.github.io/routed/');
 }
 
 String _applyReplacements(String content, Map<String, String> replacements) {

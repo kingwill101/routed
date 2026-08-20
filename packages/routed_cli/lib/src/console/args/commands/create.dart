@@ -28,6 +28,7 @@ typedef PubGetInvoker = Future<int> Function(fs.Directory projectDir);
 /// - --name/-n: Project name (used for pubspec + folder when writing to current dir)
 /// - --output/-o: Destination directory (defaults to current directory)
 /// - --template/-t: Template to use (`basic`, `api`, `web`, `fullstack`)
+/// - --auth-plugin: Optional typed auth plugin to compose (`username`)
 /// - --force/-f: Overwrite existing files when the target directory exists
 class CreateCommand extends BaseCommand {
   CreateCommand({super.logger, super.fileSystem, PubGetInvoker? pubGet})
@@ -52,6 +53,13 @@ class CreateCommand extends BaseCommand {
         help: 'Application template to scaffold (basic, api, web, fullstack).',
         valueHelp: 'basic',
         defaultsTo: 'basic',
+      )
+      ..addMultiOption(
+        'auth-plugin',
+        help: 'Opt-in auth plugins to compose in typed Dart configuration.',
+        valueHelp: 'username',
+        allowed: const ['username'],
+        splitCommas: true,
       )
       ..addFlag(
         'force',
@@ -79,6 +87,7 @@ class CreateCommand extends BaseCommand {
       final rawName = results?['name'] as String?;
       final outputArg = results?['output'] as String? ?? '.';
       final template = (results?['template'] as String? ?? 'basic').trim();
+      final authPlugins = results?['auth-plugin'] as List<String>? ?? const [];
       final force = results?['force'] as bool? ?? false;
 
       ScaffoldTemplate scaffoldTemplate;
@@ -135,6 +144,7 @@ class CreateCommand extends BaseCommand {
       final context = TemplateContext(
         packageName: packageName,
         humanName: humanName,
+        authPlugins: authPlugins,
       );
 
       await write(
@@ -143,6 +153,12 @@ class CreateCommand extends BaseCommand {
           packageName,
           routedVersion,
           scaffoldTemplate,
+          extraDependencies: authPlugins.isEmpty
+              ? const {}
+              : const {
+                  'routed_auth': '>=0.2.0 <1.0.0',
+                  'server_auth': '>=0.2.0 <1.0.0',
+                },
           inWorkspace: inWorkspace,
         ),
       );

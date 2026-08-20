@@ -4,6 +4,7 @@ import 'package:file/memory.dart';
 import 'package:routed_cli/routed_cli.dart' show CliLogger;
 import 'package:routed_cli/src/console/args/commands/create.dart';
 import 'package:routed_cli/src/console/args/runner.dart';
+import 'package:routed_cli/src/console/create/templates.dart';
 import 'package:test/test.dart';
 import 'package:yaml/yaml.dart';
 
@@ -58,6 +59,7 @@ void main() {
       expect(pubspec['name'], equals('demo_app'));
       final dependencies = pubspec['dependencies'] as YamlMap;
       expect(dependencies.containsKey('routed'), isTrue);
+      expect(dependencies['routed_core'], equals('>=0.5.0 <1.0.0'));
 
       expect(
         projectDir.fileSystem
@@ -94,19 +96,19 @@ void main() {
       expect(appContent, contains('Welcome to Demo App!'));
 
       final configContent = _read(projectDir, 'lib/config.dart');
+      expect(
+        configContent,
+        startsWith("import 'package:routed_core/routed_core.dart';"),
+      );
       expect(configContent, contains('final class AppConfig'));
       expect(configContent, contains('AppConfig config()'));
       expect(configContent, contains('CoreServiceProvider()'));
-      expect(
-        configContent,
-        contains('final AuthDeployment<EngineContext>? auth;'),
-      );
-      expect(
-        configContent,
-        contains('AuthDeploymentPresets.localDevelopment<EngineContext>'),
-      );
-      expect(configContent, contains('authDeployment.serviceProvider()'));
-      expect(configContent, contains('authDeployment?.bindTo(engine)'));
+      expect(configContent, contains('RoutingServiceProvider()'));
+      expect(configContent, contains('final List<EngineOpt> options;'));
+      expect(configContent, contains('options: options'));
+      expect(configContent, isNot(contains('AuthDeployment')));
+      expect(configContent, isNot(contains('CredentialsProvider')));
+      expect(configContent, isNot(contains('Plugin')));
       expect(configContent, isNot(contains("package:routed/src/")));
       expect(configContent, isNot(contains('config/')));
       expect(configContent, isNot(contains('storage.yaml')));
@@ -156,6 +158,45 @@ void main() {
     test('exposes template names in usage', () {
       final command = runner.commands['create'] as CreateCommand;
       expect(command.usage, contains('basic, api, web, fullstack'));
+      expect(command.usage, contains('--auth-plugin'));
+      expect(command.usage, contains('[username]'));
+    });
+
+    test('composes only explicitly selected auth plugins', () async {
+      await _run(runner, [
+        'create',
+        '--name',
+        'username_app',
+        '--auth-plugin',
+        'username',
+      ]);
+
+      final projectDir = memoryFs.directory(
+        memoryFs.path.join(workspace.path, 'username_app'),
+      );
+      final configContent = _read(projectDir, 'lib/config.dart');
+      expect(
+        configContent,
+        contains("import 'package:routed_auth/routed_auth.dart'"),
+      );
+      expect(
+        configContent,
+        contains("import 'package:server_auth/server_auth.dart'"),
+      );
+      expect(
+        configContent,
+        contains('AuthDeploymentPresets.localDevelopment<EngineContext>'),
+      );
+      expect(configContent, contains('UsernamePlugin<EngineContext>()'));
+      expect(configContent, contains('auth.serviceProvider()'));
+      expect(configContent, contains('options: [auth.bindTo]'));
+      expect(configContent, isNot(contains('PhoneNumberPlugin')));
+      expect(configContent, isNot(contains('MagicLinkPlugin')));
+
+      final pubspec = loadYaml(_read(projectDir, 'pubspec.yaml')) as YamlMap;
+      final dependencies = pubspec['dependencies'] as YamlMap;
+      expect(dependencies['routed_auth'], equals('>=0.2.0 <1.0.0'));
+      expect(dependencies['server_auth'], equals('>=0.2.0 <1.0.0'));
     });
 
     test('scaffolds API template with tests', () async {
@@ -183,8 +224,8 @@ void main() {
         memoryFs.path.join(workspace.path, 'demo_web'),
       );
       final appContent = _read(projectDir, 'lib/app.dart');
-      expect(appContent, contains('LiquidViewEngine'));
-      expect(appContent, contains("engine.static('/assets'"));
+      expect(appContent, isNot(contains('LiquidViewEngine')));
+      expect(appContent, isNot(contains("engine.static('/assets'")));
       expect(appContent, contains("templateName: 'home.liquid'"));
       expect(appContent, contains('ctx.template'));
       expect(appContent, contains('ctx.requireFound'));
@@ -194,6 +235,25 @@ void main() {
       final homeTemplate = _read(projectDir, 'templates/home.liquid');
       expect(homeTemplate, contains('{{ app_title }}'));
       expect(homeTemplate, contains('cdn.tailwindcss.com'));
+
+      final configContent = _read(projectDir, 'lib/config.dart');
+      expect(
+        configContent,
+        contains("import 'package:routed_views/routed_views.dart';"),
+      );
+      expect(
+        configContent,
+        contains("import 'package:routed_storage/routed_storage.dart';"),
+      );
+      expect(configContent, contains('ViewServiceProvider('));
+      expect(configContent, contains('RoutedStorageProvider()'));
+      expect(configContent, contains('RoutedStaticProvider('));
+      expect(configContent, contains("StaticMountConfig(route: '/assets'"));
+
+      final pubspec = loadYaml(_read(projectDir, 'pubspec.yaml')) as YamlMap;
+      final dependencies = pubspec['dependencies'] as YamlMap;
+      expect(dependencies['routed_views'], equals('>=0.2.0 <1.0.0'));
+      expect(dependencies['routed_storage'], equals('>=0.2.0 <1.0.0'));
     });
 
     test('scaffolds fullstack template with API and HTML', () async {
@@ -213,6 +273,11 @@ void main() {
       expect(appContent, contains('ctx.template'));
       expect(_exists(projectDir, 'templates/todos.liquid'), isTrue);
       expect(_exists(projectDir, 'test/api_test.dart'), isTrue);
+
+      final configContent = _read(projectDir, 'lib/config.dart');
+      expect(configContent, contains('ViewServiceProvider('));
+      expect(configContent, isNot(contains('RoutedStorageProvider')));
+      expect(configContent, isNot(contains('RoutedStaticProvider')));
 
       final pubspec = loadYaml(_read(projectDir, 'pubspec.yaml')) as YamlMap;
       final devDeps = pubspec['dev_dependencies'] as YamlMap? ?? YamlMap();
@@ -255,6 +320,44 @@ void main() {
         for (final check in entry.value.contentChecks.entries) {
           expect(_read(projectDir, check.key), contains(check.value));
         }
+      }
+    });
+
+    test('renders every scaffold deterministically without legacy config', () {
+      const forbidden = <String>[
+        'config/storage.yaml',
+        'config/static.yaml',
+        'ConfigLoaderOptions',
+        'configDirectory:',
+        'package:routed/src/',
+        '/src/',
+        'Inertia',
+        'inertia',
+      ];
+      final context = TemplateContext(
+        packageName: 'deterministic_app',
+        humanName: 'Deterministic App',
+      );
+
+      for (final template in Templates.all) {
+        final first = <String, String>{
+          for (final entry in template.fileBuilders.entries)
+            entry.key: entry.value(context),
+        };
+        final second = <String, String>{
+          for (final entry in template.fileBuilders.entries)
+            entry.key: entry.value(context),
+        };
+        expect(second, equals(first), reason: template.id);
+
+        final source = <String>[
+          template.renderReadme(context),
+          ...first.values,
+        ].join('\n');
+        for (final pattern in forbidden) {
+          expect(source, isNot(contains(pattern)), reason: template.id);
+        }
+        expect(source.codeUnits, isNot(contains(0)), reason: template.id);
       }
     });
 
