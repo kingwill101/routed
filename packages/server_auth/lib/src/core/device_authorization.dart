@@ -20,14 +20,37 @@ typedef AuthDeviceAuthorizationClientValidator<TContext> =
       List<String> scopes,
     );
 
-typedef AuthDeviceAuthorizationTokenIssuer<TContext> =
-    FutureOr<AuthDeviceAccessToken> Function({
-      required TContext context,
-      required AuthUser user,
-      required String clientId,
-      required List<String> scopes,
-      required String authorizationId,
-    });
+/// Immutable input to an application-owned idempotent token issuer.
+///
+/// Implementations must use [authorizationId] as their idempotency key and
+/// bind the cached logical grant to [clientId], [user], and [scopes]. A retry
+/// after an ambiguous failure must return that same logical grant rather than
+/// minting another one.
+final class AuthDeviceAuthorizationTokenIssuanceRequest<TContext> {
+  AuthDeviceAuthorizationTokenIssuanceRequest({
+    required this.context,
+    required this.user,
+    required this.clientId,
+    required Iterable<String> scopes,
+    required this.authorizationId,
+  }) : scopes = List<String>.unmodifiable(scopes);
+
+  final TContext context;
+  final AuthUser user;
+  final String clientId;
+  final List<String> scopes;
+  final String authorizationId;
+}
+
+/// Application-owned, authorization-ID-idempotent device token issuer.
+///
+/// Routed deliberately does not persist the returned token material. The
+/// implementation owns durable idempotency records and token lookup.
+abstract interface class AuthDeviceAuthorizationTokenIssuer<TContext> {
+  FutureOr<AuthDeviceAccessToken> issue(
+    AuthDeviceAuthorizationTokenIssuanceRequest<TContext> request,
+  );
+}
 
 /// A token response produced by the application's access-token issuer.
 final class AuthDeviceAccessToken {
@@ -81,10 +104,10 @@ final class AuthDeviceAuthorizationRequest {
 
 /// RFC 8628 device authorization flow.
 ///
-/// The plugin owns the one-time approval transaction and delegates actual
-/// access-token creation to [issueToken]. Applications should persist and
-/// validate those tokens in their own API-token boundary; this plugin never
-/// stores raw access or refresh tokens.
+/// The plugin owns the bounded issuance lease and delegates actual token
+/// creation to [tokenIssuer]. Applications persist and validate those tokens
+/// in their own API-token boundary; this plugin never stores raw access or
+/// refresh tokens.
 final class DeviceAuthorizationPlugin<TContext>
     implements
         AuthServerPlugin<TContext>,
@@ -98,18 +121,24 @@ final class DeviceAuthorizationPlugin<TContext>
   DeviceAuthorizationPlugin({
     required this.verificationUri,
     required this.validateClient,
-    required this.issueToken,
+    required this.tokenIssuer,
     this.deviceCodeTtl = const Duration(minutes: 10),
     this.pollInterval = const Duration(seconds: 5),
+    this.issuanceLeaseTtl = const Duration(seconds: 30),
+    DateTime Function()? clock,
   }) : assert(deviceCodeTtl > Duration.zero),
        assert(pollInterval > Duration.zero),
+       assert(issuanceLeaseTtl > Duration.zero),
+       _clock = clock ?? DateTime.now,
        _authStore = null;
 
   final String verificationUri;
   final AuthDeviceAuthorizationClientValidator<TContext> validateClient;
-  final AuthDeviceAuthorizationTokenIssuer<TContext> issueToken;
+  final AuthDeviceAuthorizationTokenIssuer<TContext> tokenIssuer;
   final Duration deviceCodeTtl;
   final Duration pollInterval;
+  final Duration issuanceLeaseTtl;
+  final DateTime Function() _clock;
 
   late AuthDeviceAuthorizationStore _store;
   late AuthUserDeletionDomain _deletionDomain;
@@ -309,6 +338,15 @@ final class DeviceAuthorizationPlugin<TContext>
               name: 'lastPolledAt',
               kind: 'nullable_datetime',
             ),
+            AuthFieldDescriptor(
+              name: 'issuanceLeaseDigest',
+              kind: 'nullable_secret_digest',
+            ),
+            AuthFieldDescriptor(
+              name: 'issuanceLeaseExpiresAt',
+              kind: 'nullable_datetime',
+            ),
+            AuthFieldDescriptor(name: 'consumedAt', kind: 'nullable_datetime'),
           ],
           relationships: <AuthRelationshipDescriptor>[
             AuthRelationshipDescriptor(field: 'userId', targetEntity: 'user'),
@@ -330,9 +368,19 @@ final class DeviceAuthorizationPlugin<TContext>
               'Atomically enforce polling intervals and expose approval state.',
         ),
         AuthAtomicOperationDescriptor(
-          id: 'deviceAuthorization.claim',
+          id: 'deviceAuthorization.beginIssuance',
           description:
-              'Claim an approved device request exactly once for token issuance.',
+              'Atomically acquire one bounded issuance lease for an approved request.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'deviceAuthorization.completeIssuance',
+          description:
+              'Consume an approved request only for its matching active lease.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'deviceAuthorization.releaseIssuance',
+          description:
+              'Release only the matching lease after an issuance failure.',
         ),
       ],
     ),
@@ -350,7 +398,7 @@ final class DeviceAuthorizationPlugin<TContext>
     if (!await validateClient(context, normalizedClientId, normalizedScopes)) {
       throw AuthFlowException('invalid_client');
     }
-    final createdAt = (now ?? DateTime.now()).toUtc();
+    final createdAt = (now ?? _clock()).toUtc();
     final deviceCode = secureRandomToken(length: 32);
     final rawUserCode = _generateUserCode();
     await _store.create(
@@ -413,7 +461,8 @@ final class DeviceAuthorizationPlugin<TContext>
     final normalizedClientId = _requiredClientId(clientId);
     if (deviceCode.trim().isEmpty) throw AuthFlowException('invalid_grant');
     final hash = hashAuthDeviceAuthorizationCode(deviceCode);
-    final result = await _store.poll(hash, now: now);
+    final pollNow = (now ?? _clock()).toUtc();
+    final result = await _store.poll(hash, now: pollNow);
     switch (result.status) {
       case AuthDeviceAuthorizationPollStatus.pending:
         throw AuthFlowException('authorization_pending');
@@ -434,26 +483,78 @@ final class DeviceAuthorizationPlugin<TContext>
         await _findCredentialEligibleUser(approvedUserId) == null) {
       throw AuthFlowException('invalid_grant');
     }
-    final claimed = await _store.claimApproved(
+    final leaseRaw = secureRandomToken(length: 32);
+    final leaseDigest = hashAuthDeviceAuthorizationIssuanceLease(leaseRaw);
+    final leaseNow = (now ?? _clock()).toUtc();
+    final leaseResult = await _store.beginIssuance(
       hash,
       clientId: normalizedClientId,
-      now: now,
+      leaseDigest: leaseDigest,
+      leaseExpiresAt: leaseNow.add(issuanceLeaseTtl),
+      now: leaseNow,
     );
-    final userId = claimed?.userId;
-    if (claimed == null || userId == null) {
+    if (leaseResult.status == AuthDeviceAuthorizationIssuanceLeaseStatus.busy) {
+      throw AuthFlowException('authorization_pending');
+    }
+    final lease = leaseResult.lease;
+    final authorization = lease?.authorization;
+    final userId = authorization?.userId;
+    if (leaseResult.status !=
+            AuthDeviceAuthorizationIssuanceLeaseStatus.acquired ||
+        lease == null ||
+        authorization == null ||
+        userId == null) {
       throw AuthFlowException('invalid_grant');
     }
     final user = await _findCredentialEligibleUser(userId);
     if (user == null) {
+      await _releaseIssuanceLease(hash, normalizedClientId, leaseDigest, now);
       throw AuthFlowException('invalid_grant');
     }
-    return issueToken(
-      context: context,
-      user: user,
-      clientId: normalizedClientId,
-      scopes: List<String>.unmodifiable(claimed.scopes),
-      authorizationId: claimed.id,
-    );
+    try {
+      final token = await tokenIssuer.issue(
+        AuthDeviceAuthorizationTokenIssuanceRequest<TContext>(
+          context: context,
+          user: user,
+          clientId: normalizedClientId,
+          scopes: authorization.scopes,
+          authorizationId: authorization.id,
+        ),
+      );
+      if (await _findCredentialEligibleUser(userId) == null) {
+        throw AuthFlowException('invalid_grant');
+      }
+      final completed = await _store.completeIssuance(
+        hash,
+        clientId: normalizedClientId,
+        leaseDigest: leaseDigest,
+        now: (now ?? _clock()).toUtc(),
+      );
+      if (!completed) throw AuthFlowException('invalid_grant');
+      return token;
+    } catch (error, stackTrace) {
+      await _releaseIssuanceLease(hash, normalizedClientId, leaseDigest, now);
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
+  Future<void> _releaseIssuanceLease(
+    String deviceCodeHash,
+    String clientId,
+    String leaseDigest,
+    DateTime? now,
+  ) async {
+    try {
+      await _store.releaseIssuance(
+        deviceCodeHash,
+        clientId: clientId,
+        leaseDigest: leaseDigest,
+        now: (now ?? _clock()).toUtc(),
+      );
+    } catch (_) {
+      // Preserve the issuance failure. The bounded lease remains recoverable
+      // after expiry even when the backing store is temporarily unavailable.
+    }
   }
 
   Future<AuthUser?> _findCredentialEligibleUser(String userId) async {

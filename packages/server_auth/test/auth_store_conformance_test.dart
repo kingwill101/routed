@@ -36,7 +36,7 @@ void main() {
         'oauth.challenge-replay-contention',
         'jwt.version-rotation',
         'jwt.version-rotation-contention',
-        'device-authorization.approve-claim-contention',
+        'device-authorization.approve-lease-contention',
         'email-otp.verification-contention',
         'account-deletion.transaction',
       ];

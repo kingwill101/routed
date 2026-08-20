@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:property_testing/property_testing.dart';
 import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
@@ -41,6 +45,44 @@ void main() {
         expect(json.keys, isNot(contains('userCode')));
       },
     );
+
+    test('property: codes and lease identities remain digest-only', () async {
+      final runner = PropertyTestRunner<String>(
+        Chaos.string(minLength: 0, maxLength: 512),
+        (value) {
+          final rawDevice =
+              'RAW_DEVICE_${base64Url.encode(utf8.encode(value))}';
+          final rawUser = 'RAW_USER_${base64Url.encode(utf8.encode(value))}';
+          final rawLease = 'RAW_LEASE_${base64Url.encode(utf8.encode(value))}';
+          final authorization = AuthDeviceAuthorization(
+            id: 'authorization-property',
+            deviceCodeHash: hashAuthDeviceAuthorizationCode(rawDevice),
+            userCodeHash: hashAuthDeviceAuthorizationCode(rawUser),
+            clientId: 'cli-1',
+            scopes: const <String>['openid'],
+            createdAt: createdAt,
+            expiresAt: createdAt.add(const Duration(minutes: 10)),
+            interval: const Duration(seconds: 5),
+            status: AuthDeviceAuthorizationStatus.approved,
+            userId: 'user-1',
+            issuanceLeaseDigest: hashAuthDeviceAuthorizationIssuanceLease(
+              rawLease,
+            ),
+            issuanceLeaseExpiresAt: createdAt.add(const Duration(seconds: 30)),
+          );
+          final encoded = jsonEncode(authorization.toStorageJson());
+          expect(encoded, isNot(contains(rawDevice)));
+          expect(encoded, isNot(contains(rawUser)));
+          expect(encoded, isNot(contains(rawLease)));
+          expect(encoded, isNot(contains('access_token')));
+          expect(encoded, isNot(contains('refresh_token')));
+        },
+        PropertyConfig(numTests: 500, seed: 20260820),
+      );
+
+      final result = await runner.run();
+      expect(result.success, isTrue, reason: result.error?.toString());
+    });
 
     test(
       'enforces polling interval and increases it after early polling',
@@ -107,7 +149,7 @@ void main() {
       );
     });
 
-    test('claim is client-bound and can only succeed once', () async {
+    test('issuance leases are client-bound, bounded, and stale-safe', () async {
       final store = InMemoryAuthDeviceAuthorizationStore();
       await store.create(record());
       await store.approve(
@@ -117,26 +159,70 @@ void main() {
       );
 
       expect(
-        await store.claimApproved(
+        (await store.beginIssuance(
           record().deviceCodeHash,
           clientId: 'other-client',
+          leaseDigest: 'wrong-client-lease',
+          leaseExpiresAt: createdAt.add(const Duration(seconds: 30)),
           now: createdAt.add(const Duration(seconds: 2)),
-        ),
-        isNull,
+        )).status,
+        AuthDeviceAuthorizationIssuanceLeaseStatus.invalid,
       );
-      final claimed = await store.claimApproved(
+      final first = await store.beginIssuance(
         record().deviceCodeHash,
         clientId: 'cli-1',
+        leaseDigest: 'lease-1',
+        leaseExpiresAt: createdAt.add(const Duration(seconds: 30)),
         now: createdAt.add(const Duration(seconds: 2)),
       );
-      expect(claimed!.status, AuthDeviceAuthorizationStatus.consumed);
+      expect(first.status, AuthDeviceAuthorizationIssuanceLeaseStatus.acquired);
       expect(
-        await store.claimApproved(
+        (await store.beginIssuance(
           record().deviceCodeHash,
           clientId: 'cli-1',
+          leaseDigest: 'lease-2',
+          leaseExpiresAt: createdAt.add(const Duration(seconds: 40)),
           now: createdAt.add(const Duration(seconds: 3)),
+        )).status,
+        AuthDeviceAuthorizationIssuanceLeaseStatus.busy,
+      );
+      expect(
+        await store.completeIssuance(
+          record().deviceCodeHash,
+          clientId: 'cli-1',
+          leaseDigest: 'stale-lease',
+          now: createdAt.add(const Duration(seconds: 4)),
         ),
-        isNull,
+        isFalse,
+      );
+      final recovered = await store.beginIssuance(
+        record().deviceCodeHash,
+        clientId: 'cli-1',
+        leaseDigest: 'lease-2',
+        leaseExpiresAt: createdAt.add(const Duration(seconds: 60)),
+        now: createdAt.add(const Duration(seconds: 31)),
+      );
+      expect(
+        recovered.status,
+        AuthDeviceAuthorizationIssuanceLeaseStatus.acquired,
+      );
+      expect(
+        await store.releaseIssuance(
+          record().deviceCodeHash,
+          clientId: 'cli-1',
+          leaseDigest: 'lease-1',
+          now: createdAt.add(const Duration(seconds: 32)),
+        ),
+        isFalse,
+      );
+      expect(
+        await store.completeIssuance(
+          record().deviceCodeHash,
+          clientId: 'cli-1',
+          leaseDigest: 'lease-2',
+          now: createdAt.add(const Duration(seconds: 32)),
+        ),
+        isTrue,
       );
     });
   });
@@ -154,20 +240,14 @@ void main() {
           expect(scopes, ['openid', 'profile']);
           return true;
         },
-        issueToken: ({
-          required context,
-          required user,
-          required clientId,
-          required scopes,
-          required authorizationId,
-        }) {
-          issued.add(authorizationId);
+        tokenIssuer: _TestDeviceTokenIssuer((request) {
+          issued.add(request.authorizationId);
           return AuthDeviceAccessToken(
             accessToken: 'access-token',
             expiresIn: const Duration(minutes: 5),
-            scopes: scopes,
+            scopes: request.scopes,
           );
-        },
+        }),
       );
       final runtime = AuthRuntime<Object>(
         options: AuthOptions<Object>(
@@ -231,16 +311,11 @@ void main() {
       final feature = DeviceAuthorizationPlugin<Object>(
         verificationUri: 'https://example.test/device',
         validateClient: (context, clientId, scopes) => false,
-        issueToken: ({
-          required context,
-          required user,
-          required clientId,
-          required scopes,
-          required authorizationId,
-        }) =>
-            AuthDeviceAccessToken(
-          accessToken: 'unused',
-          expiresIn: const Duration(minutes: 5),
+        tokenIssuer: _TestDeviceTokenIssuer(
+          (_) => const AuthDeviceAccessToken(
+            accessToken: 'unused',
+            expiresIn: Duration(minutes: 5),
+          ),
         ),
       );
       final runtime = AuthRuntime<Object>(
@@ -272,6 +347,265 @@ void main() {
     });
 
     test(
+      'retries an ambiguous issuer failure with one logical grant',
+      () async {
+        final store = InMemoryAuthStore();
+        await store.users.create(AuthUser(id: 'user-1'));
+        final issuer = _FaultAfterMintDeviceTokenIssuer<Object>();
+        final feature = DeviceAuthorizationPlugin<Object>(
+          verificationUri: 'https://example.test/device',
+          validateClient: (_, _, _) => true,
+          tokenIssuer: issuer,
+          pollInterval: const Duration(seconds: 1),
+          issuanceLeaseTtl: const Duration(seconds: 5),
+        );
+        AuthRuntime<Object>(
+          options: AuthOptions<Object>(
+            providers: const [],
+            store: store,
+            storeMode: AuthStoreMode.ephemeral,
+            plugins: [feature],
+          ),
+        );
+        final start = DateTime.utc(2026, 1, 1);
+        final request = await feature.authorizeDevice(
+          context: Object(),
+          clientId: 'cli-1',
+          scopes: const ['openid'],
+          now: start,
+        );
+        await feature.approveDevice(
+          userId: 'user-1',
+          userCode: request.userCode,
+          now: start.add(const Duration(seconds: 1)),
+        );
+
+        await expectLater(
+          feature.pollDeviceToken(
+            context: Object(),
+            clientId: 'cli-1',
+            deviceCode: request.deviceCode,
+            now: start.add(const Duration(seconds: 2)),
+          ),
+          throwsStateError,
+        );
+        final token = await feature.pollDeviceToken(
+          context: Object(),
+          clientId: 'cli-1',
+          deviceCode: request.deviceCode,
+          now: start.add(const Duration(seconds: 4)),
+        );
+
+        expect(token.accessToken, startsWith('stable-token-'));
+        expect(issuer.calls, 2);
+        expect(issuer.mints, 1);
+        expect(issuer.authorizationIds.toSet(), hasLength(1));
+      },
+    );
+
+    test('recovers an abandoned issuance lease after expiry', () async {
+      final store = InMemoryAuthStore();
+      await store.users.create(AuthUser(id: 'user-1'));
+      final feature = DeviceAuthorizationPlugin<Object>(
+        verificationUri: 'https://example.test/device',
+        validateClient: (_, _, _) => true,
+        tokenIssuer: _TestDeviceTokenIssuer(
+          (request) => AuthDeviceAccessToken(
+            accessToken: 'access-${request.authorizationId}',
+            expiresIn: const Duration(minutes: 5),
+          ),
+        ),
+        pollInterval: const Duration(seconds: 1),
+        issuanceLeaseTtl: const Duration(seconds: 5),
+      );
+      AuthRuntime<Object>(
+        options: AuthOptions<Object>(
+          providers: const [],
+          store: store,
+          storeMode: AuthStoreMode.ephemeral,
+          plugins: [feature],
+        ),
+      );
+      final start = DateTime.utc(2026, 1, 1);
+      final request = await feature.authorizeDevice(
+        context: Object(),
+        clientId: 'cli-1',
+        now: start,
+      );
+      await feature.approveDevice(
+        userId: 'user-1',
+        userCode: request.userCode,
+        now: start.add(const Duration(seconds: 1)),
+      );
+      final abandoned = await store.deviceAuthorizations.beginIssuance(
+        hashAuthDeviceAuthorizationCode(request.deviceCode),
+        clientId: 'cli-1',
+        leaseDigest: 'abandoned-lease-digest',
+        leaseExpiresAt: start.add(const Duration(seconds: 3)),
+        now: start.add(const Duration(seconds: 2)),
+      );
+      expect(
+        abandoned.status,
+        AuthDeviceAuthorizationIssuanceLeaseStatus.acquired,
+      );
+
+      final token = await feature.pollDeviceToken(
+        context: Object(),
+        clientId: 'cli-1',
+        deviceCode: request.deviceCode,
+        now: start.add(const Duration(seconds: 4)),
+      );
+      expect(token.accessToken, startsWith('access-'));
+      expect(
+        await store.deviceAuthorizations.releaseIssuance(
+          hashAuthDeviceAuthorizationCode(request.deviceCode),
+          clientId: 'cli-1',
+          leaseDigest: 'abandoned-lease-digest',
+          now: start.add(const Duration(seconds: 4)),
+        ),
+        isFalse,
+      );
+    });
+
+    test('denial, expiry, and wrong-client polling fail safely', () async {
+      final store = InMemoryAuthStore();
+      await store.users.create(AuthUser(id: 'user-1'));
+      final feature = DeviceAuthorizationPlugin<Object>(
+        verificationUri: 'https://example.test/device',
+        validateClient: (_, _, _) => true,
+        tokenIssuer: _TestDeviceTokenIssuer(
+          (_) => const AuthDeviceAccessToken(
+            accessToken: 'unused',
+            expiresIn: Duration(minutes: 5),
+          ),
+        ),
+        deviceCodeTtl: const Duration(seconds: 10),
+        pollInterval: const Duration(seconds: 1),
+      );
+      AuthRuntime<Object>(
+        options: AuthOptions<Object>(
+          providers: const [],
+          store: store,
+          storeMode: AuthStoreMode.ephemeral,
+          plugins: [feature],
+        ),
+      );
+      final start = DateTime.utc(2026, 1, 1);
+      final denied = await feature.authorizeDevice(
+        context: Object(),
+        clientId: 'cli-1',
+        now: start,
+      );
+      await feature.denyDevice(
+        userCode: denied.userCode,
+        now: start.add(const Duration(seconds: 1)),
+      );
+      await expectLater(
+        feature.pollDeviceToken(
+          context: Object(),
+          clientId: 'cli-1',
+          deviceCode: denied.deviceCode,
+          now: start.add(const Duration(seconds: 2)),
+        ),
+        _flow('access_denied'),
+      );
+
+      final expired = await feature.authorizeDevice(
+        context: Object(),
+        clientId: 'cli-1',
+        now: start,
+      );
+      await expectLater(
+        feature.pollDeviceToken(
+          context: Object(),
+          clientId: 'cli-1',
+          deviceCode: expired.deviceCode,
+          now: start.add(const Duration(seconds: 11)),
+        ),
+        _flow('expired_token'),
+      );
+
+      final clientBound = await feature.authorizeDevice(
+        context: Object(),
+        clientId: 'cli-1',
+        now: start,
+      );
+      await feature.approveDevice(
+        userId: 'user-1',
+        userCode: clientBound.userCode,
+        now: start.add(const Duration(seconds: 1)),
+      );
+      await expectLater(
+        feature.pollDeviceToken(
+          context: Object(),
+          clientId: 'other-client',
+          deviceCode: clientBound.deviceCode,
+          now: start.add(const Duration(seconds: 2)),
+        ),
+        _flow('invalid_grant'),
+      );
+    });
+
+    test(
+      'concurrent token polls mint and complete one logical grant',
+      () async {
+        final store = InMemoryAuthStore();
+        await store.users.create(AuthUser(id: 'user-1'));
+        final issuer = _CountingDeviceTokenIssuer<Object>();
+        final feature = DeviceAuthorizationPlugin<Object>(
+          verificationUri: 'https://example.test/device',
+          validateClient: (_, _, _) => true,
+          tokenIssuer: issuer,
+          pollInterval: const Duration(seconds: 1),
+        );
+        AuthRuntime<Object>(
+          options: AuthOptions<Object>(
+            providers: const [],
+            store: store,
+            storeMode: AuthStoreMode.ephemeral,
+            plugins: [feature],
+          ),
+        );
+        final start = DateTime.utc(2026, 1, 1);
+        final request = await feature.authorizeDevice(
+          context: Object(),
+          clientId: 'cli-1',
+          now: start,
+        );
+        await feature.approveDevice(
+          userId: 'user-1',
+          userCode: request.userCode,
+          now: start.add(const Duration(seconds: 1)),
+        );
+
+        final outcomes = await Future.wait([
+          for (var index = 0; index < 16; index++)
+            feature
+                .pollDeviceToken(
+                  context: Object(),
+                  clientId: 'cli-1',
+                  deviceCode: request.deviceCode,
+                  now: start.add(const Duration(seconds: 2)),
+                )
+                .then<Object>((token) => token)
+                .catchError((Object error) => error),
+        ]);
+
+        expect(outcomes.whereType<AuthDeviceAccessToken>(), hasLength(1));
+        expect(
+          outcomes.whereType<AuthFlowException>().every(
+            (error) => const {
+              'slow_down',
+              'authorization_pending',
+            }.contains(error.code),
+          ),
+          isTrue,
+        );
+        expect(issuer.calls, 1);
+      },
+    );
+
+    test(
       'does not issue after the approving account becomes disabled',
       () async {
         final store = InMemoryAuthStore();
@@ -280,19 +614,13 @@ void main() {
         final feature = DeviceAuthorizationPlugin<Object>(
           verificationUri: 'https://example.test/device',
           validateClient: (_, _, _) => true,
-          issueToken: ({
-            required context,
-            required user,
-            required clientId,
-            required scopes,
-            required authorizationId,
-          }) {
+          tokenIssuer: _TestDeviceTokenIssuer((_) {
             issued = true;
             return const AuthDeviceAccessToken(
               accessToken: 'must-not-be-issued',
               expiresIn: Duration(minutes: 5),
             );
-          },
+          }),
         );
         AuthRuntime<Object>(
           options: AuthOptions<Object>(
@@ -325,22 +653,66 @@ void main() {
       },
     );
 
+    test(
+      'does not deliver a token when the account is disabled mid-issue',
+      () async {
+        final store = InMemoryAuthStore();
+        await store.users.create(AuthUser(id: 'user-1'));
+        final feature = DeviceAuthorizationPlugin<Object>(
+          verificationUri: 'https://example.test/device',
+          validateClient: (_, _, _) => true,
+          tokenIssuer: _TestDeviceTokenIssuer((_) async {
+            await store.disable('user-1', reason: 'security');
+            return const AuthDeviceAccessToken(
+              accessToken: 'must-not-be-delivered',
+              expiresIn: Duration(minutes: 5),
+            );
+          }),
+          pollInterval: const Duration(seconds: 1),
+        );
+        AuthRuntime<Object>(
+          options: AuthOptions<Object>(
+            providers: const [],
+            store: store,
+            storeMode: AuthStoreMode.ephemeral,
+            plugins: [feature],
+          ),
+        );
+        final start = DateTime.utc(2026, 1, 1);
+        final request = await feature.authorizeDevice(
+          context: Object(),
+          clientId: 'cli-1',
+          now: start,
+        );
+        await feature.approveDevice(
+          userId: 'user-1',
+          userCode: request.userCode,
+          now: start.add(const Duration(seconds: 1)),
+        );
+
+        await expectLater(
+          feature.pollDeviceToken(
+            context: Object(),
+            clientId: 'cli-1',
+            deviceCode: request.deviceCode,
+            now: start.add(const Duration(seconds: 2)),
+          ),
+          _flow('invalid_grant'),
+        );
+      },
+    );
+
     test('access revocation removes approved device grants', () async {
       final store = InMemoryAuthStore();
       await store.users.create(AuthUser(id: 'user-1'));
       final feature = DeviceAuthorizationPlugin<Object>(
         verificationUri: 'https://example.test/device',
         validateClient: (_, _, _) => true,
-        issueToken: ({
-          required context,
-          required user,
-          required clientId,
-          required scopes,
-          required authorizationId,
-        }) =>
-            const AuthDeviceAccessToken(
-          accessToken: 'must-not-be-issued',
-          expiresIn: Duration(minutes: 5),
+        tokenIssuer: _TestDeviceTokenIssuer(
+          (_) => const AuthDeviceAccessToken(
+            accessToken: 'must-not-be-issued',
+            expiresIn: Duration(minutes: 5),
+          ),
         ),
       );
       AuthRuntime<Object>(
@@ -376,17 +748,12 @@ void main() {
       final device = DeviceAuthorizationPlugin<Object>(
         verificationUri: 'https://example.test/device',
         validateClient: (_, _, _) => true,
-        issueToken: ({
-          required context,
-          required user,
-          required clientId,
-          required scopes,
-          required authorizationId,
-        }) =>
-            AuthDeviceAccessToken(
-          accessToken: 'device-access-token',
-          expiresIn: const Duration(minutes: 5),
-          scopes: scopes,
+        tokenIssuer: _TestDeviceTokenIssuer(
+          (request) => AuthDeviceAccessToken(
+            accessToken: 'device-access-token',
+            expiresIn: const Duration(minutes: 5),
+            scopes: request.scopes,
+          ),
         ),
       );
       final provider = OAuthProviderModePlugin<Object>(
@@ -417,14 +784,16 @@ void main() {
       );
       await device.approveDevice(userId: 'user-1', userCode: request.userCode);
 
-      final response = await tokenEndpoints.single.invoke(
-        AuthOperationInvocation<Object>(context: Object(), user: null),
-        <String, dynamic>{
-          'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',
-          'client_id': 'cli-1',
-          'device_code': request.deviceCode,
-        },
-      ) as Map<String, dynamic>;
+      final response =
+          await tokenEndpoints.single.invoke(
+                AuthOperationInvocation<Object>(context: Object(), user: null),
+                <String, dynamic>{
+                  'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',
+                  'client_id': 'cli-1',
+                  'device_code': request.deviceCode,
+                },
+              )
+              as Map<String, dynamic>;
       expect(response['access_token'], 'device-access-token');
     });
 
@@ -433,16 +802,11 @@ void main() {
       final device = DeviceAuthorizationPlugin<Object>(
         verificationUri: 'https://example.test/device',
         validateClient: (_, _, _) => true,
-        issueToken: ({
-          required context,
-          required user,
-          required clientId,
-          required scopes,
-          required authorizationId,
-        }) =>
-            const AuthDeviceAccessToken(
-          accessToken: 'unused',
-          expiresIn: Duration(minutes: 5),
+        tokenIssuer: _TestDeviceTokenIssuer(
+          (_) => const AuthDeviceAccessToken(
+            accessToken: 'unused',
+            expiresIn: Duration(minutes: 5),
+          ),
         ),
       );
       final authorization = OAuthProviderModePlugin<Object>(
@@ -472,5 +836,63 @@ void main() {
 }
 
 Matcher _flow(String code) => throwsA(
-      isA<AuthFlowException>().having((error) => error.code, 'code', code),
+  isA<AuthFlowException>().having((error) => error.code, 'code', code),
+);
+
+final class _TestDeviceTokenIssuer<TContext>
+    implements AuthDeviceAuthorizationTokenIssuer<TContext> {
+  const _TestDeviceTokenIssuer(this.callback);
+
+  final FutureOr<AuthDeviceAccessToken> Function(
+    AuthDeviceAuthorizationTokenIssuanceRequest<TContext> request,
+  )
+  callback;
+
+  @override
+  FutureOr<AuthDeviceAccessToken> issue(
+    AuthDeviceAuthorizationTokenIssuanceRequest<TContext> request,
+  ) => callback(request);
+}
+
+final class _FaultAfterMintDeviceTokenIssuer<TContext>
+    implements AuthDeviceAuthorizationTokenIssuer<TContext> {
+  final Map<String, AuthDeviceAccessToken> _tokens = {};
+  final List<String> authorizationIds = [];
+  var calls = 0;
+  var mints = 0;
+
+  @override
+  AuthDeviceAccessToken issue(
+    AuthDeviceAuthorizationTokenIssuanceRequest<TContext> request,
+  ) {
+    calls++;
+    authorizationIds.add(request.authorizationId);
+    final token = _tokens.putIfAbsent(request.authorizationId, () {
+      mints++;
+      return AuthDeviceAccessToken(
+        accessToken: 'stable-token-${request.authorizationId}',
+        expiresIn: const Duration(minutes: 5),
+        scopes: request.scopes,
+      );
+    });
+    if (calls == 1) throw StateError('ambiguous issuer failure');
+    return token;
+  }
+}
+
+final class _CountingDeviceTokenIssuer<TContext>
+    implements AuthDeviceAuthorizationTokenIssuer<TContext> {
+  var calls = 0;
+
+  @override
+  AuthDeviceAccessToken issue(
+    AuthDeviceAuthorizationTokenIssuanceRequest<TContext> request,
+  ) {
+    calls++;
+    return AuthDeviceAccessToken(
+      accessToken: 'token-${request.authorizationId}',
+      expiresIn: const Duration(minutes: 5),
+      scopes: request.scopes,
     );
+  }
+}

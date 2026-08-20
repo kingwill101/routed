@@ -6,6 +6,9 @@ import 'tokens.dart' show hashOpaqueToken;
 /// State of an RFC 8628 device authorization transaction.
 enum AuthDeviceAuthorizationStatus { pending, approved, denied, consumed }
 
+/// Outcome of trying to acquire the bounded token-issuance lease.
+enum AuthDeviceAuthorizationIssuanceLeaseStatus { acquired, busy, invalid }
+
 /// A persisted device authorization request.
 ///
 /// Both the device code and user code are stored as digests. The raw values
@@ -26,6 +29,9 @@ final class AuthDeviceAuthorization {
     this.approvedAt,
     this.deniedAt,
     this.lastPolledAt,
+    this.issuanceLeaseDigest,
+    this.issuanceLeaseExpiresAt,
+    this.consumedAt,
   });
 
   final String id;
@@ -41,6 +47,9 @@ final class AuthDeviceAuthorization {
   final DateTime? approvedAt;
   final DateTime? deniedAt;
   final DateTime? lastPolledAt;
+  final String? issuanceLeaseDigest;
+  final DateTime? issuanceLeaseExpiresAt;
+  final DateTime? consumedAt;
 
   bool isExpired({DateTime? now}) =>
       !(now ?? DateTime.now()).toUtc().isBefore(expiresAt.toUtc());
@@ -52,6 +61,10 @@ final class AuthDeviceAuthorization {
     DateTime? deniedAt,
     DateTime? lastPolledAt,
     Duration? interval,
+    String? issuanceLeaseDigest,
+    DateTime? issuanceLeaseExpiresAt,
+    DateTime? consumedAt,
+    bool clearIssuanceLease = false,
   }) {
     return AuthDeviceAuthorization(
       id: id,
@@ -67,6 +80,13 @@ final class AuthDeviceAuthorization {
       approvedAt: approvedAt ?? this.approvedAt,
       deniedAt: deniedAt ?? this.deniedAt,
       lastPolledAt: lastPolledAt ?? this.lastPolledAt,
+      issuanceLeaseDigest: clearIssuanceLease
+          ? null
+          : issuanceLeaseDigest ?? this.issuanceLeaseDigest,
+      issuanceLeaseExpiresAt: clearIssuanceLease
+          ? null
+          : issuanceLeaseExpiresAt ?? this.issuanceLeaseExpiresAt,
+      consumedAt: consumedAt ?? this.consumedAt,
     );
   }
 
@@ -85,7 +105,35 @@ final class AuthDeviceAuthorization {
     'approved_at': approvedAt?.toUtc().toIso8601String(),
     'denied_at': deniedAt?.toUtc().toIso8601String(),
     'last_polled_at': lastPolledAt?.toUtc().toIso8601String(),
+    'issuance_lease_digest': issuanceLeaseDigest,
+    'issuance_lease_expires_at': issuanceLeaseExpiresAt
+        ?.toUtc()
+        .toIso8601String(),
+    'consumed_at': consumedAt?.toUtc().toIso8601String(),
   };
+}
+
+/// One secret-free, bounded claim on an approved authorization.
+///
+/// [leaseDigest] is a digest of a process-local random value. Neither the raw
+/// lease value nor issued access or refresh tokens cross this store boundary.
+final class AuthDeviceAuthorizationIssuanceLease {
+  const AuthDeviceAuthorizationIssuanceLease({
+    required this.authorization,
+    required this.leaseDigest,
+    required this.expiresAt,
+  });
+
+  final AuthDeviceAuthorization authorization;
+  final String leaseDigest;
+  final DateTime expiresAt;
+}
+
+final class AuthDeviceAuthorizationIssuanceLeaseResult {
+  const AuthDeviceAuthorizationIssuanceLeaseResult(this.status, [this.lease]);
+
+  final AuthDeviceAuthorizationIssuanceLeaseStatus status;
+  final AuthDeviceAuthorizationIssuanceLease? lease;
 }
 
 /// Result of atomically polling a device authorization request.
@@ -129,10 +177,28 @@ abstract interface class AuthDeviceAuthorizationStore {
   /// Atomically denies a pending request.
   FutureOr<AuthDeviceAuthorization?> deny(String userCodeHash, {DateTime? now});
 
-  /// Claims an approved request exactly once for token issuance.
-  FutureOr<AuthDeviceAuthorization?> claimApproved(
+  /// Atomically acquires a bounded issuance lease for an approved request.
+  FutureOr<AuthDeviceAuthorizationIssuanceLeaseResult> beginIssuance(
     String deviceCodeHash, {
-    String? clientId,
+    required String clientId,
+    required String leaseDigest,
+    required DateTime leaseExpiresAt,
+    DateTime? now,
+  });
+
+  /// Atomically consumes the request only when [leaseDigest] still owns it.
+  FutureOr<bool> completeIssuance(
+    String deviceCodeHash, {
+    required String clientId,
+    required String leaseDigest,
+    DateTime? now,
+  });
+
+  /// Releases only the matching lease after an issuer failure.
+  FutureOr<bool> releaseIssuance(
+    String deviceCodeHash, {
+    required String clientId,
+    required String leaseDigest,
     DateTime? now,
   });
 
@@ -280,26 +346,93 @@ final class InMemoryAuthDeviceAuthorizationStore
   }
 
   @override
-  Future<AuthDeviceAuthorization?> claimApproved(
+  Future<AuthDeviceAuthorizationIssuanceLeaseResult> beginIssuance(
     String deviceCodeHash, {
-    String? clientId,
+    required String clientId,
+    required String leaseDigest,
+    required DateTime leaseExpiresAt,
     DateTime? now,
   }) async {
     final current = (now ?? DateTime.now()).toUtc();
     final key = deviceCodeHash.trim();
+    final client = clientId.trim();
+    final digest = leaseDigest.trim();
+    final requestedExpiry = leaseExpiresAt.toUtc();
     final entry = _records[key];
     if (entry == null ||
         entry.isExpired(now: current) ||
         entry.status != AuthDeviceAuthorizationStatus.approved ||
         entry.userId == null ||
-        clientId != null && entry.clientId != clientId.trim()) {
-      return null;
+        client.isEmpty ||
+        entry.clientId != client ||
+        digest.isEmpty ||
+        !requestedExpiry.isAfter(current)) {
+      return const AuthDeviceAuthorizationIssuanceLeaseResult(
+        AuthDeviceAuthorizationIssuanceLeaseStatus.invalid,
+      );
     }
-    final claimed = entry.copyWith(
-      status: AuthDeviceAuthorizationStatus.consumed,
+    final activeLeaseExpiry = entry.issuanceLeaseExpiresAt?.toUtc();
+    if (entry.issuanceLeaseDigest != null &&
+        activeLeaseExpiry != null &&
+        activeLeaseExpiry.isAfter(current)) {
+      return const AuthDeviceAuthorizationIssuanceLeaseResult(
+        AuthDeviceAuthorizationIssuanceLeaseStatus.busy,
+      );
+    }
+    final boundedExpiry = requestedExpiry.isBefore(entry.expiresAt.toUtc())
+        ? requestedExpiry
+        : entry.expiresAt.toUtc();
+    final leased = entry.copyWith(
+      issuanceLeaseDigest: digest,
+      issuanceLeaseExpiresAt: boundedExpiry,
     );
-    _records[key] = claimed;
-    return claimed;
+    _records[key] = leased;
+    return AuthDeviceAuthorizationIssuanceLeaseResult(
+      AuthDeviceAuthorizationIssuanceLeaseStatus.acquired,
+      AuthDeviceAuthorizationIssuanceLease(
+        authorization: leased,
+        leaseDigest: digest,
+        expiresAt: boundedExpiry,
+      ),
+    );
+  }
+
+  @override
+  Future<bool> completeIssuance(
+    String deviceCodeHash, {
+    required String clientId,
+    required String leaseDigest,
+    DateTime? now,
+  }) async {
+    final current = (now ?? DateTime.now()).toUtc();
+    final key = deviceCodeHash.trim();
+    final entry = _records[key];
+    if (!_ownsActiveLease(entry, clientId, leaseDigest, current)) return false;
+    _records[key] = entry!.copyWith(
+      status: AuthDeviceAuthorizationStatus.consumed,
+      consumedAt: current,
+      clearIssuanceLease: true,
+    );
+    return true;
+  }
+
+  @override
+  Future<bool> releaseIssuance(
+    String deviceCodeHash, {
+    required String clientId,
+    required String leaseDigest,
+    DateTime? now,
+  }) async {
+    final key = deviceCodeHash.trim();
+    final entry = _records[key];
+    if (entry == null ||
+        entry.status != AuthDeviceAuthorizationStatus.approved ||
+        entry.clientId != clientId.trim() ||
+        entry.issuanceLeaseDigest != leaseDigest.trim()) {
+      return false;
+    }
+    _records[key] = entry.copyWith(clearIssuanceLease: true);
+    return true;
   }
 
   @override
@@ -324,10 +457,27 @@ final class InMemoryAuthDeviceAuthorizationStore
   void _removeExpired(DateTime now) {
     _records.removeWhere((_, value) => value.isExpired(now: now));
   }
+
+  static bool _ownsActiveLease(
+    AuthDeviceAuthorization? entry,
+    String clientId,
+    String leaseDigest,
+    DateTime now,
+  ) =>
+      entry != null &&
+      entry.status == AuthDeviceAuthorizationStatus.approved &&
+      entry.clientId == clientId.trim() &&
+      entry.issuanceLeaseDigest == leaseDigest.trim() &&
+      entry.issuanceLeaseExpiresAt?.toUtc().isAfter(now) == true &&
+      !entry.isExpired(now: now);
 }
 
 /// Builds a digest suitable for [AuthDeviceAuthorizationStore].
 String hashAuthDeviceAuthorizationCode(String code) => hashOpaqueToken(code);
+
+/// Builds a digest for a process-local random issuance lease identity.
+String hashAuthDeviceAuthorizationIssuanceLease(String lease) =>
+    hashOpaqueToken(lease);
 
 void _validate(AuthDeviceAuthorization authorization) {
   if (authorization.id.trim().isEmpty ||
@@ -343,5 +493,13 @@ void _validate(AuthDeviceAuthorization authorization) {
   }
   if (authorization.userId?.trim().isEmpty == true) {
     throw ArgumentError('Device authorization userId must not be empty');
+  }
+  final leaseDigest = authorization.issuanceLeaseDigest;
+  final leaseExpiresAt = authorization.issuanceLeaseExpiresAt;
+  if ((leaseDigest == null) != (leaseExpiresAt == null) ||
+      leaseDigest?.trim().isEmpty == true ||
+      leaseExpiresAt?.toUtc().isAfter(authorization.expiresAt.toUtc()) ==
+          true) {
+    throw ArgumentError('Invalid device authorization issuance lease');
   }
 }

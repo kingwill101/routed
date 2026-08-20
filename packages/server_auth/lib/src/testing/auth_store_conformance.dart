@@ -270,8 +270,9 @@ final class AuthStoreConformanceSuite {
           verify: _verifyJwtVersionContention,
         ),
         _case(
-          id: 'device-authorization.approve-claim-contention',
-          description: 'approves and claims a device authorization once',
+          id: 'device-authorization.approve-lease-contention',
+          description:
+              'approves and completes one bounded device issuance lease',
           verify: _verifyDeviceAuthorizationContention,
         ),
         _case(
@@ -1035,32 +1036,69 @@ Future<void> _verifyDeviceAuthorizationContention(AuthStore store) async {
   final approved = approvals.whereType<AuthDeviceAuthorization>().toList();
   _check(approved.length == 1, 'device authorization had multiple approvers');
 
-  final claims = await Future.wait([
+  final leases = await Future.wait([
     for (var index = 0; index < 16; index++)
       Future.sync(
-        () => store.deviceAuthorizations.claimApproved(
+        () => store.deviceAuthorizations.beginIssuance(
           authorization.deviceCodeHash,
           clientId: authorization.clientId,
+          leaseDigest: 'device-lease-$index',
+          leaseExpiresAt: now.add(const Duration(seconds: 30)),
           now: now,
         ),
       ),
   ]);
-  final claimed = claims.whereType<AuthDeviceAuthorization>().toList();
-  _check(claimed.length == 1, 'device authorization had multiple claimants');
+  final acquiredIndexes = <int>[
+    for (var index = 0; index < leases.length; index++)
+      if (leases[index].status ==
+          AuthDeviceAuthorizationIssuanceLeaseStatus.acquired)
+        index,
+  ];
   _check(
-    claimed.single.userId == approved.single.userId,
-    'device authorization claim changed the approved user',
+    acquiredIndexes.length == 1,
+    'device authorization had multiple active issuance leases',
+  );
+  final winningIndex = acquiredIndexes.single;
+  final claimed = leases[winningIndex].lease!.authorization;
+  _check(
+    claimed.userId == approved.single.userId,
+    'device authorization lease changed the approved user',
   );
   _check(
     await Future.sync(
-          () => store.deviceAuthorizations.claimApproved(
+          () => store.deviceAuthorizations.releaseIssuance(
             authorization.deviceCodeHash,
             clientId: authorization.clientId,
+            leaseDigest: 'device-lease-stale',
             now: now,
           ),
         ) ==
-        null,
-    'device authorization was claimable after contention',
+        false,
+    'a stale device authorization lease was released',
+  );
+  _check(
+    await Future.sync(
+      () => store.deviceAuthorizations.completeIssuance(
+        authorization.deviceCodeHash,
+        clientId: authorization.clientId,
+        leaseDigest: 'device-lease-$winningIndex',
+        now: now,
+      ),
+    ),
+    'the winning device authorization lease was not completed',
+  );
+  _check(
+    (await Future.sync(
+          () => store.deviceAuthorizations.beginIssuance(
+            authorization.deviceCodeHash,
+            clientId: authorization.clientId,
+            leaseDigest: 'device-lease-replay',
+            leaseExpiresAt: now.add(const Duration(seconds: 30)),
+            now: now,
+          ),
+        )).status ==
+        AuthDeviceAuthorizationIssuanceLeaseStatus.invalid,
+    'a consumed device authorization accepted a replay lease',
   );
 }
 

@@ -1497,31 +1497,147 @@ final class _D1DeviceAuthorizations
   }
 
   @override
-  Future<AuthDeviceAuthorization?> claimApproved(
+  Future<AuthDeviceAuthorizationIssuanceLeaseResult> beginIssuance(
     String deviceCodeHash, {
-    String? clientId,
+    required String clientId,
+    required String leaseDigest,
+    required DateTime leaseExpiresAt,
     DateTime? now,
   }) async {
     final current = (now ?? clock()).toUtc();
     final hash = deviceCodeHash.trim();
+    final client = _required(clientId, 'clientId');
+    final digest = _required(leaseDigest, 'leaseDigest');
     final timestamp = _date(current);
+    final requestedExpiry = _date(leaseExpiresAt.toUtc());
+    if (!leaseExpiresAt.toUtc().isAfter(current)) {
+      return const AuthDeviceAuthorizationIssuanceLeaseResult(
+        AuthDeviceAuthorizationIssuanceLeaseStatus.invalid,
+      );
+    }
     final results = await sql.batchRows([
       sql.database
-          .prepare('''UPDATE $table SET status = 'consumed',
-               payload = json_set(payload, '\$.status', 'consumed')
+          .prepare('''UPDATE $table SET issuance_lease_digest = ?,
+               issuance_lease_expires_at =
+                 CASE WHEN ? < expires_at THEN ? ELSE expires_at END,
+               payload = json_set(payload,
+                 '\$.issuance_lease_digest', ?,
+                 '\$.issuance_lease_expires_at',
+                   CASE WHEN ? < expires_at THEN ? ELSE expires_at END)
                WHERE device_code_hash = ? AND status = 'approved'
                  AND expires_at > ?
-                 AND (? IS NULL OR json_extract(payload, '\$.client_id') = ?)''')
-          .bind([hash, timestamp, clientId, clientId]),
+                 AND user_id IS NOT NULL
+                 AND json_extract(payload, '\$.client_id') = ?
+                 AND (issuance_lease_digest IS NULL
+                   OR issuance_lease_expires_at <= ?)
+               RETURNING payload''')
+          .bind([
+            digest,
+            requestedExpiry,
+            requestedExpiry,
+            digest,
+            requestedExpiry,
+            requestedExpiry,
+            hash,
+            timestamp,
+            client,
+            timestamp,
+          ]),
       sql.database
           .prepare('SELECT payload FROM $table WHERE device_code_hash = ?')
           .bind([hash]),
     ]);
-    if ((results.first.meta?.changes ?? 0) != 1 ||
-        results.last.results.isEmpty) {
-      return null;
+    if (results.first.results.isNotEmpty) {
+      final authorization = _decodeDeviceAuthorization(
+        results.first.results.single,
+      );
+      final expiresAt = authorization.issuanceLeaseExpiresAt!;
+      return AuthDeviceAuthorizationIssuanceLeaseResult(
+        AuthDeviceAuthorizationIssuanceLeaseStatus.acquired,
+        AuthDeviceAuthorizationIssuanceLease(
+          authorization: authorization,
+          leaseDigest: digest,
+          expiresAt: expiresAt,
+        ),
+      );
     }
-    return _decodeDeviceAuthorization(results.last.results.single);
+    if (results.last.results.isNotEmpty) {
+      final authorization = _decodeDeviceAuthorization(
+        results.last.results.single,
+      );
+      if (authorization.status == AuthDeviceAuthorizationStatus.approved &&
+          authorization.clientId == client &&
+          !authorization.isExpired(now: current) &&
+          authorization.issuanceLeaseDigest != null &&
+          authorization.issuanceLeaseExpiresAt?.toUtc().isAfter(current) ==
+              true) {
+        return const AuthDeviceAuthorizationIssuanceLeaseResult(
+          AuthDeviceAuthorizationIssuanceLeaseStatus.busy,
+        );
+      }
+    }
+    return const AuthDeviceAuthorizationIssuanceLeaseResult(
+      AuthDeviceAuthorizationIssuanceLeaseStatus.invalid,
+    );
+  }
+
+  @override
+  Future<bool> completeIssuance(
+    String deviceCodeHash, {
+    required String clientId,
+    required String leaseDigest,
+    DateTime? now,
+  }) async {
+    final current = (now ?? clock()).toUtc();
+    final timestamp = _date(current);
+    final results = await sql.batchRows([
+      sql.database
+          .prepare('''UPDATE $table SET status = 'consumed',
+               consumed_at = ?, issuance_lease_digest = NULL,
+               issuance_lease_expires_at = NULL,
+               payload = json_remove(json_set(payload,
+                 '\$.status', 'consumed', '\$.consumed_at', ?),
+                 '\$.issuance_lease_digest',
+                 '\$.issuance_lease_expires_at')
+               WHERE device_code_hash = ? AND status = 'approved'
+                 AND expires_at > ? AND issuance_lease_expires_at > ?
+                 AND issuance_lease_digest = ?
+                 AND json_extract(payload, '\$.client_id') = ?
+               RETURNING payload''')
+          .bind([
+            timestamp,
+            timestamp,
+            deviceCodeHash.trim(),
+            timestamp,
+            timestamp,
+            leaseDigest.trim(),
+            clientId.trim(),
+          ]),
+    ]);
+    return results.single.results.length == 1;
+  }
+
+  @override
+  Future<bool> releaseIssuance(
+    String deviceCodeHash, {
+    required String clientId,
+    required String leaseDigest,
+    DateTime? now,
+  }) async {
+    final results = await sql.batchRows([
+      sql.database
+          .prepare('''UPDATE $table SET issuance_lease_digest = NULL,
+               issuance_lease_expires_at = NULL,
+               payload = json_remove(payload,
+                 '\$.issuance_lease_digest',
+                 '\$.issuance_lease_expires_at')
+               WHERE device_code_hash = ? AND status = 'approved'
+                 AND issuance_lease_digest = ?
+                 AND json_extract(payload, '\$.client_id') = ?
+               RETURNING payload''')
+          .bind([deviceCodeHash.trim(), leaseDigest.trim(), clientId.trim()]),
+    ]);
+    return results.single.results.length == 1;
   }
 
   @override
@@ -1801,6 +1917,9 @@ AuthDeviceAuthorization _decodeDeviceAuthorization(Map<String, Object?> row) {
     approvedAt: optionalDate('approved_at'),
     deniedAt: optionalDate('denied_at'),
     lastPolledAt: optionalDate('last_polled_at'),
+    issuanceLeaseDigest: value['issuance_lease_digest']?.toString(),
+    issuanceLeaseExpiresAt: optionalDate('issuance_lease_expires_at'),
+    consumedAt: optionalDate('consumed_at'),
   );
 }
 

@@ -47,7 +47,19 @@ final class CloudflareD1AuthSchema {
   List<CloudflareD1AuthMigration> get migrations => [
     CloudflareD1AuthMigration(version: 1, statements: _versionOne),
     CloudflareD1AuthMigration(version: 2, statements: _versionTwo),
+    CloudflareD1AuthMigration(version: 3, statements: _versionThree),
   ];
+
+  List<String> get _versionThree {
+    final deviceAuthorizations = table('device_authorizations');
+    return [
+      'ALTER TABLE $deviceAuthorizations ADD COLUMN issuance_lease_digest TEXT',
+      'ALTER TABLE $deviceAuthorizations ADD COLUMN issuance_lease_expires_at TEXT',
+      'ALTER TABLE $deviceAuthorizations ADD COLUMN consumed_at TEXT',
+      'CREATE INDEX IF NOT EXISTS ${deviceAuthorizations}_issuance_lease '
+          'ON $deviceAuthorizations(issuance_lease_expires_at)',
+    ];
+  }
 
   List<String> get _versionTwo {
     final deletionReceipts = table('deletion_receipts');

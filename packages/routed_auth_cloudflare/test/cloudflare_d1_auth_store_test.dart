@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:routed_auth_cloudflare/routed_auth_cloudflare.dart';
 import 'package:server_auth/testing.dart';
 import 'package:test/test.dart';
@@ -311,6 +313,78 @@ void main() {
     expect(await secondStore.users.findById('one'), isNull);
   });
 
+  test('issuance-lease migration preserves existing authorizations', () async {
+    final database = FakeCloudflareD1Database();
+    addTearDown(database.close);
+    const schema = CloudflareD1AuthSchema(tablePrefix: 'auth_legacy');
+    final migrationsTable = schema.table('migrations');
+    await database.exec('''CREATE TABLE $migrationsTable (
+      version INTEGER PRIMARY KEY,
+      applied_at TEXT NOT NULL
+    )''');
+    for (final migration in schema.migrations.take(2)) {
+      await database.batch<Object?>([
+        for (final statement in migration.statements)
+          database.prepare(statement),
+        database
+            .prepare(
+              'INSERT INTO $migrationsTable (version, applied_at) VALUES (?, ?)',
+            )
+            .bind([migration.version, DateTime.utc(2026).toIso8601String()]),
+      ]);
+    }
+    final now = DateTime.utc(2026, 8, 20, 12);
+    final authorization = AuthDeviceAuthorization(
+      id: 'legacy-device',
+      deviceCodeHash: 'legacy-device-hash',
+      userCodeHash: 'legacy-user-hash',
+      clientId: 'legacy-client',
+      scopes: const ['openid'],
+      createdAt: now,
+      expiresAt: now.add(const Duration(minutes: 10)),
+      interval: const Duration(seconds: 5),
+      status: AuthDeviceAuthorizationStatus.approved,
+      userId: 'legacy-user',
+      approvedAt: now,
+    );
+    await database
+        .prepare('''INSERT INTO ${schema.table('device_authorizations')}
+          (device_code_hash, user_code_hash, user_id, status, expires_at, payload)
+          VALUES (?, ?, ?, ?, ?, ?)''')
+        .bind([
+          authorization.deviceCodeHash,
+          authorization.userCodeHash,
+          authorization.userId,
+          authorization.status.name,
+          authorization.expiresAt.toIso8601String(),
+          jsonEncode(authorization.toStorageJson()),
+        ])
+        .run();
+
+    await schema.migrate(database);
+    final store = CloudflareD1AuthStore(
+      database,
+      schema: schema,
+      clock: () => now,
+    );
+    final lease = await store.deviceAuthorizations.beginIssuance(
+      authorization.deviceCodeHash,
+      clientId: authorization.clientId,
+      leaseDigest: 'migrated-lease',
+      leaseExpiresAt: now.add(const Duration(seconds: 30)),
+      now: now,
+    );
+
+    expect(lease.status, AuthDeviceAuthorizationIssuanceLeaseStatus.acquired);
+    expect(lease.lease!.authorization.id, authorization.id);
+    expect(
+      database
+          .select('SELECT version FROM $migrationsTable ORDER BY version')
+          .map((row) => row['version']),
+      [1, 2, 3],
+    );
+  });
+
   test('migration rejects unsafe table prefixes', () {
     const schema = CloudflareD1AuthSchema(
       tablePrefix: 'auth; DROP TABLE users',
@@ -444,17 +518,12 @@ void main() {
     final device = DeviceAuthorizationPlugin<Object>(
       verificationUri: 'https://auth.example.com/device',
       validateClient: (_, _, _) => true,
-      issueToken:
-          ({
-            required context,
-            required user,
-            required clientId,
-            required scopes,
-            required authorizationId,
-          }) => const AuthDeviceAccessToken(
-            accessToken: 'unused',
-            expiresIn: Duration(minutes: 5),
-          ),
+      tokenIssuer: const _StaticDeviceTokenIssuer(
+        AuthDeviceAccessToken(
+          accessToken: 'unused',
+          expiresIn: Duration(minutes: 5),
+        ),
+      ),
     );
     final emailOtp = EmailOtpPlugin<Object>(
       sendCode: (_) {},
@@ -646,7 +715,7 @@ void main() {
     },
   );
 
-  test('claims an approved device authorization once', () async {
+  test('leases and completes an approved device authorization once', () async {
     final database = FakeCloudflareD1Database();
     addTearDown(database.close);
     final now = DateTime.utc(2026, 8, 19, 12);
@@ -674,17 +743,34 @@ void main() {
     ]);
     expect(approvals.whereType<AuthDeviceAuthorization>(), hasLength(1));
 
-    final claims = await Future.wait([
+    final leases = await Future.wait([
       for (var i = 0; i < 8; i++)
         Future.sync(
-          () => store.deviceAuthorizations.claimApproved(
+          () => store.deviceAuthorizations.beginIssuance(
             authorization.deviceCodeHash,
             clientId: authorization.clientId,
+            leaseDigest: 'lease-$i',
+            leaseExpiresAt: now.add(const Duration(seconds: 30)),
             now: now,
           ),
         ),
     ]);
-    expect(claims.whereType<AuthDeviceAuthorization>(), hasLength(1));
+    final acquired = <int>[
+      for (var i = 0; i < leases.length; i++)
+        if (leases[i].status ==
+            AuthDeviceAuthorizationIssuanceLeaseStatus.acquired)
+          i,
+    ];
+    expect(acquired, hasLength(1));
+    expect(
+      await store.deviceAuthorizations.completeIssuance(
+        authorization.deviceCodeHash,
+        clientId: authorization.clientId,
+        leaseDigest: 'lease-${acquired.single}',
+        now: now,
+      ),
+      isTrue,
+    );
   });
 
   test('verifies an email OTP once under contention', () async {
@@ -801,6 +887,18 @@ final class _ExternalMethodInventory
   AuthAuthenticationMethodSnapshot authenticationMethodsForUser(
     String userId,
   ) => AuthAuthenticationMethodSnapshot.complete(const []);
+}
+
+final class _StaticDeviceTokenIssuer
+    implements AuthDeviceAuthorizationTokenIssuer<Object> {
+  const _StaticDeviceTokenIssuer(this.token);
+
+  final AuthDeviceAccessToken token;
+
+  @override
+  AuthDeviceAccessToken issue(
+    AuthDeviceAuthorizationTokenIssuanceRequest<Object> request,
+  ) => token;
 }
 
 final class _D1DeletionContributor implements AuthUserDeletionPlanContributor {

@@ -128,17 +128,12 @@ void main() {
                 DeviceAuthorizationPlugin<Object>(
                   verificationUri: 'https://example.test/device',
                   validateClient: (_, _, _) => true,
-                  issueToken:
-                      ({
-                        required context,
-                        required user,
-                        required clientId,
-                        required scopes,
-                        required authorizationId,
-                      }) => const AuthDeviceAccessToken(
-                        accessToken: 'unused',
-                        expiresIn: Duration(minutes: 5),
-                      ),
+                  tokenIssuer: const _StaticDeviceTokenIssuer(
+                    AuthDeviceAccessToken(
+                      accessToken: 'unused',
+                      expiresIn: Duration(minutes: 5),
+                    ),
+                  ),
                 ),
                 AuthInstalledClientOperationContract(
                   endpointId: 'deviceAuthorization.request',
@@ -536,4 +531,16 @@ final class _EchoServerPlugin
 
   @override
   void configure(AuthServerPluginContext<Object> context) {}
+}
+
+final class _StaticDeviceTokenIssuer
+    implements AuthDeviceAuthorizationTokenIssuer<Object> {
+  const _StaticDeviceTokenIssuer(this.token);
+
+  final AuthDeviceAccessToken token;
+
+  @override
+  AuthDeviceAccessToken issue(
+    AuthDeviceAuthorizationTokenIssuanceRequest<Object> request,
+  ) => token;
 }

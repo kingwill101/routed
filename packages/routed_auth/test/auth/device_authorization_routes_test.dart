@@ -52,18 +52,7 @@ void main() {
         verificationUri: 'https://example.test/device',
         pollInterval: const Duration(milliseconds: 1),
         validateClient: (context, clientId, scopes) => clientId == 'cli-1',
-        issueToken:
-            ({
-              required context,
-              required user,
-              required clientId,
-              required scopes,
-              required authorizationId,
-            }) => AuthDeviceAccessToken(
-              accessToken: 'access-$authorizationId',
-              expiresIn: const Duration(minutes: 5),
-              scopes: scopes,
-            ),
+        tokenIssuer: const _AuthorizationIdDeviceTokenIssuer(),
       );
       final manager = AuthManager(
         AuthOptions<EngineContext>(
@@ -159,17 +148,7 @@ void main() {
       final feature = DeviceAuthorizationPlugin<EngineContext>(
         verificationUri: 'https://example.test/device',
         validateClient: (context, clientId, scopes) => true,
-        issueToken:
-            ({
-              required context,
-              required user,
-              required clientId,
-              required scopes,
-              required authorizationId,
-            }) => AuthDeviceAccessToken(
-              accessToken: 'unused',
-              expiresIn: const Duration(minutes: 5),
-            ),
+        tokenIssuer: const _StaticEngineDeviceTokenIssuer(),
       );
       final manager = AuthManager(
         AuthOptions<EngineContext>(
@@ -199,5 +178,32 @@ void main() {
       response.assertStatus(HttpStatus.forbidden);
       expect(response.json()['error'], 'invalid_csrf');
     },
+  );
+}
+
+final class _AuthorizationIdDeviceTokenIssuer
+    implements AuthDeviceAuthorizationTokenIssuer<EngineContext> {
+  const _AuthorizationIdDeviceTokenIssuer();
+
+  @override
+  AuthDeviceAccessToken issue(
+    AuthDeviceAuthorizationTokenIssuanceRequest<EngineContext> request,
+  ) => AuthDeviceAccessToken(
+    accessToken: 'access-${request.authorizationId}',
+    expiresIn: const Duration(minutes: 5),
+    scopes: request.scopes,
+  );
+}
+
+final class _StaticEngineDeviceTokenIssuer
+    implements AuthDeviceAuthorizationTokenIssuer<EngineContext> {
+  const _StaticEngineDeviceTokenIssuer();
+
+  @override
+  AuthDeviceAccessToken issue(
+    AuthDeviceAuthorizationTokenIssuanceRequest<EngineContext> request,
+  ) => const AuthDeviceAccessToken(
+    accessToken: 'unused',
+    expiresIn: Duration(minutes: 5),
   );
 }
