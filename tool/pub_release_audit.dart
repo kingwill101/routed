@@ -13,9 +13,23 @@ Usage: dart run tool/pub_release_audit.dart [options]
 Options:
   --root <path>  Workspace root to inspect (default: current directory)
   --json         Emit machine-readable JSON instead of a table
-  --check        Exit 1 when a published package is not ahead of pub.dev
+  --check        Exit 1 on version or dependency release blockers
   -h, --help     Show this help
 ''';
+
+enum DependencySource { hosted, path, git, sdk, unknown }
+
+class PackageDependency {
+  const PackageDependency({
+    required this.name,
+    required this.constraint,
+    required this.source,
+  });
+
+  final String name;
+  final String constraint;
+  final DependencySource source;
+}
 
 class PackageManifest {
   PackageManifest({
@@ -24,6 +38,7 @@ class PackageManifest {
     required this.relativePath,
     required this.changelog,
     required this.publishable,
+    this.dependencies = const {},
   });
 
   final String name;
@@ -31,15 +46,76 @@ class PackageManifest {
   final String relativePath;
   final ChangelogState changelog;
   final bool publishable;
+  final Map<String, PackageDependency> dependencies;
 }
 
 enum ChangelogState { unreleased, versioned, missing }
 
 class PubRelease {
-  const PubRelease({this.version, this.error});
+  const PubRelease({this.version, this.versions = const [], this.error});
 
   final String? version;
+  final List<String> versions;
   final String? error;
+}
+
+enum DependencyIssueKind {
+  localVersionMismatch,
+  unavailableWorkspaceDependency,
+  privateWorkspaceDependency,
+  unsupportedSource,
+  registryLookupFailed,
+}
+
+class DependencyIssue {
+  const DependencyIssue({
+    required this.package,
+    required this.dependency,
+    required this.constraint,
+    required this.kind,
+    required this.message,
+    required this.blocking,
+  });
+
+  final String package;
+  final String dependency;
+  final String constraint;
+  final DependencyIssueKind kind;
+  final String message;
+  final bool blocking;
+
+  Map<String, Object?> toJson() => {
+    'package': package,
+    'dependency': dependency,
+    'constraint': constraint,
+    'kind': kind.name,
+    'blocking': blocking,
+    'message': message,
+  };
+}
+
+class ReleasePlan {
+  const ReleasePlan({
+    required this.publishOrder,
+    required this.cycles,
+    required this.cycleBlockedPackages,
+    required this.issues,
+  });
+
+  final List<String> publishOrder;
+  final List<List<String>> cycles;
+  final List<String> cycleBlockedPackages;
+  final List<DependencyIssue> issues;
+
+  bool get hasBlockers =>
+      cycles.isNotEmpty || issues.any((issue) => issue.blocking);
+
+  Map<String, Object?> toJson() => {
+    'publishOrder': publishOrder,
+    'cycles': cycles,
+    'cycleBlockedPackages': cycleBlockedPackages,
+    'dependencyIssues': issues.map((issue) => issue.toJson()).toList(),
+  };
 }
 
 class PackageAudit {
@@ -99,16 +175,22 @@ Future<void> main(List<String> args) async {
       }),
     );
     audits.sort((a, b) => a.manifest.name.compareTo(b.manifest.name));
+    final releasePlan = buildReleasePlan(audits);
 
     if (options.json) {
       stdout.writeln(
-        jsonEncode(audits.map((audit) => audit.toJson()).toList()),
+        jsonEncode({
+          'packages': audits.map((audit) => audit.toJson()).toList(),
+          ...releasePlan.toJson(),
+        }),
       );
     } else {
       writeTable(audits);
+      writeReleasePlan(releasePlan, audits);
     }
 
-    if (options.check && audits.any(_needsVersionAction)) {
+    if (options.check &&
+        (audits.any(_needsVersionAction) || releasePlan.hasBlockers)) {
       exitCode = 1;
     }
   } finally {
@@ -150,6 +232,7 @@ List<PackageManifest> loadWorkspaceManifests(Directory root) {
     if (name is! String || version is! String) continue;
 
     final publishTo = package['publish_to'];
+    final dependencies = _readDependencies(package['dependencies']);
     manifests.add(
       PackageManifest(
         name: name,
@@ -157,10 +240,50 @@ List<PackageManifest> loadWorkspaceManifests(Directory root) {
         relativePath: entry,
         changelog: readChangelog(packageDirectory),
         publishable: publishTo != 'none',
+        dependencies: dependencies,
       ),
     );
   }
   return manifests;
+}
+
+Map<String, PackageDependency> _readDependencies(Object? value) {
+  if (value is! YamlMap) return const {};
+  return {
+    for (final entry in value.entries)
+      if (entry.key is String)
+        entry.key as String: _readDependency(entry.key as String, entry.value),
+  };
+}
+
+PackageDependency _readDependency(String name, Object? value) {
+  if (value == null || value is String) {
+    return PackageDependency(
+      name: name,
+      constraint: value as String? ?? 'any',
+      source: DependencySource.hosted,
+    );
+  }
+  if (value is YamlMap) {
+    final source = switch (value) {
+      {'path': _} => DependencySource.path,
+      {'git': _} => DependencySource.git,
+      {'sdk': _} => DependencySource.sdk,
+      {'hosted': _} => DependencySource.hosted,
+      _ => DependencySource.unknown,
+    };
+    final constraint = value['version'];
+    return PackageDependency(
+      name: name,
+      constraint: constraint is String ? constraint : 'any',
+      source: source,
+    );
+  }
+  return PackageDependency(
+    name: name,
+    constraint: 'any',
+    source: DependencySource.unknown,
+  );
 }
 
 ChangelogState readChangelog(Directory packageDirectory) {
@@ -209,7 +332,15 @@ class PubDevClient {
           error: 'pub.dev response has no latest version',
         );
       }
-      return PubRelease(version: version);
+      final releases = data['versions'];
+      final versions = releases is List
+          ? releases
+                .whereType<Map<String, dynamic>>()
+                .map((release) => release['version'])
+                .whereType<String>()
+                .toList(growable: false)
+          : <String>[version];
+      return PubRelease(version: version, versions: versions);
     } on Object catch (error) {
       return PubRelease(error: error.toString());
     }
@@ -274,6 +405,268 @@ int compareVersions(String left, String right) {
   );
 }
 
+bool versionSatisfiesConstraint(String version, String constraint) {
+  final normalized = constraint.trim();
+  if (normalized.isEmpty || normalized == 'any') return true;
+  return normalized
+      .split('||')
+      .any(
+        (alternative) => _satisfiesConstraintSet(version, alternative.trim()),
+      );
+}
+
+bool _satisfiesConstraintSet(String version, String constraint) {
+  if (constraint.startsWith('^')) {
+    final minimum = constraint.substring(1).trim();
+    if (compareVersions(version, minimum) < 0) return false;
+    return compareVersions(version, _caretUpperBound(minimum)) < 0;
+  }
+
+  final normalized = constraint.replaceAllMapped(
+    RegExp(r'(>=|<=|>|<|=)\s+'),
+    (match) => match.group(1)!,
+  );
+  final comparisons = normalized
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .map(RegExp(r'^(>=|<=|>|<|=)?(.+)$').firstMatch)
+      .whereType<RegExpMatch>()
+      .toList(growable: false);
+  if (comparisons.isEmpty) return false;
+  return comparisons.every((match) {
+    final operator = match.group(1) ?? '=';
+    final target = match.group(2)!;
+    final comparison = compareVersions(version, target);
+    return switch (operator) {
+      '>=' => comparison >= 0,
+      '<=' => comparison <= 0,
+      '>' => comparison > 0,
+      '<' => comparison < 0,
+      _ => comparison == 0,
+    };
+  });
+}
+
+String _caretUpperBound(String minimum) {
+  final parts = _versionParts(minimum).core;
+  final firstNonZero = parts.indexWhere((part) => part != 0);
+  final bumpIndex = firstNonZero == -1 ? 2 : firstNonZero;
+  final upper = List<int>.from(parts);
+  upper[bumpIndex]++;
+  for (var index = bumpIndex + 1; index < upper.length; index++) {
+    upper[index] = 0;
+  }
+  return upper.join('.');
+}
+
+ReleasePlan buildReleasePlan(List<PackageAudit> audits) {
+  final auditsByName = {for (final audit in audits) audit.manifest.name: audit};
+  final publishable = {
+    for (final audit in audits)
+      if (audit.manifest.publishable) audit.manifest.name: audit,
+  };
+  final dependencies = {for (final name in publishable.keys) name: <String>{}};
+  final issues = <DependencyIssue>[];
+
+  for (final audit in publishable.values) {
+    for (final dependency in audit.manifest.dependencies.values) {
+      final workspaceAudit = auditsByName[dependency.name];
+      if (workspaceAudit == null) continue;
+
+      if (dependency.source != DependencySource.hosted) {
+        issues.add(
+          DependencyIssue(
+            package: audit.manifest.name,
+            dependency: dependency.name,
+            constraint: dependency.constraint,
+            kind: DependencyIssueKind.unsupportedSource,
+            blocking: true,
+            message:
+                'uses a ${dependency.source.name} source; a clean pub.dev '
+                'consumer cannot resolve the workspace checkout',
+          ),
+        );
+        continue;
+      }
+
+      final localSatisfies = versionSatisfiesConstraint(
+        workspaceAudit.manifest.version,
+        dependency.constraint,
+      );
+      final publishedSatisfies = workspaceAudit.release.versions.any(
+        (version) => versionSatisfiesConstraint(version, dependency.constraint),
+      );
+
+      if (workspaceAudit.manifest.publishable && localSatisfies) {
+        dependencies[audit.manifest.name]!.add(dependency.name);
+      } else if (!workspaceAudit.manifest.publishable) {
+        issues.add(
+          DependencyIssue(
+            package: audit.manifest.name,
+            dependency: dependency.name,
+            constraint: dependency.constraint,
+            kind: DependencyIssueKind.privateWorkspaceDependency,
+            blocking: !publishedSatisfies,
+            message: publishedSatisfies
+                ? 'depends on a private workspace package; pub.dev has a '
+                      'compatible fallback, but local changes cannot be released'
+                : 'depends on a private workspace package with no compatible '
+                      'pub.dev release',
+          ),
+        );
+      } else if (publishedSatisfies) {
+        issues.add(
+          DependencyIssue(
+            package: audit.manifest.name,
+            dependency: dependency.name,
+            constraint: dependency.constraint,
+            kind: DependencyIssueKind.localVersionMismatch,
+            blocking: false,
+            message:
+                'local ${workspaceAudit.manifest.version} is outside the '
+                'constraint; a published version is compatible',
+          ),
+        );
+      } else if (workspaceAudit.release.error != null) {
+        issues.add(
+          DependencyIssue(
+            package: audit.manifest.name,
+            dependency: dependency.name,
+            constraint: dependency.constraint,
+            kind: DependencyIssueKind.registryLookupFailed,
+            blocking: true,
+            message:
+                'local ${workspaceAudit.manifest.version} is outside the '
+                'constraint and pub.dev lookup failed: '
+                '${workspaceAudit.release.error}',
+          ),
+        );
+      } else {
+        issues.add(
+          DependencyIssue(
+            package: audit.manifest.name,
+            dependency: dependency.name,
+            constraint: dependency.constraint,
+            kind: DependencyIssueKind.unavailableWorkspaceDependency,
+            blocking: true,
+            message:
+                'neither local ${workspaceAudit.manifest.version} nor any '
+                'published version satisfies the constraint',
+          ),
+        );
+      }
+    }
+  }
+
+  final cycles = _dependencyCycles(dependencies);
+  final cycleBlockedPackages = cycles.expand((cycle) => cycle).toSet();
+  var changed = true;
+  while (changed) {
+    changed = false;
+    for (final entry in dependencies.entries) {
+      if (!cycleBlockedPackages.contains(entry.key) &&
+          entry.value.any(cycleBlockedPackages.contains)) {
+        cycleBlockedPackages.add(entry.key);
+        changed = true;
+      }
+    }
+  }
+  final publishOrder = _topologicalOrder(dependencies, cycleBlockedPackages);
+  issues.sort((left, right) {
+    final packageComparison = left.package.compareTo(right.package);
+    return packageComparison != 0
+        ? packageComparison
+        : left.dependency.compareTo(right.dependency);
+  });
+  return ReleasePlan(
+    publishOrder: publishOrder,
+    cycles: cycles,
+    cycleBlockedPackages: cycleBlockedPackages.toList()..sort(),
+    issues: issues,
+  );
+}
+
+List<String> _topologicalOrder(
+  Map<String, Set<String>> dependencies,
+  Set<String> excluded,
+) {
+  final remaining = {
+    for (final entry in dependencies.entries)
+      if (!excluded.contains(entry.key))
+        entry.key: entry.value
+            .where((name) => !excluded.contains(name))
+            .toSet(),
+  };
+  final order = <String>[];
+  while (remaining.isNotEmpty) {
+    final ready =
+        remaining.entries
+            .where((entry) => entry.value.isEmpty)
+            .map((entry) => entry.key)
+            .toList(growable: false)
+          ..sort();
+    if (ready.isEmpty) break;
+    for (final name in ready) {
+      remaining.remove(name);
+      order.add(name);
+    }
+    for (final pending in remaining.values) {
+      pending.removeAll(ready);
+    }
+  }
+  return order;
+}
+
+List<List<String>> _dependencyCycles(Map<String, Set<String>> dependencies) {
+  var nextIndex = 0;
+  final indexes = <String, int>{};
+  final lowLinks = <String, int>{};
+  final stack = <String>[];
+  final onStack = <String>{};
+  final cycles = <List<String>>[];
+
+  void visit(String name) {
+    indexes[name] = nextIndex;
+    lowLinks[name] = nextIndex;
+    nextIndex++;
+    stack.add(name);
+    onStack.add(name);
+
+    for (final dependency in dependencies[name]!) {
+      if (!indexes.containsKey(dependency)) {
+        visit(dependency);
+        lowLinks[name] = lowLinks[name]! < lowLinks[dependency]!
+            ? lowLinks[name]!
+            : lowLinks[dependency]!;
+      } else if (onStack.contains(dependency)) {
+        lowLinks[name] = lowLinks[name]! < indexes[dependency]!
+            ? lowLinks[name]!
+            : indexes[dependency]!;
+      }
+    }
+
+    if (lowLinks[name] != indexes[name]) return;
+    final component = <String>[];
+    String member;
+    do {
+      member = stack.removeLast();
+      onStack.remove(member);
+      component.add(member);
+    } while (member != name);
+    if (component.length > 1 || dependencies[name]!.contains(name)) {
+      component.sort();
+      cycles.add(component);
+    }
+  }
+
+  final names = dependencies.keys.toList(growable: false)..sort();
+  for (final name in names) {
+    if (!indexes.containsKey(name)) visit(name);
+  }
+  cycles.sort((left, right) => left.first.compareTo(right.first));
+  return cycles;
+}
+
 void writeTable(List<PackageAudit> audits) {
   const headers = [
     'PACKAGE',
@@ -316,6 +709,51 @@ void writeTable(List<PackageAudit> audits) {
     if (row[3] == 'error') {
       final audit = audits.firstWhere((audit) => audit.manifest.name == row[0]);
       stderr.writeln('${row[0]}: ${audit.release.error}');
+    }
+  }
+}
+
+void writeReleasePlan(ReleasePlan plan, List<PackageAudit> audits) {
+  final auditsByName = {for (final audit in audits) audit.manifest.name: audit};
+  stdout.writeln();
+  stdout.writeln('PUBLISH ORDER');
+  if (plan.publishOrder.isEmpty) {
+    stdout.writeln('  No packages can be ordered.');
+  } else {
+    for (var index = 0; index < plan.publishOrder.length; index++) {
+      final name = plan.publishOrder[index];
+      final version = auditsByName[name]!.manifest.version;
+      stdout.writeln('  ${index + 1}. $name $version');
+    }
+  }
+
+  if (plan.cycles.isNotEmpty) {
+    stdout.writeln();
+    stdout.writeln('DEPENDENCY CYCLES');
+    for (final cycle in plan.cycles) {
+      stdout.writeln('  ${[...cycle, cycle.first].join(' -> ')}');
+    }
+    final dependents = plan.cycleBlockedPackages
+        .where((name) => !plan.cycles.any((cycle) => cycle.contains(name)))
+        .toList(growable: false);
+    if (dependents.isNotEmpty) {
+      stdout.writeln('  Also blocked by cycles: ${dependents.join(', ')}');
+    }
+  }
+
+  stdout.writeln();
+  stdout.writeln('DEPENDENCY READINESS');
+  if (plan.issues.isEmpty) {
+    stdout.writeln(
+      '  Ready: workspace dependency constraints are satisfiable.',
+    );
+  } else {
+    for (final issue in plan.issues) {
+      final severity = issue.blocking ? 'BLOCKER' : 'WARNING';
+      stdout.writeln(
+        '  $severity ${issue.package} -> ${issue.dependency} '
+        '(${issue.constraint}): ${issue.message}',
+      );
     }
   }
 }
