@@ -149,6 +149,44 @@ WebAuthn, two-factor auth, accounts, passwords, organizations, and admin
 operations. The client does not persist secrets or silently provision local
 accounts.
 
+## Optional username plugin
+
+Username-first authentication is opt-in and keeps its client API separately
+selectable. The server plugin owns normalization and treats values containing
+`@` only as email identifiers, avoiding ambiguous username fallback:
+
+```dart
+final usernamePlugin = UsernamePlugin<MyRequestContext>(
+  identifierPolicy: AuthUsernameIdentifierPolicy(
+    minimumLength: 3,
+    maximumLength: 32,
+  ),
+);
+
+final options = AuthOptions<MyRequestContext>(
+  providers: [CredentialsProvider()],
+  store: authStore,
+  storeMode: AuthStoreMode.durable,
+  plugins: [usernamePlugin],
+);
+```
+
+Install only the matching client plugin when the application needs username
+registration or sign-in:
+
+```dart
+const usernameClient = AuthUsernameClientPlugin();
+final auth = AuthClient(
+  baseUrl: Uri.parse('https://api.example.com/auth'),
+  plugins: const [usernameClient],
+);
+
+await auth.plugins.use(usernameClient).signIn(
+  identifier: 'ada',
+  password: password,
+);
+```
+
 ## Optional two-factor plugin
 
 Compose `TwoFactorPlugin` when an application needs TOTP and recovery codes:

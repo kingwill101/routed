@@ -104,7 +104,7 @@ await engine.initialize();
 Server plugins are ordinary typed constructor arguments. Provider callbacks,
 stores, and secrets are supplied by the application; Routed does not discover
 them from YAML or a global registry. This local-development factory enables
-phone sign-in, captcha, and breached-password checks explicitly:
+username and phone sign-in, captcha, and breached-password checks explicitly:
 
 ```dart
 AuthDeployment<EngineContext> buildAuth({
@@ -123,6 +123,7 @@ AuthDeployment<EngineContext> buildAuth({
   return AuthDeploymentPresets.localDevelopment<EngineContext>(
     providers: [CredentialsProvider()],
     plugins: [
+      UsernamePlugin<EngineContext>(),
       phone,
       CaptchaPlugin<EngineContext>(verifier: captchaVerifier),
       BreachedPasswordPlugin<EngineContext>(
@@ -134,16 +135,23 @@ AuthDeployment<EngineContext> buildAuth({
 }
 ```
 
-Client APIs are selected independently. A client that needs phone and
-captcha-aware credentials installs only those two client plugins:
+Client APIs are selected independently. A client that needs username, phone,
+and captcha-aware credentials installs only those client plugins:
 
 ```dart
+const usernameClient = AuthUsernameClientPlugin();
 const phoneClient = AuthPhoneNumberClientPlugin();
 const captchaClient = AuthCaptchaClientPlugin();
 
 final authClient = AuthClient(
   baseUrl: Uri.parse('https://api.example.com'),
-  plugins: const [phoneClient, captchaClient],
+  plugins: const [usernameClient, phoneClient, captchaClient],
+);
+
+await authClient.plugins.use(usernameClient).register(
+  username: 'ada',
+  email: 'ada@example.com',
+  password: password,
 );
 
 await authClient.plugins.use(phoneClient).sendCode(
