@@ -504,22 +504,32 @@ final class _D1Sessions implements AuthSessionStore {
     final values = _sessionValues(replacement);
     final results = await sql.batch([
       sql.database
+          .prepare('''UPDATE $table SET revoked_at = ?,
+               payload = json_set(payload, '\$.revoked_at', ?,
+                 '\$._rotation_replacement_hash', ?)
+               WHERE token_hash = ? AND user_id = ?
+                 AND revoked_at IS NULL AND expires_at > ?''')
+          .bind([
+            now,
+            now,
+            replacement.tokenHash,
+            previousTokenHash.trim(),
+            replacement.userId,
+            now,
+          ]),
+      sql.database
           .prepare('''INSERT INTO $table
                (id, token_hash, user_id, created_at, expires_at, last_used_at, revoked_at, payload)
                SELECT ?, ?, ?, ?, ?, ?, ?, ?
                WHERE EXISTS (SELECT 1 FROM $table
                  WHERE token_hash = ? AND user_id = ?
-                   AND revoked_at IS NULL AND expires_at > ?)''')
-          .bind([...values, previousTokenHash.trim(), replacement.userId, now]),
-      sql.database
-          .prepare('''UPDATE $table SET revoked_at = ?,
-               payload = json_set(payload, '\$.revoked_at', ?)
-               WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?
-                 AND EXISTS (SELECT 1 FROM $table WHERE token_hash = ?)''')
+                   AND revoked_at = ?
+                   AND json_extract(payload,
+                     '\$._rotation_replacement_hash') = ?)''')
           .bind([
-            now,
-            now,
+            ...values,
             previousTokenHash.trim(),
+            replacement.userId,
             now,
             replacement.tokenHash,
           ]),

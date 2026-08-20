@@ -175,7 +175,7 @@ final class CloudflareD1AuthSchema {
         for (final sql in migration.statements) database.prepare(sql),
         database
             .prepare(
-              'INSERT INTO $migrationTable '
+              'INSERT OR IGNORE INTO $migrationTable '
               '(version, applied_at) VALUES (?, ?)',
             )
             .bind([

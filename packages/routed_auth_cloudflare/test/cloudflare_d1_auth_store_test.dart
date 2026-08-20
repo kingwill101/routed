@@ -106,6 +106,58 @@ void main() {
     expect(await store.jwtVersions.current('rotating-user'), 16);
   });
 
+  test(
+    'session rotation commits exactly one replacement under contention',
+    () async {
+      final database = FakeCloudflareD1Database();
+      addTearDown(database.close);
+      final now = DateTime.utc(2026, 8, 19, 12);
+      final store = await CloudflareD1AuthStore.open(
+        database,
+        clock: () => now,
+      );
+      AuthSessionRecord session(String id) => AuthSessionRecord(
+        id: id,
+        tokenHash: hashOpaqueToken('token-$id'),
+        userId: 'rotating-user',
+        createdAt: now,
+        expiresAt: now.add(const Duration(hours: 1)),
+        lastUsedAt: now,
+        authenticationMethod: 'credentials',
+      );
+
+      final original = session('original');
+      await store.sessions.create(original);
+      final replacements = [for (var i = 0; i < 16; i++) session('next-$i')];
+      final results = await Future.wait([
+        for (final replacement in replacements)
+          Future.sync(
+            () => store.sessions.rotate(
+              previousTokenHash: original.tokenHash,
+              replacement: replacement,
+            ),
+          ),
+      ]);
+
+      final winner = results.whereType<AuthSessionRecord>().single;
+      final stored = await store.sessions.listForUser(original.userId);
+      expect(stored, hasLength(2));
+      expect(
+        stored.singleWhere((value) => value.id == original.id).revokedAt,
+        now,
+      );
+      expect(
+        stored.singleWhere((value) => value.id == winner.id).revokedAt,
+        isNull,
+      );
+      for (final losing in replacements.where(
+        (value) => value.id != winner.id,
+      )) {
+        expect(await store.sessions.find(losing.tokenHash), isNull);
+      }
+    },
+  );
+
   test('claims an approved device authorization once', () async {
     final database = FakeCloudflareD1Database();
     addTearDown(database.close);
