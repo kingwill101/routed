@@ -29,6 +29,9 @@
 - Publish deterministic testing fixtures for credentials, email and phone OTP,
   OAuth/OIDC, WebAuthn payloads, API keys, and two-factor flows, plus portable
   endpoint-codec, HTTP, clock, delivery, gate, and concurrency helpers.
+- Replace plugin-side session issuance with a typed authentication intent so
+  hosts uniformly enforce account policy, callbacks, session/JWT strategy,
+  token projection, and lifecycle events after successful plugin verification.
 - Extend the public durable-store conformance suite with contention cases for
   users, credentials, accounts, sessions, tokens, OAuth challenges, JWT
   versions, device authorization, and email OTP.

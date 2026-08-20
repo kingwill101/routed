@@ -16,6 +16,9 @@
   compile-failure fixture.
 - Enforce trusted browser origins for anonymous and email-OTP sign-in while
   preserving explicit native-client requests.
+- Centralize successful phone, anonymous, email-OTP, username, WebAuthn, and
+  admin-impersonation session issuance in Routed, including JWT cookies,
+  configured body-token exposure, callbacks, policy, and lifecycle events.
 - Publish `package:routed_auth/testing.dart` with a framework-neutral auth
   runtime conformance contract shared by IO, Node, and Fetch host tests.
 - Use plugin terminology consistently across Routed auth endpoint mounting and
