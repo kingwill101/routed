@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 
 import 'account_deletion.dart';
@@ -15,6 +17,7 @@ import 'password_policy.dart';
 import 'password_reset.dart';
 import 'providers.dart';
 import 'rate_limit.dart';
+import 'runtime_posture.dart';
 import 'store.dart';
 
 /// Declares whether an auth store is durable across process restarts.
@@ -28,13 +31,15 @@ class AuthOptions<TContext> {
   AuthOptions({
     required List<AuthProvider> providers,
     required this.store,
-    this.storeMode = AuthStoreMode.durable,
+    AuthStoreMode storeMode = AuthStoreMode.durable,
+    AuthRuntimeMode? runtimeMode,
+    this.productionBoundary,
     this.plugins = const [],
     this.sessionStrategy = AuthSessionStrategy.session,
     this.rateLimiter,
-    this.browserProtection = const AuthBrowserProtectionOptions(),
-    this.cookiePolicy = AuthCookiePolicy.production,
-    this.accountPolicy = const AuthAccountPolicy(),
+    AuthBrowserProtectionOptions? browserProtection,
+    AuthCookiePolicy? cookiePolicy,
+    AuthAccountPolicy? accountPolicy,
     this.passwordPolicy = const PasswordPolicy(),
     this.jwtOptions = const JwtSessionOptions(secret: ''),
     PasswordHasher? passwordHasher,
@@ -60,7 +65,20 @@ class AuthOptions<TContext> {
     this.rbac = const RbacOptions(),
     this.policies = const PolicyOptions(),
     AuthCallbacks<TContext>? callbacks,
-  }) : providers = List<AuthProvider>.unmodifiable(providers),
+  }) : storeMode = storeMode,
+       runtimeMode = runtimeMode ?? _defaultRuntimeMode(storeMode),
+       browserProtection =
+           browserProtection ??
+           _defaultBrowserProtection(
+             storeMode,
+             runtimeMode,
+             productionBoundary,
+           ),
+       cookiePolicy =
+           cookiePolicy ?? _defaultCookiePolicy(storeMode, runtimeMode),
+       accountPolicy =
+           accountPolicy ?? _defaultAccountPolicy(storeMode, runtimeMode),
+       providers = List<AuthProvider>.unmodifiable(providers),
        passwordHasher = passwordHasher ?? Argon2idPasswordHasher(),
        callbacks = callbacks ?? AuthCallbacks<TContext>() {
     validateAuthProviderConfiguration(this.providers);
@@ -110,6 +128,7 @@ class AuthOptions<TContext> {
         'AuthStoreMode.ephemeral requires InMemoryAuthStore.',
       );
     }
+    _validateRuntimePosture();
   }
 
   /// List of configured auth providers.
@@ -123,6 +142,21 @@ class AuthOptions<TContext> {
 
   /// Declares whether [store] is durable or intentionally in-memory.
   final AuthStoreMode storeMode;
+
+  /// Whether this runtime must satisfy production guarantees or was
+  /// deliberately relaxed for local development.
+  ///
+  /// [AuthStoreMode.ephemeral] derives [AuthRuntimeMode.localDevelopment].
+  /// Durable options derive [AuthRuntimeMode.production], which requires an
+  /// explicit [productionBoundary].
+  final AuthRuntimeMode runtimeMode;
+
+  /// Exact browser-origin and proxy trust decision for production boot.
+  ///
+  /// This is required when [runtimeMode] is [AuthRuntimeMode.production] and
+  /// rejected for local-development options so the two postures cannot be
+  /// accidentally mixed.
+  final AuthProductionBoundary? productionBoundary;
 
   /// Session storage strategy.
   final AuthSessionStrategy sessionStrategy;
@@ -240,10 +274,64 @@ class AuthOptions<TContext> {
     }
   }
 
+  /// Revalidates every guarantee required for production boot.
+  void requireProductionBoot() {
+    if (runtimeMode != AuthRuntimeMode.production) {
+      throw StateError(
+        'Local-development auth options cannot boot through a production '
+        'provider. Use AuthDeploymentPresets.localDevelopment explicitly.',
+      );
+    }
+    _validateRuntimePosture();
+  }
+
+  /// Ensures a framework adapter and its options use the same posture.
+  void requireRuntimeMode(AuthRuntimeMode expected) {
+    if (runtimeMode != expected) {
+      throw StateError(
+        'Auth runtime posture mismatch: the provider requires '
+        '${expected.name}, but AuthOptions uses ${runtimeMode.name}.',
+      );
+    }
+    if (expected == AuthRuntimeMode.production) requireProductionBoot();
+  }
+
+  void _validateRuntimePosture() {
+    if (runtimeMode == AuthRuntimeMode.localDevelopment) {
+      if (productionBoundary != null) {
+        throw ArgumentError.value(
+          productionBoundary,
+          'productionBoundary',
+          'must be omitted for local-development auth options',
+        );
+      }
+      return;
+    }
+
+    requireDurableStore();
+    final boundary = productionBoundary;
+    if (boundary == null) {
+      throw ArgumentError.notNull('productionBoundary');
+    }
+    _validateProductionBrowserPolicy(browserProtection, boundary);
+    if (!cookiePolicy.httpOnly || !cookiePolicy.secure) {
+      throw ArgumentError.value(
+        cookiePolicy,
+        'cookiePolicy',
+        'production cookies must be Secure and HttpOnly',
+      );
+    }
+    if (sessionStrategy == AuthSessionStrategy.jwt) {
+      _validateProductionJwt(jwtOptions);
+    }
+  }
+
   AuthOptions<TContext> copyWith({
     List<AuthProvider>? providers,
     AuthStore? store,
     AuthStoreMode? storeMode,
+    AuthRuntimeMode? runtimeMode,
+    AuthProductionBoundary? productionBoundary,
     List<AuthServerPlugin<TContext>>? plugins,
     AuthSessionStrategy? sessionStrategy,
     AuthRateLimiter<TContext>? rateLimiter,
@@ -280,6 +368,8 @@ class AuthOptions<TContext> {
       providers: providers ?? this.providers,
       store: store ?? this.store,
       storeMode: storeMode ?? this.storeMode,
+      runtimeMode: runtimeMode ?? this.runtimeMode,
+      productionBoundary: productionBoundary ?? this.productionBoundary,
       plugins: plugins ?? this.plugins,
       sessionStrategy: sessionStrategy ?? this.sessionStrategy,
       rateLimiter: rateLimiter ?? this.rateLimiter,
@@ -314,6 +404,116 @@ class AuthOptions<TContext> {
       rbac: rbac ?? this.rbac,
       policies: policies ?? this.policies,
       callbacks: callbacks ?? this.callbacks,
+    );
+  }
+}
+
+AuthRuntimeMode _defaultRuntimeMode(AuthStoreMode storeMode) =>
+    storeMode == AuthStoreMode.ephemeral
+    ? AuthRuntimeMode.localDevelopment
+    : AuthRuntimeMode.production;
+
+AuthRuntimeMode _resolvedRuntimeMode(
+  AuthStoreMode storeMode,
+  AuthRuntimeMode? runtimeMode,
+) => runtimeMode ?? _defaultRuntimeMode(storeMode);
+
+AuthBrowserProtectionOptions _defaultBrowserProtection(
+  AuthStoreMode storeMode,
+  AuthRuntimeMode? runtimeMode,
+  AuthProductionBoundary? boundary,
+) {
+  final resolved = _resolvedRuntimeMode(storeMode, runtimeMode);
+  if (resolved == AuthRuntimeMode.localDevelopment) {
+    return AuthBrowserProtectionOptions.localDevelopment;
+  }
+  return AuthBrowserProtectionOptions.production(
+    trustedOrigins: boundary?.trustedOrigins ?? const <String>[],
+  );
+}
+
+AuthCookiePolicy _defaultCookiePolicy(
+  AuthStoreMode storeMode,
+  AuthRuntimeMode? runtimeMode,
+) =>
+    _resolvedRuntimeMode(storeMode, runtimeMode) ==
+        AuthRuntimeMode.localDevelopment
+    ? AuthCookiePolicy.development
+    : AuthCookiePolicy.production;
+
+AuthAccountPolicy _defaultAccountPolicy(
+  AuthStoreMode storeMode,
+  AuthRuntimeMode? runtimeMode,
+) =>
+    _resolvedRuntimeMode(storeMode, runtimeMode) ==
+        AuthRuntimeMode.localDevelopment
+    ? AuthAccountPolicy.development
+    : AuthAccountPolicy.production;
+
+void _validateProductionBrowserPolicy(
+  AuthBrowserProtectionOptions policy,
+  AuthProductionBoundary boundary,
+) {
+  if (!policy.enabled ||
+      !policy.requireOrigin ||
+      !policy.enforceFetchMetadata ||
+      !policy.enforceReferrer ||
+      !policy.requireContentType) {
+    throw ArgumentError.value(
+      policy,
+      'browserProtection',
+      'production browser protection must require Origin, Fetch Metadata, '
+          'Referer fallback, and Content-Type checks',
+    );
+  }
+  final trusted = policy.trustedOrigins.toSet();
+  if (!trusted.containsAll(boundary.trustedOrigins)) {
+    throw ArgumentError.value(
+      policy.trustedOrigins,
+      'browserProtection.trustedOrigins',
+      'must include every production boundary origin',
+    );
+  }
+  for (final value in <String>{
+    ...policy.allowedOrigins,
+    ...policy.trustedOrigins,
+  }) {
+    final origin = Uri.tryParse(value);
+    if (origin == null ||
+        normalizeAuthOrigin(origin, requireHttps: true) != value) {
+      throw ArgumentError.value(
+        value,
+        'browserProtection',
+        'production origins must be canonical HTTPS origins',
+      );
+    }
+  }
+}
+
+void _validateProductionJwt(JwtSessionOptions options) {
+  final algorithm = options.algorithm.trim().toUpperCase();
+  final minimumBytes = switch (algorithm) {
+    'HS256' => 32,
+    'HS384' => 48,
+    'HS512' => 64,
+    _ => throw ArgumentError.value(
+      options.algorithm,
+      'jwtOptions.algorithm',
+      'production JWT sessions support HS256, HS384, or HS512',
+    ),
+  };
+  if (utf8.encode(options.secret).length < minimumBytes) {
+    throw ArgumentError.value(
+      '<redacted>',
+      'jwtOptions.secret',
+      'must contain at least $minimumBytes UTF-8 bytes for $algorithm',
+    );
+  }
+  if (!options.secure) {
+    throw ArgumentError.value(
+      options.secure,
+      'jwtOptions.secure',
+      'production JWT cookies must be Secure',
     );
   }
 }

@@ -61,7 +61,7 @@ void main() {
     expect(manager.options.store, same(deployment.options.store));
     expect(manager.options.basePath, deployment.options.basePath);
     expect(provider.configuration, same(deployment.configuration));
-    expect(provider.requireDurableStore, isFalse);
+    expect(deployment.options.runtimeMode, AuthRuntimeMode.localDevelopment);
     expect(engine.config.features.enableProxySupport, isFalse);
 
     final client = TestClient(RoutedRequestHandler(engine));
@@ -173,6 +173,42 @@ void main() {
     expect(config.trustedPlatform, 'CF-Connecting-IP');
     expect(config.redirectTrailingSlash, isFalse);
   });
+
+  test('production provider rejects an unapplied proxy boundary', () async {
+    final deployment =
+        AuthDeploymentPresets.secureSessionProduction<EngineContext>(
+          store: _OpaqueDurableStore(),
+          providers: const <AuthProvider>[],
+          boundary: AuthProductionBoundary(
+            trustedOrigins: [Uri.parse('https://app.example.com')],
+            proxyPolicy: AuthProxyPolicy.trusted(
+              proxies: ['10.0.0.0/8'],
+              headers: ['CF-Connecting-IP'],
+            ),
+          ),
+          lifecycleDelivery:
+              const AuthLifecycleDelivery<EngineContext>.disabled(),
+          rateLimiter: _AllowAllRateLimiter(),
+          requireVerifiedEmail: true,
+        );
+    final engine = Engine(
+      providers: [...Engine.defaultProviders, deployment.serviceProvider()],
+    );
+    addTearDown(engine.close);
+    deployment.bindTo(engine);
+
+    await expectLater(
+      engine.initialize(),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('deployment.engineConfig()'),
+        ),
+      ),
+    );
+    expect(engine.container.has<AuthManager>(), isFalse);
+  });
 }
 
 Directory _findPackageRoot() {
@@ -192,4 +228,15 @@ Directory _findPackageRoot() {
     }
     current = parent;
   }
+}
+
+final class _OpaqueDurableStore implements AuthStore {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _AllowAllRateLimiter implements AuthRateLimiter<EngineContext> {
+  @override
+  AuthRateLimitDecision check(AuthRateLimitRequest<EngineContext> request) =>
+      const AuthRateLimitDecision.allow();
 }

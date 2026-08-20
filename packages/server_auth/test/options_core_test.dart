@@ -3,6 +3,115 @@ import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 void main() {
+  group('runtime posture', () {
+    test('ephemeral storage selects explicit local-development defaults', () {
+      final options = AuthOptions<String>(
+        providers: const <AuthProvider>[],
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
+      );
+
+      expect(options.runtimeMode, AuthRuntimeMode.localDevelopment);
+      expect(options.productionBoundary, isNull);
+      expect(options.cookiePolicy.secure, isFalse);
+      expect(options.accountPolicy.maxLoginAttempts, 10);
+      expect(options.browserProtection.requireOrigin, isFalse);
+    });
+
+    test('durable storage requires an explicit production boundary', () {
+      expect(
+        () => AuthOptions<String>(
+          providers: const <AuthProvider>[],
+          store: _DurableAuthStore(),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('production derives coherent secure defaults', () {
+      final boundary = _productionBoundary();
+      final options = AuthOptions<String>(
+        providers: const <AuthProvider>[],
+        store: _DurableAuthStore(),
+        productionBoundary: boundary,
+      );
+
+      expect(options.runtimeMode, AuthRuntimeMode.production);
+      expect(options.productionBoundary, same(boundary));
+      expect(options.cookiePolicy.secure, isTrue);
+      expect(options.cookiePolicy.httpOnly, isTrue);
+      expect(options.accountPolicy.requireEmailVerification, isTrue);
+      expect(options.accountPolicy.allowUnverifiedSignIn, isFalse);
+      expect(options.browserProtection.requireOrigin, isTrue);
+      expect(options.browserProtection.enforceFetchMetadata, isTrue);
+      expect(options.browserProtection.enforceReferrer, isTrue);
+      expect(options.browserProtection.requireContentType, isTrue);
+      expect(options.browserProtection.trustedOrigins, [
+        'https://app.example.com',
+      ]);
+    });
+
+    test('production rejects insecure browser and cookie overrides', () {
+      expect(
+        () => AuthOptions<String>(
+          providers: const <AuthProvider>[],
+          store: _DurableAuthStore(),
+          productionBoundary: _productionBoundary(),
+          browserProtection: const AuthBrowserProtectionOptions(),
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => AuthOptions<String>(
+          providers: const <AuthProvider>[],
+          store: _DurableAuthStore(),
+          productionBoundary: _productionBoundary(),
+          cookiePolicy: AuthCookiePolicy.development,
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('production JWT sessions require algorithm-sized secrets', () {
+      expect(
+        () => AuthOptions<String>(
+          providers: const <AuthProvider>[],
+          store: _DurableAuthStore(),
+          productionBoundary: _productionBoundary(),
+          sessionStrategy: AuthSessionStrategy.jwt,
+          jwtOptions: const JwtSessionOptions(secret: 'too-short'),
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => AuthOptions<String>(
+          providers: const <AuthProvider>[],
+          store: _DurableAuthStore(),
+          productionBoundary: _productionBoundary(),
+          sessionStrategy: AuthSessionStrategy.jwt,
+          jwtOptions: const JwtSessionOptions(
+            secret: 'a-production-secret-with-at-least-32-bytes',
+            secure: false,
+          ),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('local options reject production-only boundary state', () {
+      expect(
+        () => AuthOptions<String>(
+          providers: const <AuthProvider>[],
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
+          runtimeMode: AuthRuntimeMode.localDevelopment,
+          productionBoundary: _productionBoundary(),
+        ),
+        throwsArgumentError,
+      );
+    });
+  });
+
   test('requires an explicit ephemeral mode for in-memory stores', () {
     expect(
       () => AuthOptions<String>(
@@ -283,6 +392,7 @@ void main() {
         options: AuthOptions<Object>(
           providers: [provider],
           store: store,
+          productionBoundary: _productionBoundary(),
           plugins: [WebAuthnPlugin<Object>(provider: provider)],
         ),
       ),
@@ -296,6 +406,11 @@ void main() {
     );
   });
 }
+
+AuthProductionBoundary _productionBoundary() => AuthProductionBoundary(
+  trustedOrigins: [Uri.parse('https://app.example.com')],
+  proxyPolicy: const AuthProxyPolicy.direct(),
+);
 
 final class _DurableAuthStore implements AuthStore {
   final InMemoryAuthStore _delegate = InMemoryAuthStore();

@@ -18,6 +18,7 @@ import 'password_policy.dart';
 import 'plugin.dart';
 import 'providers.dart';
 import 'rate_limit.dart';
+import 'runtime_posture.dart';
 import 'store.dart';
 
 /// Focused, typed presets for common auth deployment shapes.
@@ -44,6 +45,7 @@ abstract final class AuthDeploymentPresets {
         plugins: _plugins(plugins),
         store: InMemoryAuthStore(),
         storeMode: AuthStoreMode.ephemeral,
+        runtimeMode: AuthRuntimeMode.localDevelopment,
         rateLimiter: rateLimiter,
         browserProtection: AuthBrowserProtectionOptions(
           trustedOrigins: origins,
@@ -75,7 +77,7 @@ abstract final class AuthDeploymentPresets {
     SameSite sameSite = SameSite.lax,
     String? cookieDomain,
     String basePath = '/auth',
-    AuthAccountPolicy accountPolicy = const AuthAccountPolicy(),
+    AuthAccountPolicy accountPolicy = AuthAccountPolicy.production,
     PasswordPolicy passwordPolicy = const PasswordPolicy(),
     RbacOptions rbac = const RbacOptions(),
     PolicyOptions policies = const PolicyOptions(),
@@ -137,7 +139,7 @@ abstract final class AuthDeploymentPresets {
     SameSite sameSite = SameSite.lax,
     String? cookieDomain,
     String basePath = '/auth',
-    AuthAccountPolicy accountPolicy = const AuthAccountPolicy(),
+    AuthAccountPolicy accountPolicy = AuthAccountPolicy.production,
     PasswordPolicy passwordPolicy = const PasswordPolicy(),
     RbacOptions rbac = const RbacOptions(),
     PolicyOptions policies = const PolicyOptions(),
@@ -232,7 +234,7 @@ abstract final class AuthDeploymentPresets {
     SameSite sameSite = SameSite.lax,
     String? cookieDomain,
     String basePath = '/auth',
-    AuthAccountPolicy accountPolicy = const AuthAccountPolicy(),
+    AuthAccountPolicy accountPolicy = AuthAccountPolicy.production,
     PasswordPolicy passwordPolicy = const PasswordPolicy(),
     RbacOptions rbac = const RbacOptions(),
     PolicyOptions policies = const PolicyOptions(),
@@ -319,14 +321,12 @@ AuthOptions<TContext> _productionOptions<TContext>({
     plugins: _plugins(plugins),
     store: store,
     storeMode: AuthStoreMode.durable,
+    runtimeMode: AuthRuntimeMode.production,
+    productionBoundary: boundary,
     sessionStrategy: sessionStrategy,
     rateLimiter: rateLimiter,
-    browserProtection: AuthBrowserProtectionOptions(
+    browserProtection: AuthBrowserProtectionOptions.production(
       trustedOrigins: boundary.trustedOrigins,
-      requireOrigin: true,
-      enforceFetchMetadata: true,
-      enforceReferrer: true,
-      requireContentType: true,
     ),
     cookiePolicy: cookiePolicy,
     accountPolicy: accountPolicy,

@@ -17,6 +17,7 @@ void main() {
 
       expect(deployment.options.store, isA<InMemoryAuthStore>());
       expect(deployment.options.storeMode, AuthStoreMode.ephemeral);
+      expect(deployment.options.runtimeMode, AuthRuntimeMode.localDevelopment);
       expect(deployment.options.providers.single.id, 'credentials');
       expect(deployment.options.plugins.single, same(plugin));
       expect(deployment.options.cookiePolicy.secure, isFalse);
@@ -60,6 +61,12 @@ void main() {
 
       expect(deployment.options.store, same(store));
       expect(deployment.options.storeMode, AuthStoreMode.durable);
+      expect(deployment.options.runtimeMode, AuthRuntimeMode.production);
+      expect(deployment.options.productionBoundary, same(boundary));
+      expect(
+        deployment.options.accountPolicy,
+        same(AuthAccountPolicy.production),
+      );
       expect(deployment.options.sessionStrategy, AuthSessionStrategy.session);
       expect(deployment.options.cookiePolicy.httpOnly, isTrue);
       expect(deployment.options.cookiePolicy.secure, isTrue);
@@ -193,6 +200,24 @@ void main() {
 
       final policy = AuthProxyPolicy.trusted(proxies: ['2001:db8::/32']);
       expect(policy.proxies, ['2001:db8::/32']);
+    });
+
+    test('custom deployments cannot split production proxy policy', () {
+      final boundary = _directBoundary();
+      final options = AuthOptions<String>(
+        providers: [CredentialsProvider()],
+        store: _DurableAuthStore(),
+        productionBoundary: boundary,
+      );
+
+      expect(
+        () => AuthDeployment<String>.custom(
+          options: options,
+          configuration: AuthConfig.defaults(),
+          proxyPolicy: AuthProxyPolicy.trusted(proxies: ['10.0.0.0/8']),
+        ),
+        throwsArgumentError,
+      );
     });
 
     test('rejects ephemeral core and API-key stores', () {

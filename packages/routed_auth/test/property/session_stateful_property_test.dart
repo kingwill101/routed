@@ -185,6 +185,7 @@ final class _AuthStatefulSut {
       AuthOptions<EngineContext>(
         store: store,
         storeMode: AuthStoreMode.durable,
+        runtimeMode: AuthRuntimeMode.localDevelopment,
         providers: [
           CredentialsProvider(
             authorize: (_, _, credentials) async {

@@ -114,6 +114,29 @@ origin/proxy decision, rate limiter, verified-email policy, and lifecycle
 delivery choices explicitly. Providers and plugins remain opt-in inputs to
 every preset.
 
+Low-level `AuthOptions` usage carries the same typed runtime posture. Durable
+options are production options: they require an exact HTTPS origin set, an
+explicit direct or trusted-proxy decision, secure browser and cookie policy,
+and an algorithm-sized secret when JWT sessions are enabled. Ephemeral local
+development is an explicit opt-out:
+
+```dart
+final productionBoundary = AuthProductionBoundary(
+  trustedOrigins: [Uri.parse('https://app.example.com')],
+  proxyPolicy: const AuthProxyPolicy.direct(),
+);
+
+final localOptions = AuthOptions<MyRequestContext>(
+  providers: [CredentialsProvider()],
+  store: InMemoryAuthStore(),
+  storeMode: AuthStoreMode.ephemeral,
+);
+```
+
+`AuthRuntime` revalidates production posture automatically. Framework adapters
+must apply `AuthProductionBoundary.proxyPolicy` at their HTTP boundary; Routed
+does this through `AuthDeployment.engineConfig()`.
+
 ## Typed Dart client
 
 `AuthClient` owns the shared transport and installs only the optional client
@@ -178,6 +201,7 @@ final options = AuthOptions<MyRequestContext>(
   providers: [CredentialsProvider()],
   store: authStore,
   storeMode: AuthStoreMode.durable,
+  productionBoundary: productionBoundary,
   plugins: [lastMethod],
 );
 ```
@@ -205,6 +229,7 @@ final options = AuthOptions<MyRequestContext>(
   providers: [CredentialsProvider()],
   store: authStore,
   storeMode: AuthStoreMode.durable,
+  productionBoundary: productionBoundary,
   plugins: [usernamePlugin],
 );
 ```
@@ -379,6 +404,7 @@ final organizations = OrganizationPlugin<MyRequestContext>(
 final options = AuthOptions<MyRequestContext>(
   providers: providers,
   store: myAuthStore,
+  productionBoundary: productionBoundary,
   plugins: [organizations],
 );
 ```
@@ -436,6 +462,7 @@ final apiKeys = AuthApiKeyPlugin<MyRequestContext>(
 final options = AuthOptions<MyRequestContext>(
   store: myAuthStore,
   providers: providers,
+  productionBoundary: productionBoundary,
   plugins: [apiKeys],
 );
 ```
@@ -474,10 +501,12 @@ must persist only encoded password hashes and apply their own database
 transaction policy around registration and login. Providers that supply custom
 `authorize` or `register` callbacks own validation for those callback inputs.
 
-`AuthOptions` defaults to durable storage and rejects an unannotated
+`AuthOptions` defaults to production posture and rejects an unannotated
 `InMemoryAuthStore`. If ephemeral storage is intentional for a test or local
-demo, set `storeMode: AuthStoreMode.ephemeral`. Production adapters should
-enable their durable-store boot validation.
+demo, set `storeMode: AuthStoreMode.ephemeral`; that selects coherent local
+cookie, browser, and account defaults. Production construction and runtime
+boot validate durable persistence, the HTTPS/proxy boundary, browser policy,
+cookies, and JWT secret strength automatically.
 
 Authentication rate limits are configured as a typed policy on
 `AuthOptions.rateLimiter`. The policy receives the operation, provider ID,
@@ -489,6 +518,7 @@ policy before its built-in auth operations and custom callback providers:
 final options = AuthOptions<MyRequestContext>(
   providers: providers,
   store: myStore,
+  productionBoundary: productionBoundary,
   rateLimiter: MyAuthRateLimiter(),
 );
 ```
@@ -503,9 +533,10 @@ typed-client, and namespaced rate-limit descriptors. The registry rejects
 duplicate plugin IDs and endpoint method/path pairs, then freezes the plugin
 topology after runtime boot.
 
-For Routed applications, use `routed_auth`: initialize `AuthServiceProvider`
-alongside `Engine.defaultProviders`, then add the adapter's auth middleware and
-routes. `server_auth` itself never registers framework providers.
+For Routed applications, use `routed_auth` and a typed `AuthDeployment`; its
+service provider, option binding, and engine configuration keep the runtime
+posture and proxy boundary together. `server_auth` itself never registers
+framework providers.
 
 ## Using with Shelf
 

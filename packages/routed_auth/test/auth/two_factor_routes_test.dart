@@ -260,6 +260,7 @@ void main() {
       AuthOptions<EngineContext>(
         store: store,
         storeMode: AuthStoreMode.ephemeral,
+        cookiePolicy: AuthCookiePolicy.production,
         providers: [CredentialsProvider()],
         passwordHasher: _testHasher(),
         plugins: [feature],

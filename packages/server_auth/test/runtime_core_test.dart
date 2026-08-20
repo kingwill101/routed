@@ -503,17 +503,14 @@ void main() {
   });
 
   group('AuthRuntime', () {
-    test('can reject ephemeral storage for production boot', () {
+    test('local options reject production boot explicitly', () {
       final options = AuthOptions<String>(
         providers: const <AuthProvider>[],
         store: InMemoryAuthStore(),
         storeMode: AuthStoreMode.ephemeral,
       );
 
-      expect(
-        () => AuthRuntime<String>(options: options, requireDurableStore: true),
-        throwsStateError,
-      );
+      expect(options.requireProductionBoot, throwsStateError);
     });
 
     test('configures plugins in order against one shared store', () {
@@ -547,13 +544,10 @@ void main() {
       final contract = endpoint as AuthEndpointContractDescriptor;
 
       expect(runtime.registry.pluginIdForEndpoint(endpoint.id), 'anonymous');
-      expect(
-        contract.requestCodec.schema,
-        <String, Object?>{
-          'type': 'object',
-          'additionalProperties': false,
-        },
-      );
+      expect(contract.requestCodec.schema, <String, Object?>{
+        'type': 'object',
+        'additionalProperties': false,
+      });
       expect(contract.requestCodec.contentType, 'application/json');
       expect(contract.requestCodec.required, isFalse);
 

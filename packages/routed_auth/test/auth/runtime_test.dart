@@ -17,22 +17,52 @@ void main() {
     expect(manager.store, same(runtime.store));
   });
 
-  test(
-    'AuthServiceProvider can reject ephemeral storage during boot',
-    () async {
-      final options = AuthOptions<EngineContext>(
-        store: InMemoryAuthStore(),
-        storeMode: AuthStoreMode.ephemeral,
-        providers: const <AuthProvider>[],
-      );
-      final engine = testEngine(
-        providers: [AuthServiceProvider(requireDurableStore: true)],
-      );
-      engine.container.instance<AuthOptions<EngineContext>>(options);
+  test('AuthServiceProvider accepts an explicit local posture', () async {
+    final options = AuthOptions<EngineContext>(
+      store: InMemoryAuthStore(),
+      storeMode: AuthStoreMode.ephemeral,
+      providers: const <AuthProvider>[],
+    );
+    final engine = testEngine(providers: [AuthServiceProvider()]);
+    addTearDown(engine.close);
+    engine.container.instance<AuthOptions<EngineContext>>(options);
 
-      expect(engine.initialize, throwsStateError);
-    },
-  );
+    await engine.initialize();
+
+    expect(options.runtimeMode, AuthRuntimeMode.localDevelopment);
+    expect(engine.container.has<AuthManager>(), isTrue);
+  });
+
+  test('production options require the typed Routed deployment path', () async {
+    final deployment =
+        AuthDeploymentPresets.secureSessionProduction<EngineContext>(
+          store: _OpaqueDurableStore(),
+          providers: const <AuthProvider>[],
+          boundary: AuthProductionBoundary(
+            trustedOrigins: [Uri.parse('https://app.example.com')],
+            proxyPolicy: const AuthProxyPolicy.direct(),
+          ),
+          lifecycleDelivery:
+              const AuthLifecycleDelivery<EngineContext>.disabled(),
+          rateLimiter: _AllowAllRateLimiter(),
+          requireVerifiedEmail: true,
+        );
+    final engine = testEngine(providers: [AuthServiceProvider()]);
+    addTearDown(engine.close);
+    engine.container.instance<AuthOptions<EngineContext>>(deployment.options);
+
+    await expectLater(
+      engine.initialize(),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('typed AuthDeployment'),
+        ),
+      ),
+    );
+    expect(engine.container.has<AuthManager>(), isFalse);
+  });
 
   test('AuthRuntime rejects callback-backed test stores', () {
     final options = AuthOptions<EngineContext>(
@@ -45,9 +75,19 @@ void main() {
       () => AuthRuntime<EngineContext>(
         options: options,
         store: CallbackAuthStore(),
-        requireDurableStore: true,
       ),
       throwsArgumentError,
     );
   });
+}
+
+final class _OpaqueDurableStore implements AuthStore {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _AllowAllRateLimiter implements AuthRateLimiter<EngineContext> {
+  @override
+  AuthRateLimitDecision check(AuthRateLimitRequest<EngineContext> request) =>
+      const AuthRateLimitDecision.allow();
 }

@@ -8,7 +8,6 @@ extension RoutedAuthDeploymentBinding on AuthDeployment<EngineContext> {
   /// Creates the auth provider configured by this deployment.
   AuthServiceProvider serviceProvider() => createDeploymentAuthServiceProvider(
     configuration: configuration,
-    requireDurableStore: requiresDurableStore,
     options: options,
   );
 

@@ -1,5 +1,11 @@
 ## 0.2.0 - 2026-08-20
 
+- Make auth runtime posture fail closed: durable options now require an exact
+  HTTPS origin/proxy boundary, secure browser and cookie policy, production
+  account defaults, and algorithm-sized JWT secrets, while ephemeral local
+  development selects coherent development defaults explicitly.
+- Revalidate production posture in `AuthRuntime` and keep deployment proxy
+  policy identical to the boundary carried by `AuthOptions`.
 - Replace callback-based hard deletion with immutable, backend-bound plugin
   plans executed alongside core deletion by one storage coordinator. Freeze
   the deletion topology, reject incomplete or foreign-domain plans before

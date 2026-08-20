@@ -65,11 +65,13 @@ proxy choice to Routed, `serviceProvider()` carries the typed auth
 configuration, and `bindTo()` installs the matching runtime options before
 provider boot.
 
-For a slim composition, import `routed_auth` directly and add
-`AuthServiceProvider()` after `Engine.defaultProviders`. Add typed provider
-instances to `AuthOptions.providers`; no auth provider registry or
-configuration manifest is required. Server plugins can be composed directly
-on the same options object:
+For a slim local-development composition, direct `AuthOptions` must select
+`AuthStoreMode.ephemeral`; `AuthServiceProvider()` then validates that explicit
+posture at boot. Production options intentionally cannot boot through a bare
+service provider because that would leave Routed's proxy handling detached
+from the auth boundary. Use a typed deployment's `serviceProvider()`,
+`bindTo()`, and `engineConfig()` together. No configuration manifest or auth
+provider registry is required. Server plugins remain ordinary typed inputs:
 
 ```dart
 import 'package:routed_auth/routed_auth.dart';

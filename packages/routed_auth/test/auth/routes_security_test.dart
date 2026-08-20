@@ -496,6 +496,7 @@ void main() {
         AuthOptions<EngineContext>(
           store: InMemoryAuthStore(),
           storeMode: AuthStoreMode.ephemeral,
+          cookiePolicy: AuthCookiePolicy.production,
           providers: [
             OAuthProvider<Map<String, dynamic>>(
               id: 'oauth',

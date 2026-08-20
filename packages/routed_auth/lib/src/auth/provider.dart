@@ -16,6 +16,8 @@ import 'package:server_auth/server_auth.dart'
         resolveConfiguredGateCallback,
         resolveConfiguredGuard,
         AuthStore,
+        AuthRuntimeMode,
+        AuthProxyPolicy,
         JwtVerifier,
         AuthRuntime,
         resolveAuthOptions,
@@ -47,11 +49,9 @@ import 'package:routed_core/src/router/types.dart';
 /// deployment extension is the user-facing entry point.
 AuthServiceProvider createDeploymentAuthServiceProvider({
   required AuthConfig configuration,
-  required bool requireDurableStore,
   required AuthOptions<EngineContext> options,
 }) => AuthServiceProvider._deployment(
   configuration: configuration,
-  requireDurableStore: requireDurableStore,
   expectedOptions: options,
 );
 
@@ -61,17 +61,13 @@ AuthServiceProvider createDeploymentAuthServiceProvider({
 /// `AuthManager` when `AuthOptions` is available in the container.
 class AuthServiceProvider extends ServiceProvider
     with ProvidesTypedConfiguration<AuthConfig> {
-  AuthServiceProvider({
-    http.Client? httpClient,
-    AuthConfig? configuration,
-    this.requireDurableStore = false,
-  }) : _httpClient = httpClient ?? http.Client(),
-       configuration = configuration ?? AuthConfig.defaults(),
-       _expectedDeploymentOptions = null;
+  AuthServiceProvider({http.Client? httpClient, AuthConfig? configuration})
+    : _httpClient = httpClient ?? http.Client(),
+      configuration = configuration ?? AuthConfig.defaults(),
+      _expectedDeploymentOptions = null;
 
   AuthServiceProvider._deployment({
     required this.configuration,
-    required this.requireDurableStore,
     required AuthOptions<EngineContext> expectedOptions,
   }) : _httpClient = http.Client(),
        _expectedDeploymentOptions = expectedOptions;
@@ -80,10 +76,6 @@ class AuthServiceProvider extends ServiceProvider
   final AuthConfig configuration;
 
   final http.Client _httpClient;
-
-  /// Rejects intentionally ephemeral auth storage during provider boot.
-  /// Enable this for production deployments.
-  final bool requireDurableStore;
 
   /// Options that a Routed deployment expects [Container] to contain.
   ///
@@ -243,11 +235,36 @@ class AuthServiceProvider extends ServiceProvider
       return;
     }
 
+    final options = container.get<AuthOptions<EngineContext>>();
+    if (options.runtimeMode == AuthRuntimeMode.production) {
+      options.requireProductionBoot();
+      if (_expectedDeploymentOptions == null) {
+        throw StateError(
+          'Production AuthOptions must be booted through a typed '
+          'AuthDeployment. Use deployment.serviceProvider(), '
+          'deployment.bindTo(engine), and deployment.engineConfig().',
+        );
+      }
+      if (!container.has<Engine>()) {
+        throw StateError(
+          'Production Routed auth requires the live Engine configuration.',
+        );
+      }
+      _requireProductionEngineBoundary(
+        container.get<Engine>(),
+        options.productionBoundary!.proxyPolicy,
+      );
+    }
     if (container.has<AuthManager>() && !_ownsAuthManager) {
+      final manager = container.get<AuthManager>();
+      if (!identical(manager.options, options)) {
+        throw StateError(
+          'The bound AuthManager and AuthOptions use different runtime '
+          'postures. Bind one manager created from the same options.',
+        );
+      }
       return;
     }
-
-    final options = container.get<AuthOptions<EngineContext>>();
     final store = container.has<AuthStore>()
         ? container.get<AuthStore>()
         : options.store;
@@ -291,13 +308,12 @@ class AuthServiceProvider extends ServiceProvider
   ) {
     if (container.has<AuthRuntime<EngineContext>>()) {
       final runtime = container.get<AuthRuntime<EngineContext>>();
-      if (requireDurableStore) runtime.requireDurableStoreOrThrow();
+      if (options.runtimeMode == AuthRuntimeMode.production) {
+        runtime.requireDurableStoreOrThrow();
+      }
       return runtime;
     }
-    final runtime = AuthRuntime<EngineContext>(
-      options: options,
-      requireDurableStore: requireDurableStore,
-    );
+    final runtime = AuthRuntime<EngineContext>(options: options);
     container.instance<AuthRuntime<EngineContext>>(runtime);
     return runtime;
   }
@@ -405,4 +421,32 @@ class AuthServiceProvider extends ServiceProvider
   }
 
   FutureOr<Response> _passthrough(EngineContext ctx, Next next) => next();
+}
+
+void _requireProductionEngineBoundary(Engine engine, AuthProxyPolicy policy) {
+  final config = engine.config;
+  final features = config.features;
+  final matches =
+      features.enableProxySupport == policy.trustsForwardedHeaders &&
+      features.enableTrustedPlatform ==
+          (policy.trustsForwardedHeaders && policy.platformHeader != null) &&
+      config.forwardedByClientIP ==
+          (policy.trustsForwardedHeaders && policy.forwardClientIp) &&
+      _sameStrings(config.remoteIPHeaders, policy.headers) &&
+      _sameStrings(config.trustedProxies, policy.proxies) &&
+      config.trustedPlatform == policy.platformHeader;
+  if (!matches) {
+    throw StateError(
+      'Routed EngineConfig does not match the production auth proxy '
+      'boundary. Construct the engine with deployment.engineConfig().',
+    );
+  }
+}
+
+bool _sameStrings(List<String> left, List<String> right) {
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index += 1) {
+    if (left[index] != right[index]) return false;
+  }
+  return true;
 }

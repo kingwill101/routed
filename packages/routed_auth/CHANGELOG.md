@@ -1,5 +1,9 @@
 ## 0.2.0 - 2026-08-20
 
+- Derive Routed auth runtime durability from typed `AuthOptions` posture,
+  removing the independently configurable provider durability flag, and
+  require production options to boot through one typed deployment so proxy,
+  browser, cookie, and store guarantees cannot drift apart.
 - Add a public deterministic external-provider runtime conformance fixture for
   OAuth/OIDC and custom callback providers, covering state, PKCE, nonce,
   browser binding, replay, account linking, redirect safety, bounded failures,

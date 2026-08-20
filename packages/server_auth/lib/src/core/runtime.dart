@@ -1,5 +1,6 @@
 import 'plugin.dart';
 import 'options.dart';
+import 'runtime_posture.dart';
 import 'store.dart';
 
 /// Composed authentication runtime for one application.
@@ -12,7 +13,6 @@ class AuthRuntime<TContext> {
     required this.options,
     AuthStore? store,
     Iterable<AuthServerPlugin<TContext>> plugins = const [],
-    bool requireDurableStore = false,
   }) : store = store ?? options.store,
        plugins = List<AuthServerPlugin<TContext>>.unmodifiable([
          ...options.plugins,
@@ -23,7 +23,10 @@ class AuthRuntime<TContext> {
         'CallbackAuthStore is a test utility and cannot back AuthRuntime.',
       );
     }
-    if (requireDurableStore) requireDurableStoreOrThrow();
+    if (options.runtimeMode == AuthRuntimeMode.production) {
+      options.requireProductionBoot();
+      requireDurableStoreOrThrow();
+    }
     registry = AuthServerPluginRegistry<TContext>(
       store: this.store,
       passwordHasher: options.passwordHasher,

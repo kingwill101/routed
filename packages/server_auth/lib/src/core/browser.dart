@@ -11,6 +11,22 @@ final class AuthBrowserProtectionOptions {
     this.requireContentType = false,
   });
 
+  /// Strict browser policy for a production auth runtime.
+  AuthBrowserProtectionOptions.production({
+    required Iterable<String> trustedOrigins,
+  }) : enabled = true,
+       allowedOrigins = const <String>[],
+       trustedOrigins = List<String>.unmodifiable(trustedOrigins),
+       requireOrigin = true,
+       enforceFetchMetadata = true,
+       enforceReferrer = true,
+       allowedMethods = const {'GET', 'POST', 'PUT', 'DELETE', 'PATCH'},
+       requireContentType = true;
+
+  /// Relaxed browser policy for explicitly local development.
+  static const AuthBrowserProtectionOptions localDevelopment =
+      AuthBrowserProtectionOptions();
+
   /// Whether adapters should apply browser-request checks.
   final bool enabled;
 
