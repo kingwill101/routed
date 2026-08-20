@@ -212,13 +212,17 @@ void main() {
                     'redirect_uri': 'https://app.example.com/callback',
                     'response_type': 'code',
                     'scope': 'openid profile',
+                    'state': 'client-state',
                   },
                 )
-                as Map<String, dynamic>;
-        final code = response['code'];
+                as AuthEndpointRedirect;
+        expect(result.method, AuthOperationMethod.get);
+        expect(response.location.host, 'app.example.com');
+        expect(response.location.queryParameters['state'], 'client-state');
+        final code = response.location.queryParameters['code'];
         expect(code, isNotNull);
 
-        final consumed = await codeStore.consume(code);
+        final consumed = await codeStore.consume(code!);
         expect(consumed?.scope, equals('openid profile'));
       },
     );
@@ -552,7 +556,7 @@ void main() {
       );
       await tokenStore.save(
         OAuthAccessToken(
-          token: 'access-token',
+          tokenHash: hashOpaqueToken('access-token'),
           clientId: 'client-1',
           userId: 'user-1',
           scope: 'openid profile email',
@@ -612,7 +616,7 @@ void main() {
       final expiresAt = DateTime.now().toUtc().add(const Duration(hours: 1));
       await tokenStore.save(
         OAuthAccessToken(
-          token: 'profile-token',
+          tokenHash: hashOpaqueToken('profile-token'),
           clientId: 'client-1',
           userId: 'user-1',
           scope: 'profile',
@@ -621,7 +625,7 @@ void main() {
       );
       await tokenStore.save(
         OAuthAccessToken(
-          token: 'email-token',
+          tokenHash: hashOpaqueToken('email-token'),
           clientId: 'client-1',
           userId: 'user-1',
           scope: 'email',

@@ -11,7 +11,7 @@ import 'oauth_client_store.dart';
 import 'oauth_provider_models.dart';
 import 'rate_limit.dart';
 import 'store.dart';
-import 'tokens.dart' show secureRandomToken;
+import 'tokens.dart' show hashOpaqueToken, secureRandomToken;
 
 const String authOAuthProviderModePluginId = 'oauth_provider_mode';
 
@@ -35,7 +35,8 @@ class OAuthProviderModePlugin<TContext>
         AuthClientOperationContributor,
         AuthRateLimitContributor,
         AuthUserDataDeletionContributor,
-        AuthUserAccessRevocationContributor {
+        AuthUserAccessRevocationContributor,
+        AuthOAuthTokenEndpointHost<TContext> {
   OAuthProviderModePlugin({
     required this.clientStore,
     required this.authorizationCodeStore,
@@ -57,6 +58,7 @@ class OAuthProviderModePlugin<TContext>
 
   /// Core auth store for user lookups.
   late AuthStore _store;
+  final Map<String, AuthOAuthTokenGrantHandler<TContext>> _grantHandlers = {};
 
   @override
   String get userDataNamespace => authOAuthProviderModePluginId;
@@ -85,6 +87,18 @@ class OAuthProviderModePlugin<TContext>
     _store = context.store;
   }
 
+  @override
+  void registerOAuthTokenGrant(
+    String grantType,
+    AuthOAuthTokenGrantHandler<TContext> handler,
+  ) {
+    final normalized = grantType.trim();
+    if (normalized.isEmpty || _grantHandlers.containsKey(normalized)) {
+      throw StateError('OAuth token grant "$grantType" is already registered.');
+    }
+    _grantHandlers[normalized] = handler;
+  }
+
   Map<String, String> get _paths => {
     'oauth_provider.authorize': options.authorizationEndpoint,
     'oauth_provider.token': options.tokenEndpoint,
@@ -100,6 +114,7 @@ class OAuthProviderModePlugin<TContext>
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints => _paths.keys
       .map((operationId) {
         final isRead =
+            operationId.endsWith('.authorize') ||
             operationId.endsWith('.list') ||
             operationId.endsWith('.jwks') ||
             operationId.endsWith('.userinfo');
@@ -238,12 +253,15 @@ class OAuthProviderModePlugin<TContext>
         AuthEntityDescriptor(
           id: 'oauth_access_token',
           fields: [
-            AuthFieldDescriptor(name: 'token', kind: 'id'),
+            AuthFieldDescriptor(name: 'tokenHash', kind: 'secret_digest'),
             AuthFieldDescriptor(name: 'clientId', kind: 'id'),
             AuthFieldDescriptor(name: 'userId', kind: 'id'),
             AuthFieldDescriptor(name: 'scope', kind: 'string'),
             AuthFieldDescriptor(name: 'expiresAt', kind: 'datetime'),
-            AuthFieldDescriptor(name: 'refreshToken', kind: 'nullable_string'),
+            AuthFieldDescriptor(
+              name: 'refreshTokenHash',
+              kind: 'nullable_secret_digest',
+            ),
             AuthFieldDescriptor(name: 'issuedAt', kind: 'datetime'),
           ],
           indexes: [
@@ -293,7 +311,7 @@ class OAuthProviderModePlugin<TContext>
     throw AuthFlowException('operation_not_found');
   }
 
-  Future<Map<String, dynamic>> _handleAuthorize(
+  Future<AuthEndpointRedirect> _handleAuthorize(
     AuthOperationInvocation<TContext> invocation,
     Map<String, dynamic> input,
   ) async {
@@ -361,9 +379,16 @@ class OAuthProviderModePlugin<TContext>
 
     await authorizationCodeStore.save(authCode);
 
-    final response = <String, dynamic>{'code': code};
-    if (state != null) response['state'] = state;
-    return response;
+    final target = Uri.parse(redirectUri);
+    return AuthEndpointRedirect(
+      location: target.replace(
+        queryParameters: <String, String>{
+          ...target.queryParameters,
+          'code': code,
+          'state': ?state,
+        },
+      ),
+    );
   }
 
   Future<Map<String, dynamic>> _handleToken(
@@ -376,6 +401,14 @@ class OAuthProviderModePlugin<TContext>
 
     if (grantType == null || grantType.isEmpty) {
       throw AuthFlowException('invalid_request');
+    }
+    final contributed = _grantHandlers[grantType];
+    if (contributed != null) {
+      final result = await contributed(invocation, input);
+      if (result is! Map<String, dynamic>) {
+        throw StateError('OAuth token grant returned a non-object response.');
+      }
+      return result;
     }
     if (!options.supportedGrantTypes.contains(grantType)) {
       throw AuthFlowException('unsupported_grant_type');
@@ -553,30 +586,29 @@ class OAuthProviderModePlugin<TContext>
 
     final rotating = options.allowRefreshTokenRotation;
     final now = DateTime.now().toUtc();
-    final nextRefreshToken = rotating
-        ? secureRandomToken()
-        : originalToken.refreshToken!;
+    final nextAccessToken = secureRandomToken();
+    final nextRefreshToken = rotating ? secureRandomToken() : refreshToken;
     final replacement = OAuthAccessToken(
-      token: secureRandomToken(),
+      tokenHash: hashOpaqueToken(nextAccessToken),
       clientId: clientId,
       userId: originalToken.userId,
       scope: originalToken.scope,
       expiresAt: now.add(options.accessTokenLifetime),
-      refreshToken: nextRefreshToken,
+      refreshTokenHash: hashOpaqueToken(nextRefreshToken),
       refreshTokenExpiresAt: originalToken.refreshTokenExpiresAt,
       refreshTokenUses: originalToken.refreshTokenUses + 1,
       issuedAt: now,
     );
     final consumed = await accessTokenStore.rotateRefreshToken(
       refreshToken: refreshToken,
-      expectedToken: originalToken.token,
+      expectedTokenHash: originalToken.tokenHash,
       replacement: replacement,
       maxUses: maxUses,
     );
     if (consumed == null) throw AuthFlowException('invalid_grant');
 
     return {
-      'access_token': replacement.token,
+      'access_token': nextAccessToken,
       'token_type': 'Bearer',
       'expires_in': options.accessTokenLifetime.inSeconds,
       'refresh_token': nextRefreshToken,
@@ -813,12 +845,14 @@ class OAuthProviderModePlugin<TContext>
         issueRefreshToken && options.refreshTokenLifetime > Duration.zero;
 
     final accessToken = OAuthAccessToken(
-      token: accessTokenValue,
+      tokenHash: hashOpaqueToken(accessTokenValue),
       clientId: clientId,
       userId: userId,
       scope: scope,
       expiresAt: now.add(options.accessTokenLifetime),
-      refreshToken: hasRefreshToken ? refreshTokenValue : null,
+      refreshTokenHash: hasRefreshToken
+          ? hashOpaqueToken(refreshTokenValue)
+          : null,
       // The refresh token outlives the access token; its own expiry is tracked
       // separately so refresh grants remain valid after the access token has
       // expired.

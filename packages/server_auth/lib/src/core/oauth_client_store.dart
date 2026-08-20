@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'oauth_provider_models.dart';
-import 'tokens.dart' show constantTimeStringEquals;
+import 'tokens.dart' show constantTimeStringEquals, hashOpaqueToken;
 
 /// Persistence contract for OAuth clients.
 abstract interface class OAuthClientStore {
@@ -50,11 +50,11 @@ abstract interface class OAuthAccessTokenStore {
   FutureOr<OAuthAccessToken?> findByRefreshToken(String refreshToken);
 
   /// Atomically validates and consumes [refreshToken], replacing its token
-  /// record with [replacement]. The compare against [expectedToken] prevents
+  /// record with [replacement]. The compare against [expectedTokenHash] prevents
   /// two concurrent refreshes from succeeding from the same snapshot.
   FutureOr<OAuthAccessToken?> rotateRefreshToken({
     required String refreshToken,
-    required String expectedToken,
+    required String expectedTokenHash,
     required OAuthAccessToken replacement,
     int? maxUses,
   });
@@ -156,19 +156,21 @@ class InMemoryOAuthAccessTokenStore implements OAuthAccessTokenStore {
 
   @override
   Future<void> save(OAuthAccessToken token) async {
-    _tokens[token.token] = token;
+    _tokens[token.tokenHash] = token;
   }
 
   @override
   Future<OAuthAccessToken?> findByToken(String token) async {
-    return _tokens[token];
+    if (token.trim().isEmpty) return null;
+    return _tokens[hashOpaqueToken(token)];
   }
 
   @override
   Future<OAuthAccessToken?> findByRefreshToken(String refreshToken) async {
     if (refreshToken.trim().isEmpty) return null;
+    final refreshTokenHash = hashOpaqueToken(refreshToken);
     for (final token in _tokens.values) {
-      if (token.refreshToken == refreshToken) {
+      if (token.refreshTokenHash == refreshTokenHash) {
         return token;
       }
     }
@@ -178,16 +180,16 @@ class InMemoryOAuthAccessTokenStore implements OAuthAccessTokenStore {
   @override
   Future<OAuthAccessToken?> rotateRefreshToken({
     required String refreshToken,
-    required String expectedToken,
+    required String expectedTokenHash,
     required OAuthAccessToken replacement,
     int? maxUses,
   }) async {
-    if (refreshToken.trim().isEmpty || expectedToken.trim().isEmpty) {
+    if (refreshToken.trim().isEmpty || expectedTokenHash.trim().isEmpty) {
       return null;
     }
-    final current = _tokens[expectedToken];
+    final current = _tokens[expectedTokenHash];
     if (current == null ||
-        current.refreshToken != refreshToken ||
+        current.refreshTokenHash != hashOpaqueToken(refreshToken) ||
         !current.isRefreshTokenValid() ||
         (maxUses != null &&
             (maxUses <= 0 || current.refreshTokenUses >= maxUses))) {
@@ -198,18 +200,18 @@ class InMemoryOAuthAccessTokenStore implements OAuthAccessTokenStore {
         replacement.refreshTokenUses != current.refreshTokenUses + 1) {
       throw ArgumentError('Refresh-token replacement changed its identity.');
     }
-    if (replacement.token != expectedToken &&
-        _tokens.containsKey(replacement.token)) {
+    if (replacement.tokenHash != expectedTokenHash &&
+        _tokens.containsKey(replacement.tokenHash)) {
       throw StateError('OAuth access token already exists');
     }
-    _tokens.remove(expectedToken);
-    _tokens[replacement.token] = replacement;
+    _tokens.remove(expectedTokenHash);
+    _tokens[replacement.tokenHash] = replacement;
     return current;
   }
 
   @override
   Future<void> revoke(String token) async {
-    _tokens.remove(token);
+    if (token.trim().isNotEmpty) _tokens.remove(hashOpaqueToken(token));
   }
 
   @override

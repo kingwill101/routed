@@ -940,19 +940,22 @@ void main() {
 
     test('OAuthAccessTokenStore findByRefreshToken', () async {
       final token = OAuthAccessToken(
-        token: 'access-123',
+        tokenHash: hashOpaqueToken('access-123'),
         clientId: 'c1',
         userId: 'u1',
         scope: 'openid',
         expiresAt: DateTime.now().toUtc().add(const Duration(hours: 1)),
-        refreshToken: 'refresh-456',
+        refreshTokenHash: hashOpaqueToken('refresh-456'),
         issuedAt: DateTime.now().toUtc(),
       );
       await tokenStore.save(token);
 
+      expect(token.tokenHash, isNot('access-123'));
+      expect(token.refreshTokenHash, isNot('refresh-456'));
+
       final found = await tokenStore.findByRefreshToken('refresh-456');
       expect(found, isNotNull);
-      expect(found!.token, equals('access-123'));
+      expect(found!.tokenHash, equals(hashOpaqueToken('access-123')));
 
       final notFound = await tokenStore.findByRefreshToken('bad-refresh');
       expect(notFound, isNull);
@@ -961,7 +964,7 @@ void main() {
     test('OAuthAccessTokenStore revokes all for user', () async {
       await tokenStore.save(
         OAuthAccessToken(
-          token: 't1',
+          tokenHash: hashOpaqueToken('t1'),
           clientId: 'c1',
           userId: 'u1',
           scope: '',
@@ -970,7 +973,7 @@ void main() {
       );
       await tokenStore.save(
         OAuthAccessToken(
-          token: 't2',
+          tokenHash: hashOpaqueToken('t2'),
           clientId: 'c1',
           userId: 'u2',
           scope: '',

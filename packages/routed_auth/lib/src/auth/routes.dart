@@ -153,7 +153,7 @@ class AuthRoutes {
         .toList(growable: false);
     for (final endpoint in rootPluginEndpoints) {
       Future<Response> handler(EngineContext ctx) =>
-          _pluginOperation(ctx, endpoint);
+          _pluginOperation(ctx, endpoint.id);
       if (endpoint.method == AuthOperationMethod.get) {
         router.get(endpoint.path, handler);
       }
@@ -222,7 +222,7 @@ class AuthRoutes {
         }
         for (final endpoint in pluginEndpoints) {
           Future<Response> handler(EngineContext ctx) =>
-              _pluginOperation(ctx, endpoint);
+              _pluginOperation(ctx, endpoint.id);
           switch (endpoint.method) {
             case AuthOperationMethod.get:
               auth.get(endpoint.path, handler);
@@ -238,8 +238,17 @@ class AuthRoutes {
 
   Future<Response> _pluginOperation(
     EngineContext ctx,
-    AuthEndpointDescriptor<EngineContext> endpoint,
+    String endpointId,
   ) async {
+    final liveManager = manager;
+    AuthEndpointDescriptor<EngineContext>? endpoint;
+    for (final candidate in liveManager.runtime.registry.endpoints) {
+      if (candidate.id == endpointId) {
+        endpoint = candidate;
+        break;
+      }
+    }
+    if (endpoint == null) return _errorResponse(ctx, 'operation_not_found');
     Map<String, dynamic> payload;
     try {
       payload = await _payload(ctx);
@@ -251,11 +260,11 @@ class AuthRoutes {
       return _errorResponse(ctx, 'invalid_request');
     }
     if (endpoint.originPolicy == AuthOperationOriginPolicy.browser) {
-      final browserError = manager.validateBrowserRequest(ctx);
+      final browserError = liveManager.validateBrowserRequest(ctx);
       if (browserError != null) return _errorResponse(ctx, browserError);
     }
     if (endpoint.csrfPolicy == AuthOperationCsrfPolicy.required &&
-        !manager.validateCsrf(ctx, payload)) {
+        !liveManager.validateCsrf(ctx, payload)) {
       return ctx.json({
         'error': 'invalid_csrf',
       }, statusCode: HttpStatus.forbidden);
@@ -265,21 +274,21 @@ class AuthRoutes {
       final session =
           endpoint.authentication == AuthOperationAuthentication.none
           ? null
-          : await manager.resolveSession(ctx);
+          : await liveManager.resolveSession(ctx);
       if (endpoint.authentication == AuthOperationAuthentication.session &&
           session == null) {
         throw AuthFlowException('unauthorized');
       }
       final operation = endpoint.rateLimitOperation;
       if (operation != null) {
-        await manager.enforceRateLimitOperation(
+        await liveManager.enforceRateLimitOperation(
           ctx,
           operation: operation,
           identifier: session?.user.id,
         );
       }
       final mutableSession =
-          manager.options.sessionStrategy == AuthSessionStrategy.session &&
+          liveManager.options.sessionStrategy == AuthSessionStrategy.session &&
           ctx.hasSession;
       final activeOrganizationId = mutableSession
           ? ctx.getSession<String>(_activeOrganizationKey)
@@ -288,11 +297,11 @@ class AuthRoutes {
           ? ctx.getSession<String>(_activeTeamKey)
           : null;
       final pluginSessionControl = _RoutedPluginSessionControl(
-        manager,
+        liveManager,
         ctx,
         currentSessionId:
-            manager.options.sessionStrategy == AuthSessionStrategy.session
-            ? await manager.currentStoredSessionId(ctx)
+            liveManager.options.sessionStrategy == AuthSessionStrategy.session
+            ? await liveManager.currentStoredSessionId(ctx)
             : null,
       );
       final response = await endpoint.invoke(

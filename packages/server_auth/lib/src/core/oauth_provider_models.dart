@@ -181,19 +181,19 @@ class OAuthAuthorizationCode {
 /// Represents an issued access token.
 class OAuthAccessToken {
   const OAuthAccessToken({
-    required this.token,
+    required this.tokenHash,
     required this.clientId,
     required this.userId,
     required this.scope,
     required this.expiresAt,
-    this.refreshToken,
+    this.refreshTokenHash,
     this.refreshTokenExpiresAt,
     this.refreshTokenUses = 0,
     this.issuedAt,
   });
 
-  /// The access token (opaque or JWT).
-  final String token;
+  /// Digest of the opaque access token held by the client.
+  final String tokenHash;
 
   /// Client the token was issued to.
   final String clientId;
@@ -207,8 +207,8 @@ class OAuthAccessToken {
   /// When the access token expires.
   final DateTime expiresAt;
 
-  /// Refresh token (optional).
-  final String? refreshToken;
+  /// Digest of the opaque refresh token held by the client (optional).
+  final String? refreshTokenHash;
 
   /// When the refresh token expires (optional). When present, refresh-token
   /// grants validate this timestamp instead of [expiresAt] so a refresh token
@@ -224,23 +224,23 @@ class OAuthAccessToken {
   final DateTime? issuedAt;
 
   OAuthAccessToken copyWith({
-    String? token,
+    String? tokenHash,
     String? clientId,
     String? userId,
     String? scope,
     DateTime? expiresAt,
-    String? refreshToken,
+    String? refreshTokenHash,
     DateTime? refreshTokenExpiresAt,
     int? refreshTokenUses,
     DateTime? issuedAt,
   }) {
     return OAuthAccessToken(
-      token: token ?? this.token,
+      tokenHash: tokenHash ?? this.tokenHash,
       clientId: clientId ?? this.clientId,
       userId: userId ?? this.userId,
       scope: scope ?? this.scope,
       expiresAt: expiresAt ?? this.expiresAt,
-      refreshToken: refreshToken ?? this.refreshToken,
+      refreshTokenHash: refreshTokenHash ?? this.refreshTokenHash,
       refreshTokenExpiresAt:
           refreshTokenExpiresAt ?? this.refreshTokenExpiresAt,
       refreshTokenUses: refreshTokenUses ?? this.refreshTokenUses,
@@ -254,12 +254,12 @@ class OAuthAccessToken {
     return current.isBefore(expiresAt.toUtc());
   }
 
-  /// Whether the refresh token is still valid. A null [refreshToken] is never
+  /// Whether the refresh token is still valid. A null [refreshTokenHash] is never
   /// valid. When [refreshTokenExpiresAt] is null the refresh token does not
   /// expire on its own; callers must additionally check revocation via the
   /// access-token store.
   bool isRefreshTokenValid({DateTime? now}) {
-    if (refreshToken == null) return false;
+    if (refreshTokenHash == null) return false;
     final current = now ?? DateTime.now().toUtc();
     if (refreshTokenExpiresAt == null) return true;
     return current.isBefore(refreshTokenExpiresAt!.toUtc());
