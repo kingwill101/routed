@@ -353,6 +353,7 @@ const List<AuthClientConformanceResponse> _malformed =
     <AuthClientConformanceResponse>[AuthClientConformanceResponse.raw('[]')];
 
 final Map<String, Object?> _sessionJson = <String, Object?>{
+  'status': 'authenticated',
   'user': <String, Object?>{
     'id': 'user-1',
     'email': 'user@example.test',

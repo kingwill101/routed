@@ -51,8 +51,9 @@ typedef AuthInstalledClientResponseVerifier = void Function(Object? value);
 /// Unlike [AuthClientOperationDescriptor], this contract does not trust a
 /// server plugin's declaration as evidence that a client exists. The suite
 /// installs [plugin] through [AuthClientPluginContext], calls [invoke] on the
-/// resulting typed API, captures the real transport request, and feeds the
-/// client both valid and malformed responses.
+/// resulting typed API, validates the real transport request with the server
+/// request codec, checks response JSON against the server schema, and feeds
+/// the client both valid and malformed responses.
 final class AuthInstalledClientOperationContract {
   const AuthInstalledClientOperationContract({
     required this.endpointId,
