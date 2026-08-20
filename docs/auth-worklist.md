@@ -163,6 +163,9 @@ The work is intentionally split between framework-agnostic capabilities in
   paths. `routed_auth_cloudflare` now supplies a typed, migrated D1 `AuthStore`
   and passes local conformance/contention tests; a deployed live-D1 run, broader
   SQL adapters, and a D1-compatible plugin-deletion transaction remain open.
+  The deletion redesign will replace callback-based mutation with immutable,
+  backend-bound plugin deletion plans executed with core deletion by one
+  transaction coordinator; foreign persistence domains must fail closed.
 - [x] Define a stable public adapter conformance suite that can run against
   every persistence implementation through `package:server_auth/testing.dart`.
 - [x] Add a small, typed Dart client contract for browser/mobile auth calls
