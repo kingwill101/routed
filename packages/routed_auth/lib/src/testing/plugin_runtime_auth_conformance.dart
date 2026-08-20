@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io' show SameSite;
+import 'dart:typed_data';
 
+import 'package:http/http.dart' as http;
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_sessions/routed_sessions.dart';
 
@@ -16,6 +18,17 @@ const authPluginRuntimeConformanceOtpEmail = 'otp-runtime@example.test';
 
 /// One-time code delivered by the email-OTP conformance fixture.
 const authPluginRuntimeConformanceOtpCode = '482913';
+
+/// Provider ID resolved through the typed magic-link route placeholder.
+const authPluginRuntimeConformanceMagicLinkProviderId = 'runtime-email';
+
+/// Email used by the magic-link client/runtime conformance flow.
+const authPluginRuntimeConformanceMagicLinkEmail =
+    'magic-link-runtime@example.test';
+
+/// One-time raw token delivered only to the magic-link fixture sender.
+const _authPluginRuntimeConformanceMagicLinkToken =
+    'runtime-magic-link-token-7f8c2b';
 
 /// Username registered by the plugin conformance flow.
 const authPluginRuntimeConformanceUsername = 'runtime.user';
@@ -46,6 +59,11 @@ Engine createAuthPluginRuntimeConformanceEngine({
     ),
   );
   final plugins = <AuthServerPlugin<EngineContext>>[
+    MagicLinkPlugin<EngineContext>(
+      id: authPluginRuntimeConformanceMagicLinkProviderId,
+      tokenGenerator: () => _authPluginRuntimeConformanceMagicLinkToken,
+      sendMagicLink: (_) {},
+    ),
     EmailOtpPlugin<EngineContext>(
       secret: 'runtime-email-otp-rate-limit-key',
       generateOtp: (_) => authPluginRuntimeConformanceOtpCode,
@@ -122,6 +140,7 @@ Future<void> verifyAuthPluginRuntimeConformance({
 }) async {
   final originHeader = origin.toString();
 
+  await _verifyMagicLink(send, origin);
   await _verifyEmailOtp(send, originHeader);
   final usernameSession = await _verifyUsername(send, originHeader);
   final csrf = await _issueCsrf(send, cookie: usernameSession);
@@ -170,6 +189,285 @@ Future<void> verifyAuthWebAuthnPluginRuntimeConformance({
     csrfToken: csrf.token,
     expectedUserEmail: authPluginRuntimeConformanceUsernameEmail,
   );
+}
+
+Future<void> _verifyMagicLink(
+  AuthRuntimeConformanceSend send,
+  Uri origin,
+) async {
+  const magicLinkPlugin = AuthMagicLinkClientPlugin(
+    provider: authPluginRuntimeConformanceMagicLinkProviderId,
+  );
+  const providerPlugin = AuthProviderClientPlugin();
+  const sessionPlugin = AuthSessionClientPlugin();
+  final transport = _AuthRuntimeConformanceHttpClient(send);
+  final client = AuthClient(
+    baseUrl: origin,
+    httpClient: transport,
+    headers: <String, String>{
+      'origin': origin.toString(),
+      'sec-fetch-site': 'same-origin',
+    },
+    plugins: const <AuthClientPlugin<dynamic>>[
+      magicLinkPlugin,
+      providerPlugin,
+      sessionPlugin,
+    ],
+  );
+  final magicLink = client.plugins.use(magicLinkPlugin);
+  final providers = await client.plugins.use(providerPlugin).list();
+  _check(
+    providers.any(
+      (provider) =>
+          provider.id == authPluginRuntimeConformanceMagicLinkProviderId &&
+          provider.type == AuthProviderType.email.name,
+    ),
+    'magic-link.server-plugin',
+    'The installed server plugin was absent from provider metadata.',
+  );
+
+  final sent = await magicLink.send(
+    email: authPluginRuntimeConformanceMagicLinkEmail,
+  );
+  _check(
+    sent.email == authPluginRuntimeConformanceMagicLinkEmail,
+    'magic-link.send',
+    'The typed client did not preserve the requested email.',
+  );
+  _check(
+    transport.requestPaths.contains(
+      '/auth/signin/$authPluginRuntimeConformanceMagicLinkProviderId',
+    ),
+    'magic-link.send.path',
+    'The typed {provider} sign-in route did not resolve to the plugin ID.',
+  );
+  _check(
+    transport.responses.every(
+      (response) =>
+          !response.body.contains(_authPluginRuntimeConformanceMagicLinkToken),
+    ),
+    'magic-link.send.secret',
+    'The raw magic-link token leaked into an HTTP response.',
+  );
+
+  final otherBrowserTransport = _AuthRuntimeConformanceHttpClient(send);
+  final otherBrowserClient = AuthClient(
+    baseUrl: origin,
+    httpClient: otherBrowserTransport,
+    headers: <String, String>{
+      'origin': origin.toString(),
+      'sec-fetch-site': 'same-origin',
+    },
+    plugins: const <AuthClientPlugin<dynamic>>[magicLinkPlugin],
+  );
+  await _expectMagicLinkClientError(
+    () => otherBrowserClient.plugins
+        .use(magicLinkPlugin)
+        .verify(
+          email: authPluginRuntimeConformanceMagicLinkEmail,
+          token: _authPluginRuntimeConformanceMagicLinkToken,
+        ),
+    caseId: 'magic-link.browser-binding',
+    statusCode: 401,
+    error: 'invalid_token',
+  );
+
+  final cookieHeader = await _authClientCookieHeader(client.cookieStore);
+  for (final token in _hostileMagicLinkTokens()) {
+    final response = await send(
+      AuthRuntimeConformanceRequest(
+        method: 'GET',
+        path: _magicLinkCallbackPath(token),
+        headers: <String, List<String>>{
+          'cookie': <String>[cookieHeader],
+        },
+      ),
+    );
+    _expectError(
+      response,
+      caseId: 'magic-link.hostile-token',
+      statusCode: 401,
+      error: 'invalid_token',
+    );
+    _check(
+      !response.body.contains(token) &&
+          !response.body.contains('StateError') &&
+          !response.body.contains('/src/'),
+      'magic-link.hostile-token',
+      'A hostile token reached the public error response.',
+    );
+  }
+
+  final result = await magicLink.verify(
+    email: authPluginRuntimeConformanceMagicLinkEmail,
+    token: _authPluginRuntimeConformanceMagicLinkToken,
+  );
+  _check(
+    result.redirectUrl == null &&
+        result.session?.user.email ==
+            authPluginRuntimeConformanceMagicLinkEmail,
+    'magic-link.verify',
+    'The typed callback client did not return the authenticated session.',
+  );
+  _check(
+    transport.requestPaths.contains(
+      '/auth/callback/$authPluginRuntimeConformanceMagicLinkProviderId',
+    ),
+    'magic-link.verify.path',
+    'The typed {provider} callback route did not resolve to the plugin ID.',
+  );
+  final current = await client.plugins.use(sessionPlugin).current();
+  _check(
+    current?.user.email == authPluginRuntimeConformanceMagicLinkEmail,
+    'magic-link.session',
+    'The host-owned session was not readable through the installed client.',
+  );
+  await _expectMagicLinkClientError(
+    () => magicLink.verify(
+      email: authPluginRuntimeConformanceMagicLinkEmail,
+      token: _authPluginRuntimeConformanceMagicLinkToken,
+    ),
+    caseId: 'magic-link.replay',
+    statusCode: 401,
+    error: 'invalid_token',
+  );
+
+  await magicLink.send(email: authPluginRuntimeConformanceMagicLinkEmail);
+  final concurrentCookie = await _authClientCookieHeader(client.cookieStore);
+  final concurrent = await Future.wait(
+    List<Future<AuthRuntimeConformanceResponse>>.generate(
+      8,
+      (_) => send(
+        AuthRuntimeConformanceRequest(
+          method: 'GET',
+          path: _magicLinkCallbackPath(
+            _authPluginRuntimeConformanceMagicLinkToken,
+          ),
+          headers: <String, List<String>>{
+            'cookie': <String>[concurrentCookie],
+          },
+        ),
+      ),
+    ),
+  );
+  _check(
+    concurrent.where((response) => response.statusCode == 200).length == 1,
+    'magic-link.concurrent-replay',
+    'Concurrent callback attempts did not have exactly one winner.',
+  );
+  for (final response in concurrent.where(
+    (response) => response.statusCode != 200,
+  )) {
+    _expectError(
+      response,
+      caseId: 'magic-link.concurrent-replay',
+      statusCode: 401,
+      error: 'invalid_token',
+    );
+  }
+}
+
+Future<void> _expectMagicLinkClientError(
+  Future<Object?> Function() operation, {
+  required String caseId,
+  required int statusCode,
+  required String error,
+}) async {
+  try {
+    await operation();
+  } on AuthClientException catch (exception) {
+    _check(
+      exception.statusCode == statusCode && exception.code == error,
+      caseId,
+      'Expected $statusCode/$error, received '
+      '${exception.statusCode}/${exception.code}.',
+    );
+    return;
+  }
+  throw AuthRuntimeConformanceFailure(
+    caseId: caseId,
+    message: 'The typed client unexpectedly accepted the request.',
+  );
+}
+
+Future<String> _authClientCookieHeader(AuthClientCookieStore store) async {
+  final cookies = await Future.sync(store.load);
+  final header = cookies
+      .where((cookie) => !cookie.isDeletion)
+      .map((cookie) => '${cookie.name}=${cookie.value}')
+      .join('; ');
+  _check(
+    header.isNotEmpty,
+    'magic-link.cookies',
+    'The typed client did not retain the host session and browser binding.',
+  );
+  return header;
+}
+
+String _magicLinkCallbackPath(String token) {
+  final route = authCallbackProviderRoute.resolve(
+    <AuthRouteParameterKey, String>{
+      authProviderRouteParameter:
+          authPluginRuntimeConformanceMagicLinkProviderId,
+    },
+  );
+  return Uri(
+    path: '/auth$route',
+    queryParameters: <String, String>{
+      'email': authPluginRuntimeConformanceMagicLinkEmail,
+      'token': token,
+    },
+  ).toString();
+}
+
+Iterable<String> _hostileMagicLinkTokens() sync* {
+  yield 'wrong-token';
+  yield '../callback/runtime-email';
+  yield '%0d%0aSet-Cookie:owned=true';
+  yield '\u0000authorization: bearer secret';
+  yield '\u202eelpmaxe.rekcatta//:sptth';
+  yield '<script>alert(1)</script>';
+  for (var index = 0; index < 24; index++) {
+    yield 'invalid-$index-${List<String>.filled(index + 1, 'x').join()}';
+  }
+}
+
+final class _AuthRuntimeConformanceHttpClient extends http.BaseClient {
+  _AuthRuntimeConformanceHttpClient(this._dispatch);
+
+  final AuthRuntimeConformanceSend _dispatch;
+  final List<Uri> requests = <Uri>[];
+  final List<AuthRuntimeConformanceResponse> responses =
+      <AuthRuntimeConformanceResponse>[];
+
+  Iterable<String> get requestPaths => requests.map((request) => request.path);
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    requests.add(request.url);
+    final bytes = await request.finalize().toBytes();
+    final response = await _dispatch(
+      AuthRuntimeConformanceRequest(
+        method: request.method,
+        path: request.url.hasQuery
+            ? '${request.url.path}?${request.url.query}'
+            : request.url.path,
+        headers: request.headers.map(
+          (name, value) => MapEntry(name, <String>[value]),
+        ),
+        body: bytes.isEmpty ? null : utf8.decode(bytes),
+      ),
+    );
+    responses.add(response);
+    return http.StreamedResponse(
+      Stream<Uint8List>.value(Uint8List.fromList(utf8.encode(response.body))),
+      response.statusCode,
+      headers: response.headers.map(
+        (name, values) => MapEntry(name, values.join(', ')),
+      ),
+      request: request,
+    );
+  }
 }
 
 Future<void> _verifyEmailOtp(
