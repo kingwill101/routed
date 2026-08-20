@@ -157,6 +157,46 @@ abstract interface class AuthCredentialStore {
   FutureOr<void> deleteForUser(String userId);
 }
 
+/// Optional credential-store capability for resolving a user's password
+/// credential without assuming that their login identifier is an email.
+abstract interface class AuthCredentialUserLookupStore {
+  FutureOr<AuthPasswordCredential?> findForUser(String userId);
+}
+
+/// Resolves the password credential owned by [userId].
+///
+/// Username-based accounts require an explicit user lookup capability because
+/// their credential identifier cannot be derived from the public user record.
+/// Email lookup remains as a compatibility fallback for older adapters.
+Future<AuthPasswordCredential?> findAuthCredentialForUser(
+  AuthStore store,
+  String userId,
+) async {
+  final normalizedUserId = userId.trim();
+  if (normalizedUserId.isEmpty) return null;
+
+  final credentialStore = store.credentials;
+  if (credentialStore is AuthCredentialUserLookupStore) {
+    final lookup = credentialStore as AuthCredentialUserLookupStore;
+    final credential = await Future.sync(
+      () => lookup.findForUser(normalizedUserId),
+    );
+    if (credential != null) return credential;
+  }
+  if (store is AuthAdminStoreCapabilities) {
+    final capabilities = store as AuthAdminStoreCapabilities;
+    final credential = await Future.sync(
+      () => capabilities.findCredentialForUser(normalizedUserId),
+    );
+    if (credential != null) return credential;
+  }
+
+  final user = await Future.sync(() => store.users.findById(normalizedUserId));
+  final email = user?.email;
+  if (email == null || email.isEmpty) return null;
+  return Future.sync(() => credentialStore.findByIdentifier(email));
+}
+
 /// Persistence contract for external provider accounts.
 abstract interface class AuthAccountStore {
   FutureOr<AuthAccount?> find(String providerId, String providerAccountId);
@@ -576,6 +616,8 @@ class CallbackAuthStore implements AuthStore {
     FutureOr<bool> Function(String userId)? onDeleteUser,
     FutureOr<AuthPasswordCredential?> Function(String identifier)?
     onFindCredential,
+    FutureOr<AuthPasswordCredential?> Function(String userId)?
+    onFindCredentialForUser,
     FutureOr<AuthUser?> Function(
       AuthUser user,
       AuthPasswordCredential credential,
@@ -680,6 +722,7 @@ class CallbackAuthStore implements AuthStore {
        ),
        credentials = _CallbackCredentialStore(
          onFind: onFindCredential,
+         onFindForUser: onFindCredentialForUser,
          onRegister: onRegisterCredential,
          onUpdate: onUpdateCredential,
          onUpdatePasswordForUser: onUpdatePasswordForUser,
@@ -968,7 +1011,8 @@ class _InMemoryUserStore implements AuthUserStore {
   }
 }
 
-class _InMemoryCredentialStore implements AuthCredentialStore {
+class _InMemoryCredentialStore
+    implements AuthCredentialStore, AuthCredentialUserLookupStore {
   AuthUserStore? users;
   final Map<String, AuthPasswordCredential> _credentialsById =
       <String, AuthPasswordCredential>{};
@@ -1012,6 +1056,16 @@ class _InMemoryCredentialStore implements AuthCredentialStore {
     }
     final credentialId = _credentialIdsByIdentifier[identifier];
     return credentialId == null ? null : _credentialsById[credentialId];
+  }
+
+  @override
+  Future<AuthPasswordCredential?> findForUser(String userId) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) return null;
+    for (final credential in _credentialsById.values) {
+      if (credential.userId == normalizedUserId) return credential;
+    }
+    return null;
   }
 
   @override
@@ -1365,9 +1419,11 @@ class _CallbackUserStore implements AuthUserStore {
   FutureOr<bool> delete(String userId) => onDelete?.call(userId) ?? false;
 }
 
-class _CallbackCredentialStore implements AuthCredentialStore {
+class _CallbackCredentialStore
+    implements AuthCredentialStore, AuthCredentialUserLookupStore {
   const _CallbackCredentialStore({
     this.onFind,
+    this.onFindForUser,
     this.onRegister,
     this.onUpdate,
     this.onUpdatePasswordForUser,
@@ -1376,6 +1432,8 @@ class _CallbackCredentialStore implements AuthCredentialStore {
   });
 
   final FutureOr<AuthPasswordCredential?> Function(String identifier)? onFind;
+  final FutureOr<AuthPasswordCredential?> Function(String userId)?
+  onFindForUser;
   final FutureOr<AuthUser?> Function(
     AuthUser user,
     AuthPasswordCredential credential,
@@ -1397,6 +1455,10 @@ class _CallbackCredentialStore implements AuthCredentialStore {
   @override
   FutureOr<AuthPasswordCredential?> findByIdentifier(String identifier) =>
       onFind?.call(identifier);
+
+  @override
+  FutureOr<AuthPasswordCredential?> findForUser(String userId) =>
+      onFindForUser?.call(userId);
 
   @override
   FutureOr<AuthUser?> register(

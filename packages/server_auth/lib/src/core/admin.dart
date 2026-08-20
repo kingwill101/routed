@@ -739,12 +739,18 @@ final class AdminPlugin<TContext>
       userId,
     );
     final data = Map<String, Object?>.from(transformed as Map);
+    final nextBanned = data['banned'] == true;
     final stored = await store.setBan(
       userId,
-      banned: data['banned'] == true,
+      banned: nextBanned,
       reason: data['reason']?.toString(),
       expiresAt: data['expiresAt'] as DateTime?,
     );
+    if (nextBanned) {
+      for (final contributor in _accessRevocationContributors) {
+        await contributor.revokeUserAccess(userId);
+      }
+    }
     return _completeMutation(
       context,
       actor,

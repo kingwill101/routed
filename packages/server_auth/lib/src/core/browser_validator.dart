@@ -119,12 +119,20 @@ class AuthBrowserProtectionValidator {
       return const BrowserValidationResult.valid();
     }
 
+    final normalizedMethod = method.trim().toUpperCase();
+    final methodAllowed = options.allowedMethods.any(
+      (allowed) => allowed.trim().toUpperCase() == normalizedMethod,
+    );
+    if (!methodAllowed) {
+      return const BrowserValidationResult.invalid('method_not_allowed');
+    }
+
     // 1. Validate Origin header
     final originResult = _validateOrigin(headers, requestUri);
     if (!originResult.isValid) return originResult;
 
     // 2. Validate Fetch Metadata
-    final fetchResult = _validateFetchMetadata(headers, originResult);
+    final fetchResult = _validateFetchMetadata(headers, requestUri);
     if (!fetchResult.isValid) return fetchResult;
 
     // 3. Validate Referrer as fallback
@@ -132,7 +140,7 @@ class AuthBrowserProtectionValidator {
     if (!referrerResult.isValid) return referrerResult;
 
     // 4. Validate Content-Type for state-changing requests
-    if (method != 'GET' && method != 'HEAD') {
+    if (normalizedMethod != 'GET' && normalizedMethod != 'HEAD') {
       final contentTypeResult = _validateContentType(headers);
       if (!contentTypeResult.isValid) return contentTypeResult;
     }
@@ -163,7 +171,7 @@ class AuthBrowserProtectionValidator {
   /// Validates Fetch Metadata headers.
   BrowserValidationResult _validateFetchMetadata(
     HttpHeaders headers,
-    BrowserValidationResult previous,
+    Uri requestUri,
   ) {
     if (!options.enforceFetchMetadata) {
       return const BrowserValidationResult.valid();
@@ -181,9 +189,11 @@ class AuthBrowserProtectionValidator {
       return const BrowserValidationResult.valid();
     }
 
-    // Cross-site requests should be rejected unless origin is explicitly allowed
+    // Cross-site requests must establish an explicitly allowed origin. A
+    // missing Origin header cannot be treated as a successful origin check.
     if (fetchSite == 'cross-site') {
-      if (!previous.isValid && previous.errorCode == 'invalid_origin') {
+      final origin = headers.value('origin')?.trim();
+      if (origin == null || !_isOriginAllowed(origin, _originOf(requestUri))) {
         return const BrowserValidationResult.invalid('cross_site_request');
       }
     }
@@ -194,8 +204,11 @@ class AuthBrowserProtectionValidator {
     }
 
     // Cross-origin requests need origin validation - already checked above
-    if (fetchSite == 'cross-origin' && !previous.isValid) {
-      return previous;
+    if (fetchSite == 'cross-origin') {
+      final origin = headers.value('origin')?.trim();
+      if (origin == null || !_isOriginAllowed(origin, _originOf(requestUri))) {
+        return const BrowserValidationResult.invalid('cross_site_request');
+      }
     }
 
     return const BrowserValidationResult.valid();

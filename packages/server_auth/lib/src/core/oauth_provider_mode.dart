@@ -85,12 +85,12 @@ class OAuthProviderModePlugin<TContext>
     _store = context.store;
   }
 
-  static const Map<String, String> _paths = {
-    'oauth_provider.authorize': '/oauth/authorize',
-    'oauth_provider.token': '/oauth/token',
-    'oauth_provider.userinfo': '/oauth/userinfo',
-    'oauth_provider.jwks': '/oauth/jwks',
-    'oauth_provider.introspect': '/oauth/introspect',
+  Map<String, String> get _paths => {
+    'oauth_provider.authorize': options.authorizationEndpoint,
+    'oauth_provider.token': options.tokenEndpoint,
+    'oauth_provider.userinfo': options.userInfoEndpoint,
+    'oauth_provider.jwks': options.jwksEndpoint,
+    'oauth_provider.introspect': options.introspectionEndpoint,
     'oauth_provider.clients.list': '/oauth/clients/list',
     'oauth_provider.clients.create': '/oauth/clients/create',
     'oauth_provider.clients.delete': '/oauth/clients/delete',
@@ -313,7 +313,11 @@ class OAuthProviderModePlugin<TContext>
     if (clientId == null || clientId.isEmpty) {
       throw AuthFlowException('invalid_request');
     }
-    if (responseType != 'code') {
+    if (responseType == null || responseType.isEmpty) {
+      throw AuthFlowException('invalid_request');
+    }
+    if (!options.supportedResponseTypes.contains(responseType) ||
+        responseType != 'code') {
       throw AuthFlowException('unsupported_response_type');
     }
     if (redirectUri == null || redirectUri.isEmpty) {
@@ -372,6 +376,9 @@ class OAuthProviderModePlugin<TContext>
 
     if (grantType == null || grantType.isEmpty) {
       throw AuthFlowException('invalid_request');
+    }
+    if (!options.supportedGrantTypes.contains(grantType)) {
+      throw AuthFlowException('unsupported_grant_type');
     }
 
     // Validate the client and its allowed grant types before dispatching.
@@ -593,6 +600,10 @@ class OAuthProviderModePlugin<TContext>
     if (accessToken == null || !accessToken.isValid()) {
       throw AuthFlowException('invalid_token');
     }
+    final client = await clientStore.findById(accessToken.clientId);
+    if (client == null || !client.enabled) {
+      throw AuthFlowException('invalid_token');
+    }
 
     // Look up the user from the store
     final user = await _activeUser(accessToken.userId);
@@ -600,13 +611,7 @@ class OAuthProviderModePlugin<TContext>
       throw AuthFlowException('invalid_token');
     }
 
-    return {
-      ..._safeUserInfoAttributes(user.attributes),
-      'sub': user.id,
-      'email': user.email,
-      'name': user.name,
-      'picture': user.image,
-    };
+    return _userInfoClaims(user, accessToken.scope);
   }
 
   String? _extractBearerToken(String? authorizationHeader) {
@@ -636,6 +641,10 @@ class OAuthProviderModePlugin<TContext>
 
     final accessToken = await accessTokenStore.findByToken(token);
     if (accessToken == null || !accessToken.isValid()) {
+      return {'active': false};
+    }
+    final tokenClient = await clientStore.findById(accessToken.clientId);
+    if (tokenClient == null || !tokenClient.enabled) {
       return {'active': false};
     }
     if (!accessToken.userId.startsWith('system:') &&
@@ -672,9 +681,24 @@ class OAuthProviderModePlugin<TContext>
     final name = input['name']?.toString();
     final redirectUris = input['redirect_uris'] as List?;
     final scopes = input['scopes'] as List?;
+    final requestedGrantTypes =
+        (input['grant_types'] ?? input['grantTypes']) as List?;
 
     if (name == null || redirectUris == null) {
       throw AuthFlowException('invalid_request');
+    }
+    final grantTypes = requestedGrantTypes
+        ?.map((value) => value.toString())
+        .toSet()
+        .toList(growable: false);
+    final effectiveGrantTypes =
+        grantTypes ??
+        (options.supportedGrantTypes.contains('authorization_code')
+            ? const ['authorization_code']
+            : options.supportedGrantTypes.take(1).toList(growable: false));
+    if (effectiveGrantTypes.isEmpty ||
+        !effectiveGrantTypes.every(options.supportedGrantTypes.contains)) {
+      throw AuthFlowException('invalid_client_metadata');
     }
 
     final clientId = secureRandomToken();
@@ -688,6 +712,7 @@ class OAuthProviderModePlugin<TContext>
       name: name,
       description: input['description']?.toString(),
       redirectUris: redirectUris.map((e) => e.toString()).toList(),
+      grantTypes: effectiveGrantTypes,
       scopes:
           scopes?.map((e) => e.toString()).toList() ??
           ['openid', 'profile', 'email'],
@@ -711,6 +736,7 @@ class OAuthProviderModePlugin<TContext>
       throw AuthFlowException('invalid_request');
     }
 
+    await accessTokenStore.revokeAllForClient(clientId);
     await clientStore.delete(clientId);
     return {'deleted': true};
   }
@@ -741,13 +767,35 @@ class OAuthProviderModePlugin<TContext>
     return user;
   }
 
-  Map<String, dynamic> _safeUserInfoAttributes(
-    Map<String, dynamic> attributes,
-  ) => Map<String, dynamic>.fromEntries(
-    attributes.entries.where(
-      (entry) => !_reservedUserInfoClaims.contains(entry.key),
-    ),
-  );
+  Map<String, dynamic> _userInfoClaims(AuthUser user, String scope) {
+    final grantedScopes = scope
+        .split(' ')
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    final claims = <String, dynamic>{'sub': user.id};
+    if (grantedScopes.contains('email')) {
+      claims['email'] = user.email;
+    }
+    if (grantedScopes.contains('profile')) {
+      claims['name'] = user.name;
+      claims['picture'] = user.image;
+    }
+    for (final scope in grantedScopes) {
+      final allowedClaims = options.userInfoClaimsByScope[scope];
+      if (allowedClaims == null) continue;
+      for (final claim in allowedClaims) {
+        final normalizedClaim = claim.trim();
+        if (normalizedClaim.isEmpty ||
+            _reservedUserInfoClaims.contains(normalizedClaim) ||
+            !user.attributes.containsKey(normalizedClaim)) {
+          continue;
+        }
+        claims[normalizedClaim] = user.attributes[normalizedClaim];
+      }
+    }
+    return claims;
+  }
 
   Future<Map<String, dynamic>> _issueTokens({
     required String clientId,
@@ -878,4 +926,25 @@ typedef OAuthProviderModeFeature<TContext> = OAuthProviderModePlugin<TContext>;
 Map<String, dynamic> _identityMap(Map<String, dynamic> value) => value;
 Object? _identityObject(Object? value) => value;
 
-const Set<String> _reservedUserInfoClaims = {'sub', 'email', 'name', 'picture'};
+const Set<String> _reservedUserInfoClaims = {
+  'sub',
+  'email',
+  'email_verified',
+  'name',
+  'given_name',
+  'family_name',
+  'middle_name',
+  'nickname',
+  'preferred_username',
+  'profile',
+  'picture',
+  'website',
+  'gender',
+  'birthdate',
+  'zoneinfo',
+  'locale',
+  'updated_at',
+  'address',
+  'phone_number',
+  'phone_number_verified',
+};

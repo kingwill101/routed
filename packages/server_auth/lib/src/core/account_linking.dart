@@ -402,9 +402,7 @@ Future<bool> canUnlinkProvider({
   final user = await Future.sync(() => store.users.findById(normalizedUserId));
   if (user == null) return false;
 
-  final hasPassword = await Future.sync(
-    () => store.credentials.findByIdentifier(user.email ?? normalizedUserId),
-  );
+  final hasPassword = await findAuthCredentialForUser(store, normalizedUserId);
 
   if (hasPassword != null && hasPassword.enabled) {
     // User has a password, can unlink any provider

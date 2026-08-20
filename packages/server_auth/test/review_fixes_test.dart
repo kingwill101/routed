@@ -390,8 +390,94 @@ void main() {
     });
   });
 
+  group('P2: OAuth provider options define protocol behavior', () {
+    test('uses configured endpoint paths and allowlists', () async {
+      final clientStore = InMemoryOAuthClientStore();
+      await clientStore.create(
+        OAuthClient(
+          clientId: 'client-1',
+          clientSecretHash: _clientSecretHash('secret'),
+          name: 'Test Client',
+          redirectUris: const ['https://app.example.com/callback'],
+          scopes: const ['openid'],
+          grantTypes: const ['authorization_code', 'client_credentials'],
+        ),
+      );
+      final plugin = OAuthProviderModePlugin<Object>(
+        clientStore: clientStore,
+        authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+        accessTokenStore: InMemoryOAuthAccessTokenStore(),
+        options: const OAuthProviderModeOptions(
+          authorizationEndpoint: '/identity/authorize',
+          tokenEndpoint: '/identity/token',
+          userInfoEndpoint: '/identity/userinfo',
+          jwksEndpoint: '/identity/jwks',
+          introspectionEndpoint: '/identity/introspect',
+          supportedGrantTypes: ['authorization_code'],
+          supportedResponseTypes: [],
+          requirePkce: false,
+        ),
+      )..configure(AuthServerPluginContext<Object>(store: InMemoryAuthStore()));
+      final paths = {
+        for (final endpoint in plugin.endpoints) endpoint.id: endpoint.path,
+      };
+      expect(paths['oauth_provider.authorize'], '/identity/authorize');
+      expect(paths['oauth_provider.token'], '/identity/token');
+      expect(paths['oauth_provider.userinfo'], '/identity/userinfo');
+      expect(paths['oauth_provider.jwks'], '/identity/jwks');
+      expect(paths['oauth_provider.introspect'], '/identity/introspect');
+
+      final tokenEndpoint = plugin.endpoints.firstWhere(
+        (value) => value.id == 'oauth_provider.token',
+      );
+      expect(
+        () => tokenEndpoint.invoke(
+          AuthOperationInvocation<Object>(context: Object(), user: null),
+          {
+            'grant_type': 'client_credentials',
+            'client_id': 'client-1',
+            'client_secret': 'secret',
+          },
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'unsupported_grant_type',
+          ),
+        ),
+      );
+
+      final authorizeEndpoint = plugin.endpoints.firstWhere(
+        (value) => value.id == 'oauth_provider.authorize',
+      );
+      expect(
+        () => authorizeEndpoint.invoke(
+          AuthOperationInvocation<Object>(
+            context: Object(),
+            user: AuthUser(id: 'user-1'),
+          ),
+          {
+            'client_id': 'client-1',
+            'redirect_uri': 'https://app.example.com/callback',
+            'response_type': 'code',
+            'scope': 'openid',
+          },
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'unsupported_response_type',
+          ),
+        ),
+      );
+    });
+  });
+
   group('P1: OAuth bearer identity remains authoritative', () {
     late InMemoryAuthStore store;
+    late InMemoryOAuthClientStore clientStore;
     late InMemoryOAuthAccessTokenStore tokenStore;
     late OAuthProviderModePlugin<Object> plugin;
 
@@ -412,6 +498,16 @@ void main() {
         ),
       );
       tokenStore = InMemoryOAuthAccessTokenStore();
+      clientStore = InMemoryOAuthClientStore();
+      await clientStore.create(
+        OAuthClient(
+          clientId: 'client-1',
+          clientSecretHash: _clientSecretHash('secret'),
+          name: 'Test Client',
+          redirectUris: const ['https://app.example.com/callback'],
+          scopes: const ['openid', 'profile', 'email'],
+        ),
+      );
       await tokenStore.save(
         OAuthAccessToken(
           token: 'access-token',
@@ -422,9 +518,14 @@ void main() {
         ),
       );
       plugin = OAuthProviderModePlugin<Object>(
-        clientStore: InMemoryOAuthClientStore(),
+        clientStore: clientStore,
         authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
         accessTokenStore: tokenStore,
+        options: const OAuthProviderModeOptions(
+          userInfoClaimsByScope: {
+            'profile': ['custom', 'sub', 'email'],
+          },
+        ),
       )..configure(AuthServerPluginContext<Object>(store: store));
     });
 
@@ -464,9 +565,115 @@ void main() {
         ),
       );
     });
+
+    test('UserInfo emits claims only for granted scopes', () async {
+      final expiresAt = DateTime.now().toUtc().add(const Duration(hours: 1));
+      await tokenStore.save(
+        OAuthAccessToken(
+          token: 'profile-token',
+          clientId: 'client-1',
+          userId: 'user-1',
+          scope: 'profile',
+          expiresAt: expiresAt,
+        ),
+      );
+      await tokenStore.save(
+        OAuthAccessToken(
+          token: 'email-token',
+          clientId: 'client-1',
+          userId: 'user-1',
+          scope: 'email',
+          expiresAt: expiresAt,
+        ),
+      );
+      final endpoint = plugin.endpoints.firstWhere(
+        (value) => value.id == 'oauth_provider.userinfo',
+      );
+
+      final profile =
+          await endpoint.invoke(
+                AuthOperationInvocation<Object>(context: Object(), user: null),
+                {'_authorization': 'Bearer profile-token'},
+              )
+              as Map<String, dynamic>;
+      expect(profile['sub'], equals('user-1'));
+      expect(profile['name'], equals('Real Name'));
+      expect(profile['custom'], equals('kept'));
+      expect(profile, isNot(contains('email')));
+
+      final email =
+          await endpoint.invoke(
+                AuthOperationInvocation<Object>(context: Object(), user: null),
+                {'_authorization': 'Bearer email-token'},
+              )
+              as Map<String, dynamic>;
+      expect(email['sub'], equals('user-1'));
+      expect(email['email'], equals('real@example.com'));
+      expect(email, isNot(contains('name')));
+      expect(email, isNot(contains('picture')));
+      expect(email, isNot(contains('custom')));
+    });
+
+    test('deleting a client revokes its tokens immediately', () async {
+      final endpoint = plugin.endpoints.firstWhere(
+        (value) => value.id == 'oauth_provider.clients.delete',
+      );
+      await endpoint.invoke(
+        AuthOperationInvocation<Object>(
+          context: Object(),
+          user: AuthUser(id: 'admin', roles: const ['admin']),
+        ),
+        {'client_id': 'client-1'},
+      );
+
+      expect(await clientStore.findById('client-1'), isNull);
+      expect(await tokenStore.findByToken('access-token'), isNull);
+    });
   });
 
   group('P1: Account lifecycle safety boundaries', () {
+    test('username credentials support deletion and unlink safety', () async {
+      final store = InMemoryAuthStore();
+      final now = DateTime.now().toUtc();
+      await store.credentials.register(
+        AuthUser(id: 'user-1'),
+        AuthPasswordCredential(
+          id: 'credential-1',
+          userId: 'user-1',
+          identifier: 'alice',
+          passwordHash: 'hash:current-password',
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      await store.accounts.link(
+        AuthAccount(
+          providerId: 'github',
+          providerAccountId: 'github-1',
+          userId: 'user-1',
+        ),
+      );
+
+      final initiated = await initiateAccountDeletion(
+        store: store,
+        passwordHasher: const _TestPasswordHasher(),
+        userId: 'user-1',
+        password: 'current-password',
+        generateToken: () => 'delete-token',
+      );
+
+      expect(initiated.confirmationToken, equals('delete-token'));
+      expect(
+        await canUnlinkProvider(
+          store: store,
+          userId: 'user-1',
+          providerId: 'github',
+          providerAccountId: 'github-1',
+        ),
+        isTrue,
+      );
+    });
+
     test('cannot unlink the only authentication method', () async {
       final store = InMemoryAuthStore();
       await store.users.create(AuthUser(id: 'user-1'));
@@ -623,4 +830,18 @@ Future<void> _seedUser(
   if (result == null) {
     await store.users.create(user);
   }
+}
+
+final class _TestPasswordHasher implements PasswordHasher {
+  const _TestPasswordHasher();
+
+  @override
+  String hash(String password) => 'hash:$password';
+
+  @override
+  PasswordVerification verify(String password, String encodedHash) =>
+      PasswordVerification(
+        matches: encodedHash == 'hash:$password',
+        needsRehash: false,
+      );
 }

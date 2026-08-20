@@ -672,6 +672,53 @@ void main() {
       expect(result.isValid, isTrue);
     });
 
+    test('rejects cross-site metadata without an allowed origin', () {
+      final validator = AuthBrowserProtectionValidator(
+        options: const AuthBrowserProtectionOptions(enabled: true),
+      );
+      final result = validator.validate(
+        requestUri: Uri.parse('https://app.example.com/auth/signin'),
+        headers: _MockHeaders({'sec-fetch-site': 'cross-site'}),
+        method: 'POST',
+      );
+      expect(result.isValid, isFalse);
+      expect(result.errorCode, equals('cross_site_request'));
+    });
+
+    test('accepts cross-site metadata only with an allowed origin', () {
+      final validator = AuthBrowserProtectionValidator(
+        options: const AuthBrowserProtectionOptions(
+          enabled: true,
+          allowedOrigins: ['https://frontend.example.com'],
+        ),
+      );
+      final result = validator.validate(
+        requestUri: Uri.parse('https://api.example.com/auth/signin'),
+        headers: _MockHeaders({
+          'origin': 'https://frontend.example.com',
+          'sec-fetch-site': 'cross-site',
+        }),
+        method: 'POST',
+      );
+      expect(result.isValid, isTrue);
+    });
+
+    test('rejects methods outside the configured allowlist', () {
+      final validator = AuthBrowserProtectionValidator(
+        options: const AuthBrowserProtectionOptions(
+          enabled: true,
+          allowedMethods: {'GET', 'POST'},
+        ),
+      );
+      final result = validator.validate(
+        requestUri: Uri.parse('https://app.example.com/auth/signin'),
+        headers: _MockHeaders({'origin': 'https://app.example.com'}),
+        method: 'DELETE',
+      );
+      expect(result.isValid, isFalse);
+      expect(result.errorCode, equals('method_not_allowed'));
+    });
+
     test(
       'content-type validation rejects when requireContentType is enabled',
       () {

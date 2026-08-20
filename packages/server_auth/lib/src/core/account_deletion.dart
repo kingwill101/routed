@@ -100,9 +100,7 @@ Future<AuthAccountDeletionInitiated> initiateAccountDeletion({
   }
 
   // Reauthenticate with password
-  final credential = await Future.sync(
-    () => store.credentials.findByIdentifier(user.email ?? normalizedUserId),
-  );
+  final credential = await findAuthCredentialForUser(store, normalizedUserId);
   if (credential == null ||
       !credential.enabled ||
       credential.userId != normalizedUserId ||

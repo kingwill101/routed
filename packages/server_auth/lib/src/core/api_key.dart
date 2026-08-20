@@ -218,8 +218,14 @@ abstract interface class AuthApiKeyStore {
   FutureOr<void> deleteForUser(String userId);
 }
 
+/// Optional atomic capability for revoking all API keys owned by one user.
+abstract interface class AuthApiKeyUserAccessRevocationStore {
+  FutureOr<int> revokeAllForUser(String userId, {DateTime? revokedAt});
+}
+
 /// Bounded in-memory API-key store for tests and local development.
-final class InMemoryAuthApiKeyStore implements AuthApiKeyStore {
+final class InMemoryAuthApiKeyStore
+    implements AuthApiKeyStore, AuthApiKeyUserAccessRevocationStore {
   InMemoryAuthApiKeyStore({this.maxRecords = 10000}) {
     if (maxRecords <= 0) {
       throw ArgumentError.value(
@@ -285,6 +291,26 @@ final class InMemoryAuthApiKeyStore implements AuthApiKeyStore {
   }
 
   @override
+  Future<int> revokeAllForUser(String userId, {DateTime? revokedAt}) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) return 0;
+    final revokedAtUtc = (revokedAt ?? DateTime.now()).toUtc();
+    var count = 0;
+    for (final entry in _records.entries.toList(growable: false)) {
+      final record = entry.value;
+      if (record.userId != normalizedUserId || record.revokedAt != null) {
+        continue;
+      }
+      _records[entry.key] = record.copyWith(
+        revokedAt: revokedAtUtc,
+        updatedAt: revokedAtUtc,
+      );
+      count += 1;
+    }
+    return count;
+  }
+
+  @override
   Future<AuthApiKeyRecord?> rotateForUser({
     required String userId,
     required String id,
@@ -329,7 +355,8 @@ final class AuthApiKeyPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
-        AuthUserDataDeletionContributor {
+        AuthUserDataDeletionContributor,
+        AuthUserAccessRevocationContributor {
   AuthApiKeyPlugin({
     required this.store,
     this.keyPrefix = 'rka',
@@ -386,6 +413,9 @@ final class AuthApiKeyPlugin<TContext>
   String get userDataNamespace => 'api_keys';
 
   @override
+  String get userAccessNamespace => 'api_keys';
+
+  @override
   Future<void> validateUserDeletion(String userId) async {
     if (userId.trim().isEmpty) {
       throw ArgumentError.value(userId, 'userId', 'must be non-empty');
@@ -395,6 +425,23 @@ final class AuthApiKeyPlugin<TContext>
   @override
   Future<void> deleteUserData(String userId) async {
     await store.deleteForUser(userId);
+  }
+
+  @override
+  Future<void> revokeUserAccess(String userId) async {
+    final target = store;
+    if (target is AuthApiKeyUserAccessRevocationStore) {
+      final revocationStore = target as AuthApiKeyUserAccessRevocationStore;
+      await revocationStore.revokeAllForUser(userId);
+      return;
+    }
+    final revokedAt = _clock().toUtc();
+    final records = await target.listForUser(userId);
+    for (final record in records) {
+      if (record.revokedAt == null) {
+        await target.revokeForUser(userId, record.id, revokedAt: revokedAt);
+      }
+    }
   }
 
   @override
@@ -633,6 +680,10 @@ final class AuthApiKeyPlugin<TContext>
         AuthAtomicOperationDescriptor(
           id: 'api_key.revoke_for_user',
           description: 'Revoke a key belonging to a user atomically.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'api_key.revoke_all_for_user',
+          description: 'Revoke every key belonging to a user atomically.',
         ),
       ],
     ),

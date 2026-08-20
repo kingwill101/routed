@@ -286,6 +286,7 @@ class OAuthProviderModeOptions {
     ],
     this.supportedResponseTypes = const ['code'],
     this.supportedScopes = const ['openid', 'profile', 'email'],
+    this.userInfoClaimsByScope = const {},
     this.requirePkce = true,
     this.allowRefreshTokenRotation = true,
     this.maxRefreshTokenUses,
@@ -329,6 +330,12 @@ class OAuthProviderModeOptions {
 
   /// Supported scopes.
   final List<String> supportedScopes;
+
+  /// Explicit user-attribute claims exposed by each granted scope.
+  ///
+  /// Protocol-reserved claims such as `sub`, `email`, `name`, and `picture`
+  /// are always ignored here and are emitted only by their standard scopes.
+  final Map<String, List<String>> userInfoClaimsByScope;
 
   /// Whether PKCE is required.
   final bool requirePkce;
