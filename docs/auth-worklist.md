@@ -391,11 +391,14 @@ account, session, client, and plugin contracts above:
   counter updates; username registration does not yet publish a persistence
   descriptor; Admin ban/disable can require separately persisted plugin
   revocation; Admin impersonation replacement sessions are host-owned; and
-  organization update plus its host callbacks and several two-factor mutations
-  span store or host boundaries without one declared transaction. These
-  operations remain
-  `nonAtomic` or `unguarded` until their adapters expose a stronger bounded
-  operation.
+  organization update plus its host callbacks spans store or host boundaries
+  without one declared transaction. Two-factor durable mutations now resolve
+  to the required backend-owned atomic command schema. Pending challenge
+  completion deliberately remains a host-session operation because session and
+  cookie delivery occurs after the durable command commits. Password
+  change/reset and trusted-device revocation also remain separate host and
+  plugin transactions. Weaker operations remain `nonAtomic` or `unguarded`
+  until their adapters expose a stronger bounded operation.
 - [x] Every advertised auth endpoint has documented authentication,
   CSRF/origin, rate-limit, redirect, session/body-token, and error semantics in
   the public auth endpoint security contract, including plugin-gated 2FA route

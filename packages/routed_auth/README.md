@@ -307,13 +307,23 @@ Credential sign-ins for enabled users return a `202 two_factor_required`
 response until the challenge route verifies TOTP.
 The challenge request may include `trustDevice: true`; after successful TOTP,
 Routed sets an expiring HTTP-only trusted-device cookie. The revoke route
-invalidates all trusted devices for the current user. Pending recovery-code
-completion is available when the plugin is configured with an atomic pending
-recovery store.
-When `stepUpStore` is configured, `POST /auth/2fa/step-up` verifies a fresh
-TOTP code and sets a short-lived, session-bound HTTP-only proof cookie. Routed
-consumers can enforce it with `AuthManager.requireTwoFactorStepUp` before
-sensitive actions; `POST /auth/2fa/step-up/revoke` clears the proof.
+invalidates all trusted devices for the current user. The plugin's required
+`AuthTwoFactorBackend` atomically consumes pending TOTP or recovery challenges,
+updates bounded attempts, and persists any trusted-device or step-up record.
+`POST /auth/2fa/step-up` verifies a fresh TOTP code and sets a short-lived,
+session-bound HTTP-only proof cookie. Routed consumers can enforce it with
+`AuthManager.requireTwoFactorStepUp` before sensitive actions;
+`POST /auth/2fa/step-up/revoke` clears the proof.
+
+Routed issues the server session and writes response cookies after the backend
+command commits. Session/cookie delivery is therefore not part of the durable
+two-factor transaction. If host delivery fails, the consumed one-time
+challenge remains consumed and the caller must restart sign-in.
+
+Password change and reset revoke trusted devices through the two-factor
+backend, but that command is separate from Routed's host-owned credential and
+session mutations. Durable deployments that need one transaction across those
+stores must provide that wider boundary in their auth persistence adapter.
 
 ## API-key authentication
 

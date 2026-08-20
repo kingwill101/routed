@@ -3,6 +3,12 @@
 - Route Admin mutations through backend-owned typed commands, consume
   impersonation source sessions once before host replacement-session creation,
   and preserve the explicit host-session and post-commit audit boundary.
+- Route all opt-in two-factor mutations through the plugin's required typed
+  atomic backend, including pending TOTP/recovery completion, trusted devices,
+  disablement, recovery regeneration/use, and session-bound step-up proofs.
+  Routed still issues sessions and delivers cookies after the command commits,
+  so failed host delivery requires a fresh sign-in challenge. Password
+  mutation and trusted-device revocation also remain separate backend commands.
 - Route device-token polling through the bounded issuance-lease protocol so
   issuer failures can retry with the same stable authorization ID while
   concurrent, stale, disabled-account, and consumed grants fail generically.

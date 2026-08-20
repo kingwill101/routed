@@ -6,6 +6,16 @@
   sessions, JWT versions, and admin state back on failure. Make impersonation
   session transitions single-use, preserve the existing deletion coordinator,
   and add public durable-adapter conformance plus stateful/property coverage.
+- Breaking: require `TwoFactorPlugin` to use one `AuthTwoFactorBackend` with
+  typed backend-owned atomic commands. Remove the pending-recovery coordinator
+  and all fallback orchestration; enrollment verification, bounded attempts,
+  recovery use/regeneration, pending completion, disablement, trusted devices,
+  and step-up proofs now share the declared command boundary.
+- Add `InMemoryAuthTwoFactorBackend` per-user serialization, rollback and fault
+  injection, schema-backed atomic operation metadata, and public durable
+  adapter conformance through `package:server_auth/testing.dart`. Host session
+  and cookie delivery remains explicitly outside pending-challenge commands;
+  host password mutations remain outside trusted-device revocation commands.
 - Replace pre-issuance device-grant consumption with bounded digest-only
   issuance leases and a typed authorization-ID-idempotent application token
   issuer. Matching completion/release transitions make ambiguous failures and

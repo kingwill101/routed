@@ -497,32 +497,37 @@ Compose `TwoFactorPlugin` when an application needs TOTP and recovery codes:
 
 ```dart
 final twoFactor = TwoFactorPlugin<void>(
-  store: myTwoFactorStore,
-  challengeStore: myTwoFactorChallengeStore,
-  pendingRecoveryStore: myPendingRecoveryStore,
-  trustedDeviceStore: myTrustedDeviceStore,
-  stepUpStore: myStepUpStore,
+  backend: myTwoFactorBackend,
   secretProtector: mySecretProtector,
 );
 ```
 
-The plugin owns enrollment verification, TOTP validation, lockout state,
-recovery-code hashing and atomic consumption, regeneration, disablement, and
-expiring trusted-device tokens. Explicit trusted-device issuance requires a
-fresh TOTP code. Trusted-device records store only token
-digests; the Routed adapter places the raw token in an HTTP-only cookie and
-supports revoking all devices. Credential sign-ins for enabled users return a
-short-lived pending challenge and issue a session only after TOTP completion.
-The pending challenge can optionally issue a trusted-device cookie after
-successful TOTP verification. Configure `pendingRecoveryStore` with a
-durable implementation when recovery codes must complete pending sign-ins; it
-must consume the recovery digest and challenge in one transaction.
-Configure `stepUpStore` to issue short-lived proofs bound to the current
-authenticated session before sensitive actions. The adapter should call its
-step-up requirement helper at those action boundaries.
-`AuthTwoFactorSecretProtector` is required
-so durable applications can use their own key-management system; the
+`AuthTwoFactorBackend` is a required, two-factor-specific persistence boundary.
+Durable adapters implement its typed commands with backend-native transactions;
+the plugin does not accept transaction callbacks or coordinate fallback writes.
+The commands atomically cover enrollment activation, bounded TOTP attempts,
+one-time recovery use and regeneration, pending challenge completion,
+disablement, trusted-device lifecycle, and session-bound step-up proofs.
+`InMemoryAuthTwoFactorBackend` provides per-user serialization, rollback, and
+deterministic fault injection for tests. Adapter packages can run
+`verifyAuthTwoFactorBackendConformance` from `package:server_auth/testing.dart`
+against their durable implementation.
+
+Recovery codes and opaque challenge, trusted-device, step-up, and session
+binding material cross persistence only as digests. Explicit trusted-device
+issuance requires a fresh TOTP code. `AuthTwoFactorSecretProtector` remains
+required so durable applications can use their own key-management system; the
 plaintext protector is intended only for tests and ephemeral examples.
+
+Pending sign-in commands commit before the framework host creates a session or
+delivers cookies. Those host-owned effects are intentionally outside the
+two-factor transaction: a session-delivery failure can leave a consumed
+challenge, and clients must restart sign-in rather than replay it.
+
+Password change and reset flows also belong to the host auth store. Their
+trusted-device revocation command can commit separately from credential and
+session changes unless a durable adapter provides a wider store-owned
+transaction; the two-factor plugin does not claim cross-backend atomicity.
 
 ## Optional FIDO metadata trust evaluation
 
