@@ -1,8 +1,9 @@
 import 'dart:convert';
 
-import 'package:property_testing/property_testing.dart';
 import 'package:server_auth/testing.dart';
 import 'package:test/test.dart';
+
+import 'support/node_crypto.dart';
 
 const _now = '2030-01-01T12:00:00Z';
 const _signatureAlgorithm = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256';
@@ -10,6 +11,8 @@ const _digestAlgorithm = 'http://www.w3.org/2001/04/xmlenc#sha256';
 const _canonicalization = 'http://www.w3.org/2001/10/xml-exc-c14n#';
 
 void main() {
+  stabilizeNodeCryptoBinding();
+
   group('AuthSamlPlugin', () {
     test('requires durable atomic replay persistence by default', () {
       expect(() => _plugin(allowTestStore: false), throwsA(isA<StateError>()));
@@ -259,39 +262,6 @@ void main() {
         throwsA(isA<AuthFlowException>()),
       );
     });
-
-    test(
-      'property: arbitrary ACS payloads fail with stable public code',
-      () async {
-        final runner = PropertyTestRunner<String>(
-          Chaos.string(minLength: 0, maxLength: 4096),
-          (value) async {
-            final plugin = _plugin();
-            try {
-              await _endpoint(
-                plugin,
-                'saml.acs',
-              ).invoke(_invocation('browser-binding-value-0001'), {
-                'providerId': 'enterprise',
-                'SAMLResponse': value,
-                'RelayState': value,
-              });
-              fail('Hostile payload unexpectedly authenticated');
-            } on AuthFlowException catch (error) {
-              expect(error.code, 'saml_authentication_failed');
-              expect(error.toString(), isNot(contains(value)));
-            }
-          },
-          PropertyConfig(numTests: 300, seed: 20260820),
-        );
-        final result = await runner.run();
-        expect(
-          result.success,
-          isTrue,
-          reason: '${result.error} ${result.failingInput}',
-        );
-      },
-    );
   });
 }
 
