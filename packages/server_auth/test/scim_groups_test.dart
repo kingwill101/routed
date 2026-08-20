@@ -325,27 +325,32 @@ void main() {
   test(
     'projection input contains stable SCIM identities and exact binding only',
     () {
-      final connection = _connection(
+      final scope = AuthScimApplicationProjectionScope(
         connectionId: 'connection-a',
         tenantId: 'tenant-a',
         organizationId: 'org-a',
         provisioningDomainId: 'domain-a',
-        scopes: const <AuthScimScope>[AuthScimScope.groupsWrite],
       );
-      final change = AuthScimRoleMembershipProjectionChange(
-        context: AuthScimProvisioningContext(connection: connection),
-        groupResourceId: 'group-1',
-        before: const <AuthScimStableResourceIdentity>[],
-        after: <AuthScimStableResourceIdentity>[
-          AuthScimStableResourceIdentity(
+      final projection = AuthScimApplicationProjectionSnapshot(
+        subject: AuthScimApplicationProjectionSubject(
+          scope: scope,
+          resourceId: 'group-1',
+          kind: AuthScimApplicationSubjectKind.group,
+        ),
+        sourceVersion: 'version-1',
+        sourceDigest: 'a' * 64,
+        state: AuthScimApplicationProjectionState.active,
+        members: <AuthScimApplicationProjectionSubject>[
+          AuthScimApplicationProjectionSubject(
+            scope: scope,
             resourceId: 'user-1',
-            type: AuthScimGroupMemberType.user,
+            kind: AuthScimApplicationSubjectKind.user,
           ),
         ],
       );
-      expect(change.context.connectionId, 'connection-a');
-      expect(change.groupResourceId, 'group-1');
-      expect(change.after.single.resourceId, 'user-1');
+      expect(projection.subject.scope.connectionId, 'connection-a');
+      expect(projection.subject.resourceId, 'group-1');
+      expect(projection.members.single.resourceId, 'user-1');
     },
   );
 }
