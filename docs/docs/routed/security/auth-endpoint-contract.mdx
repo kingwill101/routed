@@ -132,9 +132,8 @@ server route.
 
 ### Two factor
 
-The Routed adapter currently keeps the 2FA route shell mounted even when
-`TwoFactorPlugin` is absent; those requests return `two_factor_unavailable`.
-Composing the plugin enables the operations below.
+Routed mounts the operations below only when `TwoFactorPlugin` is selected.
+Omitting the plugin means the 2FA API is not present.
 
 | Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Result |
 | --- | --- | --- | --- | --- |

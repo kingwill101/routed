@@ -319,9 +319,8 @@ native auth model.
   replay-safety story.
 - [x] Every advertised auth endpoint has documented authentication,
   CSRF/origin, rate-limit, redirect, session/body-token, and error semantics in
-  the public auth endpoint security contract. The matrix also calls out the
-  current 2FA route-shell behavior instead of describing plugin absence as a
-  `404`.
+  the public auth endpoint security contract, including plugin-gated 2FA route
+  mounting.
 - [x] The shared credentials/session runtime contract is verified through
   `routed_io`, native Node, and native Cloudflare Fetch request paths.
 - [ ] Every advertised plugin flow has matching end-to-end coverage across its

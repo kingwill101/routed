@@ -32,6 +32,9 @@
 - Replace plugin-side session issuance with a typed authentication intent so
   hosts uniformly enforce account policy, callbacks, session/JWT strategy,
   token projection, and lifecycle events after successful plugin verification.
+- Require a keyed email-OTP rate-limit secret and derive bounded HMAC target
+  identifiers without exposing canonical emails or OTPs; require CSRF for
+  authenticated anonymous-account deletion.
 - Extend the public durable-store conformance suite with contention cases for
   users, credentials, accounts, sessions, tokens, OAuth challenges, JWT
   versions, device authorization, and email OTP.
