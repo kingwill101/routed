@@ -1,5 +1,9 @@
 ## 0.2.0 - 2026-08-20
 
+- Extend the public plugin conformance suite with executable installed-client
+  contracts that verify real method/path/request behavior, server codec
+  alignment, response decoding, optional topology, malformed responses,
+  duplicate IDs, and secret-safe public results across independent plugins.
 - Add offline FIDO Metadata Service 3.1.1 blob parsing and WebAuthn trust
   evaluation with bounded inputs, monotonic update checks, optional freshness
   enforcement, typed provenance, and an explicit application-owned JWS/PKIX

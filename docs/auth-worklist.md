@@ -229,7 +229,7 @@ account, session, client, and plugin contracts above:
   out-of-band trust anchors when the root is omitted from `x5c`.
 - [x] Start captcha replay retention after successful provider verification so
   slow providers cannot make an accepted token immediately reusable.
-- [ ] Make plugin conformance consume actual installed client operation and
+- [x] Make plugin conformance consume actual installed client operation and
   codec contracts instead of comparing only server-declared descriptors.
 - [x] Constrain Routed auth deployment binding to `EngineContext` and reject an
   incompatible context at startup instead of silently omitting auth routes.

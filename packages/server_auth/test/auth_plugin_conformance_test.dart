@@ -11,6 +11,7 @@ void main() {
         'endpoints.typed-contracts',
         'rate-limits.references',
         'clients.public-endpoints',
+        'clients.installed-contracts',
         'endpoints.mutation-protection',
       ];
 
