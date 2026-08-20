@@ -22,7 +22,7 @@ final class CloudflareD1AuthSchema {
   /// underscores are accepted because SQLite cannot bind identifiers.
   final String tablePrefix;
 
-  static const int currentVersion = 5;
+  static const int currentVersion = 7;
 
   String table(String suffix) {
     final prefix = tablePrefix.trim();
@@ -51,7 +51,39 @@ final class CloudflareD1AuthSchema {
     CloudflareD1AuthMigration(version: 4, statements: _versionFour),
     CloudflareD1AuthMigration(version: 5, statements: _versionFive),
     CloudflareD1AuthMigration(version: 6, statements: _versionSix),
+    CloudflareD1AuthMigration(version: 7, statements: _versionSeven),
   ];
+
+  List<String> get _versionSeven {
+    final guards = table('anonymous_mutation_guards');
+    final receipts = table('anonymous_mutation_receipts');
+    return [
+      '''CREATE TABLE IF NOT EXISTS $guards (
+        operation_id_hash TEXT PRIMARY KEY,
+        fingerprint_hash TEXT NOT NULL,
+        subject_user_id_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )''',
+      '''CREATE TABLE IF NOT EXISTS $receipts (
+        operation_id_hash TEXT PRIMARY KEY,
+        operation_type TEXT NOT NULL
+          CHECK (operation_type IN ('create', 'delete', 'upgrade')),
+        fingerprint_hash TEXT NOT NULL,
+        subject_user_id_hash TEXT NOT NULL,
+        target_user_id_hash TEXT,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        CHECK (
+          (operation_type = 'upgrade' AND target_user_id_hash IS NOT NULL) OR
+          (operation_type <> 'upgrade' AND target_user_id_hash IS NULL)
+        )
+      )''',
+      'CREATE INDEX IF NOT EXISTS ${receipts}_subject '
+          'ON $receipts(subject_user_id_hash)',
+      'CREATE INDEX IF NOT EXISTS ${receipts}_expiry '
+          'ON $receipts(expires_at, created_at)',
+    ];
+  }
 
   List<String> get _versionSix {
     final connections = table('scim_connections');
@@ -375,6 +407,8 @@ final class CloudflareD1AuthSchema {
   /// retain migration history and never call it during normal operation.
   Future<void> dropAll(CloudflareD1Database database) async {
     final suffixes = [
+      'anonymous_mutation_guards',
+      'anonymous_mutation_receipts',
       'scim_replays',
       'scim_credentials',
       'scim_connections',

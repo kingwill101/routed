@@ -15,6 +15,7 @@ final class CloudflareD1AuthStore
     implements
         AuthStore,
         AuthUsernameStore,
+        AuthAnonymousAccountMutationStore,
         AuthUserDeletionCoordinatorHost,
         AuthOAuthAccountMutationStore,
         AuthAuthenticationMethodTopologyStore {
@@ -22,9 +23,25 @@ final class CloudflareD1AuthStore
     CloudflareD1Database database, {
     this.schema = const CloudflareD1AuthSchema(),
     this.scimReplayTtl = const Duration(days: 1),
+    this.anonymousReplayTtl = const Duration(days: 1),
+    this.anonymousMaxReceipts = 10000,
     DateTime Function()? clock,
   }) : _database = database,
        _clock = clock ?? DateTime.now {
+    if (anonymousReplayTtl <= Duration.zero) {
+      throw ArgumentError.value(
+        anonymousReplayTtl,
+        'anonymousReplayTtl',
+        'must be positive',
+      );
+    }
+    if (anonymousMaxReceipts <= 0) {
+      throw ArgumentError.value(
+        anonymousMaxReceipts,
+        'anonymousMaxReceipts',
+        'must be positive',
+      );
+    }
     final sql = _D1(database);
     _sql = sql;
     users = _D1Users(sql, schema);
@@ -83,6 +100,8 @@ final class CloudflareD1AuthStore
     CloudflareD1Database database, {
     CloudflareD1AuthSchema schema = const CloudflareD1AuthSchema(),
     Duration scimReplayTtl = const Duration(days: 1),
+    Duration anonymousReplayTtl = const Duration(days: 1),
+    int anonymousMaxReceipts = 10000,
     DateTime Function()? clock,
   }) async {
     await schema.migrate(database);
@@ -90,6 +109,8 @@ final class CloudflareD1AuthStore
       database,
       schema: schema,
       scimReplayTtl: scimReplayTtl,
+      anonymousReplayTtl: anonymousReplayTtl,
+      anonymousMaxReceipts: anonymousMaxReceipts,
       clock: clock,
     );
   }
@@ -99,6 +120,8 @@ final class CloudflareD1AuthStore
   final DateTime Function() _clock;
   final CloudflareD1AuthSchema schema;
   final Duration scimReplayTtl;
+  final Duration anonymousReplayTtl;
+  final int anonymousMaxReceipts;
   late final CloudflareD1UserDeletionCoordinator _deletionCoordinator;
   bool _authenticationMethodTopologyBound = false;
   bool _authenticationMethodInventoryAuthoritative = false;
@@ -256,6 +279,297 @@ final class CloudflareD1AuthStore
     return existing?.userId == userId
         ? AuthAuthenticationMethodMutationResult.lastAuthenticationMethod
         : AuthAuthenticationMethodMutationResult.notFound;
+  }
+
+  String get _anonymousGuards => schema.table('anonymous_mutation_guards');
+  String get _anonymousReceipts => schema.table('anonymous_mutation_receipts');
+
+  @override
+  Future<AuthAnonymousMutationResult> createAnonymousAccount(
+    AuthAnonymousCreateAccountCommand command,
+  ) async {
+    validateAuthAnonymousUser(command.user);
+    validateAuthUserForPersistence(command.user);
+    final now = _clock().toUtc();
+    final operationIdHash = hashOpaqueToken(command.operationId);
+    final subjectUserIdHash = hashOpaqueToken(command.user.id);
+    final fingerprint = _anonymousCreateFingerprint(command);
+    final usersTable = schema.table('users');
+    final deletionReceipts = schema.table('deletion_receipts');
+    final creationGuard =
+        '''EXISTS (
+      SELECT 1 FROM $_anonymousGuards
+      WHERE operation_id_hash = ? AND fingerprint_hash = ?
+        AND subject_user_id_hash = ?
+    )''';
+    final creationGuardValues = [
+      operationIdHash,
+      fingerprint,
+      subjectUserIdHash,
+    ];
+    try {
+      final results = await _sql.batch([
+        _database
+            .prepare('''INSERT INTO $_anonymousGuards
+                 (operation_id_hash, fingerprint_hash, subject_user_id_hash,
+                  created_at)
+                 SELECT ?, ?, ?, ?
+                 WHERE NOT EXISTS (
+                   SELECT 1 FROM $_anonymousReceipts
+                   WHERE operation_id_hash = ?
+                 )
+                   AND NOT EXISTS (
+                     SELECT 1 FROM $usersTable WHERE id = ?
+                   )
+                   AND NOT EXISTS (
+                     SELECT 1 FROM $deletionReceipts WHERE user_id_hash = ?
+                   )''')
+            .bind([
+              operationIdHash,
+              fingerprint,
+              subjectUserIdHash,
+              _date(now),
+              operationIdHash,
+              command.user.id,
+              subjectUserIdHash,
+            ]),
+        ..._anonymousReceiptRetentionStatements(
+          now,
+          guard: creationGuard,
+          guardValues: creationGuardValues,
+        ),
+        _database
+            .prepare('''INSERT INTO $usersTable (id, email, payload)
+                 SELECT ?, NULL, ?
+                 WHERE $creationGuard''')
+            .bind([
+              command.user.id,
+              _encodeUser(command.user),
+              ...creationGuardValues,
+            ]),
+        _database
+            .prepare('''INSERT INTO $_anonymousReceipts
+                 (operation_id_hash, operation_type, fingerprint_hash,
+                 subject_user_id_hash, target_user_id_hash, created_at,
+                  expires_at)
+                 SELECT ?, 'create', ?, ?, NULL, ?, ?
+                 WHERE $creationGuard''')
+            .bind([
+              ...creationGuardValues,
+              _date(now),
+              _date(now.add(anonymousReplayTtl)),
+              operationIdHash,
+              fingerprint,
+              subjectUserIdHash,
+            ]),
+        _database
+            .prepare(
+              'DELETE FROM $_anonymousGuards WHERE operation_id_hash = ?',
+            )
+            .bind([operationIdHash]),
+      ]);
+      if ((results.first.meta?.changes ?? 0) == 1 &&
+          (results[3].meta?.changes ?? 0) == 1 &&
+          (results[4].meta?.changes ?? 0) == 1 &&
+          (results.last.meta?.changes ?? 0) == 1) {
+        return AuthAnonymousMutationResult(
+          AuthAnonymousMutationStatus.applied,
+          user: command.user,
+        );
+      }
+    } catch (error, stackTrace) {
+      final replay = await _readAnonymousReplay(
+        operationIdHash: operationIdHash,
+        fingerprint: fingerprint,
+        createUserId: command.user.id,
+        now: now,
+      );
+      if (replay != null) return replay;
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+    final replay = await _readAnonymousReplay(
+      operationIdHash: operationIdHash,
+      fingerprint: fingerprint,
+      createUserId: command.user.id,
+      now: now,
+    );
+    if (replay != null) return replay;
+    throw StateError('D1 anonymous account creation was not committed.');
+  }
+
+  @override
+  Future<AuthAnonymousMutationResult> deleteAnonymousAccount(
+    AuthAnonymousDeleteAccountCommand command,
+  ) => _removeAnonymousAccount(
+    operationId: command.operationId,
+    operationType: 'delete',
+    anonymousUserId: command.userId,
+  );
+
+  @override
+  Future<AuthAnonymousMutationResult> completeAnonymousAccountUpgrade(
+    AuthAnonymousCompleteUpgradeCommand command,
+  ) => _removeAnonymousAccount(
+    operationId: command.operationId,
+    operationType: 'upgrade',
+    anonymousUserId: command.anonymousUserId,
+    targetUserId: command.targetUserId,
+  );
+
+  Future<AuthAnonymousMutationResult> _removeAnonymousAccount({
+    required String operationId,
+    required String operationType,
+    required String anonymousUserId,
+    String? targetUserId,
+  }) async {
+    final now = _clock().toUtc();
+    final operationIdHash = hashOpaqueToken(operationId);
+    final subjectUserIdHash = hashOpaqueToken(anonymousUserId);
+    final targetUserIdHash = targetUserId == null
+        ? null
+        : hashOpaqueToken(targetUserId);
+    final fingerprint = hashOpaqueToken(
+      targetUserId == null
+          ? 'delete:$anonymousUserId'
+          : 'upgrade:$anonymousUserId:$targetUserId',
+    );
+    final replay = await _readAnonymousReplay(
+      operationIdHash: operationIdHash,
+      fingerprint: fingerprint,
+      now: now,
+    );
+    if (replay != null) return replay;
+
+    final source = await users.findById(anonymousUserId);
+    if (source == null) {
+      return const AuthAnonymousMutationResult(
+        AuthAnonymousMutationStatus.notFound,
+      );
+    }
+    if (!source.isAnonymous) {
+      return const AuthAnonymousMutationResult(
+        AuthAnonymousMutationStatus.notAnonymous,
+      );
+    }
+
+    late final bool deleted;
+    try {
+      deleted = await _deletionCoordinator._delete(
+        userId: anonymousUserId,
+        plans: null,
+        confirmationToken: null,
+        requireAnonymous: true,
+        completion: (guard, guardValues, deletedAt) => [
+          ..._anonymousReceiptRetentionStatements(
+            deletedAt,
+            guard: guard,
+            guardValues: guardValues,
+          ),
+          _database
+              .prepare('''INSERT INTO $_anonymousReceipts
+                 (operation_id_hash, operation_type, fingerprint_hash,
+                  subject_user_id_hash, target_user_id_hash, created_at,
+                  expires_at)
+                 SELECT ?, ?, ?, ?, ?, ?, ? WHERE $guard''')
+              .bind([
+                operationIdHash,
+                operationType,
+                fingerprint,
+                subjectUserIdHash,
+                targetUserIdHash,
+                _date(deletedAt),
+                _date(deletedAt.add(anonymousReplayTtl)),
+                ...guardValues,
+              ]),
+        ],
+      );
+    } catch (error, stackTrace) {
+      final conflict = await _readAnonymousReplay(
+        operationIdHash: operationIdHash,
+        fingerprint: fingerprint,
+        now: now,
+      );
+      if (conflict != null) return conflict;
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+    if (deleted) {
+      return const AuthAnonymousMutationResult(
+        AuthAnonymousMutationStatus.applied,
+      );
+    }
+    final concurrentReplay = await _readAnonymousReplay(
+      operationIdHash: operationIdHash,
+      fingerprint: fingerprint,
+      now: now,
+    );
+    if (concurrentReplay != null) return concurrentReplay;
+    final current = await users.findById(anonymousUserId);
+    if (current == null) {
+      return const AuthAnonymousMutationResult(
+        AuthAnonymousMutationStatus.notFound,
+      );
+    }
+    if (!current.isAnonymous) {
+      return const AuthAnonymousMutationResult(
+        AuthAnonymousMutationStatus.notAnonymous,
+      );
+    }
+    throw StateError('D1 anonymous account removal was not committed.');
+  }
+
+  Iterable<CloudflareD1PreparedStatement> _anonymousReceiptRetentionStatements(
+    DateTime now, {
+    String? guard,
+    List<Object?> guardValues = const [],
+  }) sync* {
+    final predicate = guard == null ? '' : ' AND $guard';
+    yield _database
+        .prepare(
+          'DELETE FROM $_anonymousReceipts '
+          'WHERE expires_at <= ?$predicate',
+        )
+        .bind([_date(now), ...guardValues]);
+    yield _database
+        .prepare('''DELETE FROM $_anonymousReceipts
+             WHERE operation_id_hash IN (
+               SELECT operation_id_hash FROM $_anonymousReceipts
+               ORDER BY created_at DESC, operation_id_hash DESC
+               LIMIT -1 OFFSET ?
+             )$predicate''')
+        .bind([anonymousMaxReceipts - 1, ...guardValues]);
+  }
+
+  Future<AuthAnonymousMutationResult?> _readAnonymousReplay({
+    required String operationIdHash,
+    required String fingerprint,
+    required DateTime now,
+    String? createUserId,
+  }) async {
+    final receipt = await _sql.first(
+      '''SELECT fingerprint_hash FROM $_anonymousReceipts
+         WHERE operation_id_hash = ? AND expires_at > ?''',
+      [operationIdHash, _date(now)],
+      (row) => row['fingerprint_hash']?.toString() ?? '',
+    );
+    if (receipt == null) return null;
+    if (!constantTimeStringEquals(receipt, fingerprint)) {
+      return const AuthAnonymousMutationResult(
+        AuthAnonymousMutationStatus.replayMismatch,
+      );
+    }
+    if (createUserId == null) {
+      return const AuthAnonymousMutationResult(
+        AuthAnonymousMutationStatus.replayed,
+      );
+    }
+    final user = await users.findById(createUserId);
+    if (user == null || !user.isAnonymous) {
+      throw StateError('D1 anonymous creation replay is unavailable.');
+    }
+    return AuthAnonymousMutationResult(
+      AuthAnonymousMutationStatus.replayed,
+      user: user,
+    );
   }
 
   _D1Credentials get _usernameCredentials => credentials as _D1Credentials;
@@ -745,6 +1059,9 @@ final class CloudflareD1AuthStore
   Future<void> migrate() => schema.migrate(_database);
 }
 
+String _anonymousCreateFingerprint(AuthAnonymousCreateAccountCommand command) =>
+    hashOpaqueToken('create:${_encodeUser(command.user)}');
+
 /// Exact D1 database and schema identity accepted by a deletion coordinator.
 final class CloudflareD1UserDeletionDomain implements AuthUserDeletionDomain {
   CloudflareD1UserDeletionDomain._(this.database, this.schema);
@@ -888,6 +1205,13 @@ final class CloudflareD1UserDeletionCoordinator
     required Iterable<AuthUserDeletionPlan>? plans,
     required String? confirmationToken,
     DateTime? now,
+    bool requireAnonymous = false,
+    Iterable<CloudflareD1PreparedStatement> Function(
+      String guard,
+      List<Object?> guardValues,
+      DateTime deletedAt,
+    )?
+    completion,
   }) async {
     final id = _required(userId, 'userId');
     _ensureBound();
@@ -920,7 +1244,10 @@ final class CloudflareD1UserDeletionCoordinator
     final batch = <CloudflareD1PreparedStatement>[];
 
     if (confirmationToken == null) {
-      guard = 'EXISTS (SELECT 1 FROM $users WHERE id = ?)';
+      guard = requireAnonymous
+          ? '''EXISTS (SELECT 1 FROM $users WHERE id = ?
+                AND json_extract(payload, '\$.isAnonymous') = 1)'''
+          : 'EXISTS (SELECT 1 FROM $users WHERE id = ?)';
       guardValues = [id];
     } else {
       final identifier = 'account_deletion:$id';
@@ -945,6 +1272,9 @@ final class CloudflareD1UserDeletionCoordinator
       batch.add(_prepareGuarded(statement, guard, guardValues));
     }
     batch.addAll(_coreDeletionStatements(user, guard, guardValues, current));
+    if (completion != null) {
+      batch.addAll(completion(guard, guardValues, current));
+    }
     final userDeleteIndex = batch.length;
     batch.add(
       _sql.database.prepare('DELETE FROM $users WHERE id = ? AND $guard').bind([
@@ -1017,6 +1347,11 @@ final class CloudflareD1UserDeletionCoordinator
              SELECT ?, ? WHERE $guard
              ON CONFLICT(user_id_hash) DO NOTHING''')
         .bind([hashOpaqueToken(id), _date(deletedAt), ...guardValues]);
+    final anonymousReceipts = schema.table('anonymous_mutation_receipts');
+    yield _sql.database
+        .prepare('''DELETE FROM $anonymousReceipts
+             WHERE subject_user_id_hash = ? AND $guard''')
+        .bind([hashOpaqueToken(id), ...guardValues]);
   }
 
   CloudflareD1PreparedStatement _prepareGuarded(
