@@ -782,170 +782,6 @@ final class InMemoryAuthTwoFactorChallengeStore
   }
 }
 
-/// Result of atomically completing a pending sign-in with a recovery code.
-class AuthTwoFactorPendingRecoveryAttempt {
-  const AuthTwoFactorPendingRecoveryAttempt({
-    required this.accepted,
-    required this.locked,
-    required this.expired,
-    this.userId,
-  });
-
-  final bool accepted;
-  final bool locked;
-  final bool expired;
-  final String? userId;
-}
-
-/// Transaction boundary for pending recovery-code sign-ins.
-///
-/// Implementations must atomically consume the recovery-code digest and mark
-/// the matching pending challenge complete. A database-backed implementation
-/// should perform both changes in one transaction; composing two independent
-/// network or database writes is not sufficient.
-abstract interface class AuthTwoFactorPendingRecoveryStore {
-  FutureOr<AuthTwoFactorPendingRecoveryAttempt> recordRecoveryAttempt(
-    String tokenHash, {
-    required String recoveryCodeHash,
-    required DateTime now,
-    required int maxAttempts,
-    required Duration lockoutDuration,
-  });
-
-  /// Deletes every pending recovery challenge owned by [userId].
-  FutureOr<void> deleteForUser(String userId);
-}
-
-/// In-memory atomic pending-recovery store for tests and local examples.
-///
-/// Pass the same in-memory factor and challenge stores to this coordinator;
-/// its operation performs all state changes synchronously in one isolate turn.
-final class InMemoryAuthTwoFactorPendingRecoveryStore
-    implements
-        AuthTwoFactorPendingRecoveryStore,
-        AuthInMemoryUserDeletionStore {
-  const InMemoryAuthTwoFactorPendingRecoveryStore({
-    required this.factorStore,
-    required this.challengeStore,
-  });
-
-  final InMemoryAuthTwoFactorStore factorStore;
-  final InMemoryAuthTwoFactorChallengeStore challengeStore;
-
-  @override
-  Object captureDeletionState() => (
-    factors: factorStore.captureDeletionState(),
-    challenges: challengeStore.captureDeletionState(),
-  );
-
-  @override
-  void restoreDeletionState(Object checkpoint) {
-    final state = checkpoint as ({Object factors, Object challenges});
-    factorStore.restoreDeletionState(state.factors);
-    challengeStore.restoreDeletionState(state.challenges);
-  }
-
-  @override
-  void deleteForUser(String userId) {
-    _requireUserId(userId);
-    challengeStore._records.removeWhere((_, record) => record.userId == userId);
-  }
-
-  @override
-  void deleteUserDataForDeletion(String userId) => deleteForUser(userId);
-
-  @override
-  AuthTwoFactorPendingRecoveryAttempt recordRecoveryAttempt(
-    String tokenHash, {
-    required String recoveryCodeHash,
-    required DateTime now,
-    required int maxAttempts,
-    required Duration lockoutDuration,
-  }) {
-    final current = now.toUtc();
-    final challenge = challengeStore._records[tokenHash];
-    if (challenge == null || !challenge.isActive(now: current)) {
-      return const AuthTwoFactorPendingRecoveryAttempt(
-        accepted: false,
-        locked: false,
-        expired: true,
-      );
-    }
-    if (challenge.lockedUntil != null &&
-        current.isBefore(challenge.lockedUntil!.toUtc())) {
-      return AuthTwoFactorPendingRecoveryAttempt(
-        accepted: false,
-        locked: true,
-        expired: false,
-        userId: challenge.userId,
-      );
-    }
-    final factor = factorStore._records[challenge.userId];
-    if (factor == null || !factor.verified) {
-      return const AuthTwoFactorPendingRecoveryAttempt(
-        accepted: false,
-        locked: false,
-        expired: true,
-      );
-    }
-    if (factor.lockedUntil != null &&
-        current.isBefore(factor.lockedUntil!.toUtc())) {
-      return AuthTwoFactorPendingRecoveryAttempt(
-        accepted: false,
-        locked: true,
-        expired: false,
-        userId: challenge.userId,
-      );
-    }
-
-    final remaining = List<String>.from(factor.recoveryCodeHashes);
-    final recoveryIndex = remaining.indexWhere(
-      (candidate) => constantTimeStringEquals(candidate, recoveryCodeHash),
-    );
-    if (recoveryIndex < 0) {
-      final failures = challenge.failedVerificationCount + 1;
-      final lockedUntil = failures >= maxAttempts
-          ? current.add(lockoutDuration)
-          : challenge.lockedUntil;
-      challengeStore._records[tokenHash] = challenge.copyWith(
-        failedVerificationCount: failures,
-        lockedUntil: lockedUntil,
-      );
-      final factorFailures = factor.failedVerificationCount + 1;
-      factorStore._records[challenge.userId] = factor.copyWith(
-        failedVerificationCount: factorFailures,
-        lockedUntil: factorFailures >= maxAttempts
-            ? current.add(lockoutDuration)
-            : factor.lockedUntil,
-        updatedAt: current,
-      );
-      return AuthTwoFactorPendingRecoveryAttempt(
-        accepted: false,
-        locked: failures >= maxAttempts || factorFailures >= maxAttempts,
-        expired: false,
-        userId: challenge.userId,
-      );
-    }
-
-    remaining.removeAt(recoveryIndex);
-    factorStore._records[challenge.userId] = factor.copyWith(
-      recoveryCodeHashes: List<String>.unmodifiable(remaining),
-      failedVerificationCount: 0,
-      clearLockedUntil: true,
-      updatedAt: current,
-    );
-    challengeStore._records[tokenHash] = challenge.copyWith(
-      completedAt: current,
-    );
-    return AuthTwoFactorPendingRecoveryAttempt(
-      accepted: true,
-      locked: false,
-      expired: false,
-      userId: challenge.userId,
-    );
-  }
-}
-
 /// A short-lived proof that a user recently completed TOTP verification.
 class AuthTwoFactorStepUpToken {
   const AuthTwoFactorStepUpToken({
@@ -1126,6 +962,817 @@ final class InMemoryAuthTwoFactorStepUpStore
   }
 }
 
+/// Outcome of a backend-owned two-factor atomic command.
+enum AuthTwoFactorCommandStatus {
+  applied,
+  bypassed,
+  invalid,
+  locked,
+  expired,
+  notFound,
+  conflict,
+}
+
+/// Result returned by every two-factor atomic command.
+///
+/// [challenge] is populated only for commands operating on a pending sign-in.
+/// It contains the already-redacted credential snapshot stored by the plugin.
+class AuthTwoFactorCommandResult {
+  const AuthTwoFactorCommandResult(this.status, {this.challenge});
+
+  final AuthTwoFactorCommandStatus status;
+  final AuthTwoFactorChallengeRecord? challenge;
+}
+
+/// Attempt and lockout policy evaluated inside an atomic command.
+class AuthTwoFactorAttemptPolicy {
+  const AuthTwoFactorAttemptPolicy({
+    required this.now,
+    required this.maxAttempts,
+    required this.lockoutDuration,
+  });
+
+  final DateTime now;
+  final int maxAttempts;
+  final Duration lockoutDuration;
+}
+
+/// Atomically starts or replaces an unverified enrollment.
+class AuthTwoFactorBeginEnrollmentCommand {
+  const AuthTwoFactorBeginEnrollmentCommand(this.record);
+
+  final AuthTwoFactorRecord record;
+}
+
+/// Atomically activates an enrollment or records its failed TOTP attempt.
+class AuthTwoFactorVerifyEnrollmentCommand {
+  const AuthTwoFactorVerifyEnrollmentCommand({
+    required this.expected,
+    required this.valid,
+    required this.recoveryCodeHashes,
+    required this.policy,
+  });
+
+  final AuthTwoFactorRecord expected;
+  final bool valid;
+  final List<String> recoveryCodeHashes;
+  final AuthTwoFactorAttemptPolicy policy;
+}
+
+/// Atomically verifies TOTP and updates the account attempt state.
+class AuthTwoFactorVerifyTotpCommand {
+  const AuthTwoFactorVerifyTotpCommand({
+    required this.expected,
+    required this.valid,
+    required this.policy,
+  });
+
+  final AuthTwoFactorRecord expected;
+  final bool valid;
+  final AuthTwoFactorAttemptPolicy policy;
+}
+
+/// Atomically consumes a recovery code or records the failed attempt.
+class AuthTwoFactorUseRecoveryCodeCommand {
+  const AuthTwoFactorUseRecoveryCodeCommand({
+    required this.userId,
+    required this.recoveryCodeHash,
+    required this.policy,
+  });
+
+  final String userId;
+  final String recoveryCodeHash;
+  final AuthTwoFactorAttemptPolicy policy;
+}
+
+/// Atomically verifies TOTP and replaces every recovery-code digest.
+class AuthTwoFactorRegenerateRecoveryCodesCommand {
+  const AuthTwoFactorRegenerateRecoveryCodesCommand({
+    required this.expected,
+    required this.valid,
+    required this.recoveryCodeHashes,
+    required this.policy,
+  });
+
+  final AuthTwoFactorRecord expected;
+  final bool valid;
+  final List<String> recoveryCodeHashes;
+  final AuthTwoFactorAttemptPolicy policy;
+}
+
+/// Atomically verifies TOTP and removes all two-factor state for a user.
+class AuthTwoFactorDisableCommand {
+  const AuthTwoFactorDisableCommand({
+    required this.expected,
+    required this.valid,
+    required this.policy,
+  });
+
+  final AuthTwoFactorRecord expected;
+  final bool valid;
+  final AuthTwoFactorAttemptPolicy policy;
+}
+
+/// Atomically accepts a trusted device or creates a pending sign-in challenge.
+class AuthTwoFactorBeginChallengeCommand {
+  const AuthTwoFactorBeginChallengeCommand({
+    required this.userId,
+    required this.challenge,
+    required this.now,
+    this.trustedDeviceTokenHash,
+  });
+
+  final String userId;
+  final AuthTwoFactorChallengeRecord challenge;
+  final DateTime now;
+  final String? trustedDeviceTokenHash;
+}
+
+/// Atomically completes a pending TOTP challenge and optionally trusts a device.
+class AuthTwoFactorCompleteChallengeCommand {
+  const AuthTwoFactorCompleteChallengeCommand({
+    required this.tokenHash,
+    required this.expectedFactor,
+    required this.valid,
+    required this.policy,
+    this.trustedDevice,
+  });
+
+  final String tokenHash;
+  final AuthTwoFactorRecord expectedFactor;
+  final bool valid;
+  final AuthTwoFactorAttemptPolicy policy;
+  final AuthTwoFactorTrustedDeviceRecord? trustedDevice;
+}
+
+/// Atomically consumes recovery material and completes a pending challenge.
+class AuthTwoFactorCompleteRecoveryChallengeCommand {
+  const AuthTwoFactorCompleteRecoveryChallengeCommand({
+    required this.tokenHash,
+    required this.recoveryCodeHash,
+    required this.policy,
+  });
+
+  final String tokenHash;
+  final String recoveryCodeHash;
+  final AuthTwoFactorAttemptPolicy policy;
+}
+
+/// Atomically verifies TOTP and creates a trusted-device record.
+class AuthTwoFactorIssueTrustedDeviceCommand {
+  const AuthTwoFactorIssueTrustedDeviceCommand({
+    required this.expectedFactor,
+    required this.valid,
+    required this.trustedDevice,
+    required this.policy,
+  });
+
+  final AuthTwoFactorRecord expectedFactor;
+  final bool valid;
+  final AuthTwoFactorTrustedDeviceRecord trustedDevice;
+  final AuthTwoFactorAttemptPolicy policy;
+}
+
+/// Atomically verifies TOTP and creates a session-bound recent proof.
+class AuthTwoFactorVerifyStepUpCommand {
+  const AuthTwoFactorVerifyStepUpCommand({
+    required this.expectedFactor,
+    required this.valid,
+    required this.proof,
+    required this.policy,
+  });
+
+  final AuthTwoFactorRecord expectedFactor;
+  final bool valid;
+  final AuthTwoFactorStepUpRecord proof;
+  final AuthTwoFactorAttemptPolicy policy;
+}
+
+class AuthTwoFactorRevokeTrustedDevicesCommand {
+  const AuthTwoFactorRevokeTrustedDevicesCommand({
+    required this.userId,
+    required this.now,
+  });
+
+  final String userId;
+  final DateTime now;
+}
+
+class AuthTwoFactorRevokeStepUpCommand {
+  const AuthTwoFactorRevokeStepUpCommand({
+    required this.userId,
+    required this.sessionBindingHash,
+  });
+
+  final String userId;
+  final String sessionBindingHash;
+}
+
+/// Required persistence boundary for the optional two-factor plugin.
+///
+/// Durable adapters implement these typed commands with backend-native
+/// transactions. The plugin never supplies a transaction callback and never
+/// falls back to coordinating individual writes itself.
+abstract interface class AuthTwoFactorBackend {
+  AuthTwoFactorStore get factorStore;
+  AuthTwoFactorChallengeStore get challengeStore;
+  AuthTwoFactorTrustedDeviceStore get trustedDeviceStore;
+  AuthTwoFactorStepUpStore get stepUpStore;
+
+  FutureOr<AuthTwoFactorCommandResult> beginEnrollment(
+    AuthTwoFactorBeginEnrollmentCommand command,
+  );
+
+  FutureOr<AuthTwoFactorCommandResult> verifyEnrollment(
+    AuthTwoFactorVerifyEnrollmentCommand command,
+  );
+
+  FutureOr<AuthTwoFactorCommandResult> verifyTotp(
+    AuthTwoFactorVerifyTotpCommand command,
+  );
+
+  FutureOr<AuthTwoFactorCommandResult> useRecoveryCode(
+    AuthTwoFactorUseRecoveryCodeCommand command,
+  );
+
+  FutureOr<AuthTwoFactorCommandResult> regenerateRecoveryCodes(
+    AuthTwoFactorRegenerateRecoveryCodesCommand command,
+  );
+
+  FutureOr<AuthTwoFactorCommandResult> disable(
+    AuthTwoFactorDisableCommand command,
+  );
+
+  FutureOr<AuthTwoFactorCommandResult> beginChallenge(
+    AuthTwoFactorBeginChallengeCommand command,
+  );
+
+  FutureOr<AuthTwoFactorCommandResult> completeChallenge(
+    AuthTwoFactorCompleteChallengeCommand command,
+  );
+
+  FutureOr<AuthTwoFactorCommandResult> completeRecoveryChallenge(
+    AuthTwoFactorCompleteRecoveryChallengeCommand command,
+  );
+
+  FutureOr<AuthTwoFactorCommandResult> issueTrustedDevice(
+    AuthTwoFactorIssueTrustedDeviceCommand command,
+  );
+
+  FutureOr<AuthTwoFactorCommandResult> verifyStepUp(
+    AuthTwoFactorVerifyStepUpCommand command,
+  );
+
+  FutureOr<void> revokeTrustedDevices(
+    AuthTwoFactorRevokeTrustedDevicesCommand command,
+  );
+
+  FutureOr<void> revokeStepUp(AuthTwoFactorRevokeStepUpCommand command);
+
+  FutureOr<void> revokeAllStepUp(String userId);
+}
+
+/// In-memory fault locations used to prove rollback behavior.
+enum AuthTwoFactorAtomicFaultPoint {
+  afterFactorWrite,
+  afterChallengeWrite,
+  afterTrustedDeviceWrite,
+  afterStepUpWrite,
+}
+
+final class AuthTwoFactorInjectedFault implements Exception {
+  const AuthTwoFactorInjectedFault(this.point);
+
+  final AuthTwoFactorAtomicFaultPoint point;
+
+  @override
+  String toString() => 'AuthTwoFactorInjectedFault(${point.name})';
+}
+
+/// Deterministic, one-shot fault injection for the in-memory backend.
+final class AuthTwoFactorFaultInjector {
+  final Set<AuthTwoFactorAtomicFaultPoint> _pending =
+      <AuthTwoFactorAtomicFaultPoint>{};
+
+  void failNext(AuthTwoFactorAtomicFaultPoint point) => _pending.add(point);
+
+  void _check(AuthTwoFactorAtomicFaultPoint point) {
+    if (_pending.remove(point)) throw AuthTwoFactorInjectedFault(point);
+  }
+}
+
+/// Transactional in-memory backend for tests and local applications.
+///
+/// Commands are serialized per user. Every command snapshots all two-factor
+/// stores and restores them if a write or injected fault fails.
+final class InMemoryAuthTwoFactorBackend
+    implements AuthTwoFactorBackend, AuthInMemoryDeletionState {
+  InMemoryAuthTwoFactorBackend({
+    InMemoryAuthTwoFactorStore? factorStore,
+    InMemoryAuthTwoFactorChallengeStore? challengeStore,
+    InMemoryAuthTwoFactorTrustedDeviceStore? trustedDeviceStore,
+    InMemoryAuthTwoFactorStepUpStore? stepUpStore,
+    this.faultInjector,
+    DateTime Function()? clock,
+  }) : factorStore = factorStore ?? InMemoryAuthTwoFactorStore(),
+       challengeStore =
+           challengeStore ?? InMemoryAuthTwoFactorChallengeStore(clock: clock),
+       trustedDeviceStore =
+           trustedDeviceStore ??
+           InMemoryAuthTwoFactorTrustedDeviceStore(clock: clock),
+       stepUpStore =
+           stepUpStore ?? InMemoryAuthTwoFactorStepUpStore(clock: clock);
+
+  @override
+  final InMemoryAuthTwoFactorStore factorStore;
+
+  @override
+  final InMemoryAuthTwoFactorChallengeStore challengeStore;
+
+  @override
+  final InMemoryAuthTwoFactorTrustedDeviceStore trustedDeviceStore;
+
+  @override
+  final InMemoryAuthTwoFactorStepUpStore stepUpStore;
+
+  final AuthTwoFactorFaultInjector? faultInjector;
+  final Map<String, Future<void>> _userTails = <String, Future<void>>{};
+
+  @override
+  Object captureDeletionState() => _captureState();
+
+  @override
+  void restoreDeletionState(Object checkpoint) => _restoreState(checkpoint);
+
+  @override
+  Future<AuthTwoFactorCommandResult> beginEnrollment(
+    AuthTwoFactorBeginEnrollmentCommand command,
+  ) => _atomic(command.record.userId, () {
+    final current = factorStore._records[command.record.userId];
+    if (current?.verified == true) {
+      return const AuthTwoFactorCommandResult(
+        AuthTwoFactorCommandStatus.conflict,
+      );
+    }
+    factorStore._records[command.record.userId] = command.record;
+    _fault(AuthTwoFactorAtomicFaultPoint.afterFactorWrite);
+    return const AuthTwoFactorCommandResult(AuthTwoFactorCommandStatus.applied);
+  });
+
+  @override
+  Future<AuthTwoFactorCommandResult> verifyEnrollment(
+    AuthTwoFactorVerifyEnrollmentCommand command,
+  ) => _atomic(command.expected.userId, () {
+    final current = factorStore._records[command.expected.userId];
+    if (current == null) return _notFound;
+    if (current.verified || !_sameFactorIdentity(current, command.expected)) {
+      return _conflict;
+    }
+    final now = command.policy.now.toUtc();
+    if (!now.isBefore(current.enrollmentExpiresAt.toUtc())) return _expired;
+    if (_isLocked(current, now)) return _locked;
+    if (!command.valid) return _failFactor(current, command.policy);
+    factorStore._records[current.userId] = current.copyWith(
+      verified: true,
+      recoveryCodeHashes: List<String>.unmodifiable(command.recoveryCodeHashes),
+      failedVerificationCount: 0,
+      clearLockedUntil: true,
+      updatedAt: now,
+    );
+    _fault(AuthTwoFactorAtomicFaultPoint.afterFactorWrite);
+    return _applied;
+  });
+
+  @override
+  Future<AuthTwoFactorCommandResult> verifyTotp(
+    AuthTwoFactorVerifyTotpCommand command,
+  ) => _atomic(command.expected.userId, () {
+    final current = factorStore._records[command.expected.userId];
+    final checked = _checkVerifiedFactor(
+      current,
+      command.expected,
+      command.policy,
+    );
+    if (checked != null) return checked;
+    if (!command.valid) return _failFactor(current!, command.policy);
+    _clearFactorFailures(current!, command.policy.now);
+    return _applied;
+  });
+
+  @override
+  Future<AuthTwoFactorCommandResult> useRecoveryCode(
+    AuthTwoFactorUseRecoveryCodeCommand command,
+  ) => _atomic(command.userId, () {
+    final current = factorStore._records[command.userId];
+    if (current == null || !current.verified) return _notFound;
+    final now = command.policy.now.toUtc();
+    if (_isLocked(current, now)) return _locked;
+    final remaining = List<String>.from(current.recoveryCodeHashes);
+    final index = remaining.indexWhere(
+      (candidate) =>
+          constantTimeStringEquals(candidate, command.recoveryCodeHash),
+    );
+    if (index < 0) return _failFactor(current, command.policy);
+    remaining.removeAt(index);
+    factorStore._records[command.userId] = current.copyWith(
+      recoveryCodeHashes: List<String>.unmodifiable(remaining),
+      failedVerificationCount: 0,
+      clearLockedUntil: true,
+      updatedAt: now,
+    );
+    _fault(AuthTwoFactorAtomicFaultPoint.afterFactorWrite);
+    return _applied;
+  });
+
+  @override
+  Future<AuthTwoFactorCommandResult> regenerateRecoveryCodes(
+    AuthTwoFactorRegenerateRecoveryCodesCommand command,
+  ) => _atomic(command.expected.userId, () {
+    final current = factorStore._records[command.expected.userId];
+    final checked = _checkVerifiedFactor(
+      current,
+      command.expected,
+      command.policy,
+    );
+    if (checked != null) return checked;
+    if (!command.valid) return _failFactor(current!, command.policy);
+    if (!_sameRecord(current!, command.expected)) return _conflict;
+    factorStore._records[current.userId] = current.copyWith(
+      recoveryCodeHashes: List<String>.unmodifiable(command.recoveryCodeHashes),
+      failedVerificationCount: 0,
+      clearLockedUntil: true,
+      updatedAt: command.policy.now.toUtc(),
+    );
+    _fault(AuthTwoFactorAtomicFaultPoint.afterFactorWrite);
+    return _applied;
+  });
+
+  @override
+  Future<AuthTwoFactorCommandResult> disable(
+    AuthTwoFactorDisableCommand command,
+  ) => _atomic(command.expected.userId, () {
+    final current = factorStore._records[command.expected.userId];
+    final checked = _checkVerifiedFactor(
+      current,
+      command.expected,
+      command.policy,
+    );
+    if (checked != null) return checked;
+    if (!command.valid) return _failFactor(current!, command.policy);
+    if (!_sameRecord(current!, command.expected)) return _conflict;
+    factorStore._records.remove(current.userId);
+    _fault(AuthTwoFactorAtomicFaultPoint.afterFactorWrite);
+    challengeStore._records.removeWhere(
+      (_, challenge) => challenge.userId == current.userId,
+    );
+    _fault(AuthTwoFactorAtomicFaultPoint.afterChallengeWrite);
+    trustedDeviceStore.revokeAll(
+      current.userId,
+      now: command.policy.now.toUtc(),
+    );
+    _fault(AuthTwoFactorAtomicFaultPoint.afterTrustedDeviceWrite);
+    stepUpStore.revokeAllForUser(current.userId);
+    _fault(AuthTwoFactorAtomicFaultPoint.afterStepUpWrite);
+    return _applied;
+  });
+
+  @override
+  Future<AuthTwoFactorCommandResult> beginChallenge(
+    AuthTwoFactorBeginChallengeCommand command,
+  ) => _atomic(command.userId, () {
+    final factor = factorStore._records[command.userId];
+    if (factor == null || !factor.verified) return _bypassed;
+    final now = command.now.toUtc();
+    if (_isLocked(factor, now)) return _locked;
+    final trustedHash = command.trustedDeviceTokenHash;
+    if (trustedHash != null && trustedHash.isNotEmpty) {
+      final trusted = trustedDeviceStore.findActive(
+        command.userId,
+        trustedHash,
+        now: now,
+      );
+      if (trusted != null) {
+        _fault(AuthTwoFactorAtomicFaultPoint.afterTrustedDeviceWrite);
+        return _bypassed;
+      }
+    }
+    if (command.challenge.userId != command.userId) return _conflict;
+    challengeStore.create(command.challenge);
+    _fault(AuthTwoFactorAtomicFaultPoint.afterChallengeWrite);
+    return AuthTwoFactorCommandResult(
+      AuthTwoFactorCommandStatus.applied,
+      challenge: command.challenge,
+    );
+  });
+
+  @override
+  Future<AuthTwoFactorCommandResult> completeChallenge(
+    AuthTwoFactorCompleteChallengeCommand command,
+  ) async {
+    final observed = challengeStore._records[command.tokenHash];
+    if (observed == null) return _expired;
+    return _atomic(observed.userId, () {
+      final now = command.policy.now.toUtc();
+      final challenge = challengeStore._records[command.tokenHash];
+      if (challenge == null || !challenge.isActive(now: now)) return _expired;
+      if (_challengeLocked(challenge, now)) {
+        return AuthTwoFactorCommandResult(
+          AuthTwoFactorCommandStatus.locked,
+          challenge: challenge,
+        );
+      }
+      final factor = factorStore._records[challenge.userId];
+      final checked = _checkVerifiedFactor(
+        factor,
+        command.expectedFactor,
+        command.policy,
+      );
+      if (checked != null) {
+        return AuthTwoFactorCommandResult(checked.status, challenge: challenge);
+      }
+      if (!command.valid) {
+        final challengeFailures = challenge.failedVerificationCount + 1;
+        challengeStore._records[command.tokenHash] = challenge.copyWith(
+          failedVerificationCount: challengeFailures,
+          lockedUntil: challengeFailures >= command.policy.maxAttempts
+              ? now.add(command.policy.lockoutDuration)
+              : challenge.lockedUntil,
+        );
+        _fault(AuthTwoFactorAtomicFaultPoint.afterChallengeWrite);
+        final factorResult = _failFactor(factor!, command.policy);
+        final locked =
+            challengeFailures >= command.policy.maxAttempts ||
+            factorResult.status == AuthTwoFactorCommandStatus.locked;
+        return AuthTwoFactorCommandResult(
+          locked
+              ? AuthTwoFactorCommandStatus.locked
+              : AuthTwoFactorCommandStatus.invalid,
+          challenge: challenge,
+        );
+      }
+      final trusted = command.trustedDevice;
+      if (trusted != null && trusted.userId != challenge.userId) {
+        return _conflict;
+      }
+      challengeStore._records[command.tokenHash] = challenge.copyWith(
+        completedAt: now,
+      );
+      _fault(AuthTwoFactorAtomicFaultPoint.afterChallengeWrite);
+      _clearFactorFailures(factor!, now);
+      if (trusted != null) {
+        trustedDeviceStore.create(trusted);
+        _fault(AuthTwoFactorAtomicFaultPoint.afterTrustedDeviceWrite);
+      }
+      return AuthTwoFactorCommandResult(
+        AuthTwoFactorCommandStatus.applied,
+        challenge: challenge,
+      );
+    });
+  }
+
+  @override
+  Future<AuthTwoFactorCommandResult> completeRecoveryChallenge(
+    AuthTwoFactorCompleteRecoveryChallengeCommand command,
+  ) async {
+    final observed = challengeStore._records[command.tokenHash];
+    if (observed == null) return _expired;
+    return _atomic(observed.userId, () {
+      final now = command.policy.now.toUtc();
+      final challenge = challengeStore._records[command.tokenHash];
+      if (challenge == null || !challenge.isActive(now: now)) return _expired;
+      if (_challengeLocked(challenge, now)) {
+        return AuthTwoFactorCommandResult(
+          AuthTwoFactorCommandStatus.locked,
+          challenge: challenge,
+        );
+      }
+      final factor = factorStore._records[challenge.userId];
+      if (factor == null || !factor.verified) return _expired;
+      if (_isLocked(factor, now)) {
+        return AuthTwoFactorCommandResult(
+          AuthTwoFactorCommandStatus.locked,
+          challenge: challenge,
+        );
+      }
+      final remaining = List<String>.from(factor.recoveryCodeHashes);
+      final index = remaining.indexWhere(
+        (candidate) =>
+            constantTimeStringEquals(candidate, command.recoveryCodeHash),
+      );
+      if (index < 0) {
+        final challengeFailures = challenge.failedVerificationCount + 1;
+        challengeStore._records[command.tokenHash] = challenge.copyWith(
+          failedVerificationCount: challengeFailures,
+          lockedUntil: challengeFailures >= command.policy.maxAttempts
+              ? now.add(command.policy.lockoutDuration)
+              : challenge.lockedUntil,
+        );
+        _fault(AuthTwoFactorAtomicFaultPoint.afterChallengeWrite);
+        final factorResult = _failFactor(factor, command.policy);
+        final locked =
+            challengeFailures >= command.policy.maxAttempts ||
+            factorResult.status == AuthTwoFactorCommandStatus.locked;
+        return AuthTwoFactorCommandResult(
+          locked
+              ? AuthTwoFactorCommandStatus.locked
+              : AuthTwoFactorCommandStatus.invalid,
+          challenge: challenge,
+        );
+      }
+      remaining.removeAt(index);
+      factorStore._records[factor.userId] = factor.copyWith(
+        recoveryCodeHashes: List<String>.unmodifiable(remaining),
+        failedVerificationCount: 0,
+        clearLockedUntil: true,
+        updatedAt: now,
+      );
+      _fault(AuthTwoFactorAtomicFaultPoint.afterFactorWrite);
+      challengeStore._records[command.tokenHash] = challenge.copyWith(
+        completedAt: now,
+      );
+      _fault(AuthTwoFactorAtomicFaultPoint.afterChallengeWrite);
+      return AuthTwoFactorCommandResult(
+        AuthTwoFactorCommandStatus.applied,
+        challenge: challenge,
+      );
+    });
+  }
+
+  @override
+  Future<AuthTwoFactorCommandResult> issueTrustedDevice(
+    AuthTwoFactorIssueTrustedDeviceCommand command,
+  ) => _atomic(command.expectedFactor.userId, () {
+    final factor = factorStore._records[command.expectedFactor.userId];
+    final checked = _checkVerifiedFactor(
+      factor,
+      command.expectedFactor,
+      command.policy,
+    );
+    if (checked != null) return checked;
+    if (!command.valid) return _failFactor(factor!, command.policy);
+    if (command.trustedDevice.userId != factor!.userId) return _conflict;
+    _clearFactorFailures(factor, command.policy.now);
+    trustedDeviceStore.create(command.trustedDevice);
+    _fault(AuthTwoFactorAtomicFaultPoint.afterTrustedDeviceWrite);
+    return _applied;
+  });
+
+  @override
+  Future<AuthTwoFactorCommandResult> verifyStepUp(
+    AuthTwoFactorVerifyStepUpCommand command,
+  ) => _atomic(command.expectedFactor.userId, () {
+    final factor = factorStore._records[command.expectedFactor.userId];
+    final checked = _checkVerifiedFactor(
+      factor,
+      command.expectedFactor,
+      command.policy,
+    );
+    if (checked != null) return checked;
+    if (!command.valid) return _failFactor(factor!, command.policy);
+    if (command.proof.userId != factor!.userId) return _conflict;
+    _clearFactorFailures(factor, command.policy.now);
+    stepUpStore.create(command.proof);
+    _fault(AuthTwoFactorAtomicFaultPoint.afterStepUpWrite);
+    return _applied;
+  });
+
+  @override
+  Future<void> revokeTrustedDevices(
+    AuthTwoFactorRevokeTrustedDevicesCommand command,
+  ) => _atomic(command.userId, () {
+    trustedDeviceStore.revokeAll(command.userId, now: command.now.toUtc());
+    _fault(AuthTwoFactorAtomicFaultPoint.afterTrustedDeviceWrite);
+  });
+
+  @override
+  Future<void> revokeStepUp(AuthTwoFactorRevokeStepUpCommand command) =>
+      _atomic(command.userId, () {
+        stepUpStore.revokeAll(command.userId, command.sessionBindingHash);
+        _fault(AuthTwoFactorAtomicFaultPoint.afterStepUpWrite);
+      });
+
+  @override
+  Future<void> revokeAllStepUp(String userId) => _atomic(userId, () {
+    stepUpStore.revokeAllForUser(userId);
+    _fault(AuthTwoFactorAtomicFaultPoint.afterStepUpWrite);
+  });
+
+  AuthTwoFactorCommandResult? _checkVerifiedFactor(
+    AuthTwoFactorRecord? current,
+    AuthTwoFactorRecord expected,
+    AuthTwoFactorAttemptPolicy policy,
+  ) {
+    if (current == null || !current.verified) return _notFound;
+    if (!_sameFactorIdentity(current, expected)) return _conflict;
+    if (_isLocked(current, policy.now.toUtc())) return _locked;
+    return null;
+  }
+
+  AuthTwoFactorCommandResult _failFactor(
+    AuthTwoFactorRecord record,
+    AuthTwoFactorAttemptPolicy policy,
+  ) {
+    final failures = record.failedVerificationCount + 1;
+    final locked = failures >= policy.maxAttempts;
+    factorStore._records[record.userId] = record.copyWith(
+      failedVerificationCount: failures,
+      lockedUntil: locked
+          ? policy.now.toUtc().add(policy.lockoutDuration)
+          : record.lockedUntil,
+      updatedAt: policy.now.toUtc(),
+    );
+    _fault(AuthTwoFactorAtomicFaultPoint.afterFactorWrite);
+    return locked ? _locked : _invalid;
+  }
+
+  void _clearFactorFailures(AuthTwoFactorRecord record, DateTime now) {
+    factorStore._records[record.userId] = record.copyWith(
+      failedVerificationCount: 0,
+      clearLockedUntil: true,
+      updatedAt: now.toUtc(),
+    );
+    _fault(AuthTwoFactorAtomicFaultPoint.afterFactorWrite);
+  }
+
+  bool _isLocked(AuthTwoFactorRecord record, DateTime now) =>
+      record.lockedUntil != null && now.isBefore(record.lockedUntil!.toUtc());
+
+  bool _challengeLocked(AuthTwoFactorChallengeRecord record, DateTime now) =>
+      record.lockedUntil != null && now.isBefore(record.lockedUntil!.toUtc());
+
+  Future<T> _atomic<T>(String userId, T Function() operation) async {
+    _requireUserId(userId);
+    final previous = _userTails[userId] ?? Future<void>.value();
+    final release = Completer<void>();
+    final tail = release.future;
+    _userTails[userId] = tail;
+    await previous;
+    final checkpoint = _captureState();
+    try {
+      return operation();
+    } catch (_) {
+      _restoreState(checkpoint);
+      rethrow;
+    } finally {
+      release.complete();
+      if (identical(_userTails[userId], tail)) _userTails.remove(userId);
+    }
+  }
+
+  Object _captureState() => (
+    factors: factorStore.captureDeletionState(),
+    challenges: challengeStore.captureDeletionState(),
+    trustedDevices: trustedDeviceStore.captureDeletionState(),
+    stepUps: stepUpStore.captureDeletionState(),
+  );
+
+  void _restoreState(Object checkpoint) {
+    final state =
+        checkpoint
+            as ({
+              Object factors,
+              Object challenges,
+              Object trustedDevices,
+              Object stepUps,
+            });
+    factorStore.restoreDeletionState(state.factors);
+    challengeStore.restoreDeletionState(state.challenges);
+    trustedDeviceStore.restoreDeletionState(state.trustedDevices);
+    stepUpStore.restoreDeletionState(state.stepUps);
+  }
+
+  void _fault(AuthTwoFactorAtomicFaultPoint point) =>
+      faultInjector?._check(point);
+}
+
+const AuthTwoFactorCommandResult _applied = AuthTwoFactorCommandResult(
+  AuthTwoFactorCommandStatus.applied,
+);
+const AuthTwoFactorCommandResult _bypassed = AuthTwoFactorCommandResult(
+  AuthTwoFactorCommandStatus.bypassed,
+);
+const AuthTwoFactorCommandResult _invalid = AuthTwoFactorCommandResult(
+  AuthTwoFactorCommandStatus.invalid,
+);
+const AuthTwoFactorCommandResult _locked = AuthTwoFactorCommandResult(
+  AuthTwoFactorCommandStatus.locked,
+);
+const AuthTwoFactorCommandResult _expired = AuthTwoFactorCommandResult(
+  AuthTwoFactorCommandStatus.expired,
+);
+const AuthTwoFactorCommandResult _notFound = AuthTwoFactorCommandResult(
+  AuthTwoFactorCommandStatus.notFound,
+);
+const AuthTwoFactorCommandResult _conflict = AuthTwoFactorCommandResult(
+  AuthTwoFactorCommandStatus.conflict,
+);
+
+bool _sameFactorIdentity(AuthTwoFactorRecord left, AuthTwoFactorRecord right) =>
+    left.userId == right.userId &&
+    left.protectedSecret == right.protectedSecret &&
+    left.enrollmentExpiresAt == right.enrollmentExpiresAt &&
+    left.verified == right.verified;
+
 /// Exception used by an adapter to return a pending sign-in response.
 class AuthTwoFactorRequiredException extends AuthFlowException {
   AuthTwoFactorRequiredException({required this.challenge})
@@ -1169,9 +1816,10 @@ final class TwoFactorPlugin<TContext>
     implements
         AuthServerPlugin<TContext>,
         AuthHostEndpointContributor<TContext>,
+        AuthPersistenceContributor,
         AuthUserDeletionPlanContributor {
   TwoFactorPlugin({
-    required this.store,
+    required this.backend,
     required this.secretProtector,
     this.issuer = 'server_auth',
     this.enrollmentTtl = const Duration(minutes: 10),
@@ -1180,13 +1828,9 @@ final class TwoFactorPlugin<TContext>
     this.allowedClockSkew = 1,
     this.maxFailedVerificationAttempts = 5,
     this.lockoutDuration = const Duration(minutes: 15),
-    required this.challengeStore,
     this.challengeTtl = const Duration(minutes: 5),
-    this.pendingRecoveryStore,
-    required this.trustedDeviceStore,
     this.trustedDeviceTtl = const Duration(days: 30),
     this.trustedDeviceCookieName = 'two_factor_trusted_device',
-    this.stepUpStore,
     this.stepUpTtl = const Duration(minutes: 5),
     this.stepUpCookieName = 'two_factor_step_up',
     List<int> Function(int length)? secretGenerator,
@@ -1261,7 +1905,7 @@ final class TwoFactorPlugin<TContext>
   @override
   String get id => authTwoFactorPluginId;
 
-  final AuthTwoFactorStore store;
+  final AuthTwoFactorBackend backend;
   final AuthTwoFactorSecretProtector secretProtector;
   final String issuer;
   final Duration enrollmentTtl;
@@ -1270,13 +1914,9 @@ final class TwoFactorPlugin<TContext>
   final int allowedClockSkew;
   final int maxFailedVerificationAttempts;
   final Duration lockoutDuration;
-  final AuthTwoFactorChallengeStore challengeStore;
   final Duration challengeTtl;
-  final AuthTwoFactorPendingRecoveryStore? pendingRecoveryStore;
-  final AuthTwoFactorTrustedDeviceStore trustedDeviceStore;
   final Duration trustedDeviceTtl;
   final String trustedDeviceCookieName;
-  final AuthTwoFactorStepUpStore? stepUpStore;
   final Duration stepUpTtl;
   final String stepUpCookieName;
   final List<int> Function(int length) _secretGenerator;
@@ -1375,17 +2015,185 @@ final class TwoFactorPlugin<TContext>
       ];
 
   @override
+  Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
+    AuthPersistenceSchema(
+      id: authTwoFactorPluginId,
+      entities: <AuthEntityDescriptor>[
+        AuthEntityDescriptor(
+          id: 'two_factor',
+          fields: <AuthFieldDescriptor>[
+            AuthFieldDescriptor(name: 'user_id', kind: 'string'),
+            AuthFieldDescriptor(
+              name: 'protected_secret',
+              kind: 'secret_ciphertext',
+            ),
+            AuthFieldDescriptor(name: 'verified', kind: 'boolean'),
+            AuthFieldDescriptor(
+              name: 'recovery_code_hashes',
+              kind: 'secret_digest[]',
+            ),
+            AuthFieldDescriptor(
+              name: 'enrollment_expires_at',
+              kind: 'timestamp',
+            ),
+            AuthFieldDescriptor(name: 'failed_attempts', kind: 'integer'),
+            AuthFieldDescriptor(name: 'locked_until', kind: 'timestamp?'),
+          ],
+          relationships: <AuthRelationshipDescriptor>[
+            AuthRelationshipDescriptor(
+              field: 'user_id',
+              targetEntity: 'user',
+              cascadeDelete: true,
+            ),
+          ],
+          uniqueConstraints: <List<String>>[
+            <String>['user_id'],
+          ],
+        ),
+        AuthEntityDescriptor(
+          id: 'two_factor_challenge',
+          fields: <AuthFieldDescriptor>[
+            AuthFieldDescriptor(name: 'id', kind: 'string'),
+            AuthFieldDescriptor(name: 'token_hash', kind: 'secret_digest'),
+            AuthFieldDescriptor(name: 'user_id', kind: 'string'),
+            AuthFieldDescriptor(name: 'expires_at', kind: 'timestamp'),
+            AuthFieldDescriptor(name: 'failed_attempts', kind: 'integer'),
+            AuthFieldDescriptor(name: 'locked_until', kind: 'timestamp?'),
+            AuthFieldDescriptor(name: 'completed_at', kind: 'timestamp?'),
+          ],
+          relationships: <AuthRelationshipDescriptor>[
+            AuthRelationshipDescriptor(
+              field: 'user_id',
+              targetEntity: 'user',
+              cascadeDelete: true,
+            ),
+          ],
+          uniqueConstraints: <List<String>>[
+            <String>['id'],
+            <String>['token_hash'],
+          ],
+        ),
+        AuthEntityDescriptor(
+          id: 'two_factor_trusted_device',
+          fields: <AuthFieldDescriptor>[
+            AuthFieldDescriptor(name: 'id', kind: 'string'),
+            AuthFieldDescriptor(name: 'user_id', kind: 'string'),
+            AuthFieldDescriptor(name: 'token_hash', kind: 'secret_digest'),
+            AuthFieldDescriptor(name: 'expires_at', kind: 'timestamp'),
+            AuthFieldDescriptor(name: 'last_used_at', kind: 'timestamp?'),
+            AuthFieldDescriptor(name: 'revoked_at', kind: 'timestamp?'),
+          ],
+          relationships: <AuthRelationshipDescriptor>[
+            AuthRelationshipDescriptor(
+              field: 'user_id',
+              targetEntity: 'user',
+              cascadeDelete: true,
+            ),
+          ],
+          uniqueConstraints: <List<String>>[
+            <String>['id'],
+            <String>['token_hash'],
+          ],
+        ),
+        AuthEntityDescriptor(
+          id: 'two_factor_step_up',
+          fields: <AuthFieldDescriptor>[
+            AuthFieldDescriptor(name: 'id', kind: 'string'),
+            AuthFieldDescriptor(name: 'user_id', kind: 'string'),
+            AuthFieldDescriptor(
+              name: 'session_binding_hash',
+              kind: 'secret_digest',
+            ),
+            AuthFieldDescriptor(name: 'token_hash', kind: 'secret_digest'),
+            AuthFieldDescriptor(name: 'expires_at', kind: 'timestamp'),
+          ],
+          relationships: <AuthRelationshipDescriptor>[
+            AuthRelationshipDescriptor(
+              field: 'user_id',
+              targetEntity: 'user',
+              cascadeDelete: true,
+            ),
+          ],
+          uniqueConstraints: <List<String>>[
+            <String>['id'],
+            <String>['token_hash'],
+          ],
+        ),
+      ],
+      atomicOperations: <AuthAtomicOperationDescriptor>[
+        AuthAtomicOperationDescriptor(
+          id: 'two_factor.begin_enrollment',
+          description: 'Create or replace an unverified enrollment atomically.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'two_factor.verify_enrollment',
+          description:
+              'Verify enrollment state and install recovery digests atomically.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'two_factor.verify_totp',
+          description:
+              'Verify outcome and update bounded attempt state atomically.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'two_factor.use_recovery_code',
+          description:
+              'Consume one recovery digest or record its failed attempt atomically.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'two_factor.regenerate_recovery_codes',
+          description:
+              'Verify TOTP and replace every recovery digest atomically.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'two_factor.disable',
+          description:
+              'Remove the factor and revoke challenges, devices, and proofs atomically.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'two_factor.begin_challenge',
+          description:
+              'Touch a trusted device or create a pending challenge atomically.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'two_factor.complete_challenge',
+          description:
+              'Consume a TOTP challenge, update attempts, and trust a device atomically.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'two_factor.complete_recovery_challenge',
+          description:
+              'Consume a recovery digest and pending challenge atomically.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'two_factor.issue_trusted_device',
+          description:
+              'Verify TOTP and persist a hashed trusted-device token atomically.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'two_factor.revoke_trusted_devices',
+          description: 'Revoke every trusted device for one user atomically.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'two_factor.verify_step_up',
+          description:
+              'Verify TOTP and persist a session-bound recent proof atomically.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'two_factor.revoke_step_up',
+          description: 'Revoke session-bound recent proofs atomically.',
+        ),
+      ],
+    ),
+  ];
+
+  @override
   String get userDataNamespace => 'two_factor';
 
   @override
   Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) async {
     if (_deletionDomain is! AuthInMemoryUserDeletionDomain ||
-        store is! AuthInMemoryDeletionState ||
-        trustedDeviceStore is! InMemoryAuthTwoFactorTrustedDeviceStore ||
-        challengeStore is! InMemoryAuthTwoFactorChallengeStore ||
-        (pendingRecoveryStore != null &&
-            pendingRecoveryStore is! AuthInMemoryDeletionState) ||
-        (stepUpStore != null && stepUpStore is! AuthInMemoryDeletionState)) {
+        backend is! InMemoryAuthTwoFactorBackend) {
       throw StateError('The two-factor adapter has no plan for this domain.');
     }
     return AuthInMemoryUserDeletionPlan(
@@ -1394,12 +2202,7 @@ final class TwoFactorPlugin<TContext>
       namespace: userDataNamespace,
       operation: _InMemoryTwoFactorDeletionOperation(
         userId: user.id,
-        factorStore: store,
-        trustedDeviceStore:
-            trustedDeviceStore as InMemoryAuthTwoFactorTrustedDeviceStore,
-        challengeStore: challengeStore as InMemoryAuthTwoFactorChallengeStore,
-        pendingRecoveryStore: pendingRecoveryStore,
-        stepUpStore: stepUpStore,
+        backend: backend as InMemoryAuthTwoFactorBackend,
       ),
     );
   }
@@ -1413,33 +2216,43 @@ final class TwoFactorPlugin<TContext>
     AuthCredentials? credentials,
     DateTime? now,
   }) async {
-    final factor = await store.findByUserId(userId);
-    if (factor == null || !factor.verified) return null;
+    _requireUserId(userId);
     final issuedAt = (now ?? DateTime.now()).toUtc();
-    _ensureNotLocked(factor, issuedAt);
-    if (trustedDeviceToken != null && trustedDeviceToken.isNotEmpty) {
-      final trusted = await trustedDeviceStore.findActive(
-        userId,
-        hashOpaqueToken(trustedDeviceToken),
-        now: issuedAt,
-      );
-      if (trusted != null) return null;
-    }
     final token = secureRandomToken();
     final expiresAt = issuedAt.add(challengeTtl);
-    await challengeStore.create(
-      AuthTwoFactorChallengeRecord(
-        id: secureRandomToken(length: 16),
-        tokenHash: hashOpaqueToken(token),
+    final result = await backend.beginChallenge(
+      AuthTwoFactorBeginChallengeCommand(
         userId: userId,
-        createdAt: issuedAt,
-        expiresAt: expiresAt,
-        user: user,
-        providerId: providerId,
-        credentials: credentials?.redacted(),
+        trustedDeviceTokenHash:
+            trustedDeviceToken == null || trustedDeviceToken.isEmpty
+            ? null
+            : hashOpaqueToken(trustedDeviceToken),
+        now: issuedAt,
+        challenge: AuthTwoFactorChallengeRecord(
+          id: secureRandomToken(length: 16),
+          tokenHash: hashOpaqueToken(token),
+          userId: userId,
+          createdAt: issuedAt,
+          expiresAt: expiresAt,
+          user: user,
+          providerId: providerId,
+          credentials: credentials?.redacted(),
+        ),
       ),
     );
-    return AuthTwoFactorSignInChallenge(token: token, expiresAt: expiresAt);
+    switch (result.status) {
+      case AuthTwoFactorCommandStatus.applied:
+        return AuthTwoFactorSignInChallenge(token: token, expiresAt: expiresAt);
+      case AuthTwoFactorCommandStatus.bypassed:
+      case AuthTwoFactorCommandStatus.notFound:
+        return null;
+      case AuthTwoFactorCommandStatus.locked:
+        throw AuthFlowException('two_factor_locked');
+      case AuthTwoFactorCommandStatus.invalid:
+      case AuthTwoFactorCommandStatus.expired:
+      case AuthTwoFactorCommandStatus.conflict:
+        throw AuthFlowException('two_factor_challenge_failed');
+    }
   }
 
   /// Verifies a TOTP code and atomically completes a pending sign-in.
@@ -1451,88 +2264,76 @@ final class TwoFactorPlugin<TContext>
   }) async {
     final current = (now ?? DateTime.now()).toUtc();
     final tokenHash = hashOpaqueToken(token);
-    final challenge = await challengeStore.findByTokenHash(tokenHash);
+    final challenge = await backend.challengeStore.findByTokenHash(tokenHash);
     if (challenge == null || !challenge.isActive(now: current)) {
       throw AuthFlowException('two_factor_invalid_challenge');
     }
-    if (challenge.lockedUntil != null &&
-        current.isBefore(challenge.lockedUntil!.toUtc())) {
-      throw AuthFlowException('two_factor_challenge_locked');
-    }
-    final factor = await _requireRecord(challenge.userId);
-    _ensureNotLocked(factor, current);
-    final valid = _matchesTotp(factor, code, current);
-    final attempt = await challengeStore.recordAttempt(
-      tokenHash,
-      now: current,
-      valid: valid,
-      maxAttempts: maxFailedVerificationAttempts,
-      lockoutDuration: lockoutDuration,
-    );
-    if (attempt.expired) {
+    final factor = await backend.factorStore.findByUserId(challenge.userId);
+    if (factor == null || !factor.verified) {
       throw AuthFlowException('two_factor_invalid_challenge');
     }
-    if (!valid) {
-      await _recordFailure(challenge.userId, current);
-    }
-    if (attempt.locked) {
-      throw AuthFlowException('two_factor_challenge_locked');
-    }
-    if (!attempt.accepted) {
-      throw AuthFlowException('two_factor_invalid_code');
-    }
-    await store.clearVerificationFailures(challenge.userId, now: current);
+    final valid = _matchesTotp(factor, code, current);
+    final rawTrustedToken = trustDevice ? secureRandomToken() : null;
+    final trustedExpiresAt = current.add(trustedDeviceTtl);
+    final result = await backend.completeChallenge(
+      AuthTwoFactorCompleteChallengeCommand(
+        tokenHash: tokenHash,
+        expectedFactor: factor,
+        valid: valid,
+        policy: _policy(current),
+        trustedDevice: rawTrustedToken == null
+            ? null
+            : AuthTwoFactorTrustedDeviceRecord(
+                id: secureRandomToken(length: 16),
+                userId: challenge.userId,
+                tokenHash: hashOpaqueToken(rawTrustedToken),
+                createdAt: current,
+                expiresAt: trustedExpiresAt,
+              ),
+      ),
+    );
+    _requireAppliedChallenge(result, invalidCode: 'two_factor_invalid_code');
+    final completed = result.challenge!;
     AuthTwoFactorTrustedDeviceToken? trustedDevice;
-    if (trustDevice) {
-      trustedDevice = await _issueTrustedDevice(challenge.userId, now: current);
+    if (rawTrustedToken != null) {
+      trustedDevice = AuthTwoFactorTrustedDeviceToken(
+        token: rawTrustedToken,
+        expiresAt: trustedExpiresAt,
+      );
     }
     return AuthTwoFactorSignInCompletion(
-      userId: challenge.userId,
-      user: challenge.user,
-      providerId: challenge.providerId,
-      credentials: challenge.credentials,
+      userId: completed.userId,
+      user: completed.user,
+      providerId: completed.providerId,
+      credentials: completed.credentials,
       trustedDevice: trustedDevice,
     );
   }
 
   /// Completes a pending credential sign-in with one recovery code.
   ///
-  /// Recovery-code completion requires [pendingRecoveryStore] because the
-  /// recovery digest and challenge record must be consumed in one transaction.
-  /// It deliberately does not issue a trusted-device token: a device token
-  /// requires a fresh TOTP proof, while the recovery code is a fallback path.
+  /// The backend consumes the recovery digest and challenge together. It does
+  /// not issue a trusted-device token because that requires a fresh TOTP proof.
   Future<AuthTwoFactorSignInCompletion> completeRecoverySignInChallenge(
     String token,
     String recoveryCode, {
     DateTime? now,
   }) async {
-    final transaction = pendingRecoveryStore;
-    if (transaction == null) {
-      throw AuthFlowException('two_factor_recovery_not_supported');
-    }
     final tokenHash = hashOpaqueToken(token);
-    final challenge = await challengeStore.findByTokenHash(tokenHash);
-    if (challenge == null || !challenge.isActive(now: now)) {
-      throw AuthFlowException('two_factor_invalid_challenge');
-    }
-    final attempt = await transaction.recordRecoveryAttempt(
-      tokenHash,
-      recoveryCodeHash: _hashRecoveryCode(recoveryCode),
-      now: (now ?? DateTime.now()).toUtc(),
-      maxAttempts: maxFailedVerificationAttempts,
-      lockoutDuration: lockoutDuration,
+    final result = await backend.completeRecoveryChallenge(
+      AuthTwoFactorCompleteRecoveryChallengeCommand(
+        tokenHash: tokenHash,
+        recoveryCodeHash: _hashRecoveryCode(recoveryCode),
+        policy: _policy((now ?? DateTime.now()).toUtc()),
+      ),
     );
-    if (attempt.expired) {
-      throw AuthFlowException('two_factor_invalid_challenge');
-    }
-    if (attempt.locked) {
-      throw AuthFlowException('two_factor_challenge_locked');
-    }
-    if (!attempt.accepted || attempt.userId == null) {
-      throw AuthFlowException('two_factor_invalid_recovery_code');
-    }
+    _requireAppliedChallenge(
+      result,
+      invalidCode: 'two_factor_invalid_recovery_code',
+    );
+    final challenge = result.challenge!;
     return AuthTwoFactorSignInCompletion(
-      userId: attempt.userId!,
+      userId: challenge.userId,
       user: challenge.user,
       providerId: challenge.providerId,
       credentials: challenge.credentials,
@@ -1548,38 +2349,36 @@ final class TwoFactorPlugin<TContext>
     String code, {
     DateTime? now,
   }) async {
-    await verifyTotp(userId, code, now: now);
-    return _issueTrustedDevice(userId, now: now);
-  }
-
-  /// Issues a trusted-device token after the caller has already completed a
-  /// TOTP proof in this plugin.
-  Future<AuthTwoFactorTrustedDeviceToken> _issueTrustedDevice(
-    String userId, {
-    DateTime? now,
-  }) async {
-    await _requireRecord(userId);
     final issuedAt = (now ?? DateTime.now()).toUtc();
+    final factor = await _requireRecord(userId);
     final token = secureRandomToken();
     final expiresAt = issuedAt.add(trustedDeviceTtl);
-    await trustedDeviceStore.create(
-      AuthTwoFactorTrustedDeviceRecord(
-        id: secureRandomToken(length: 16),
-        userId: userId,
-        tokenHash: hashOpaqueToken(token),
-        createdAt: issuedAt,
-        expiresAt: expiresAt,
+    final result = await backend.issueTrustedDevice(
+      AuthTwoFactorIssueTrustedDeviceCommand(
+        expectedFactor: factor,
+        valid: _matchesTotp(factor, code, issuedAt),
+        policy: _policy(issuedAt),
+        trustedDevice: AuthTwoFactorTrustedDeviceRecord(
+          id: secureRandomToken(length: 16),
+          userId: userId,
+          tokenHash: hashOpaqueToken(token),
+          createdAt: issuedAt,
+          expiresAt: expiresAt,
+        ),
       ),
     );
+    _requireAppliedFactor(result, invalidCode: 'two_factor_invalid_code');
     return AuthTwoFactorTrustedDeviceToken(token: token, expiresAt: expiresAt);
   }
 
   /// Revokes every trusted device for [userId].
   Future<void> revokeAllTrustedDevices(String userId, {DateTime? now}) async {
     _requireUserId(userId);
-    await trustedDeviceStore.revokeAll(
-      userId,
-      now: (now ?? DateTime.now()).toUtc(),
+    await backend.revokeTrustedDevices(
+      AuthTwoFactorRevokeTrustedDevicesCommand(
+        userId: userId,
+        now: (now ?? DateTime.now()).toUtc(),
+      ),
     );
   }
 
@@ -1590,7 +2389,7 @@ final class TwoFactorPlugin<TContext>
     DateTime? now,
   }) async {
     _requireUserId(userId);
-    final existing = await store.findByUserId(userId);
+    final existing = await backend.factorStore.findByUserId(userId);
     if (existing?.verified == true) {
       throw AuthFlowException('two_factor_already_enabled');
     }
@@ -1601,14 +2400,19 @@ final class TwoFactorPlugin<TContext>
     }
     final secret = encodeAuthBase32(secretBytes);
     final expiresAt = issuedAt.add(enrollmentTtl);
-    await store.save(
-      AuthTwoFactorRecord(
-        userId: userId,
-        protectedSecret: secretProtector.protect(secret),
-        enrollmentExpiresAt: expiresAt,
-        updatedAt: issuedAt,
+    final result = await backend.beginEnrollment(
+      AuthTwoFactorBeginEnrollmentCommand(
+        AuthTwoFactorRecord(
+          userId: userId,
+          protectedSecret: secretProtector.protect(secret),
+          enrollmentExpiresAt: expiresAt,
+          updatedAt: issuedAt,
+        ),
       ),
     );
+    if (result.status != AuthTwoFactorCommandStatus.applied) {
+      throw AuthFlowException('two_factor_already_enabled');
+    }
     final label = accountLabel == null || accountLabel.trim().isEmpty
         ? userId
         : accountLabel.trim();
@@ -1646,27 +2450,28 @@ final class TwoFactorPlugin<TContext>
       throw AuthFlowException('two_factor_enrollment_expired');
     }
     _ensureNotLocked(record, current);
-    if (!_matchesTotp(record, code, current)) {
-      await _recordFailure(userId, current);
-      throw AuthFlowException('two_factor_invalid_code');
-    }
-    final recovery = _newRecoveryCodes();
-    final activated = record.copyWith(
-      verified: true,
-      recoveryCodeHashes: recovery.codes.map(_hashRecoveryCode).toList(),
-      failedVerificationCount: 0,
-      clearLockedUntil: true,
-      updatedAt: current,
+    final valid = _matchesTotp(record, code, current);
+    final recovery = valid
+        ? _newRecoveryCodes()
+        : const AuthTwoFactorRecoveryCodes(<String>[]);
+    final result = await backend.verifyEnrollment(
+      AuthTwoFactorVerifyEnrollmentCommand(
+        expected: record,
+        valid: valid,
+        recoveryCodeHashes: recovery.codes.map(_hashRecoveryCode).toList(),
+        policy: _policy(current),
+      ),
     );
-    if (!await store.saveIfCurrent(record, activated)) {
+    if (result.status == AuthTwoFactorCommandStatus.conflict) {
       throw AuthFlowException('two_factor_enrollment_changed');
     }
+    _requireAppliedFactor(result, invalidCode: 'two_factor_invalid_code');
     return recovery;
   }
 
   /// Returns the current public status for [userId].
   Future<AuthTwoFactorStatus> status(String userId, {DateTime? now}) async {
-    final record = await store.findByUserId(userId);
+    final record = await backend.factorStore.findByUserId(userId);
     if (record == null) {
       return const AuthTwoFactorStatus(
         enabled: false,
@@ -1690,12 +2495,14 @@ final class TwoFactorPlugin<TContext>
   Future<void> verifyTotp(String userId, String code, {DateTime? now}) async {
     final current = (now ?? DateTime.now()).toUtc();
     final record = await _requireRecord(userId);
-    _ensureNotLocked(record, current);
-    if (!_matchesTotp(record, code, current)) {
-      await _recordFailure(userId, current);
-      throw AuthFlowException('two_factor_invalid_code');
-    }
-    await store.clearVerificationFailures(userId, now: current);
+    final result = await backend.verifyTotp(
+      AuthTwoFactorVerifyTotpCommand(
+        expected: record,
+        valid: _matchesTotp(record, code, current),
+        policy: _policy(current),
+      ),
+    );
+    _requireAppliedFactor(result, invalidCode: 'two_factor_invalid_code');
   }
 
   /// Verifies TOTP and issues a short-lived proof for a sensitive action.
@@ -1709,31 +2516,27 @@ final class TwoFactorPlugin<TContext>
     String code, {
     DateTime? now,
   }) async {
-    final stepUpStore = this.stepUpStore;
-    if (stepUpStore == null) {
-      throw AuthFlowException('two_factor_step_up_not_supported');
-    }
     _requireSessionBinding(sessionBinding);
     final current = (now ?? DateTime.now()).toUtc();
     final record = await _requireRecord(userId);
-    _ensureNotLocked(record, current);
-    if (!_matchesTotp(record, code, current)) {
-      await _recordFailure(userId, current);
-      throw AuthFlowException('two_factor_invalid_code');
-    }
-    await store.clearVerificationFailures(userId, now: current);
     final token = secureRandomToken();
     final expiresAt = current.add(stepUpTtl);
-    await stepUpStore.create(
-      AuthTwoFactorStepUpRecord(
-        id: secureRandomToken(length: 16),
-        userId: userId,
-        sessionBindingHash: hashOpaqueToken(sessionBinding),
-        tokenHash: hashOpaqueToken(token),
-        createdAt: current,
-        expiresAt: expiresAt,
+    final result = await backend.verifyStepUp(
+      AuthTwoFactorVerifyStepUpCommand(
+        expectedFactor: record,
+        valid: _matchesTotp(record, code, current),
+        policy: _policy(current),
+        proof: AuthTwoFactorStepUpRecord(
+          id: secureRandomToken(length: 16),
+          userId: userId,
+          sessionBindingHash: hashOpaqueToken(sessionBinding),
+          tokenHash: hashOpaqueToken(token),
+          createdAt: current,
+          expiresAt: expiresAt,
+        ),
       ),
     );
+    _requireAppliedFactor(result, invalidCode: 'two_factor_invalid_code');
     return AuthTwoFactorStepUpToken(token: token, expiresAt: expiresAt);
   }
 
@@ -1744,13 +2547,10 @@ final class TwoFactorPlugin<TContext>
     String token, {
     DateTime? now,
   }) async {
-    final stepUpStore = this.stepUpStore;
-    if (stepUpStore == null ||
-        sessionBinding.trim().isEmpty ||
-        token.trim().isEmpty) {
+    if (sessionBinding.trim().isEmpty || token.trim().isEmpty) {
       return false;
     }
-    final record = await stepUpStore.findActive(
+    final record = await backend.stepUpStore.findActive(
       userId,
       hashOpaqueToken(sessionBinding),
       hashOpaqueToken(token),
@@ -1761,18 +2561,19 @@ final class TwoFactorPlugin<TContext>
 
   /// Revokes all step-up proofs for the current user/session binding.
   Future<void> revokeStepUp(String userId, String sessionBinding) async {
-    final stepUpStore = this.stepUpStore;
-    if (stepUpStore == null) return;
     _requireSessionBinding(sessionBinding);
-    await stepUpStore.revokeAll(userId, hashOpaqueToken(sessionBinding));
+    await backend.revokeStepUp(
+      AuthTwoFactorRevokeStepUpCommand(
+        userId: userId,
+        sessionBindingHash: hashOpaqueToken(sessionBinding),
+      ),
+    );
   }
 
   /// Revokes every step-up proof issued for [userId].
   Future<void> revokeAllStepUpProofs(String userId) async {
     _requireUserId(userId);
-    final stepUpStore = this.stepUpStore;
-    if (stepUpStore == null) return;
-    await stepUpStore.revokeAllForUser(userId);
+    await backend.revokeAllStepUp(userId);
   }
 
   /// Consumes one recovery code for [userId].
@@ -1782,18 +2583,18 @@ final class TwoFactorPlugin<TContext>
     DateTime? now,
   }) async {
     final current = (now ?? DateTime.now()).toUtc();
-    final record = await _requireRecord(userId);
-    _ensureNotLocked(record, current);
-    final consumed = await store.consumeRecoveryCode(
-      userId,
-      _hashRecoveryCode(code),
-      now: current,
+    await _requireRecord(userId);
+    final result = await backend.useRecoveryCode(
+      AuthTwoFactorUseRecoveryCodeCommand(
+        userId: userId,
+        recoveryCodeHash: _hashRecoveryCode(code),
+        policy: _policy(current),
+      ),
     );
-    if (!consumed) {
-      await _recordFailure(userId, current);
-      throw AuthFlowException('two_factor_invalid_recovery_code');
-    }
-    await store.clearVerificationFailures(userId, now: current);
+    _requireAppliedFactor(
+      result,
+      invalidCode: 'two_factor_invalid_recovery_code',
+    );
   }
 
   /// Replaces all recovery codes after verifying the current TOTP code.
@@ -1802,25 +2603,42 @@ final class TwoFactorPlugin<TContext>
     String code, {
     DateTime? now,
   }) async {
-    await verifyTotp(userId, code, now: now);
+    final current = (now ?? DateTime.now()).toUtc();
     final record = await _requireRecord(userId);
-    final recovery = _newRecoveryCodes();
-    final replacement = record.copyWith(
-      recoveryCodeHashes: recovery.codes.map(_hashRecoveryCode).toList(),
-      updatedAt: (now ?? DateTime.now()).toUtc(),
+    final valid = _matchesTotp(record, code, current);
+    final recovery = valid
+        ? _newRecoveryCodes()
+        : const AuthTwoFactorRecoveryCodes(<String>[]);
+    final result = await backend.regenerateRecoveryCodes(
+      AuthTwoFactorRegenerateRecoveryCodesCommand(
+        expected: record,
+        valid: valid,
+        recoveryCodeHashes: recovery.codes.map(_hashRecoveryCode).toList(),
+        policy: _policy(current),
+      ),
     );
-    if (!await store.saveIfCurrent(record, replacement)) {
+    if (result.status == AuthTwoFactorCommandStatus.conflict) {
       throw AuthFlowException('two_factor_state_changed');
     }
+    _requireAppliedFactor(result, invalidCode: 'two_factor_invalid_code');
     return recovery;
   }
 
   /// Disables two-factor authentication after verifying the current TOTP code.
   Future<void> disable(String userId, String code, {DateTime? now}) async {
-    await verifyTotp(userId, code, now: now);
-    await revokeAllStepUpProofs(userId);
-    await store.delete(userId);
-    await revokeAllTrustedDevices(userId, now: now);
+    final current = (now ?? DateTime.now()).toUtc();
+    final record = await _requireRecord(userId);
+    final result = await backend.disable(
+      AuthTwoFactorDisableCommand(
+        expected: record,
+        valid: _matchesTotp(record, code, current),
+        policy: _policy(current),
+      ),
+    );
+    if (result.status == AuthTwoFactorCommandStatus.conflict) {
+      throw AuthFlowException('two_factor_state_changed');
+    }
+    _requireAppliedFactor(result, invalidCode: 'two_factor_invalid_code');
   }
 
   bool _matchesTotp(AuthTwoFactorRecord record, String code, DateTime now) {
@@ -1858,7 +2676,7 @@ final class TwoFactorPlugin<TContext>
     bool requireVerified = true,
   }) async {
     _requireUserId(userId);
-    final record = await store.findByUserId(userId);
+    final record = await backend.factorStore.findByUserId(userId);
     if (record == null || (requireVerified && !record.verified)) {
       throw AuthFlowException('two_factor_not_enabled');
     }
@@ -1872,13 +2690,56 @@ final class TwoFactorPlugin<TContext>
     }
   }
 
-  Future<void> _recordFailure(String userId, DateTime now) async {
-    await store.recordFailedVerification(
-      userId,
-      now: now,
+  AuthTwoFactorAttemptPolicy _policy(DateTime now) {
+    return AuthTwoFactorAttemptPolicy(
+      now: now.toUtc(),
       maxAttempts: maxFailedVerificationAttempts,
       lockoutDuration: lockoutDuration,
     );
+  }
+
+  void _requireAppliedFactor(
+    AuthTwoFactorCommandResult result, {
+    required String invalidCode,
+  }) {
+    switch (result.status) {
+      case AuthTwoFactorCommandStatus.applied:
+        return;
+      case AuthTwoFactorCommandStatus.locked:
+        throw AuthFlowException('two_factor_locked');
+      case AuthTwoFactorCommandStatus.expired:
+        throw AuthFlowException('two_factor_enrollment_expired');
+      case AuthTwoFactorCommandStatus.notFound:
+        throw AuthFlowException('two_factor_not_enabled');
+      case AuthTwoFactorCommandStatus.invalid:
+        throw AuthFlowException(invalidCode);
+      case AuthTwoFactorCommandStatus.conflict:
+        throw AuthFlowException('two_factor_state_changed');
+      case AuthTwoFactorCommandStatus.bypassed:
+        throw AuthFlowException(invalidCode);
+    }
+  }
+
+  void _requireAppliedChallenge(
+    AuthTwoFactorCommandResult result, {
+    required String invalidCode,
+  }) {
+    switch (result.status) {
+      case AuthTwoFactorCommandStatus.applied:
+        if (result.challenge == null) {
+          throw AuthFlowException('two_factor_invalid_challenge');
+        }
+        return;
+      case AuthTwoFactorCommandStatus.locked:
+        throw AuthFlowException('two_factor_challenge_locked');
+      case AuthTwoFactorCommandStatus.invalid:
+        throw AuthFlowException(invalidCode);
+      case AuthTwoFactorCommandStatus.bypassed:
+      case AuthTwoFactorCommandStatus.expired:
+      case AuthTwoFactorCommandStatus.notFound:
+      case AuthTwoFactorCommandStatus.conflict:
+        throw AuthFlowException('two_factor_invalid_challenge');
+    }
   }
 
   AuthTwoFactorRecoveryCodes _newRecoveryCodes() {
@@ -2011,62 +2872,31 @@ final class _InMemoryTwoFactorDeletionOperation
     implements AuthInMemoryUserDeletionOperation {
   _InMemoryTwoFactorDeletionOperation({
     required this.userId,
-    required this.factorStore,
-    required this.trustedDeviceStore,
-    required this.challengeStore,
-    required this.pendingRecoveryStore,
-    required this.stepUpStore,
+    required this.backend,
   });
 
   final String userId;
-  final AuthTwoFactorStore factorStore;
-  final InMemoryAuthTwoFactorTrustedDeviceStore trustedDeviceStore;
-  final InMemoryAuthTwoFactorChallengeStore challengeStore;
-  final AuthTwoFactorPendingRecoveryStore? pendingRecoveryStore;
-  final AuthTwoFactorStepUpStore? stepUpStore;
-
-  List<AuthInMemoryDeletionState> get _stores {
-    final values = <AuthInMemoryDeletionState>[
-      factorStore as AuthInMemoryDeletionState,
-      trustedDeviceStore,
-      challengeStore,
-      if (pendingRecoveryStore case AuthInMemoryDeletionState value) value,
-      if (stepUpStore case AuthInMemoryDeletionState value) value,
-    ];
-    final unique = <AuthInMemoryDeletionState>[];
-    for (final value in values) {
-      if (!unique.any((existing) => identical(existing, value))) {
-        unique.add(value);
-      }
-    }
-    return unique;
-  }
+  final InMemoryAuthTwoFactorBackend backend;
 
   @override
-  List<({AuthInMemoryDeletionState store, Object state})> captureState() => [
-    for (final store in _stores)
-      (store: store, state: store.captureDeletionState()),
-  ];
+  Object captureState() => backend.captureDeletionState();
 
   @override
-  Future<void> apply() async {
-    await factorStore.delete(userId);
-    await pendingRecoveryStore?.deleteForUser(userId);
-    trustedDeviceStore._records.removeWhere(
+  void apply() {
+    backend.factorStore._records.remove(userId);
+    backend.trustedDeviceStore._records.removeWhere(
       (_, record) => record.userId == userId,
     );
-    challengeStore._records.removeWhere((_, record) => record.userId == userId);
-    await stepUpStore?.revokeAllForUser(userId);
+    backend.challengeStore._records.removeWhere(
+      (_, record) => record.userId == userId,
+    );
+    backend.stepUpStore._records.removeWhere(
+      (_, record) => record.userId == userId,
+    );
   }
 
   @override
-  Future<void> restoreState(Object state) async {
-    final checkpoints =
-        state as List<({AuthInMemoryDeletionState store, Object state})>;
-    for (final checkpoint in checkpoints.reversed) {
-      await checkpoint.store.restoreDeletionState(checkpoint.state);
-    }
-  }
+  void restoreState(Object state) => backend.restoreDeletionState(state);
 }
 
 String _normalizeRecoveryCode(String code) =>
@@ -2136,7 +2966,6 @@ AuthOperationSemantics _twoFactorOperationSemantics(String id) {
   switch (id) {
     case 'twoFactor.status':
       return const AuthOperationSemantics.readOnly();
-    case 'twoFactor.enroll':
     case 'twoFactor.stepUp':
       return const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.boundedEphemeral(),
@@ -2150,36 +2979,85 @@ AuthOperationSemantics _twoFactorOperationSemantics(String id) {
     case 'twoFactor.challengeVerify':
     case 'twoFactor.challengeRecoveryCode':
       return const AuthOperationSemantics.mutation(
+        // The two-factor command commits before the host issues its session
+        // and cookies, so the public endpoint is not end-to-end atomic.
         persistence: AuthMutationPersistence.session(),
         replaySafety: AuthMutationReplaySafety.singleUse,
+      );
+    case 'twoFactor.enroll':
+      return const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: authTwoFactorPluginId,
+            atomicOperationId: 'two_factor.begin_enrollment',
+          ),
+        ),
+        replaySafety: AuthMutationReplaySafety.repeatable,
       );
     case 'twoFactor.trustedDevicesRevoke':
       return const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
-          atomicity: AuthMutationAtomicity.nonAtomic,
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: authTwoFactorPluginId,
+            atomicOperationId: 'two_factor.revoke_trusted_devices',
+          ),
         ),
         replaySafety: AuthMutationReplaySafety.idempotent,
       );
     case 'twoFactor.enrollVerify':
+      return const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: authTwoFactorPluginId,
+            atomicOperationId: 'two_factor.verify_enrollment',
+          ),
+        ),
+        replaySafety: AuthMutationReplaySafety.singleUse,
+      );
     case 'twoFactor.recoveryCode':
+      return const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: authTwoFactorPluginId,
+            atomicOperationId: 'two_factor.use_recovery_code',
+          ),
+        ),
+        replaySafety: AuthMutationReplaySafety.singleUse,
+      );
     case 'twoFactor.disable':
       return const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
-          atomicity: AuthMutationAtomicity.nonAtomic,
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: authTwoFactorPluginId,
+            atomicOperationId: 'two_factor.disable',
+          ),
         ),
         replaySafety: AuthMutationReplaySafety.singleUse,
       );
     case 'twoFactor.verify':
       return const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
-          atomicity: AuthMutationAtomicity.nonAtomic,
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: authTwoFactorPluginId,
+            atomicOperationId: 'two_factor.verify_totp',
+          ),
         ),
-        replaySafety: AuthMutationReplaySafety.unguarded,
+        replaySafety: AuthMutationReplaySafety.repeatable,
       );
     case 'twoFactor.recoveryCodesRegenerate':
       return const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
-          atomicity: AuthMutationAtomicity.nonAtomic,
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: authTwoFactorPluginId,
+            atomicOperationId: 'two_factor.regenerate_recovery_codes',
+          ),
         ),
         replaySafety: AuthMutationReplaySafety.repeatable,
       );

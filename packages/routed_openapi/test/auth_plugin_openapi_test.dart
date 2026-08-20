@@ -438,10 +438,8 @@ void main() {
           config: const AuthBreachedPasswordPluginConfig(maxPasswordLength: 20),
         ),
         TwoFactorPlugin<Object>(
-          store: InMemoryAuthTwoFactorStore(),
+          backend: InMemoryAuthTwoFactorBackend(),
           secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
-          challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-          trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
         ),
       ]);
 
@@ -552,10 +550,8 @@ void main() {
         AnonymousPlugin<Object>(),
         AuthApiKeyPlugin<Object>(store: InMemoryAuthApiKeyStore()),
         TwoFactorPlugin<Object>(
-          store: InMemoryAuthTwoFactorStore(),
+          backend: InMemoryAuthTwoFactorBackend(),
           secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
-          challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-          trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
         ),
       ]).toOpenApi31(info: _info);
 

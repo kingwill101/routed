@@ -969,9 +969,13 @@
         "x-routed-auth-csrf-policy": "required",
         "x-routed-auth-operation-semantics": {
           "effect": "mutation",
-          "persistence": "boundedEphemeral",
-          "atomicity": "notApplicable",
-          "replaySafety": "repeatable"
+          "persistence": "durable",
+          "atomicity": "atomic",
+          "replaySafety": "repeatable",
+          "persistenceReference": {
+            "schemaId": "two_factor",
+            "atomicOperationId": "two_factor.begin_enrollment"
+          }
         },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
@@ -1094,8 +1098,12 @@
         "x-routed-auth-operation-semantics": {
           "effect": "mutation",
           "persistence": "durable",
-          "atomicity": "nonAtomic",
-          "replaySafety": "singleUse"
+          "atomicity": "atomic",
+          "replaySafety": "singleUse",
+          "persistenceReference": {
+            "schemaId": "two_factor",
+            "atomicOperationId": "two_factor.verify_enrollment"
+          }
         },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
@@ -1218,8 +1226,12 @@
         "x-routed-auth-operation-semantics": {
           "effect": "mutation",
           "persistence": "durable",
-          "atomicity": "nonAtomic",
-          "replaySafety": "unguarded"
+          "atomicity": "atomic",
+          "replaySafety": "repeatable",
+          "persistenceReference": {
+            "schemaId": "two_factor",
+            "atomicOperationId": "two_factor.verify_totp"
+          }
         },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
@@ -1342,8 +1354,12 @@
         "x-routed-auth-operation-semantics": {
           "effect": "mutation",
           "persistence": "durable",
-          "atomicity": "nonAtomic",
-          "replaySafety": "singleUse"
+          "atomicity": "atomic",
+          "replaySafety": "singleUse",
+          "persistenceReference": {
+            "schemaId": "two_factor",
+            "atomicOperationId": "two_factor.use_recovery_code"
+          }
         },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
@@ -1466,8 +1482,12 @@
         "x-routed-auth-operation-semantics": {
           "effect": "mutation",
           "persistence": "durable",
-          "atomicity": "nonAtomic",
-          "replaySafety": "repeatable"
+          "atomicity": "atomic",
+          "replaySafety": "repeatable",
+          "persistenceReference": {
+            "schemaId": "two_factor",
+            "atomicOperationId": "two_factor.regenerate_recovery_codes"
+          }
         },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
@@ -1590,8 +1610,12 @@
         "x-routed-auth-operation-semantics": {
           "effect": "mutation",
           "persistence": "durable",
-          "atomicity": "nonAtomic",
-          "replaySafety": "singleUse"
+          "atomicity": "atomic",
+          "replaySafety": "singleUse",
+          "persistenceReference": {
+            "schemaId": "two_factor",
+            "atomicOperationId": "two_factor.disable"
+          }
         },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",
@@ -1947,8 +1971,12 @@
         "x-routed-auth-operation-semantics": {
           "effect": "mutation",
           "persistence": "durable",
-          "atomicity": "nonAtomic",
-          "replaySafety": "idempotent"
+          "atomicity": "atomic",
+          "replaySafety": "idempotent",
+          "persistenceReference": {
+            "schemaId": "two_factor",
+            "atomicOperationId": "two_factor.revoke_trusted_devices"
+          }
         },
         "x-routed-auth-rate-limit-operation": {
           "id": "core.twoFactor",

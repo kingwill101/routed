@@ -23,6 +23,9 @@ Generator<String> _hostileCodes() {
   ]);
 }
 
+Generator<List<int>> _commandSequences() =>
+    Gen.integer(min: 0, max: 4).list(minLength: 1, maxLength: 80);
+
 String _propertyReport(PropertyResult result) {
   if (result.success) return 'All ${result.numTests} generated cases passed';
   return [
@@ -82,9 +85,7 @@ void main() {
     final now = DateTime.utc(2030, 1, 1);
     final runner = PropertyTestRunner<String>(_hostileCodes(), (code) async {
       final feature = TwoFactorPlugin<Object>(
-        store: InMemoryAuthTwoFactorStore(),
-        challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-        trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+        backend: InMemoryAuthTwoFactorBackend(),
         secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
         secretGenerator: _uniqueGenerator(),
       );
@@ -140,9 +141,7 @@ void main() {
         ),
       );
       final feature = TwoFactorPlugin<Object>(
-        store: store,
-        challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-        trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+        backend: InMemoryAuthTwoFactorBackend(factorStore: store),
         secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
       );
 
@@ -161,4 +160,98 @@ void main() {
     final result = await runner.run();
     expect(result.success, isTrue, reason: _propertyReport(result));
   });
+
+  test(
+    'stateful atomic command sequences preserve factor invariants',
+    () async {
+      final now = DateTime.utc(2030, 1, 1);
+      final runner = PropertyTestRunner<List<int>>(_commandSequences(), (
+        operations,
+      ) async {
+        final backend = InMemoryAuthTwoFactorBackend();
+        const userId = 'stateful-user';
+        backend.factorStore.save(
+          AuthTwoFactorRecord(
+            userId: userId,
+            protectedSecret: 'protected-secret',
+            enrollmentExpiresAt: now.add(const Duration(minutes: 10)),
+            verified: true,
+            recoveryCodeHashes: const <String>['initial-recovery'],
+            updatedAt: now,
+          ),
+        );
+
+        for (var index = 0; index < operations.length; index++) {
+          final current = backend.factorStore.findByUserId(userId);
+          final policy = AuthTwoFactorAttemptPolicy(
+            now: now,
+            maxAttempts: 5,
+            lockoutDuration: const Duration(minutes: 5),
+          );
+          switch (operations[index]) {
+            case 0:
+              if (current != null) {
+                await backend.verifyTotp(
+                  AuthTwoFactorVerifyTotpCommand(
+                    expected: current,
+                    valid: true,
+                    policy: policy,
+                  ),
+                );
+              }
+            case 1:
+              await backend.useRecoveryCode(
+                AuthTwoFactorUseRecoveryCodeCommand(
+                  userId: userId,
+                  recoveryCodeHash: 'initial-recovery',
+                  policy: policy,
+                ),
+              );
+            case 2:
+              await backend.useRecoveryCode(
+                AuthTwoFactorUseRecoveryCodeCommand(
+                  userId: userId,
+                  recoveryCodeHash: 'invalid-$index',
+                  policy: policy,
+                ),
+              );
+            case 3:
+              if (current != null) {
+                await backend.regenerateRecoveryCodes(
+                  AuthTwoFactorRegenerateRecoveryCodesCommand(
+                    expected: current,
+                    valid: true,
+                    recoveryCodeHashes: <String>['replacement-$index'],
+                    policy: policy,
+                  ),
+                );
+              }
+            case 4:
+              if (current != null) {
+                await backend.disable(
+                  AuthTwoFactorDisableCommand(
+                    expected: current,
+                    valid: true,
+                    policy: policy,
+                  ),
+                );
+              }
+          }
+
+          final after = backend.factorStore.findByUserId(userId);
+          if (after != null) {
+            expect(after.failedVerificationCount, inInclusiveRange(0, 5));
+            expect(
+              after.recoveryCodeHashes.toSet(),
+              hasLength(after.recoveryCodeHashes.length),
+            );
+            expect(after.recoveryCodeHashes, isNot(contains('invalid-$index')));
+          }
+        }
+      }, PropertyConfig(numTests: 200, seed: 20260820));
+
+      final result = await runner.run();
+      expect(result.success, isTrue, reason: _propertyReport(result));
+    },
+  );
 }

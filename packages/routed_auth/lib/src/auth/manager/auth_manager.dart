@@ -434,7 +434,7 @@ class AuthManager {
   /// Requires a recent step-up proof for the current request.
   Future<void> requireTwoFactorStepUp(EngineContext ctx) async {
     final plugin = twoFactor;
-    if (plugin == null || plugin.stepUpStore == null) {
+    if (plugin == null) {
       throw AuthFlowException('two_factor_step_up_not_supported');
     }
     if (!await hasValidTwoFactorStepUp(ctx)) {
@@ -630,7 +630,7 @@ class AuthManager {
       passwordHasher: options.passwordHasher,
       token: token,
       newPassword: newPassword,
-      trustedDeviceStore: twoFactor?.trustedDeviceStore,
+      trustedDeviceStore: twoFactor?.backend.trustedDeviceStore,
       passwordPolicy: options.passwordPolicy,
     );
   }
@@ -654,7 +654,7 @@ class AuthManager {
       identifier: identifier,
       currentPassword: currentPassword,
       newPassword: newPassword,
-      trustedDeviceStore: twoFactor?.trustedDeviceStore,
+      trustedDeviceStore: twoFactor?.backend.trustedDeviceStore,
       passwordPolicy: options.passwordPolicy,
       beforeCommit: (user) => runtime.registry.enforcePasswordPolicy(
         AuthPasswordPolicyRequest<EngineContext>(

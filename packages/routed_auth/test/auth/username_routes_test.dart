@@ -153,9 +153,7 @@ void main() {
   test('username route returns a typed pending two-factor challenge', () async {
     var sequence = 0;
     final twoFactor = TwoFactorPlugin<EngineContext>(
-      store: InMemoryAuthTwoFactorStore(),
-      challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-      trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+      backend: InMemoryAuthTwoFactorBackend(),
       secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
       secretGenerator: (length) {
         final current = sequence++;

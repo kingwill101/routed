@@ -7,84 +7,12 @@ TwoFactorPlugin<Object> _feature({
   int period = 30,
 }) {
   return TwoFactorPlugin<Object>(
-    store: InMemoryAuthTwoFactorStore(),
-    challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-    trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+    backend: InMemoryAuthTwoFactorBackend(),
     secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
     maxFailedVerificationAttempts: maxFailedVerificationAttempts,
     lockoutDuration: lockoutDuration,
     period: period,
   );
-}
-
-final class _YieldingTwoFactorStore implements AuthTwoFactorStore {
-  _YieldingTwoFactorStore(this.delegate);
-
-  final InMemoryAuthTwoFactorStore delegate;
-
-  Future<void> _yield() => Future<void>.delayed(Duration.zero);
-
-  @override
-  Future<AuthTwoFactorRecord?> findByUserId(String userId) async {
-    await _yield();
-    return delegate.findByUserId(userId);
-  }
-
-  @override
-  Future<AuthTwoFactorRecord> save(AuthTwoFactorRecord record) async {
-    await _yield();
-    return delegate.save(record);
-  }
-
-  @override
-  Future<bool> saveIfCurrent(
-    AuthTwoFactorRecord expected,
-    AuthTwoFactorRecord replacement,
-  ) async {
-    await _yield();
-    return delegate.saveIfCurrent(expected, replacement);
-  }
-
-  @override
-  Future<void> delete(String userId) async {
-    await _yield();
-    delegate.delete(userId);
-  }
-
-  @override
-  Future<bool> consumeRecoveryCode(
-    String userId,
-    String codeHash, {
-    required DateTime now,
-  }) async {
-    await _yield();
-    return delegate.consumeRecoveryCode(userId, codeHash, now: now);
-  }
-
-  @override
-  Future<AuthTwoFactorRecord?> recordFailedVerification(
-    String userId, {
-    required DateTime now,
-    required int maxAttempts,
-    required Duration lockoutDuration,
-  }) async {
-    await _yield();
-    return delegate.recordFailedVerification(
-      userId,
-      now: now,
-      maxAttempts: maxAttempts,
-      lockoutDuration: lockoutDuration,
-    );
-  }
-
-  @override
-  Future<AuthTwoFactorRecord?> clearVerificationFailures(
-    String userId, {
-    required DateTime now,
-  }) async {
-    await _yield();
-    return delegate.clearVerificationFailures(userId, now: now);
-  }
 }
 
 Future<Object?> _captureRecoveryResult(
@@ -173,14 +101,39 @@ void main() {
       );
     });
 
+    test('publishes only schema-backed durable atomic guarantees', () {
+      final feature = _feature();
+      final schema = feature.persistenceSchemas.single;
+      final operationIds = schema.atomicOperations
+          .map((operation) => operation.id)
+          .toSet();
+
+      for (final endpoint in feature.hostEndpoints) {
+        final semantics = endpoint.semantics;
+        if (semantics is! AuthMutationOperationSemantics) continue;
+        expect(
+          semantics.replaySafety,
+          isNot(AuthMutationReplaySafety.unguarded),
+          reason: endpoint.id,
+        );
+        final persistence = semantics.persistence;
+        if (persistence.kind != AuthMutationPersistenceKind.durable) continue;
+        expect(persistence.atomicity, AuthMutationAtomicity.atomic);
+        expect(persistence.reference?.schemaId, authTwoFactorPluginId);
+        expect(
+          operationIds,
+          contains(persistence.reference?.atomicOperationId),
+          reason: endpoint.id,
+        );
+      }
+    });
+
     test(
       'atomically activates one enrollment under concurrent verification',
       () async {
         final now = DateTime.utc(2030, 1, 1);
         final feature = TwoFactorPlugin<Object>(
-          store: _YieldingTwoFactorStore(InMemoryAuthTwoFactorStore()),
-          challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-          trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+          backend: InMemoryAuthTwoFactorBackend(),
           secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
         );
         final enrollment = await feature.beginEnrollment('user-1', now: now);
@@ -208,9 +161,7 @@ void main() {
       () async {
         final now = DateTime.utc(2030, 1, 1);
         final feature = TwoFactorPlugin<Object>(
-          store: _YieldingTwoFactorStore(InMemoryAuthTwoFactorStore()),
-          challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-          trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+          backend: InMemoryAuthTwoFactorBackend(),
           secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
         );
         final enrollment = await feature.beginEnrollment('user-1', now: now);
@@ -238,9 +189,7 @@ void main() {
       final generator = _queuedGenerator();
       final store = InMemoryAuthTwoFactorStore();
       final feature = TwoFactorPlugin<Object>(
-        store: store,
-        challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-        trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+        backend: InMemoryAuthTwoFactorBackend(factorStore: store),
         secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
         secretGenerator: generator,
       );
@@ -345,9 +294,7 @@ void main() {
       final now = DateTime.utc(2030, 1, 1);
       var calls = 0;
       final feature = TwoFactorPlugin<Object>(
-        store: InMemoryAuthTwoFactorStore(),
-        challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-        trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+        backend: InMemoryAuthTwoFactorBackend(),
         secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
         secretGenerator: (length) {
           final current = calls++;
@@ -380,9 +327,7 @@ void main() {
     test('locks repeated invalid TOTP attempts', () async {
       final generator = _queuedGenerator();
       final feature = TwoFactorPlugin<Object>(
-        store: InMemoryAuthTwoFactorStore(),
-        challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-        trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+        backend: InMemoryAuthTwoFactorBackend(),
         secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
         secretGenerator: generator,
         maxFailedVerificationAttempts: 2,
@@ -421,9 +366,7 @@ void main() {
     test('creates a single-use pending sign-in challenge', () async {
       final now = DateTime.utc(2030, 1, 1);
       final feature = TwoFactorPlugin<Object>(
-        store: InMemoryAuthTwoFactorStore(),
-        challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-        trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+        backend: InMemoryAuthTwoFactorBackend(),
         secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
       );
       final enrollment = await feature.beginEnrollment('user-1', now: now);
@@ -470,13 +413,10 @@ void main() {
         final factorStore = InMemoryAuthTwoFactorStore();
         final challengeStore = InMemoryAuthTwoFactorChallengeStore();
         final feature = TwoFactorPlugin<Object>(
-          store: factorStore,
-          challengeStore: challengeStore,
-          pendingRecoveryStore: InMemoryAuthTwoFactorPendingRecoveryStore(
+          backend: InMemoryAuthTwoFactorBackend(
             factorStore: factorStore,
             challengeStore: challengeStore,
           ),
-          trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
           secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
         );
         final enrollment = await feature.beginEnrollment('user-1', now: now);
@@ -524,34 +464,25 @@ void main() {
       },
     );
 
-    test(
-      'pending recovery deletion is reversible and validates user IDs',
-      () async {
-        final now = DateTime.utc(2030, 1, 1);
-        final factorStore = InMemoryAuthTwoFactorStore();
-        final challengeStore = InMemoryAuthTwoFactorChallengeStore();
-        final pendingStore = InMemoryAuthTwoFactorPendingRecoveryStore(
-          factorStore: factorStore,
-          challengeStore: challengeStore,
-        );
-        final record = AuthTwoFactorChallengeRecord(
-          id: 'challenge-1',
-          tokenHash: 'challenge-hash-1',
-          userId: 'user-1',
-          createdAt: now,
-          expiresAt: now.add(const Duration(minutes: 5)),
-        );
-        challengeStore.create(record);
-        final checkpoint = pendingStore.captureDeletionState();
+    test('in-memory backend deletion state is reversible', () async {
+      final now = DateTime.utc(2030, 1, 1);
+      final backend = InMemoryAuthTwoFactorBackend();
+      final record = AuthTwoFactorChallengeRecord(
+        id: 'challenge-1',
+        tokenHash: 'challenge-hash-1',
+        userId: 'user-1',
+        createdAt: now,
+        expiresAt: now.add(const Duration(minutes: 5)),
+      );
+      backend.challengeStore.create(record);
+      final checkpoint = backend.captureDeletionState();
 
-        pendingStore.deleteForUser('user-1');
-        expect(challengeStore.findByTokenHash(record.tokenHash), isNull);
+      backend.challengeStore.deleteUserDataForDeletion('user-1');
+      expect(backend.challengeStore.findByTokenHash(record.tokenHash), isNull);
 
-        pendingStore.restoreDeletionState(checkpoint);
-        expect(challengeStore.findByTokenHash(record.tokenHash), record);
-        expect(() => pendingStore.deleteForUser('   '), throwsArgumentError);
-      },
-    );
+      backend.restoreDeletionState(checkpoint);
+      expect(backend.challengeStore.findByTokenHash(record.tokenHash), record);
+    });
 
     test('hard deletion removes every user-owned two-factor record', () async {
       final fixture = await _createDeletionFixture();
@@ -654,9 +585,7 @@ void main() {
       final now = DateTime.utc(2030, 1, 1);
       final trustedStore = InMemoryAuthTwoFactorTrustedDeviceStore();
       final feature = TwoFactorPlugin<Object>(
-        store: InMemoryAuthTwoFactorStore(),
-        challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-        trustedDeviceStore: trustedStore,
+        backend: InMemoryAuthTwoFactorBackend(trustedDeviceStore: trustedStore),
         trustedDeviceTtl: const Duration(days: 30),
         secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
         secretGenerator: _queuedGenerator(),
@@ -745,10 +674,7 @@ void main() {
       final now = DateTime.utc(2030, 1, 1);
       final stepUpStore = InMemoryAuthTwoFactorStepUpStore();
       final feature = TwoFactorPlugin<Object>(
-        store: InMemoryAuthTwoFactorStore(),
-        challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-        trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
-        stepUpStore: stepUpStore,
+        backend: InMemoryAuthTwoFactorBackend(stepUpStore: stepUpStore),
         stepUpTtl: const Duration(minutes: 5),
         secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
         secretGenerator: _queuedGenerator(),
@@ -826,10 +752,7 @@ void main() {
       final now = DateTime.utc(2030, 1, 1);
       final stepUpStore = InMemoryAuthTwoFactorStepUpStore();
       final feature = TwoFactorPlugin<Object>(
-        store: InMemoryAuthTwoFactorStore(),
-        challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-        trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
-        stepUpStore: stepUpStore,
+        backend: InMemoryAuthTwoFactorBackend(stepUpStore: stepUpStore),
         secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
         secretGenerator: _queuedGenerator(),
       );
@@ -865,9 +788,7 @@ void main() {
         final now = DateTime.utc(2030, 1, 1);
         final factorStore = InMemoryAuthTwoFactorStore();
         final feature = TwoFactorPlugin<Object>(
-          store: factorStore,
-          challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-          trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+          backend: InMemoryAuthTwoFactorBackend(factorStore: factorStore),
           secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
           secretGenerator: _queuedGenerator(),
           maxFailedVerificationAttempts: 2,
@@ -945,9 +866,7 @@ void main() {
         ),
       );
       final feature = TwoFactorPlugin<Object>(
-        store: store,
-        challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-        trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+        backend: InMemoryAuthTwoFactorBackend(factorStore: store),
         secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
       );
 
@@ -1014,16 +933,13 @@ Future<_TwoFactorDeletionFixture> _createDeletionFixture({
   final challengeStore = InMemoryAuthTwoFactorChallengeStore();
   final trustedDeviceStore = InMemoryAuthTwoFactorTrustedDeviceStore();
   final stepUpStore = InMemoryAuthTwoFactorStepUpStore();
-  final pendingRecoveryStore = InMemoryAuthTwoFactorPendingRecoveryStore(
-    factorStore: factorStore,
-    challengeStore: challengeStore,
-  );
   final plugin = TwoFactorPlugin<Object>(
-    store: factorStore,
-    challengeStore: challengeStore,
-    pendingRecoveryStore: pendingRecoveryStore,
-    trustedDeviceStore: trustedDeviceStore,
-    stepUpStore: stepUpStore,
+    backend: InMemoryAuthTwoFactorBackend(
+      factorStore: factorStore,
+      challengeStore: challengeStore,
+      trustedDeviceStore: trustedDeviceStore,
+      stepUpStore: stepUpStore,
+    ),
     secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
     secretGenerator: _queuedGenerator(),
   );

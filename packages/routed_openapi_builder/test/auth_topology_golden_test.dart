@@ -236,17 +236,8 @@ AuthServerPluginRegistry<Object> _registry(
 }
 
 TwoFactorPlugin<Object> _twoFactorPlugin() {
-  final factorStore = InMemoryAuthTwoFactorStore();
-  final challengeStore = InMemoryAuthTwoFactorChallengeStore();
   return TwoFactorPlugin<Object>(
-    store: factorStore,
-    challengeStore: challengeStore,
-    pendingRecoveryStore: InMemoryAuthTwoFactorPendingRecoveryStore(
-      factorStore: factorStore,
-      challengeStore: challengeStore,
-    ),
-    trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
-    stepUpStore: InMemoryAuthTwoFactorStepUpStore(),
+    backend: InMemoryAuthTwoFactorBackend(),
     secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
   );
 }

@@ -94,9 +94,9 @@ void main() {
           passwordHasher: hasher,
           plugins: [
             TwoFactorPlugin<EngineContext>(
-              store: InMemoryAuthTwoFactorStore(),
-              challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-              trustedDeviceStore: trustedDeviceStore,
+              backend: InMemoryAuthTwoFactorBackend(
+                trustedDeviceStore: trustedDeviceStore,
+              ),
               secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
             ),
           ],

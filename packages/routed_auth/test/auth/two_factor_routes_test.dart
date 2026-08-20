@@ -93,10 +93,7 @@ void main() {
         providers: [CredentialsProvider()],
         plugins: [
           TwoFactorPlugin<EngineContext>(
-            store: InMemoryAuthTwoFactorStore(),
-            challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-            trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
-            stepUpStore: InMemoryAuthTwoFactorStepUpStore(),
+            backend: InMemoryAuthTwoFactorBackend(),
             secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
           ),
         ],
@@ -116,10 +113,7 @@ void main() {
   test('applies the global rate limiter to two-factor routes', () async {
     final limiter = _BlockingAuthLimiter();
     final feature = TwoFactorPlugin<EngineContext>(
-      store: InMemoryAuthTwoFactorStore(),
-      challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-      trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
-      stepUpStore: InMemoryAuthTwoFactorStepUpStore(),
+      backend: InMemoryAuthTwoFactorBackend(),
       secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
     );
     final manager = AuthManager(
@@ -158,9 +152,7 @@ void main() {
     'continues the original callback credential flow after TOTP verification',
     () async {
       final feature = TwoFactorPlugin<EngineContext>(
-        store: InMemoryAuthTwoFactorStore(),
-        challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-        trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+        backend: InMemoryAuthTwoFactorBackend(),
         secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
       );
       final enrollment = await feature.beginEnrollment('callback-user');
@@ -246,14 +238,11 @@ void main() {
     final challengeStore = InMemoryAuthTwoFactorChallengeStore();
     final stepUpStore = InMemoryAuthTwoFactorStepUpStore();
     final feature = TwoFactorPlugin<EngineContext>(
-      store: factorStore,
-      challengeStore: challengeStore,
-      pendingRecoveryStore: InMemoryAuthTwoFactorPendingRecoveryStore(
+      backend: InMemoryAuthTwoFactorBackend(
         factorStore: factorStore,
         challengeStore: challengeStore,
+        stepUpStore: stepUpStore,
       ),
-      trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
-      stepUpStore: stepUpStore,
       secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
     );
     final manager = AuthManager(

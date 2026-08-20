@@ -296,9 +296,7 @@ void main() {
     test('issues a pending challenge when two-factor is enabled', () async {
       var sequence = 0;
       final twoFactor = TwoFactorPlugin<String>(
-        store: InMemoryAuthTwoFactorStore(),
-        challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-        trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+        backend: InMemoryAuthTwoFactorBackend(),
         secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
         secretGenerator: (length) {
           final current = sequence++;

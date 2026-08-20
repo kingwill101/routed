@@ -62,10 +62,7 @@ Engine createAuthPluginRuntimeConformanceEngine({
     AnonymousPlugin<EngineContext>(),
     if (includeTwoFactor)
       TwoFactorPlugin<EngineContext>(
-        store: InMemoryAuthTwoFactorStore(),
-        challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-        trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
-        stepUpStore: InMemoryAuthTwoFactorStepUpStore(),
+        backend: InMemoryAuthTwoFactorBackend(),
         secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
         secretGenerator: (length) =>
             List<int>.generate(length, (index) => (index + 1) & 0xff),
