@@ -106,7 +106,9 @@ final class AuthRoutePath {
             'contains duplicate placeholder "$name"',
           );
         }
-      } else if (segment.contains('{') ||
+      } else if (segment == '.' ||
+          segment == '..' ||
+          segment.contains('{') ||
           segment.contains('}') ||
           !_authRouteStaticSegmentPattern.hasMatch(segment)) {
         throw ArgumentError.value(

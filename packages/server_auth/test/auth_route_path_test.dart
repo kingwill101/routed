@@ -62,6 +62,8 @@ void main() {
         const AuthRoutePath('/users', parameters: [_id]),
         const AuthRoutePath('/users/{id}/{id}', parameters: [_id]),
         const AuthRoutePath('/users/{id}', parameters: [_id, _id]),
+        const AuthRoutePath('/.'),
+        const AuthRoutePath('/users/../admin'),
       ];
 
       for (final route in invalid) {
