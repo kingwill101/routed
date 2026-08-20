@@ -8,7 +8,7 @@ manifests in this checkout as of 2026-08-20.
 | Package | Version | Role |
 | --- | --- | --- |
 | [`routed`](https://github.com/kingwill101/routed/tree/master/packages/routed) | `0.5.0` | Batteries-included framework facade and official provider catalogue |
-| [`routed_core`](https://github.com/kingwill101/routed/tree/master/packages/routed_core) | `0.4.0` | Slim engine, routing, contexts, configuration, and lifecycle |
+| [`routed_core`](https://github.com/kingwill101/routed/tree/master/packages/routed_core) | `0.5.0` | Slim engine, routing, contexts, configuration, and lifecycle |
 | [`routed_auth`](https://github.com/kingwill101/routed/tree/master/packages/routed_auth) | `0.2.0` | Routed auth plugin mounting, typed deployment binding, and runtime conformance support |
 | [`routed_auth_cloudflare`](https://github.com/kingwill101/routed/tree/master/packages/routed_auth_cloudflare) | `0.1.0` | Durable Cloudflare D1 `AuthStore` adapter and typed migrations |
 | [`routed_cache`](https://github.com/kingwill101/routed/tree/master/packages/routed_cache) | `0.2.0` | Cache services and context helpers for Routed |
@@ -29,7 +29,7 @@ manifests in this checkout as of 2026-08-20.
 | Package | Version | Role |
 | --- | --- | --- |
 | [`routed_io`](https://github.com/kingwill101/routed/tree/master/packages/routed_io) | `0.1.0` | `dart:io` server transport |
-| [`routed_node`](https://github.com/kingwill101/routed/tree/master/packages/routed_node) | `0.1.0` | Node.js, Bun, Deno, and Fetch/Cloudflare edge transports and bindings |
+| [`routed_node`](https://github.com/kingwill101/routed/tree/master/packages/routed_node) | `0.2.0` | Node.js, Bun, Deno, and Fetch/Cloudflare edge transports and bindings |
 | [`server_native`](https://github.com/kingwill101/routed/tree/master/packages/server_native) | `0.1.3+1` | Rust-backed native HTTP server runtime |
 
 ## Server runtimes and contracts
@@ -37,7 +37,7 @@ manifests in this checkout as of 2026-08-20.
 | Package | Version | Role |
 | --- | --- | --- |
 | [`server_contracts`](https://github.com/kingwill101/routed/tree/master/packages/server_contracts) | `0.1.0` | Framework-agnostic interfaces and value contracts |
-| [`server_auth`](https://github.com/kingwill101/routed/tree/master/packages/server_auth) | `0.1.0` | Typed auth plugins, stores, clients, OAuth/OIDC, WebAuthn, deployment presets, and conformance support |
+| [`server_auth`](https://github.com/kingwill101/routed/tree/master/packages/server_auth) | `0.2.0` | Typed auth plugins, stores, clients, OAuth/OIDC, WebAuthn, deployment presets, and conformance support |
 | [`server_cache`](https://github.com/kingwill101/routed/tree/master/packages/server_cache) | `0.2.0` | Framework-agnostic cache stores and repositories |
 | [`server_sessions`](https://github.com/kingwill101/routed/tree/master/packages/server_sessions) | `0.1.0` | Framework-agnostic session runtime |
 | [`server_storage`](https://github.com/kingwill101/routed/tree/master/packages/server_storage) | `0.1.0` | Framework-agnostic storage runtime |

@@ -42,7 +42,7 @@ responses use a native `ReadableStream`.
 ```yaml
 dependencies:
   routed_core: ^0.3.3
-  routed_node: ^0.1.0
+  routed_node: ^0.2.0
 ```
 
 The package internally uses `package:web` for JavaScript Fetch and stream

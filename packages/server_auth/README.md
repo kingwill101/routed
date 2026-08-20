@@ -13,7 +13,7 @@ utilities) without requiring Routed-specific runtime types.
 
 ```yaml
 dependencies:
-  server_auth: ^0.1.0
+  server_auth: ^0.2.0
 ```
 
 ## Entry points
@@ -406,7 +406,7 @@ auth contracts in `server_auth`.
 
 ```yaml
 dependencies:
-  server_auth: ^0.1.0
+  server_auth: ^0.2.0
   shelf_auth: ^0.1.0
 ```
 
