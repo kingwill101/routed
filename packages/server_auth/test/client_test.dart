@@ -3,14 +3,15 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:server_auth/server_auth.dart';
-import 'package:server_auth/src/core/client.dart' show AuthClientCore;
 import 'package:test/test.dart';
 
 void main() {
   test('credentials sign-in handles CSRF and session cookies', () async {
     final requests = <http.BaseRequest>[];
-    final client = AuthClientCore(
+    final plugin = const AuthCredentialsClientPlugin();
+    final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test/api'),
+      plugins: [plugin],
       httpClient: MockClient((request) async {
         requests.add(request);
         if (request.url.path == '/api/auth/csrf') {
@@ -49,8 +50,9 @@ void main() {
         );
       }),
     );
+    final client = auth.plugins.use(plugin);
 
-    final session = await client.signInWithCredentials(
+    final session = await client.signIn(
       email: 'ada@example.com',
       password: 'correct horse battery staple',
     );
@@ -65,8 +67,11 @@ void main() {
   });
 
   test('provider metadata and signed-out sessions are typed', () async {
-    final client = AuthClientCore(
+    final providerPlugin = const AuthProviderClientPlugin();
+    final sessionPlugin = const AuthSessionClientPlugin();
+    final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
+      plugins: [providerPlugin, sessionPlugin],
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/providers') {
           return http.Response(
@@ -87,9 +92,11 @@ void main() {
         return http.Response('null', 200);
       }),
     );
+    final providersClient = auth.plugins.use(providerPlugin);
+    final sessionsClient = auth.plugins.use(sessionPlugin);
 
-    final providers = await client.getProviders();
-    final session = await client.getSession();
+    final providers = await providersClient.list();
+    final session = await sessionsClient.current();
 
     expect(providers.map((provider) => provider.id), ['credentials', 'github']);
     expect(providers.last.type, 'oauth');
@@ -99,8 +106,10 @@ void main() {
   test(
     'OAuth start returns the server redirect without following it',
     () async {
-      final client = AuthClientCore(
+      final plugin = const AuthOAuthClientPlugin();
+      final auth = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
+        plugins: [plugin],
         httpClient: MockClient((request) async {
           expect(request.url.path, '/auth/signin/github');
           expect(request.url.queryParameters['callbackUrl'], 'app://callback');
@@ -114,8 +123,9 @@ void main() {
           );
         }),
       );
+      final client = auth.plugins.use(plugin);
 
-      final redirect = await client.beginOAuth(
+      final redirect = await client.begin(
         provider: 'github',
         callbackUrl: 'app://callback',
       );
@@ -126,8 +136,10 @@ void main() {
   );
 
   test('auth failures preserve sanitized code and retry information', () async {
-    final client = AuthClientCore(
+    final plugin = const AuthSessionClientPlugin();
+    final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
+      plugins: [plugin],
       httpClient: MockClient(
         (_) async => http.Response(
           jsonEncode({'error': 'invalid_credentials'}),
@@ -136,9 +148,10 @@ void main() {
         ),
       ),
     );
+    final client = auth.plugins.use(plugin);
 
     expect(
-      () => client.getSession(),
+      () => client.current(),
       throwsA(
         isA<AuthClientException>()
             .having((error) => error.statusCode, 'status', 401)
@@ -190,7 +203,7 @@ void main() {
       ),
       const AuthClientCookie(name: 'active', value: 'current'),
     ]);
-    final client = AuthClientCore(
+    final transport = AuthClientTransport(
       baseUrl: Uri.parse('https://example.test'),
       cookieStore: cookieStore,
       httpClient: MockClient((request) async {
@@ -199,10 +212,10 @@ void main() {
       }),
     );
 
-    await client.getProviders();
+    await transport.request('GET', '/providers');
   });
 
-  test('AuthClient honors Secure cookies by request scheme', () async {
+  test('transport honors Secure cookies by request scheme', () async {
     final secureCookie = AuthClientCookie.fromSetCookie(
       'session=secret; Secure; HttpOnly; Path=/',
     );
@@ -215,27 +228,27 @@ void main() {
       return http.Response('null', 200);
     });
 
-    final cleartextClient = AuthClientCore(
+    final cleartextTransport = AuthClientTransport(
       baseUrl: Uri.parse('http://example.test'),
       httpClient: httpClient,
       cookieStore: store,
     );
-    await cleartextClient.getSession();
+    await cleartextTransport.request('GET', '/session');
     expect(requests.single.headers['cookie'], isNull);
 
-    final tlsClient = AuthClientCore(
+    final tlsTransport = AuthClientTransport(
       baseUrl: Uri.parse('https://example.test'),
       httpClient: httpClient,
       cookieStore: store,
     );
-    await tlsClient.getSession();
+    await tlsTransport.request('GET', '/session');
     expect(requests[1].headers['cookie'], equals('session=secret'));
   });
 
   test('invalid CSRF refreshes once and retries the mutation', () async {
     var csrfRequests = 0;
     var mutationRequests = 0;
-    final client = AuthClientCore(
+    final transport = AuthClientTransport(
       baseUrl: Uri.parse('https://example.test'),
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/csrf') {
@@ -264,19 +277,23 @@ void main() {
       }),
     );
 
-    await client.revokeSession('session-1');
+    await transport.mutate('POST', '/sessions/revoke', {
+      'sessionId': 'session-1',
+    });
 
     expect(csrfRequests, 2);
     expect(mutationRequests, 2);
   });
 
   test(
-    'changePassword sends reauthentication data and clears CSRF cache',
+    'password plugin sends reauthentication data and clears CSRF cache',
     () async {
       var csrfRequests = 0;
       var changeRequests = 0;
-      final client = AuthClientCore(
+      final plugin = const AuthPasswordClientPlugin();
+      final auth = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
+        plugins: [plugin],
         httpClient: MockClient((request) async {
           if (request.url.path == '/auth/csrf') {
             csrfRequests += 1;
@@ -302,13 +319,14 @@ void main() {
           return http.Response('{}', 200);
         }),
       );
+      final client = auth.plugins.use(plugin);
 
-      await client.changePassword(
+      await client.change(
         identifier: 'user@example.com',
         currentPassword: 'old-password-123',
         newPassword: 'new-password-456',
       );
-      await client.changePassword(
+      await client.change(
         identifier: 'user@example.com',
         currentPassword: 'new-password-456',
         newPassword: 'third-password-789',
@@ -321,8 +339,10 @@ void main() {
 
   test('session helpers parse metadata and send revocation requests', () async {
     var csrfRequests = 0;
-    final client = AuthClientCore(
+    final plugin = const AuthSessionClientPlugin();
+    final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
+      plugins: [plugin],
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/csrf') {
           csrfRequests += 1;
@@ -365,10 +385,11 @@ void main() {
         return http.Response('{}', 200);
       }),
     );
+    final client = auth.plugins.use(plugin);
 
-    final sessions = await client.getSessions();
-    final revoked = await client.revokeOtherSessions();
-    await client.revokeSession('session-1');
+    final sessions = await client.list();
+    final revoked = await client.revokeOthers();
+    await client.revoke('session-1');
 
     expect(sessions.single.isCurrent, isTrue);
     expect(sessions.single.userAgent, 'test-agent');
@@ -377,8 +398,10 @@ void main() {
 
   test('two-factor helpers parse enrollment and send typed actions', () async {
     var csrfRequests = 0;
-    final client = AuthClientCore(
+    final plugin = const AuthTwoFactorClientPlugin();
+    final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
+      plugins: [plugin],
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/csrf') {
           csrfRequests += 1;
@@ -418,12 +441,13 @@ void main() {
         }
       }),
     );
+    final client = auth.plugins.use(plugin);
 
-    final enrollment = await client.beginTwoFactorEnrollment(
+    final enrollment = await client.beginEnrollment(
       accountLabel: 'ada@example.com',
     );
-    final recovery = await client.verifyTwoFactorEnrollment(code: '123456');
-    await client.verifyTwoFactor(code: '123456');
+    final recovery = await client.verifyEnrollment(code: '123456');
+    await client.verify(code: '123456');
 
     expect(enrollment.otpauthUri.scheme, equals('otpauth'));
     expect(recovery.codes, equals(['ABCD-EFGH-IJKL']));
@@ -431,8 +455,11 @@ void main() {
   });
 
   test('credentials sign-in surfaces and completes a TOTP challenge', () async {
-    final client = AuthClientCore(
+    final credentialsPlugin = const AuthCredentialsClientPlugin();
+    final twoFactorPlugin = const AuthTwoFactorClientPlugin();
+    final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
+      plugins: [credentialsPlugin, twoFactorPlugin],
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/csrf') {
           return http.Response(
@@ -473,10 +500,12 @@ void main() {
         );
       }),
     );
+    final credentials = auth.plugins.use(credentialsPlugin);
+    final twoFactor = auth.plugins.use(twoFactorPlugin);
 
     AuthClientTwoFactorRequiredException? required;
     try {
-      await client.signInWithCredentials(
+      await credentials.signIn(
         email: 'ada@example.com',
         password: 'correct horse battery staple',
       );
@@ -484,7 +513,7 @@ void main() {
       required = error;
     }
     expect(required, isNotNull);
-    final session = await client.verifyTwoFactorChallenge(
+    final session = await twoFactor.verifyChallenge(
       challengeToken: required!.challengeToken,
       code: '123456',
       trustDevice: true,
@@ -493,8 +522,11 @@ void main() {
   });
 
   test('completes a pending sign-in with a recovery code', () async {
-    final client = AuthClientCore(
+    final credentialsPlugin = const AuthCredentialsClientPlugin();
+    final twoFactorPlugin = const AuthTwoFactorClientPlugin();
+    final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
+      plugins: [credentialsPlugin, twoFactorPlugin],
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/csrf') {
           return http.Response(
@@ -534,10 +566,12 @@ void main() {
         );
       }),
     );
+    final credentials = auth.plugins.use(credentialsPlugin);
+    final twoFactor = auth.plugins.use(twoFactorPlugin);
 
     AuthClientTwoFactorRequiredException? required;
     try {
-      await client.signInWithCredentials(
+      await credentials.signIn(
         email: 'ada@example.com',
         password: 'correct horse battery staple',
       );
@@ -545,7 +579,7 @@ void main() {
       required = error;
     }
     expect(required, isNotNull);
-    final session = await client.verifyTwoFactorRecoveryChallenge(
+    final session = await twoFactor.verifyRecoveryChallenge(
       challengeToken: required!.challengeToken,
       recoveryCode: 'ABCD-EFGH',
     );
@@ -553,8 +587,10 @@ void main() {
   });
 
   test('verifies and revokes a two-factor step-up proof', () async {
-    final client = AuthClientCore(
+    final plugin = const AuthTwoFactorClientPlugin();
+    final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
+      plugins: [plugin],
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/csrf') {
           return http.Response(
@@ -581,10 +617,11 @@ void main() {
         return http.Response(jsonEncode({'status': 'step_up_revoked'}), 200);
       }),
     );
+    final client = auth.plugins.use(plugin);
 
-    final proof = await client.verifyTwoFactorStepUp(code: '123456');
+    final proof = await client.verifyStepUp(code: '123456');
     expect(proof.expiresAt, equals(DateTime.utc(2030, 1, 1, 0, 5)));
-    await client.revokeTwoFactorStepUp();
+    await client.revokeStepUp();
   });
 }
 
