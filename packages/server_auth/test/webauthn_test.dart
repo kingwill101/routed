@@ -22,7 +22,11 @@ String _propertyReport(PropertyResult result) {
 }
 
 final class _Fixture {
-  _Fixture({WebAuthnRegistrationOptions? registrationOptions}) {
+  _Fixture({
+    WebAuthnRegistrationOptions? registrationOptions,
+    WebAuthnAttestationTrustPolicy attestationTrustPolicy =
+        const WebAuthnAttestationTrustPolicy.passkeys(),
+  }) {
     provider = WebAuthnProvider(
       getUserInfo: (_, _, _) => null,
       getRelyingParty: (_, _) => const WebAuthnRelyingParty(
@@ -39,7 +43,10 @@ final class _Fixture {
       email: 'user@example.com',
       name: 'Example User',
     );
-    feature = WebAuthnPlugin<Object>(provider: provider);
+    feature = WebAuthnPlugin<Object>(
+      provider: provider,
+      attestationTrustPolicy: attestationTrustPolicy,
+    );
     AuthRuntime<Object>(
       options: AuthOptions<Object>(
         providers: [provider],
@@ -690,6 +697,278 @@ void main() {
       expect(saved.userId, fixture.user.id);
     });
 
+    test(
+      'accepts a certificate path ending at an explicit trusted root',
+      () async {
+        final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+        final certificate = _packedAttestationCertificate(attestationKey);
+        final fixture = _Fixture(
+          attestationTrustPolicy: WebAuthnAttestationTrustPolicy.trustedRoots(
+            roots: <List<int>>[certificate],
+          ),
+        );
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+
+        final saved = await fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _registrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            attestationFormat: 'packed',
+            packedSigningKey: attestationKey,
+            packedCertificateChain: <Object?>[certificate],
+          ),
+        );
+
+        expect(saved.userId, fixture.user.id);
+      },
+    );
+
+    test(
+      'rejects an untrusted self-signed path with a generic error',
+      () async {
+        final trustedKey = _KeyPair.create(privateValue: BigInt.from(3));
+        final untrustedKey = _KeyPair.create(privateValue: BigInt.two);
+        final fixture = _Fixture(
+          attestationTrustPolicy: WebAuthnAttestationTrustPolicy.trustedRoots(
+            roots: <List<int>>[_packedAttestationCertificate(trustedKey)],
+          ),
+        );
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: _registrationCredential(
+              challenge: registration.challenge,
+              keyPair: fixture.keyPair,
+              attestationFormat: 'packed',
+              packedSigningKey: untrustedKey,
+              packedCertificateChain: <Object?>[
+                _packedAttestationCertificate(untrustedKey),
+              ],
+            ),
+          ),
+          throwsA(
+            isA<AuthFlowException>()
+                .having(
+                  (error) => error.code,
+                  'code',
+                  'webauthn_attestation_untrusted',
+                )
+                .having(
+                  (error) => error.toString(),
+                  'public representation',
+                  'AuthFlowException(webauthn_attestation_untrusted)',
+                ),
+          ),
+        );
+      },
+    );
+
+    test('policy rejection does not consume a valid challenge', () async {
+      var reject = true;
+      WebAuthnAttestationMetadata? observed;
+      final fixture = _Fixture(
+        attestationTrustPolicy: WebAuthnAttestationTrustPolicy(
+          evaluateCertificate: (metadata) {
+            observed = metadata;
+            return reject
+                ? WebAuthnAttestationTrustDecision.reject
+                : WebAuthnAttestationTrustDecision.accept;
+          },
+        ),
+      );
+      final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+      final certificate = _packedAttestationCertificate(attestationKey);
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+      final credential = _registrationCredential(
+        challenge: registration.challenge,
+        keyPair: fixture.keyPair,
+        attestationFormat: 'packed',
+        packedSigningKey: attestationKey,
+        packedCertificateChain: <Object?>[certificate],
+      );
+
+      await expectLater(
+        () => fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: credential,
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'webauthn_attestation_untrusted',
+          ),
+        ),
+      );
+      expect(observed?.format, 'packed');
+      expect(observed?.kind, WebAuthnAttestationKind.certificate);
+      expect(observed?.aaguid, '00000000-0000-0000-0000-000000000000');
+      expect(observed?.certificateTrustPath, hasLength(1));
+      expect(
+        observed?.certificateTrustPath.single.sha256Fingerprint,
+        crypto.sha256.convert(certificate).toString(),
+      );
+      expect(
+        () => observed!.certificateTrustPath.single.derBytes[0] = 0,
+        throwsUnsupportedError,
+      );
+
+      reject = false;
+      final saved = await fixture.feature.finishRegistration(
+        context: fixture.context,
+        user: fixture.user,
+        credential: credential,
+      );
+      expect(saved.userId, fixture.user.id);
+    });
+
+    test(
+      'policy exceptions are generic and leave the challenge retryable',
+      () async {
+        var throwsPolicyError = true;
+        final fixture = _Fixture(
+          attestationTrustPolicy: WebAuthnAttestationTrustPolicy(
+            evaluateCertificate: (_) {
+              if (throwsPolicyError) {
+                throw StateError('certificate parser internals');
+              }
+              return WebAuthnAttestationTrustDecision.downgrade;
+            },
+          ),
+        );
+        final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        final credential = _registrationCredential(
+          challenge: registration.challenge,
+          keyPair: fixture.keyPair,
+          attestationFormat: 'packed',
+          packedSigningKey: attestationKey,
+          packedCertificateChain: <Object?>[
+            _packedAttestationCertificate(attestationKey),
+          ],
+        );
+
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: credential,
+          ),
+          throwsA(
+            isA<AuthFlowException>()
+                .having(
+                  (error) => error.code,
+                  'code',
+                  'webauthn_attestation_untrusted',
+                )
+                .having(
+                  (error) => error.toString(),
+                  'public representation',
+                  isNot(contains('parser')),
+                ),
+          ),
+        );
+
+        throwsPolicyError = false;
+        final saved = await fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: credential,
+        );
+        expect(saved.userId, fixture.user.id);
+      },
+    );
+
+    test('none and self attestation have explicit policy decisions', () async {
+      Future<void> expectRejected({required bool selfAttestation}) async {
+        final fixture = _Fixture(
+          attestationTrustPolicy: WebAuthnAttestationTrustPolicy(
+            none: selfAttestation
+                ? WebAuthnUnprovenAttestationDecision.accept
+                : WebAuthnUnprovenAttestationDecision.reject,
+            self: selfAttestation
+                ? WebAuthnUnprovenAttestationDecision.reject
+                : WebAuthnUnprovenAttestationDecision.accept,
+          ),
+        );
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: _registrationCredential(
+              challenge: registration.challenge,
+              keyPair: fixture.keyPair,
+              attestationFormat: selfAttestation ? 'packed' : 'none',
+            ),
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'webauthn_attestation_untrusted',
+            ),
+          ),
+        );
+      }
+
+      await expectRejected(selfAttestation: false);
+      await expectRejected(selfAttestation: true);
+    });
+
+    test(
+      'FIDO U2F trust evaluation receives its validated leaf only',
+      () async {
+        WebAuthnAttestationMetadata? observed;
+        final fixture = _Fixture(
+          attestationTrustPolicy: WebAuthnAttestationTrustPolicy(
+            evaluateCertificate: (metadata) {
+              observed = metadata;
+              return WebAuthnAttestationTrustDecision.downgrade;
+            },
+          ),
+        );
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+
+        await fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _u2fRegistrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+          ),
+        );
+
+        expect(observed?.format, 'fido-u2f');
+        expect(observed?.kind, WebAuthnAttestationKind.certificate);
+        expect(observed?.certificateTrustPath, hasLength(1));
+      },
+    );
+
     test('registers certificate-backed packed RS256 attestation', () async {
       final fixture = _Fixture();
       final keyPair = _RsaKeyPair.create();
@@ -714,7 +993,15 @@ void main() {
     });
 
     test('rejects malformed certificate-backed packed attestation', () async {
-      final fixture = _Fixture();
+      var policyCalled = false;
+      final fixture = _Fixture(
+        attestationTrustPolicy: WebAuthnAttestationTrustPolicy(
+          evaluateCertificate: (_) {
+            policyCalled = true;
+            return WebAuthnAttestationTrustDecision.accept;
+          },
+        ),
+      );
       final registration = await fixture.feature.beginRegistration(
         context: fixture.context,
         user: fixture.user,
@@ -741,6 +1028,7 @@ void main() {
           ),
         ),
       );
+      expect(policyCalled, isFalse);
     });
 
     test('rejects a forged certificate-backed packed signature', () async {

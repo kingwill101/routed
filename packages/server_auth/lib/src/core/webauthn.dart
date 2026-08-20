@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -117,6 +118,157 @@ final class AuthWebAuthnAuthenticationResult {
   final WebAuthnAuthenticator authenticator;
 }
 
+/// The provenance model established by attestation statement verification.
+enum WebAuthnAttestationKind {
+  /// No attestation statement or provenance information was supplied.
+  none,
+
+  /// The credential key signed its own attestation statement.
+  self,
+
+  /// Format verification returned an X.509 attestation trust path.
+  certificate,
+}
+
+/// A relying-party decision about a cryptographically valid attestation.
+enum WebAuthnAttestationTrustDecision {
+  /// Accept the attestation under the relying party's configured policy.
+  accept,
+
+  /// Fail registration without consuming its challenge.
+  reject,
+
+  /// Register an ordinary passkey without claiming hardware provenance.
+  downgrade,
+}
+
+/// A relying-party decision for `none` or self attestation.
+///
+/// These forms carry no hardware provenance, so downgrading is not a distinct
+/// operation: a relying party can only accept the ordinary passkey or reject
+/// the registration.
+enum WebAuthnUnprovenAttestationDecision { accept, reject }
+
+/// One certificate in a format-validated WebAuthn attestation trust path.
+///
+/// [derBytes] is an immutable copy of the certificate supplied by the client.
+/// The parser's internal certificate representation is deliberately not
+/// exposed. Relying parties can compare [sha256Fingerprint] with a configured
+/// trust anchor or pass [derBytes] to their own offline trust implementation.
+final class WebAuthnAttestationCertificate {
+  WebAuthnAttestationCertificate._(List<int> derBytes)
+    : derBytes = List<int>.unmodifiable(List<int>.from(derBytes)),
+      sha256Fingerprint = crypto.sha256.convert(derBytes).toString();
+
+  final List<int> derBytes;
+  final String sha256Fingerprint;
+}
+
+/// Safe output from WebAuthn attestation statement verification.
+///
+/// This value contains no user, request, parser, or exception details. A trust
+/// evaluator receives only the attestation format, provenance model, AAGUID,
+/// and the already format-validated certificate path needed for a local trust
+/// decision.
+final class WebAuthnAttestationMetadata {
+  WebAuthnAttestationMetadata._({
+    required this.format,
+    required this.kind,
+    required this.aaguid,
+    required List<WebAuthnAttestationCertificate> certificateTrustPath,
+  }) : certificateTrustPath = List<WebAuthnAttestationCertificate>.unmodifiable(
+         certificateTrustPath,
+       );
+
+  final String format;
+  final WebAuthnAttestationKind kind;
+
+  /// Lowercase UUID representation of the authenticator AAGUID.
+  final String aaguid;
+
+  /// Leaf-first certificate path returned by format verification.
+  ///
+  /// This is empty for `none` and self attestation. Presence of a path proves
+  /// only that the attestation format and supplied chain are cryptographically
+  /// valid; it does not mean the root is trusted by the relying party.
+  final List<WebAuthnAttestationCertificate> certificateTrustPath;
+}
+
+/// Evaluates a certificate-backed attestation after format verification.
+typedef WebAuthnCertificateAttestationTrustEvaluator =
+    FutureOr<WebAuthnAttestationTrustDecision> Function(
+      WebAuthnAttestationMetadata metadata,
+    );
+
+/// Explicit relying-party policy for WebAuthn attestation trust.
+///
+/// The passkey default accepts `none` and self attestation and downgrades
+/// certificate-backed attestation to an ordinary passkey. It never silently
+/// treats a supplied certificate as a trusted hardware provenance claim.
+final class WebAuthnAttestationTrustPolicy {
+  const WebAuthnAttestationTrustPolicy({
+    this.none = WebAuthnUnprovenAttestationDecision.accept,
+    this.self = WebAuthnUnprovenAttestationDecision.accept,
+    this.certificate = WebAuthnAttestationTrustDecision.downgrade,
+    this.evaluateCertificate,
+  });
+
+  /// Ordinary-passkey policy with no hardware provenance claim.
+  const WebAuthnAttestationTrustPolicy.passkeys()
+    : none = WebAuthnUnprovenAttestationDecision.accept,
+      self = WebAuthnUnprovenAttestationDecision.accept,
+      certificate = WebAuthnAttestationTrustDecision.downgrade,
+      evaluateCertificate = null;
+
+  /// Trusts only paths whose final certificate exactly matches a configured
+  /// DER trust anchor.
+  ///
+  /// Signature and path-link verification happens before this policy runs.
+  /// Exact anchor matching is intentionally local and deterministic; core does
+  /// not fetch FIDO metadata or certificate roots from the network.
+  factory WebAuthnAttestationTrustPolicy.trustedRoots({
+    required Iterable<List<int>> roots,
+    WebAuthnUnprovenAttestationDecision none =
+        WebAuthnUnprovenAttestationDecision.accept,
+    WebAuthnUnprovenAttestationDecision self =
+        WebAuthnUnprovenAttestationDecision.accept,
+    WebAuthnAttestationTrustDecision untrusted =
+        WebAuthnAttestationTrustDecision.reject,
+  }) {
+    final fingerprints = roots.map((root) {
+      if (root.isEmpty || root.length > 16384) {
+        throw ArgumentError.value(root, 'roots', 'must contain bounded DER');
+      }
+      return crypto.sha256.convert(root).toString();
+    }).toSet();
+    if (fingerprints.isEmpty) {
+      throw ArgumentError.value(roots, 'roots', 'must not be empty');
+    }
+    return WebAuthnAttestationTrustPolicy(
+      none: none,
+      self: self,
+      certificate: untrusted,
+      evaluateCertificate: (metadata) {
+        final path = metadata.certificateTrustPath;
+        if (path.isNotEmpty &&
+            fingerprints.contains(path.last.sha256Fingerprint)) {
+          return WebAuthnAttestationTrustDecision.accept;
+        }
+        return untrusted;
+      },
+    );
+  }
+
+  final WebAuthnUnprovenAttestationDecision none;
+  final WebAuthnUnprovenAttestationDecision self;
+
+  /// Decision used when [evaluateCertificate] is absent.
+  final WebAuthnAttestationTrustDecision certificate;
+
+  /// Optional local trust evaluator for certificate-backed attestation.
+  final WebAuthnCertificateAttestationTrustEvaluator? evaluateCertificate;
+}
+
 /// Typed WebAuthn/passkey plugin for `server_auth` runtimes.
 ///
 /// This plugin supports `none` attestation plus cryptographically verified
@@ -124,9 +276,10 @@ final class AuthWebAuthnAuthenticationResult {
 /// (`alg: -7`) and RS256 (`alg: -257`) passkeys, and FIDO U2F attestation.
 /// It deliberately rejects unsupported attestation formats and COSE
 /// algorithms instead of accepting an assertion that has not been verified.
-/// FIDO U2F verification does not establish trusted hardware provenance;
-/// applications must apply an explicit attestation trust policy if they need
-/// one.
+/// Certificate verification alone does not establish trusted hardware
+/// provenance. Configure [attestationTrustPolicy] when relying-party policy
+/// needs to trust or reject particular roots; the default safely downgrades
+/// certificate-backed registrations to ordinary passkeys.
 /// Applications that need other WebAuthn algorithms can add them after the
 /// same parsing and replay guarantees are implemented.
 final class WebAuthnPlugin<TContext>
@@ -140,10 +293,13 @@ final class WebAuthnPlugin<TContext>
   WebAuthnPlugin({
     required this.provider,
     this.challengeTtl = const Duration(minutes: 5),
+    this.attestationTrustPolicy =
+        const WebAuthnAttestationTrustPolicy.passkeys(),
   }) : assert(challengeTtl > Duration.zero);
 
   final WebAuthnProvider provider;
   final Duration challengeTtl;
+  final WebAuthnAttestationTrustPolicy attestationTrustPolicy;
 
   late AuthWebAuthnChallengeStore _challengeStore;
   late AuthWebAuthnAuthenticatorStore _authenticatorStore;
@@ -541,6 +697,7 @@ final class WebAuthnPlugin<TContext>
     )) {
       throw AuthFlowException('webauthn_credential_invalid');
     }
+    await _applyAttestationTrustPolicy(attestation.metadata);
     await _consumeChallenge(
       clientData.challenge,
       ceremony: AuthWebAuthnCeremony.registration,
@@ -565,6 +722,35 @@ final class WebAuthnPlugin<TContext>
       throw AuthFlowException('webauthn_credential_exists');
     } on ArgumentError {
       throw AuthFlowException('webauthn_registration_invalid');
+    }
+  }
+
+  Future<void> _applyAttestationTrustPolicy(
+    WebAuthnAttestationMetadata metadata,
+  ) async {
+    WebAuthnAttestationTrustDecision decision;
+    try {
+      decision = switch (metadata.kind) {
+        WebAuthnAttestationKind.none =>
+          attestationTrustPolicy.none ==
+                  WebAuthnUnprovenAttestationDecision.accept
+              ? WebAuthnAttestationTrustDecision.accept
+              : WebAuthnAttestationTrustDecision.reject,
+        WebAuthnAttestationKind.self =>
+          attestationTrustPolicy.self ==
+                  WebAuthnUnprovenAttestationDecision.accept
+              ? WebAuthnAttestationTrustDecision.accept
+              : WebAuthnAttestationTrustDecision.reject,
+        WebAuthnAttestationKind.certificate =>
+          attestationTrustPolicy.evaluateCertificate == null
+              ? attestationTrustPolicy.certificate
+              : await attestationTrustPolicy.evaluateCertificate!(metadata),
+      };
+    } catch (_) {
+      throw AuthFlowException('webauthn_attestation_untrusted');
+    }
+    if (decision == WebAuthnAttestationTrustDecision.reject) {
+      throw AuthFlowException('webauthn_attestation_untrusted');
     }
   }
 
@@ -911,12 +1097,16 @@ final class WebAuthnPlugin<TContext>
       requireAttestedCredential: true,
       requireUserVerification: requireUserVerification,
     );
+    final _VerifiedAttestationStatement verifiedStatement;
     if (format == 'none') {
       if (statement.isNotEmpty) {
         throw AuthFlowException('webauthn_attestation_invalid');
       }
+      verifiedStatement = const _VerifiedAttestationStatement(
+        kind: WebAuthnAttestationKind.none,
+      );
     } else if (format == 'packed') {
-      _verifyPackedAttestation(
+      verifiedStatement = _verifyPackedAttestation(
         statement: statement,
         authenticatorData: authDataBytes,
         clientDataHash: clientDataHash,
@@ -924,7 +1114,7 @@ final class WebAuthnPlugin<TContext>
         aaguid: parsed.aaguid!,
       );
     } else if (format == 'fido-u2f') {
-      _verifyFidoU2fAttestation(
+      verifiedStatement = _verifyFidoU2fAttestation(
         statement: statement,
         authenticatorData: authDataBytes,
         clientDataHash: clientDataHash,
@@ -938,10 +1128,18 @@ final class WebAuthnPlugin<TContext>
       credentialId: parsed.credentialId!,
       publicKeyCose: parsed.publicKeyCose!,
       counter: parsed.counter,
+      metadata: WebAuthnAttestationMetadata._(
+        format: format,
+        kind: verifiedStatement.kind,
+        aaguid: _formatAaguid(parsed.aaguid!),
+        certificateTrustPath: verifiedStatement.certificateTrustPath
+            .map(WebAuthnAttestationCertificate._)
+            .toList(growable: false),
+      ),
     );
   }
 
-  void _verifyPackedAttestation({
+  _VerifiedAttestationStatement _verifyPackedAttestation({
     required Map statement,
     required Uint8List authenticatorData,
     required Uint8List clientDataHash,
@@ -973,13 +1171,14 @@ final class WebAuthnPlugin<TContext>
       ...clientDataHash,
     ]);
     final _CosePublicKey key;
+    List<_PackedAttestationCertificate>? certificates;
     if (certificateChain == null) {
       key = _decodeCosePublicKey(credentialPublicKey);
       if (key.algorithm != algorithm) {
         throw AuthFlowException('webauthn_attestation_invalid');
       }
     } else {
-      final certificates = _parsePackedCertificateChain(
+      certificates = _parsePackedCertificateChain(
         certificateChain,
         aaguid: aaguid,
       );
@@ -1005,9 +1204,19 @@ final class WebAuthnPlugin<TContext>
     )) {
       throw AuthFlowException('webauthn_attestation_invalid');
     }
+    return _VerifiedAttestationStatement(
+      kind: certificates == null
+          ? WebAuthnAttestationKind.self
+          : WebAuthnAttestationKind.certificate,
+      certificateTrustPath:
+          certificates
+              ?.map((certificate) => certificate.derBytes)
+              .toList(growable: false) ??
+          const <Uint8List>[],
+    );
   }
 
-  void _verifyFidoU2fAttestation({
+  _VerifiedAttestationStatement _verifyFidoU2fAttestation({
     required Map statement,
     required Uint8List authenticatorData,
     required Uint8List clientDataHash,
@@ -1074,6 +1283,12 @@ final class WebAuthnPlugin<TContext>
     )) {
       throw AuthFlowException('webauthn_attestation_invalid');
     }
+    return _VerifiedAttestationStatement(
+      kind: WebAuthnAttestationKind.certificate,
+      certificateTrustPath: <Uint8List>[
+        Uint8List.fromList(certificateBytes.cast<int>()),
+      ],
+    );
   }
 
   _CosePublicKey _parseFidoU2fAttestationCertificate(Uint8List bytes) {
@@ -1297,6 +1512,7 @@ final class WebAuthnPlugin<TContext>
         }
       }
       return _PackedAttestationCertificate(
+        derBytes: Uint8List.fromList(bytes),
         tbsCertificate: Uint8List.fromList(tbsCertificate.encodedBytes!),
         signatureAlgorithm: _certificateSignatureAlgorithm(signatureAlgorithm),
         signature: Uint8List.fromList(signatureValue.stringValues!),
@@ -1829,6 +2045,20 @@ final class _ParsedCredential {
   final String? name;
 }
 
+String _formatAaguid(List<int> bytes) {
+  if (bytes.length != 16) {
+    throw AuthFlowException('webauthn_attestation_invalid');
+  }
+  final encoded = bytes
+      .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+      .join();
+  return '${encoded.substring(0, 8)}-'
+      '${encoded.substring(8, 12)}-'
+      '${encoded.substring(12, 16)}-'
+      '${encoded.substring(16, 20)}-'
+      '${encoded.substring(20)}';
+}
+
 final class _ClientData {
   const _ClientData({required this.challenge});
 
@@ -1840,11 +2070,23 @@ final class _ParsedAttestation {
     required this.credentialId,
     required this.publicKeyCose,
     required this.counter,
+    required this.metadata,
   });
 
   final Uint8List credentialId;
   final Uint8List publicKeyCose;
   final int counter;
+  final WebAuthnAttestationMetadata metadata;
+}
+
+final class _VerifiedAttestationStatement {
+  const _VerifiedAttestationStatement({
+    required this.kind,
+    this.certificateTrustPath = const <Uint8List>[],
+  });
+
+  final WebAuthnAttestationKind kind;
+  final List<Uint8List> certificateTrustPath;
 }
 
 final class _ParsedAuthenticatorData {
@@ -1863,6 +2105,7 @@ final class _ParsedAuthenticatorData {
 
 final class _PackedAttestationCertificate {
   const _PackedAttestationCertificate({
+    required this.derBytes,
     required this.tbsCertificate,
     required this.signatureAlgorithm,
     required this.signature,
@@ -1879,6 +2122,7 @@ final class _PackedAttestationCertificate {
     this.aaguid,
   });
 
+  final Uint8List derBytes;
   final Uint8List tbsCertificate;
   final int signatureAlgorithm;
   final Uint8List signature;
