@@ -212,7 +212,7 @@ void main() {
       }),
     );
 
-    await transport.request('GET', '/providers');
+    await transport.request('GET', const AuthRoutePath('/providers'));
   });
 
   test('transport honors Secure cookies by request scheme', () async {
@@ -233,7 +233,7 @@ void main() {
       httpClient: httpClient,
       cookieStore: store,
     );
-    await cleartextTransport.request('GET', '/session');
+    await cleartextTransport.request('GET', const AuthRoutePath('/session'));
     expect(requests.single.headers['cookie'], isNull);
 
     final tlsTransport = AuthClientTransport(
@@ -241,7 +241,7 @@ void main() {
       httpClient: httpClient,
       cookieStore: store,
     );
-    await tlsTransport.request('GET', '/session');
+    await tlsTransport.request('GET', const AuthRoutePath('/session'));
     expect(requests[1].headers['cookie'], equals('session=secret'));
   });
 
@@ -277,7 +277,7 @@ void main() {
       }),
     );
 
-    await transport.mutate('POST', '/sessions/revoke', {
+    await transport.mutate('POST', const AuthRoutePath('/sessions/revoke'), {
       'sessionId': 'session-1',
     });
 

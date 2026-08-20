@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'client.dart';
+import 'plugin.dart';
+import 'saml.dart';
 import 'saml_models.dart';
 
 final class AuthSamlClientPlugin implements AuthClientPlugin<AuthSamlClient> {
@@ -85,7 +87,7 @@ final class AuthSamlClient {
   Future<AuthSamlSignInForm> signIn(AuthSamlSignInRequest request) async {
     final response = await _transport.mutate(
       'POST',
-      '/sso/saml/sign-in',
+      const AuthRoutePath('/sso/saml/sign-in'),
       request.toJson(),
     );
     final decoded = jsonDecode(response.body);
@@ -100,7 +102,13 @@ final class AuthSamlClient {
     if (normalized.isEmpty) throw ArgumentError.value(providerId, 'providerId');
     final response = await _transport.request(
       'GET',
-      '/sso/saml/metadata/${Uri.encodeComponent(normalized)}',
+      const AuthRoutePath(
+        '/sso/saml/metadata/{providerId}',
+        parameters: <AuthRouteParameterKey>[authSamlProviderIdRouteParameter],
+      ),
+      pathParameters: <AuthRouteParameterKey, String>{
+        authSamlProviderIdRouteParameter: normalized,
+      },
     );
     return response.body;
   }

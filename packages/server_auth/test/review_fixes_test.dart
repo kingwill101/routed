@@ -40,8 +40,7 @@ void main() {
       await _seedUser(store, 'u2', 'taken@example.com');
     });
 
-    test(
-        'confirmEmailChange does not report success or revoke sessions when '
+    test('confirmEmailChange does not report success or revoke sessions when '
         'update returns null', () async {
       // Seed a session so we can verify it is NOT revoked on failure.
       final now = DateTime.now().toUtc();
@@ -103,9 +102,9 @@ void main() {
         clientStore: clientStore,
         authorizationCodeExchangeStore:
             InMemoryOAuthAuthorizationCodeExchangeStore(
-          authorizationCodeStore: codeStore,
-          accessTokenStore: InMemoryOAuthAccessTokenStore(),
-        ),
+              authorizationCodeStore: codeStore,
+              accessTokenStore: InMemoryOAuthAccessTokenStore(),
+            ),
         options: const OAuthProviderModeOptions(
           supportedScopes: ['read', 'profile', 'email'],
           requirePkce: false,
@@ -137,12 +136,14 @@ void main() {
             context: Object(),
             user: AuthUser(id: 'user-1'),
           ),
-          {
-            'client_id': 'client-1',
-            'redirect_uri': 'https://app.example.com/callback',
-            'response_type': 'code',
-            'scope': 'read email',
-          },
+          AuthEndpointRequest(
+            query: {
+              'client_id': 'client-1',
+              'redirect_uri': 'https://app.example.com/callback',
+              'response_type': 'code',
+              'scope': 'read email',
+            },
+          ),
         ),
         throwsA(
           isA<AuthFlowException>().having(
@@ -164,12 +165,14 @@ void main() {
             context: Object(),
             user: AuthUser(id: 'user-1'),
           ),
-          {
-            'client_id': 'client-1',
-            'redirect_uri': 'https://app.example.com/callback',
-            'response_type': 'code',
-            'scope': 'read admin',
-          },
+          AuthEndpointRequest(
+            query: {
+              'client_id': 'client-1',
+              'redirect_uri': 'https://app.example.com/callback',
+              'response_type': 'code',
+              'scope': 'read admin',
+            },
+          ),
         ),
         throwsA(
           isA<AuthFlowException>().having(
@@ -187,19 +190,23 @@ void main() {
         final result = plugin.endpoints.firstWhere(
           (e) => e.id == 'oauth_provider.authorize',
         );
-        final response = await result.invoke(
-          AuthOperationInvocation<Object>(
-            context: Object(),
-            user: AuthUser(id: 'user-1'),
-          ),
-          {
-            'client_id': 'client-1',
-            'redirect_uri': 'https://app.example.com/callback',
-            'response_type': 'code',
-            'scope': 'read profile',
-            'state': 'client-state',
-          },
-        ) as AuthEndpointRedirect;
+        final response =
+            await result.invoke(
+                  AuthOperationInvocation<Object>(
+                    context: Object(),
+                    user: AuthUser(id: 'user-1'),
+                  ),
+                  AuthEndpointRequest(
+                    query: {
+                      'client_id': 'client-1',
+                      'redirect_uri': 'https://app.example.com/callback',
+                      'response_type': 'code',
+                      'scope': 'read profile',
+                      'state': 'client-state',
+                    },
+                  ),
+                )
+                as AuthEndpointRedirect;
         expect(result.method, AuthOperationMethod.get);
         expect(response.location.host, 'app.example.com');
         expect(response.location.queryParameters['state'], 'client-state');
@@ -223,12 +230,14 @@ void main() {
       expect(
         () => result.invoke(
           AuthOperationInvocation<Object>(context: Object(), user: null),
-          {
-            'grant_type': 'client_credentials',
-            'client_id': 'client-1',
-            'client_secret': 'secret',
-            'scope': 'admin',
-          },
+          AuthEndpointRequest(
+            body: {
+              'grant_type': 'client_credentials',
+              'client_id': 'client-1',
+              'client_secret': 'secret',
+              'scope': 'admin',
+            },
+          ),
         ),
         throwsA(
           isA<AuthFlowException>().having(
@@ -250,9 +259,9 @@ void main() {
         clientStore: clientStore,
         authorizationCodeExchangeStore:
             InMemoryOAuthAuthorizationCodeExchangeStore(
-          authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
-          accessTokenStore: InMemoryOAuthAccessTokenStore(),
-        ),
+              authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+              accessTokenStore: InMemoryOAuthAccessTokenStore(),
+            ),
         options: const OAuthProviderModeOptions(
           supportedScopes: ['api:read'],
           accessTokenLifetime: Duration(milliseconds: 1),
@@ -282,18 +291,22 @@ void main() {
           (e) => e.id == 'oauth_provider.token',
         );
 
-        final tokenResult = await tokenEndpoint.invoke(
-          AuthOperationInvocation<Object>(
-            context: Object(),
-            user: null,
-          ),
-          {
-            'grant_type': 'client_credentials',
-            'client_id': 'client-1',
-            'client_secret': 'secret',
-            'scope': 'api:read',
-          },
-        ) as Map<String, dynamic>;
+        final tokenResult =
+            await tokenEndpoint.invoke(
+                  AuthOperationInvocation<Object>(
+                    context: Object(),
+                    user: null,
+                  ),
+                  AuthEndpointRequest(
+                    body: {
+                      'grant_type': 'client_credentials',
+                      'client_id': 'client-1',
+                      'client_secret': 'secret',
+                      'scope': 'api:read',
+                    },
+                  ),
+                )
+                as Map<String, dynamic>;
 
         final refreshToken = tokenResult['refresh_token'] as String;
         expect(refreshToken, isNotEmpty);
@@ -301,18 +314,22 @@ void main() {
         // Wait for the access token to expire (1 ms lifetime).
         await Future<void>.delayed(const Duration(milliseconds: 50));
 
-        final refreshResult = await tokenEndpoint.invoke(
-          AuthOperationInvocation<Object>(
-            context: Object(),
-            user: null,
-          ),
-          {
-            'grant_type': 'refresh_token',
-            'client_id': 'client-1',
-            'client_secret': 'secret',
-            'refresh_token': refreshToken,
-          },
-        ) as Map<String, dynamic>;
+        final refreshResult =
+            await tokenEndpoint.invoke(
+                  AuthOperationInvocation<Object>(
+                    context: Object(),
+                    user: null,
+                  ),
+                  AuthEndpointRequest(
+                    body: {
+                      'grant_type': 'refresh_token',
+                      'client_id': 'client-1',
+                      'client_secret': 'secret',
+                      'refresh_token': refreshToken,
+                    },
+                  ),
+                )
+                as Map<String, dynamic>;
 
         expect(refreshResult['access_token'], isNotNull);
         expect(refreshResult['refresh_token'], isNotNull);
@@ -323,27 +340,33 @@ void main() {
       final tokenEndpoint = plugin.endpoints.firstWhere(
         (endpoint) => endpoint.id == 'oauth_provider.token',
       );
-      final issued = await tokenEndpoint.invoke(
-        AuthOperationInvocation<Object>(context: Object(), user: null),
-        {
-          'grant_type': 'client_credentials',
-          'client_id': 'client-1',
-          'client_secret': 'secret',
-          'scope': 'api:read',
-        },
-      ) as Map<String, dynamic>;
+      final issued =
+          await tokenEndpoint.invoke(
+                AuthOperationInvocation<Object>(context: Object(), user: null),
+                AuthEndpointRequest(
+                  body: {
+                    'grant_type': 'client_credentials',
+                    'client_id': 'client-1',
+                    'client_secret': 'secret',
+                    'scope': 'api:read',
+                  },
+                ),
+              )
+              as Map<String, dynamic>;
       final refreshToken = issued['refresh_token'] as String;
 
       Future<Object> refresh() async {
         try {
           return await tokenEndpoint.invoke(
                 AuthOperationInvocation<Object>(context: Object(), user: null),
-                {
-                  'grant_type': 'refresh_token',
-                  'client_id': 'client-1',
-                  'client_secret': 'secret',
-                  'refresh_token': refreshToken,
-                },
+                AuthEndpointRequest(
+                  body: {
+                    'grant_type': 'refresh_token',
+                    'client_id': 'client-1',
+                    'client_secret': 'secret',
+                    'refresh_token': refreshToken,
+                  },
+                ),
               ) ??
               Object();
         } catch (error) {
@@ -375,9 +398,9 @@ void main() {
         clientStore: clientStore,
         authorizationCodeExchangeStore:
             InMemoryOAuthAuthorizationCodeExchangeStore(
-          authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
-          accessTokenStore: InMemoryOAuthAccessTokenStore(),
-        ),
+              authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+              accessTokenStore: InMemoryOAuthAccessTokenStore(),
+            ),
         options: const OAuthProviderModeOptions(
           supportedScopes: ['api:read'],
           maxRefreshTokenUses: 1,
@@ -386,33 +409,43 @@ void main() {
       final endpoint = limited.endpoints.firstWhere(
         (value) => value.id == 'oauth_provider.token',
       );
-      final issued = await endpoint.invoke(
-        AuthOperationInvocation<Object>(context: Object(), user: null),
-        {
-          'grant_type': 'client_credentials',
-          'client_id': 'limited-client',
-          'client_secret': 'secret',
-          'scope': 'api:read',
-        },
-      ) as Map<String, dynamic>;
-      final refreshed = await endpoint.invoke(
-        AuthOperationInvocation<Object>(context: Object(), user: null),
-        {
-          'grant_type': 'refresh_token',
-          'client_id': 'limited-client',
-          'client_secret': 'secret',
-          'refresh_token': issued['refresh_token'],
-        },
-      ) as Map<String, dynamic>;
+      final issued =
+          await endpoint.invoke(
+                AuthOperationInvocation<Object>(context: Object(), user: null),
+                AuthEndpointRequest(
+                  body: {
+                    'grant_type': 'client_credentials',
+                    'client_id': 'limited-client',
+                    'client_secret': 'secret',
+                    'scope': 'api:read',
+                  },
+                ),
+              )
+              as Map<String, dynamic>;
+      final refreshed =
+          await endpoint.invoke(
+                AuthOperationInvocation<Object>(context: Object(), user: null),
+                AuthEndpointRequest(
+                  body: {
+                    'grant_type': 'refresh_token',
+                    'client_id': 'limited-client',
+                    'client_secret': 'secret',
+                    'refresh_token': issued['refresh_token'],
+                  },
+                ),
+              )
+              as Map<String, dynamic>;
       expect(
         () => endpoint.invoke(
           AuthOperationInvocation<Object>(context: Object(), user: null),
-          {
-            'grant_type': 'refresh_token',
-            'client_id': 'limited-client',
-            'client_secret': 'secret',
-            'refresh_token': refreshed['refresh_token'],
-          },
+          AuthEndpointRequest(
+            body: {
+              'grant_type': 'refresh_token',
+              'client_id': 'limited-client',
+              'client_secret': 'secret',
+              'refresh_token': refreshed['refresh_token'],
+            },
+          ),
         ),
         throwsA(
           isA<AuthFlowException>().having(
@@ -442,14 +475,14 @@ void main() {
         clientStore: clientStore,
         authorizationCodeExchangeStore:
             InMemoryOAuthAuthorizationCodeExchangeStore(
-          authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
-          accessTokenStore: InMemoryOAuthAccessTokenStore(),
-        ),
+              authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+              accessTokenStore: InMemoryOAuthAccessTokenStore(),
+            ),
         options: const OAuthProviderModeOptions(
-          authorizationEndpoint: '/identity/authorize',
-          tokenEndpoint: '/identity/token',
-          userInfoEndpoint: '/identity/userinfo',
-          introspectionEndpoint: '/identity/introspect',
+          authorizationEndpoint: AuthRoutePath('/identity/authorize'),
+          tokenEndpoint: AuthRoutePath('/identity/token'),
+          userInfoEndpoint: AuthRoutePath('/identity/userinfo'),
+          introspectionEndpoint: AuthRoutePath('/identity/introspect'),
           supportedScopes: ['api:read'],
           supportedGrantTypes: ['authorization_code'],
           supportedResponseTypes: [],
@@ -457,7 +490,8 @@ void main() {
         ),
       )..configure(AuthServerPluginContext<Object>(store: InMemoryAuthStore()));
       final paths = {
-        for (final endpoint in plugin.endpoints) endpoint.id: endpoint.path,
+        for (final endpoint in plugin.endpoints)
+          endpoint.id: endpoint.path.template,
       };
       expect(paths['oauth_provider.authorize'], '/identity/authorize');
       expect(paths['oauth_provider.token'], '/identity/token');
@@ -471,11 +505,13 @@ void main() {
       expect(
         () => tokenEndpoint.invoke(
           AuthOperationInvocation<Object>(context: Object(), user: null),
-          {
-            'grant_type': 'client_credentials',
-            'client_id': 'client-1',
-            'client_secret': 'secret',
-          },
+          AuthEndpointRequest(
+            body: {
+              'grant_type': 'client_credentials',
+              'client_id': 'client-1',
+              'client_secret': 'secret',
+            },
+          ),
         ),
         throwsA(
           isA<AuthFlowException>().having(
@@ -495,12 +531,14 @@ void main() {
             context: Object(),
             user: AuthUser(id: 'user-1'),
           ),
-          {
-            'client_id': 'client-1',
-            'redirect_uri': 'https://app.example.com/callback',
-            'response_type': 'code',
-            'scope': 'api:read',
-          },
+          AuthEndpointRequest(
+            query: {
+              'client_id': 'client-1',
+              'redirect_uri': 'https://app.example.com/callback',
+              'response_type': 'code',
+              'scope': 'api:read',
+            },
+          ),
         ),
         throwsA(
           isA<AuthFlowException>().having(
@@ -559,9 +597,9 @@ void main() {
         clientStore: clientStore,
         authorizationCodeExchangeStore:
             InMemoryOAuthAuthorizationCodeExchangeStore(
-          authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
-          accessTokenStore: tokenStore,
-        ),
+              authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+              accessTokenStore: tokenStore,
+            ),
         options: const OAuthProviderModeOptions(
           userInfoClaimsByScope: {
             'profile': ['custom', 'sub', 'email'],
@@ -574,10 +612,14 @@ void main() {
       final endpoint = plugin.endpoints.firstWhere(
         (value) => value.id == 'oauth_provider.userinfo',
       );
-      final response = await endpoint.invoke(
-        AuthOperationInvocation<Object>(context: Object(), user: null),
-        {'_authorization': 'Bearer access-token'},
-      ) as Map<String, dynamic>;
+      final response =
+          await endpoint.invoke(
+                AuthOperationInvocation<Object>(context: Object(), user: null),
+                AuthEndpointRequest(
+                  headers: {'authorization': 'Bearer access-token'},
+                ),
+              )
+              as Map<String, dynamic>;
       expect(response['sub'], equals('user-1'));
       expect(response['email'], equals('real@example.com'));
       expect(response['name'], equals('Real Name'));
@@ -593,7 +635,9 @@ void main() {
       expect(
         () => endpoint.invoke(
           AuthOperationInvocation<Object>(context: Object(), user: null),
-          {'_authorization': 'Bearer access-token'},
+          AuthEndpointRequest(
+            headers: {'authorization': 'Bearer access-token'},
+          ),
         ),
         throwsA(
           isA<AuthFlowException>().having(
@@ -629,19 +673,27 @@ void main() {
         (value) => value.id == 'oauth_provider.userinfo',
       );
 
-      final profile = await endpoint.invoke(
-        AuthOperationInvocation<Object>(context: Object(), user: null),
-        {'_authorization': 'Bearer profile-token'},
-      ) as Map<String, dynamic>;
+      final profile =
+          await endpoint.invoke(
+                AuthOperationInvocation<Object>(context: Object(), user: null),
+                AuthEndpointRequest(
+                  headers: {'authorization': 'Bearer profile-token'},
+                ),
+              )
+              as Map<String, dynamic>;
       expect(profile['sub'], equals('user-1'));
       expect(profile['name'], equals('Real Name'));
       expect(profile['custom'], equals('kept'));
       expect(profile, isNot(contains('email')));
 
-      final email = await endpoint.invoke(
-        AuthOperationInvocation<Object>(context: Object(), user: null),
-        {'_authorization': 'Bearer email-token'},
-      ) as Map<String, dynamic>;
+      final email =
+          await endpoint.invoke(
+                AuthOperationInvocation<Object>(context: Object(), user: null),
+                AuthEndpointRequest(
+                  headers: {'authorization': 'Bearer email-token'},
+                ),
+              )
+              as Map<String, dynamic>;
       expect(email['sub'], equals('user-1'));
       expect(email['email'], equals('real@example.com'));
       expect(email, isNot(contains('name')));
@@ -658,7 +710,7 @@ void main() {
           context: Object(),
           user: AuthUser(id: 'admin', roles: const ['admin']),
         ),
-        {'client_id': 'client-1'},
+        AuthEndpointRequest(body: {'client_id': 'client-1'}),
       );
 
       expect(await clientStore.findById('client-1'), isNull);

@@ -285,7 +285,7 @@ final class PhoneNumberPlugin<TContext>
         >(
           id: 'phoneNumber.sendCode',
           method: AuthOperationMethod.post,
-          path: '/phone-number/send-code',
+          path: const AuthRoutePath('/phone-number/send-code'),
           semantics: const AuthOperationSemantics.mutation(
             persistence: AuthMutationPersistence.external(),
             replaySafety: AuthMutationReplaySafety.repeatable,
@@ -313,7 +313,7 @@ final class PhoneNumberPlugin<TContext>
         >(
           id: 'phoneNumber.verifyCode',
           method: AuthOperationMethod.post,
-          path: '/phone-number/verify-code',
+          path: const AuthRoutePath('/phone-number/verify-code'),
           semantics: const AuthOperationSemantics.mutation(
             persistence: AuthMutationPersistence.durable(
               atomicity: AuthMutationAtomicity.nonAtomic,
@@ -362,6 +362,7 @@ final class PhoneNumberPlugin<TContext>
       id: endpoint.id,
       method: endpoint.method,
       path: endpoint.path,
+      mount: endpoint.mount,
       serverOnly: endpoint.serverOnly,
     ),
   );

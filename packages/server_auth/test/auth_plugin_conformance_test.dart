@@ -85,7 +85,7 @@ void main() {
       final endpoint = _endpoint(
         id: 'unstable endpoint',
         method: AuthOperationMethod.get,
-        path: '/unstable',
+        path: const AuthRoutePath('/unstable'),
       );
       final suite = _suite(
         _FixturePlugin(
@@ -94,7 +94,7 @@ void main() {
             AuthClientOperationDescriptor(
               id: 'unstable client',
               method: AuthOperationMethod.get,
-              path: '/unstable',
+              path: AuthRoutePath('/unstable'),
             ),
           ],
         ),
@@ -104,17 +104,18 @@ void main() {
       await _expectCaseFailure(suite, 'clients.public-endpoints');
     });
 
-    test('rejects non-canonical method and path keys', () async {
+    test('rejects non-canonical paths when topology freezes', () {
       final endpoint = _endpoint(
         id: 'sample.path',
         method: AuthOperationMethod.get,
-        path: 'sample/path/',
+        path: const AuthRoutePath('sample/path/'),
       );
-      final suite = _suite(
-        _FixturePlugin(endpoints: <AuthEndpointDescriptor<Object>>[endpoint]),
+      expect(
+        () => _suite(
+          _FixturePlugin(endpoints: <AuthEndpointDescriptor<Object>>[endpoint]),
+        ),
+        throwsArgumentError,
       );
-
-      await _expectCaseFailure(suite, 'endpoints.identifiers');
     });
 
     test('requires typed JSON-compatible endpoint contracts', () async {
@@ -131,7 +132,7 @@ void main() {
             _endpoint(
               id: 'sample.malformed',
               method: AuthOperationMethod.get,
-              path: '/sample/malformed',
+              path: const AuthRoutePath('/sample/malformed'),
               requestSchema: <String, Object?>{'properties': Object()},
             ),
           ],
@@ -147,7 +148,7 @@ void main() {
             _endpoint(
               id: 'sample.protocol',
               method: AuthOperationMethod.get,
-              path: '/sample/protocol',
+              path: const AuthRoutePath('/sample/protocol'),
               responseContracts: const <AuthEndpointResponseContract>[
                 AuthEndpointResponseContract(
                   statusCode: 200,
@@ -174,7 +175,7 @@ void main() {
             _endpoint(
               id: 'sample.verify',
               method: AuthOperationMethod.post,
-              path: '/sample/verify',
+              path: const AuthRoutePath('/sample/verify'),
               rateLimitOperation: missing,
             ),
           ],
@@ -188,7 +189,7 @@ void main() {
             _endpoint(
               id: 'sample.status',
               method: AuthOperationMethod.get,
-              path: '/sample/status',
+              path: AuthRoutePath('/sample/status'),
             ),
           ],
           rateLimitOperations: const <AuthRateLimitOperation>[missing],
@@ -201,7 +202,7 @@ void main() {
       final endpoint = _endpoint(
         id: 'sample.status',
         method: AuthOperationMethod.get,
-        path: '/sample/status',
+        path: const AuthRoutePath('/sample/status'),
       );
       final suite = _suite(
         _FixturePlugin(
@@ -210,7 +211,7 @@ void main() {
             AuthClientOperationDescriptor(
               id: 'sample.status',
               method: AuthOperationMethod.post,
-              path: '/sample/status',
+              path: AuthRoutePath('/sample/status'),
             ),
           ],
         ),
@@ -225,7 +226,7 @@ void main() {
         final endpoint = _endpoint(
           id: 'sample.discovery',
           method: AuthOperationMethod.get,
-          path: '/.well-known/sample',
+          path: const AuthRoutePath('/.well-known/sample'),
         );
         final plugin = _FixturePlugin(
           endpoints: <AuthEndpointDescriptor<Object>>[endpoint],
@@ -253,7 +254,7 @@ void main() {
             _endpoint(
               id: 'sample.verify',
               method: AuthOperationMethod.post,
-              path: '/sample/verify',
+              path: const AuthRoutePath('/sample/verify'),
               originPolicy: AuthOperationOriginPolicy.browser,
               rateLimitOperation: operation,
             ),
@@ -274,7 +275,7 @@ void main() {
             _endpoint(
               id: 'sample.update',
               method: AuthOperationMethod.post,
-              path: '/sample/update',
+              path: const AuthRoutePath('/sample/update'),
               authentication: AuthOperationAuthentication.session,
               originPolicy: AuthOperationOriginPolicy.browser,
               csrfPolicy: AuthOperationCsrfPolicy.none,
@@ -305,7 +306,7 @@ void main() {
             _endpoint(
               id: 'sample.atomic',
               method: AuthOperationMethod.post,
-              path: '/sample/atomic',
+              path: const AuthRoutePath('/sample/atomic'),
               semantics: const AuthOperationSemantics.mutation(
                 persistence: AuthMutationPersistence.durable(
                   atomicity: AuthMutationAtomicity.atomic,
@@ -327,7 +328,7 @@ void main() {
             _endpoint(
               id: 'sample.mutating-get',
               method: AuthOperationMethod.get,
-              path: '/sample/mutating-get',
+              path: const AuthRoutePath('/sample/mutating-get'),
               semantics: const AuthOperationSemantics.mutation(
                 persistence: AuthMutationPersistence.boundedEphemeral(),
                 replaySafety: AuthMutationReplaySafety.idempotent,
@@ -344,7 +345,7 @@ void main() {
             _endpoint(
               id: 'sample.reading-post',
               method: AuthOperationMethod.post,
-              path: '/sample/reading-post',
+              path: const AuthRoutePath('/sample/reading-post'),
               semantics: const AuthOperationSemantics.readOnly(),
             ),
           ],
@@ -360,7 +361,7 @@ void main() {
             _endpoint(
               id: 'sample.persist',
               method: AuthOperationMethod.post,
-              path: '/sample/persist',
+              path: const AuthRoutePath('/sample/persist'),
               semantics: const AuthOperationSemantics.mutation(
                 persistence: AuthMutationPersistence.durable(
                   atomicity: AuthMutationAtomicity.nonAtomic,
@@ -385,7 +386,7 @@ void main() {
             _endpoint(
               id: 'sample.atomic',
               method: AuthOperationMethod.post,
-              path: '/sample/atomic',
+              path: const AuthRoutePath('/sample/atomic'),
               semantics: const AuthOperationSemantics.mutation(
                 persistence: AuthMutationPersistence.durable(
                   atomicity: AuthMutationAtomicity.atomic,
@@ -420,7 +421,7 @@ void main() {
             _endpoint(
               id: 'sample.unsafe',
               method: AuthOperationMethod.post,
-              path: '/sample/unsafe',
+              path: const AuthRoutePath('/sample/unsafe'),
               originPolicy: AuthOperationOriginPolicy.browser,
               rateLimitOperation: operation,
               semantics: const AuthOperationSemantics.mutation(
@@ -445,7 +446,7 @@ void main() {
               _endpoint(
                 id: 'sample.verify',
                 method: AuthOperationMethod.post,
-                path: '/sample/verify',
+                path: const AuthRoutePath('/sample/verify'),
               ),
             ],
           ),
@@ -483,18 +484,18 @@ _FixturePlugin _validPlugin() {
     _endpoint(
       id: 'sample.status',
       method: AuthOperationMethod.get,
-      path: '/sample/status',
+      path: const AuthRoutePath('/sample/status'),
     ),
     _endpoint(
       id: 'sample.verify',
       method: AuthOperationMethod.post,
-      path: '/sample/verify',
+      path: const AuthRoutePath('/sample/verify'),
       rateLimitOperation: verifyRateLimit,
     ),
     _endpoint(
       id: 'sample.update',
       method: AuthOperationMethod.post,
-      path: '/sample/update',
+      path: const AuthRoutePath('/sample/update'),
       authentication: AuthOperationAuthentication.session,
       originPolicy: AuthOperationOriginPolicy.browser,
       csrfPolicy: AuthOperationCsrfPolicy.required,
@@ -522,7 +523,7 @@ _FixturePlugin _validPlugin() {
 TypedAuthEndpointDescriptor<Object, Map<String, dynamic>, Object?> _endpoint({
   required String id,
   required AuthOperationMethod method,
-  required String path,
+  required AuthRoutePath path,
   AuthOperationAuthentication authentication = AuthOperationAuthentication.none,
   AuthOperationOriginPolicy originPolicy = AuthOperationOriginPolicy.none,
   AuthOperationCsrfPolicy csrfPolicy = AuthOperationCsrfPolicy.none,
@@ -634,7 +635,10 @@ final class _UntypedEndpoint implements AuthEndpointDescriptor<Object> {
   AuthOperationMethod get method => AuthOperationMethod.get;
 
   @override
-  String get path => '/sample/untyped';
+  AuthRoutePath get path => const AuthRoutePath('/sample/untyped');
+
+  @override
+  AuthEndpointMount get mount => AuthEndpointMount.auth;
 
   @override
   AuthOperationSemantics get semantics =>
@@ -659,7 +663,7 @@ final class _UntypedEndpoint implements AuthEndpointDescriptor<Object> {
   @override
   Object? invoke(
     AuthOperationInvocation<Object> invocation,
-    Map<String, dynamic> input,
+    AuthEndpointRequest request,
   ) => null;
 }
 
@@ -672,7 +676,9 @@ final class _MissingSemanticsEndpoint
   @override
   AuthOperationMethod get method => AuthOperationMethod.post;
   @override
-  String get path => '/sample/missing-semantics';
+  AuthRoutePath get path => const AuthRoutePath('/sample/missing-semantics');
+  @override
+  AuthEndpointMount get mount => AuthEndpointMount.auth;
   @override
   AuthOperationSemantics get semantics =>
       throw StateError('Mutation semantics were not declared.');
@@ -694,7 +700,7 @@ final class _MissingSemanticsEndpoint
   @override
   Object? invoke(
     AuthOperationInvocation<Object> invocation,
-    Map<String, dynamic> input,
+    AuthEndpointRequest request,
   ) => const <String, Object?>{};
 }
 

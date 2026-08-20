@@ -50,7 +50,9 @@ final class AuthPluginEndpointFixture<TContext> {
     }
     final path = request.uri.path.substring(prefix.length);
     final match = _endpoints
-        .map((candidate) => (candidate, _matchPath(candidate.path, path)))
+        .map(
+          (candidate) => (candidate, _matchPath(candidate.path.template, path)),
+        )
         .where(
           (entry) =>
               entry.$2 != null &&
@@ -62,14 +64,16 @@ final class AuthPluginEndpointFixture<TContext> {
     }
     final endpoint = match.$1;
     try {
-      final endpointInvocation = invocation(request);
-      final result = await endpoint
-          .invoke(endpointInvocation, <String, dynamic>{
-            ...request.uri.queryParameters,
-            ...request.jsonObject(),
-            ...match.$2!,
-            '_authorization': ?request.headers['authorization'],
-          });
+      final endpointRequest = AuthEndpointRequest(
+        path: endpoint.path.bind(Map<String, Object?>.from(match.$2!)),
+        query: Map<String, dynamic>.from(request.uri.queryParameters),
+        body: request.jsonObject(),
+        headers: request.headers,
+      );
+      final endpointInvocation = invocation(
+        request,
+      ).withRequest(endpointRequest);
+      final result = await endpoint.invoke(endpointInvocation, endpointRequest);
       if (result is AuthEndpointRedirect) {
         return AuthTestHttpResponse(
           statusCode: result.statusCode,

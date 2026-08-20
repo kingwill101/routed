@@ -186,19 +186,29 @@ void main() {
             endpoint.id: endpoint as AuthEndpointRateLimitIdentifierDescriptor,
         };
         final sendKey = endpoints['phoneNumber.sendCode']!
-            .resolveRateLimitIdentifier(const <String, dynamic>{
-              'phoneNumber': ' +18765551234 ',
-            });
+            .resolveRateLimitIdentifier(
+              AuthEndpointRequest(
+                body: const <String, dynamic>{'phoneNumber': ' +18765551234 '},
+              ),
+            );
         final verifyKey = endpoints['phoneNumber.verifyCode']!
-            .resolveRateLimitIdentifier(const <String, dynamic>{
-              'phoneNumber': '+18765551234',
-              'code': '123456',
-            });
+            .resolveRateLimitIdentifier(
+              AuthEndpointRequest(
+                body: const <String, dynamic>{
+                  'phoneNumber': '+18765551234',
+                  'code': '123456',
+                },
+              ),
+            );
         final otherCodeKey = endpoints['phoneNumber.verifyCode']!
-            .resolveRateLimitIdentifier(const <String, dynamic>{
-              'phoneNumber': '+18765551234',
-              'code': 'never-copy-this-otp',
-            });
+            .resolveRateLimitIdentifier(
+              AuthEndpointRequest(
+                body: const <String, dynamic>{
+                  'phoneNumber': '+18765551234',
+                  'code': 'never-copy-this-otp',
+                },
+              ),
+            );
 
         expect(sendKey, startsWith('phone:'));
         expect(sendKey, verifyKey);
@@ -210,13 +220,17 @@ void main() {
         expect(sendKey, isNot(contains('never-copy-this-otp')));
         expect(
           endpoints['phoneNumber.sendCode']!.resolveRateLimitIdentifier(
-            const <String, dynamic>{'phoneNumber': 'not-a-phone'},
+            AuthEndpointRequest(
+              body: const <String, dynamic>{'phoneNumber': 'not-a-phone'},
+            ),
           ),
           isNull,
         );
         expect(
           endpoints['phoneNumber.verifyCode']!.resolveRateLimitIdentifier(
-            const <String, dynamic>{'phoneNumber': '+18765551234'},
+            AuthEndpointRequest(
+              body: const <String, dynamic>{'phoneNumber': '+18765551234'},
+            ),
           ),
           isNull,
         );

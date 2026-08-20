@@ -300,7 +300,7 @@ Future<Object?> _invoke(
           user: user,
           sessionControl: control,
         ),
-        input,
+        AuthEndpointRequest(body: input),
       ),
 );
 

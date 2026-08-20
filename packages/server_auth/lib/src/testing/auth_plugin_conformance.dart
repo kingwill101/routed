@@ -300,6 +300,7 @@ final class AuthPluginConformanceSuite<TContext> {
           id: endpoint.id,
           method: endpoint.method,
           path: endpoint.path,
+          mount: endpoint.mount,
         ),
       ),
       label: 'endpoint',
@@ -381,6 +382,7 @@ final class AuthPluginConformanceSuite<TContext> {
           id: operation.id,
           method: operation.method,
           path: operation.path,
+          mount: operation.mount,
         ),
       ),
       label: 'client operation',
@@ -418,7 +420,8 @@ final class AuthPluginConformanceSuite<TContext> {
         );
       }
       if (endpoint.method != operation.method ||
-          _canonicalPath(endpoint.path) != _canonicalPath(operation.path)) {
+          endpoint.mount != operation.mount ||
+          endpoint.path.collisionShape != operation.path.collisionShape) {
         _fail(
           'Client operation "${operation.id}" does not match its endpoint '
           'method and path.',
@@ -802,7 +805,7 @@ void _verifyObservedRequest<TContext>(
     );
   }
   final actualPath = request.url.path.replaceFirst(RegExp(r'^/auth'), '');
-  if (_canonicalPath(actualPath) != _canonicalPath(endpoint.path)) {
+  if (_canonicalPath(actualPath) != endpoint.path.validate()) {
     _fail(
       'Installed client operation "${endpoint.id}" uses path '
       '"$actualPath", not "${endpoint.path}".',
@@ -989,11 +992,14 @@ void _verifyUniqueOperationKeys(
 }) {
   final seen = <String>{};
   for (final operation in operations) {
-    final path = _canonicalPath(operation.path);
-    if (operation.path != path) {
-      _fail('$label "${operation.id}" path must be canonical: "$path".');
+    try {
+      operation.path.validate();
+    } on ArgumentError catch (error) {
+      _fail('$label "${operation.id}" has an invalid path: $error.');
     }
-    final key = '${operation.method.name}:$path';
+    final key =
+        '${operation.mount.name}:${operation.method.name}:'
+        '${operation.path.collisionShape}';
     if (!seen.add(key)) _fail('Duplicate $label method and path "$key".');
   }
 }
@@ -1063,11 +1069,13 @@ final class _OperationKey {
     required this.id,
     required this.method,
     required this.path,
+    required this.mount,
   });
 
   final String id;
   final AuthOperationMethod method;
-  final String path;
+  final AuthRoutePath path;
+  final AuthEndpointMount mount;
 }
 
 final class _AuthPluginExpectationFailure implements Exception {

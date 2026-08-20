@@ -16,11 +16,13 @@ void main() {
                 context: 'browser-binding-value-0001',
                 user: null,
               ),
-              {
-                'providerId': 'enterprise',
-                'SAMLResponse': value,
-                'RelayState': value,
-              },
+              AuthEndpointRequest(
+                body: {
+                  'providerId': 'enterprise',
+                  'SAMLResponse': value,
+                  'RelayState': value,
+                },
+              ),
             );
             fail('Hostile payload unexpectedly authenticated');
           } on AuthFlowException catch (error) {

@@ -9,6 +9,11 @@
   durable-adapter conformance, and property coverage for contention, replay,
   deletion rollback, operation binding, generated-name bounds, control
   characters, and privilege-bearing anonymous records.
+- Breaking: replace endpoint and client path strings with canonical
+  `AuthRoutePath` contracts, typed `{parameter}` keys, and explicit
+  `AuthEndpointMount.auth`/`root` placement. Requests now expose isolated path,
+  query, and body namespaces; client resolution requires an exact parameter
+  set and safely encodes each segment.
 - Bind managed SCIM authorization principals to the authenticated session user
   so credential ownership and coordinated deletion cannot be assigned to a
   different account by a faulty application authorizer.

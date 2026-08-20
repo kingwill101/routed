@@ -31,7 +31,7 @@ void main() {
       expect(runtime.registry.isFrozen, isTrue);
       expect(runtime.registry.endpoints, hasLength(36));
       expect(
-        runtime.registry.endpoints.map((endpoint) => endpoint.path),
+        runtime.registry.endpoints.map((endpoint) => endpoint.path.template),
         contains('/organization/create'),
       );
       expect(runtime.registry.persistenceSchemas.single.id, 'organization');
@@ -1067,7 +1067,14 @@ Future<Object?> _invoke(
         user: user,
         emailVerified: emailVerified,
       ),
-      input,
+      AuthEndpointRequest(
+        body: endpoint.method == AuthOperationMethod.get
+            ? const <String, dynamic>{}
+            : input,
+        query: endpoint.method == AuthOperationMethod.get
+            ? input
+            : const <String, dynamic>{},
+      ),
     ),
   );
 }

@@ -55,7 +55,7 @@ void main() {
       );
       expect(runtime.registry.endpoints, hasLength(20));
       expect(
-        runtime.registry.endpoints.map((endpoint) => endpoint.path),
+        runtime.registry.endpoints.map((endpoint) => endpoint.path.template),
         containsAll([
           '/admin/create-user',
           '/admin/ban-user',
@@ -635,10 +635,13 @@ Future<Object?> _invoke(
   Map<String, dynamic> input,
 ) {
   final endpoint = feature.endpoints.singleWhere((value) => value.id == id);
+  final request = endpoint.method == AuthOperationMethod.get
+      ? AuthEndpointRequest(query: input)
+      : AuthEndpointRequest(body: input);
   return Future<Object?>.value(
     endpoint.invoke(
       AuthOperationInvocation(context: Object(), user: user),
-      input,
+      request,
     ),
   );
 }
@@ -651,6 +654,9 @@ Future<Object?> _invokeWithControl(
   AuthServerPluginSessionControl control,
 ) {
   final endpoint = feature.endpoints.singleWhere((value) => value.id == id);
+  final request = endpoint.method == AuthOperationMethod.get
+      ? AuthEndpointRequest(query: input)
+      : AuthEndpointRequest(body: input);
   return Future<Object?>.value(
     endpoint.invoke(
       AuthOperationInvocation(
@@ -658,7 +664,7 @@ Future<Object?> _invokeWithControl(
         user: user,
         sessionControl: control,
       ),
-      input,
+      request,
     ),
   );
 }

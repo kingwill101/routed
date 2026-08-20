@@ -456,7 +456,7 @@ final class _EchoClient {
   Future<String> read(String requestValue) async {
     final response = await _transport.request(
       'POST',
-      '/echo',
+      const AuthRoutePath('/echo'),
       body: <String, dynamic>{'value': requestValue},
     );
     final decoded = jsonDecode(response.body);
@@ -487,7 +487,7 @@ final class _EchoServerPlugin
         >(
           id: 'echo.read',
           method: AuthOperationMethod.post,
-          path: '/echo',
+          path: AuthRoutePath('/echo'),
           semantics: const AuthOperationSemantics.readOnly(),
           requestCodec: AuthOperationCodec<Map<String, dynamic>>(
             decode: (value) {
@@ -525,7 +525,7 @@ final class _EchoServerPlugin
         AuthClientOperationDescriptor(
           id: 'echo.read',
           method: AuthOperationMethod.post,
-          path: '/echo',
+          path: AuthRoutePath('/echo'),
         ),
       ];
 

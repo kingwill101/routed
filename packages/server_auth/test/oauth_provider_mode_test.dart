@@ -59,10 +59,16 @@ void main() {
     });
 
     test('publishes truthful discovery metadata and a public JWKS', () async {
+      final discoveryEndpoint = _endpoint(plugin, 'oauth_provider.discovery');
+      expect(discoveryEndpoint.mount, AuthEndpointMount.root);
+      final discoveryClient = plugin.clientOperations.singleWhere(
+        (operation) => operation.id == 'oauth_provider.discovery',
+      );
+      expect(discoveryClient.mount, AuthEndpointMount.root);
       final discovery =
-          await _endpoint(plugin, 'oauth_provider.discovery').invoke(
+          await discoveryEndpoint.invoke(
                 AuthOperationInvocation<Object>(context: Object(), user: null),
-                const <String, dynamic>{},
+                AuthEndpointRequest(body: const <String, dynamic>{}),
               )
               as Map<String, dynamic>;
       expect(discovery['issuer'], 'https://issuer.example.test');
@@ -80,7 +86,7 @@ void main() {
       final jwks =
           await _endpoint(plugin, 'oauth_provider.jwks').invoke(
                 AuthOperationInvocation<Object>(context: Object(), user: null),
-                const <String, dynamic>{},
+                AuthEndpointRequest(body: const <String, dynamic>{}),
               )
               as Map<String, dynamic>;
       final keys = jwks['keys'] as List<dynamic>;
@@ -102,29 +108,33 @@ void main() {
                   context: Object(),
                   user: AuthUser(id: 'user-1'),
                 ),
-                const <String, dynamic>{
-                  'client_id': 'client-1',
-                  'redirect_uri': 'https://client.example.test/callback',
-                  'response_type': 'code',
-                  'scope': 'openid profile email',
-                  'nonce': 'nonce-1',
-                  'code_challenge': _challenge,
-                  'code_challenge_method': 'S256',
-                },
+                AuthEndpointRequest(
+                  query: const <String, dynamic>{
+                    'client_id': 'client-1',
+                    'redirect_uri': 'https://client.example.test/callback',
+                    'response_type': 'code',
+                    'scope': 'openid profile email',
+                    'nonce': 'nonce-1',
+                    'code_challenge': _challenge,
+                    'code_challenge_method': 'S256',
+                  },
+                ),
               )
               as AuthEndpointRedirect;
 
       final response =
           await _endpoint(plugin, 'oauth_provider.token').invoke(
                 AuthOperationInvocation<Object>(context: Object(), user: null),
-                <String, dynamic>{
-                  'grant_type': 'authorization_code',
-                  'client_id': 'client-1',
-                  'client_secret': 'secret',
-                  'redirect_uri': 'https://client.example.test/callback',
-                  'code': redirect.location.queryParameters['code'],
-                  'code_verifier': _verifier,
-                },
+                AuthEndpointRequest(
+                  body: <String, dynamic>{
+                    'grant_type': 'authorization_code',
+                    'client_id': 'client-1',
+                    'client_secret': 'secret',
+                    'redirect_uri': 'https://client.example.test/callback',
+                    'code': redirect.location.queryParameters['code'],
+                    'code_verifier': _verifier,
+                  },
+                ),
               )
               as Map<String, dynamic>;
 
@@ -154,27 +164,31 @@ void main() {
                   context: Object(),
                   user: AuthUser(id: 'user-1'),
                 ),
-                const <String, dynamic>{
-                  'client_id': 'client-1',
-                  'redirect_uri': 'https://client.example.test/callback',
-                  'response_type': 'code',
-                  'scope': 'profile',
-                  'code_challenge': _challenge,
-                  'code_challenge_method': 'S256',
-                },
+                AuthEndpointRequest(
+                  query: const <String, dynamic>{
+                    'client_id': 'client-1',
+                    'redirect_uri': 'https://client.example.test/callback',
+                    'response_type': 'code',
+                    'scope': 'profile',
+                    'code_challenge': _challenge,
+                    'code_challenge_method': 'S256',
+                  },
+                ),
               )
               as AuthEndpointRedirect;
       final response =
           await _endpoint(plugin, 'oauth_provider.token').invoke(
                 AuthOperationInvocation<Object>(context: Object(), user: null),
-                <String, dynamic>{
-                  'grant_type': 'authorization_code',
-                  'client_id': 'client-1',
-                  'client_secret': 'secret',
-                  'redirect_uri': 'https://client.example.test/callback',
-                  'code': redirect.location.queryParameters['code'],
-                  'code_verifier': _verifier,
-                },
+                AuthEndpointRequest(
+                  body: <String, dynamic>{
+                    'grant_type': 'authorization_code',
+                    'client_id': 'client-1',
+                    'client_secret': 'secret',
+                    'redirect_uri': 'https://client.example.test/callback',
+                    'code': redirect.location.queryParameters['code'],
+                    'code_verifier': _verifier,
+                  },
+                ),
               )
               as Map<String, dynamic>;
       expect(response, isNot(contains('id_token')));
@@ -187,14 +201,16 @@ void main() {
                   context: Object(),
                   user: AuthUser(id: 'user-1'),
                 ),
-                const <String, dynamic>{
-                  'client_id': 'client-1',
-                  'redirect_uri': 'https://client.example.test/callback',
-                  'response_type': 'code',
-                  'scope': 'openid',
-                  'code_challenge': _challenge,
-                  'code_challenge_method': 'S256',
-                },
+                AuthEndpointRequest(
+                  query: const <String, dynamic>{
+                    'client_id': 'client-1',
+                    'redirect_uri': 'https://client.example.test/callback',
+                    'response_type': 'code',
+                    'scope': 'openid',
+                    'code_challenge': _challenge,
+                    'code_challenge_method': 'S256',
+                  },
+                ),
               )
               as AuthEndpointRedirect;
       await authStore.disable('user-1', reason: 'security');
@@ -210,7 +226,7 @@ void main() {
       await expectLater(
         _endpoint(plugin, 'oauth_provider.token').invoke(
           AuthOperationInvocation<Object>(context: Object(), user: null),
-          request,
+          AuthEndpointRequest(body: request),
         ),
         _flow('invalid_grant'),
       );
@@ -218,7 +234,7 @@ void main() {
       final response =
           await _endpoint(plugin, 'oauth_provider.token').invoke(
                 AuthOperationInvocation<Object>(context: Object(), user: null),
-                request,
+                AuthEndpointRequest(body: request),
               )
               as Map<String, dynamic>;
       expect(response['access_token'], isNotEmpty);
@@ -231,14 +247,16 @@ void main() {
                   context: Object(),
                   user: AuthUser(id: 'user-1'),
                 ),
-                const <String, dynamic>{
-                  'client_id': 'client-1',
-                  'redirect_uri': 'https://client.example.test/callback',
-                  'response_type': 'code',
-                  'scope': 'profile',
-                  'code_challenge': _challenge,
-                  'code_challenge_method': 'S256',
-                },
+                AuthEndpointRequest(
+                  query: const <String, dynamic>{
+                    'client_id': 'client-1',
+                    'redirect_uri': 'https://client.example.test/callback',
+                    'response_type': 'code',
+                    'scope': 'profile',
+                    'code_challenge': _challenge,
+                    'code_challenge_method': 'S256',
+                  },
+                ),
               )
               as AuthEndpointRedirect;
       final client = (await clientStore.findById('client-1'))!;
@@ -255,7 +273,7 @@ void main() {
       await expectLater(
         _endpoint(plugin, 'oauth_provider.token').invoke(
           AuthOperationInvocation<Object>(context: Object(), user: null),
-          request,
+          AuthEndpointRequest(body: request),
         ),
         _flow('invalid_client'),
       );
@@ -263,7 +281,7 @@ void main() {
       final response =
           await _endpoint(plugin, 'oauth_provider.token').invoke(
                 AuthOperationInvocation<Object>(context: Object(), user: null),
-                request,
+                AuthEndpointRequest(body: request),
               )
               as Map<String, dynamic>;
       expect(response['access_token'], isNotEmpty);
@@ -276,14 +294,16 @@ void main() {
                   context: Object(),
                   user: AuthUser(id: 'user-1'),
                 ),
-                const <String, dynamic>{
-                  'client_id': 'client-1',
-                  'redirect_uri': 'https://client.example.test/callback',
-                  'response_type': 'code',
-                  'scope': 'profile',
-                  'code_challenge': _challenge,
-                  'code_challenge_method': 'S256',
-                },
+                AuthEndpointRequest(
+                  query: const <String, dynamic>{
+                    'client_id': 'client-1',
+                    'redirect_uri': 'https://client.example.test/callback',
+                    'response_type': 'code',
+                    'scope': 'profile',
+                    'code_challenge': _challenge,
+                    'code_challenge_method': 'S256',
+                  },
+                ),
               )
               as AuthEndpointRedirect;
       await authStore.upsert(
@@ -304,7 +324,7 @@ void main() {
       await expectLater(
         _endpoint(plugin, 'oauth_provider.token').invoke(
           AuthOperationInvocation<Object>(context: Object(), user: null),
-          request,
+          AuthEndpointRequest(body: request),
         ),
         _flow('invalid_grant'),
       );
@@ -312,7 +332,7 @@ void main() {
       final response =
           await _endpoint(plugin, 'oauth_provider.token').invoke(
                 AuthOperationInvocation<Object>(context: Object(), user: null),
-                request,
+                AuthEndpointRequest(body: request),
               )
               as Map<String, dynamic>;
       expect(response['access_token'], isNotEmpty);
@@ -325,14 +345,16 @@ void main() {
             context: Object(),
             user: AuthUser(id: 'user-1'),
           ),
-          const <String, dynamic>{
-            'client_id': 'client-1',
-            'redirect_uri': 'https://client.example.test/callback',
-            'response_type': 'code',
-            'scope': 'openid',
-            'code_challenge': _verifier,
-            'code_challenge_method': 'plain',
-          },
+          AuthEndpointRequest(
+            query: const <String, dynamic>{
+              'client_id': 'client-1',
+              'redirect_uri': 'https://client.example.test/callback',
+              'response_type': 'code',
+              'scope': 'openid',
+              'code_challenge': _verifier,
+              'code_challenge_method': 'plain',
+            },
+          ),
         ),
         _flow('invalid_request'),
       );
@@ -412,14 +434,16 @@ void main() {
             context: Object(),
             user: AuthUser(id: 'user-1'),
           ),
-          const <String, dynamic>{
-            'client_id': 'client-1',
-            'redirect_uri': 'https://client.example.test/callback',
-            'response_type': 'code',
-            'scope': 'openid',
-            'code_challenge': _challenge,
-            'code_challenge_method': 'S256',
-          },
+          AuthEndpointRequest(
+            query: const <String, dynamic>{
+              'client_id': 'client-1',
+              'redirect_uri': 'https://client.example.test/callback',
+              'response_type': 'code',
+              'scope': 'openid',
+              'code_challenge': _challenge,
+              'code_challenge_method': 'S256',
+            },
+          ),
         ),
         _flow('invalid_scope'),
       );
@@ -457,12 +481,14 @@ void main() {
       await expectLater(
         _endpoint(plugin, 'oauth_provider.token').invoke(
           AuthOperationInvocation<Object>(context: Object(), user: null),
-          const <String, dynamic>{
-            'grant_type': 'client_credentials',
-            'client_id': 'service-client',
-            'client_secret': 'secret',
-            'scope': 'openid',
-          },
+          AuthEndpointRequest(
+            body: const <String, dynamic>{
+              'grant_type': 'client_credentials',
+              'client_id': 'service-client',
+              'client_secret': 'secret',
+              'scope': 'openid',
+            },
+          ),
         ),
         _flow('invalid_scope'),
       );

@@ -397,7 +397,7 @@ final class AuthScimConnectionPlugin<TContext>
         _endpoint(
           id: 'scimConnections.list',
           method: AuthOperationMethod.get,
-          path: '/scim/connections',
+          path: const AuthRoutePath('/scim/connections'),
           semantics: const AuthOperationSemantics.readOnly(),
           operation: AuthScimConnectionManagementOperation.list,
           handler: _listEndpoint,
@@ -405,7 +405,7 @@ final class AuthScimConnectionPlugin<TContext>
         _endpoint(
           id: 'scimConnections.create',
           method: AuthOperationMethod.post,
-          path: '/scim/connections/create',
+          path: const AuthRoutePath('/scim/connections/create'),
           semantics: _atomic(
             'createConnection',
             AuthMutationReplaySafety.idempotent,
@@ -416,7 +416,7 @@ final class AuthScimConnectionPlugin<TContext>
         _endpoint(
           id: 'scimConnections.update',
           method: AuthOperationMethod.post,
-          path: '/scim/connections/update',
+          path: const AuthRoutePath('/scim/connections/update'),
           semantics: _atomic(
             'updateConnection',
             AuthMutationReplaySafety.idempotent,
@@ -427,7 +427,7 @@ final class AuthScimConnectionPlugin<TContext>
         _endpoint(
           id: 'scimConnections.disable',
           method: AuthOperationMethod.post,
-          path: '/scim/connections/disable',
+          path: const AuthRoutePath('/scim/connections/disable'),
           semantics: _atomic(
             'disableConnection',
             AuthMutationReplaySafety.idempotent,
@@ -438,7 +438,7 @@ final class AuthScimConnectionPlugin<TContext>
         _endpoint(
           id: 'scimConnections.credentials.list',
           method: AuthOperationMethod.get,
-          path: '/scim/connections/credentials',
+          path: const AuthRoutePath('/scim/connections/credentials'),
           semantics: const AuthOperationSemantics.readOnly(),
           operation: AuthScimConnectionManagementOperation.credentialsList,
           handler: _listCredentialsEndpoint,
@@ -446,7 +446,7 @@ final class AuthScimConnectionPlugin<TContext>
         _endpoint(
           id: 'scimConnections.credentials.issue',
           method: AuthOperationMethod.post,
-          path: '/scim/connections/credentials/issue',
+          path: const AuthRoutePath('/scim/connections/credentials/issue'),
           semantics: _atomic(
             'issueCredential',
             AuthMutationReplaySafety.idempotent,
@@ -457,7 +457,7 @@ final class AuthScimConnectionPlugin<TContext>
         _endpoint(
           id: 'scimConnections.credentials.rotate',
           method: AuthOperationMethod.post,
-          path: '/scim/connections/credentials/rotate',
+          path: const AuthRoutePath('/scim/connections/credentials/rotate'),
           semantics: _atomic(
             'rotateCredential',
             AuthMutationReplaySafety.idempotent,
@@ -468,7 +468,7 @@ final class AuthScimConnectionPlugin<TContext>
         _endpoint(
           id: 'scimConnections.credentials.revoke',
           method: AuthOperationMethod.post,
-          path: '/scim/connections/credentials/revoke',
+          path: const AuthRoutePath('/scim/connections/credentials/revoke'),
           semantics: _atomic(
             'revokeCredential',
             AuthMutationReplaySafety.idempotent,
@@ -481,7 +481,7 @@ final class AuthScimConnectionPlugin<TContext>
   AuthEndpointDescriptor<TContext> _endpoint({
     required String id,
     required AuthOperationMethod method,
-    required String path,
+    required AuthRoutePath path,
     required AuthOperationSemantics semantics,
     required AuthScimConnectionManagementOperation operation,
     required FutureOr<Object?> Function(
@@ -643,6 +643,7 @@ final class AuthScimConnectionPlugin<TContext>
       id: endpoint.id,
       method: endpoint.method,
       path: endpoint.path,
+      mount: endpoint.mount,
       serverOnly: endpoint.serverOnly,
     ),
   );

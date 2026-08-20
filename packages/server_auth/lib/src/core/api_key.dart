@@ -687,7 +687,7 @@ final class AuthApiKeyPlugin<TContext>
     TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
       id: 'apiKey.create',
       method: AuthOperationMethod.post,
-      path: '/api-keys/create',
+      path: AuthRoutePath('/api-keys/create'),
       semantics: const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
           atomicity: AuthMutationAtomicity.nonAtomic,
@@ -715,7 +715,7 @@ final class AuthApiKeyPlugin<TContext>
     TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
       id: 'apiKey.list',
       method: AuthOperationMethod.get,
-      path: '/api-keys/list',
+      path: AuthRoutePath('/api-keys/list'),
       semantics: const AuthOperationSemantics.readOnly(),
       requestCodec: _emptyRequestCodec,
       responseCodec: _apiKeyListResponseCodec,
@@ -734,7 +734,7 @@ final class AuthApiKeyPlugin<TContext>
     TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
       id: 'apiKey.revoke',
       method: AuthOperationMethod.post,
-      path: '/api-keys/revoke',
+      path: AuthRoutePath('/api-keys/revoke'),
       semantics: const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
           atomicity: AuthMutationAtomicity.atomic,
@@ -760,7 +760,7 @@ final class AuthApiKeyPlugin<TContext>
     TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
       id: 'apiKey.rotate',
       method: AuthOperationMethod.post,
-      path: '/api-keys/rotate',
+      path: AuthRoutePath('/api-keys/rotate'),
       semantics: const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
           atomicity: AuthMutationAtomicity.atomic,
@@ -800,7 +800,7 @@ final class AuthApiKeyPlugin<TContext>
           TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
             id: 'apiKey.exchange',
             method: AuthOperationMethod.post,
-            path: '/api-keys/exchange',
+            path: const AuthRoutePath('/api-keys/exchange'),
             semantics: const AuthOperationSemantics.mutation(
               persistence: AuthMutationPersistence.session(),
               replaySafety: AuthMutationReplaySafety.repeatable,
@@ -882,29 +882,29 @@ final class AuthApiKeyPlugin<TContext>
     const AuthClientOperationDescriptor(
       id: 'apiKey.create',
       method: AuthOperationMethod.post,
-      path: '/api-keys/create',
+      path: AuthRoutePath('/api-keys/create'),
     ),
     const AuthClientOperationDescriptor(
       id: 'apiKey.list',
       method: AuthOperationMethod.get,
-      path: '/api-keys/list',
+      path: AuthRoutePath('/api-keys/list'),
     ),
     const AuthClientOperationDescriptor(
       id: 'apiKey.revoke',
       method: AuthOperationMethod.post,
-      path: '/api-keys/revoke',
+      path: AuthRoutePath('/api-keys/revoke'),
     ),
     const AuthClientOperationDescriptor(
       id: 'apiKey.rotate',
       method: AuthOperationMethod.post,
-      path: '/api-keys/rotate',
+      path: AuthRoutePath('/api-keys/rotate'),
     ),
     if (sessionExchangeEnabled &&
         _sessionStrategy == AuthSessionStrategy.session)
       const AuthClientOperationDescriptor(
         id: 'apiKey.exchange',
         method: AuthOperationMethod.post,
-        path: '/api-keys/exchange',
+        path: AuthRoutePath('/api-keys/exchange'),
       ),
   ];
 

@@ -162,7 +162,7 @@ Future<Object?> _invoke(
       .singleWhere((endpoint) => endpoint.id == operation)
       .invoke(
         AuthOperationInvocation<Object>(context: Object(), user: user),
-        input,
+        AuthEndpointRequest(body: input),
       ),
 );
 

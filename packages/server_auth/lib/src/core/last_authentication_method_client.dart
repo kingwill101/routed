@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'client.dart';
+import 'plugin.dart';
 import 'last_authentication_method.dart';
 
 /// Installs only the typed last-authentication-method read API.
@@ -26,7 +27,7 @@ final class AuthLastAuthenticationMethodClient {
   Future<AuthLastAuthenticationMethodReadResult?> read() async {
     final response = await _transport.request(
       'GET',
-      '/last-authentication-method',
+      const AuthRoutePath('/last-authentication-method'),
     );
     final decoded = jsonDecode(response.body);
     if (decoded == null) return null;

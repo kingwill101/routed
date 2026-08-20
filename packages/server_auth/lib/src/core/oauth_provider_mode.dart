@@ -199,18 +199,22 @@ final class OAuthProviderModePlugin<TContext>
     _grantHandlers[normalized] = handler;
   }
 
-  Map<String, String> get _paths => {
+  Map<String, AuthRoutePath> get _paths => {
     'oauth_provider.authorize': options.authorizationEndpoint,
     'oauth_provider.token': options.tokenEndpoint,
     'oauth_provider.userinfo': options.userInfoEndpoint,
     'oauth_provider.introspect': options.introspectionEndpoint,
-    if (options.oidc case final oidc?) ...<String, String>{
+    if (options.oidc case final oidc?) ...<String, AuthRoutePath>{
       'oauth_provider.discovery': oidc.discoveryEndpoint,
       'oauth_provider.jwks': oidc.jwksEndpoint,
     },
-    'oauth_provider.clients.list': '/oauth/clients/list',
-    'oauth_provider.clients.create': '/oauth/clients/create',
-    'oauth_provider.clients.delete': '/oauth/clients/delete',
+    'oauth_provider.clients.list': const AuthRoutePath('/oauth/clients/list'),
+    'oauth_provider.clients.create': const AuthRoutePath(
+      '/oauth/clients/create',
+    ),
+    'oauth_provider.clients.delete': const AuthRoutePath(
+      '/oauth/clients/delete',
+    ),
   };
 
   @override
@@ -239,6 +243,9 @@ final class OAuthProviderModePlugin<TContext>
           id: operationId,
           method: method,
           path: _paths[operationId]!,
+          mount: operationId == 'oauth_provider.discovery'
+              ? AuthEndpointMount.root
+              : AuthEndpointMount.auth,
           semantics: _operationSemantics(operationId),
           requestCodec: const AuthOperationCodec(
             decode: _identityMap,
@@ -332,6 +339,7 @@ final class OAuthProviderModePlugin<TContext>
       id: endpoint.id,
       method: endpoint.method,
       path: endpoint.path,
+      mount: endpoint.mount,
       serverOnly: endpoint.serverOnly,
     ),
   );
@@ -582,7 +590,8 @@ final class OAuthProviderModePlugin<TContext>
     Map<String, dynamic> input,
   ) async {
     final grantType = input['grant_type']?.toString();
-    final credentials = _clientCredentials(input);
+    final authorization = invocation.request.headers['authorization'];
+    final credentials = _clientCredentials(authorization);
     final clientId = credentials.$1 ?? input['client_id']?.toString();
 
     if (grantType == null || grantType.isEmpty) {
@@ -621,11 +630,11 @@ final class OAuthProviderModePlugin<TContext>
 
     switch (grantType) {
       case 'authorization_code':
-        return _handleAuthorizationCodeGrant(input);
+        return _handleAuthorizationCodeGrant(input, authorization);
       case 'client_credentials':
-        return _handleClientCredentialsGrant(invocation, input);
+        return _handleClientCredentialsGrant(invocation, input, authorization);
       case 'refresh_token':
-        return _handleRefreshTokenGrant(input);
+        return _handleRefreshTokenGrant(input, authorization);
       default:
         throw AuthFlowException('unsupported_grant_type');
     }
@@ -633,8 +642,9 @@ final class OAuthProviderModePlugin<TContext>
 
   Future<Map<String, dynamic>> _handleAuthorizationCodeGrant(
     Map<String, dynamic> input,
+    String? authorization,
   ) async {
-    final credentials = _clientCredentials(input);
+    final credentials = _clientCredentials(authorization);
     final code = input['code']?.toString();
     final clientId = credentials.$1 ?? input['client_id']?.toString();
     final redirectUri = input['redirect_uri']?.toString();
@@ -753,8 +763,9 @@ final class OAuthProviderModePlugin<TContext>
   Future<Map<String, dynamic>> _handleClientCredentialsGrant(
     AuthOperationInvocation<TContext> invocation,
     Map<String, dynamic> input,
+    String? authorization,
   ) async {
-    final credentials = _clientCredentials(input);
+    final credentials = _clientCredentials(authorization);
     final clientId = credentials.$1 ?? input['client_id']?.toString();
     final clientSecret = credentials.$2 ?? input['client_secret']?.toString();
     final scope = input['scope']?.toString();
@@ -792,8 +803,9 @@ final class OAuthProviderModePlugin<TContext>
 
   Future<Map<String, dynamic>> _handleRefreshTokenGrant(
     Map<String, dynamic> input,
+    String? authorization,
   ) async {
-    final credentials = _clientCredentials(input);
+    final credentials = _clientCredentials(authorization);
     final refreshToken = input['refresh_token']?.toString();
     final clientId = credentials.$1 ?? input['client_id']?.toString();
 
@@ -884,8 +896,7 @@ final class OAuthProviderModePlugin<TContext>
     Map<String, dynamic> input,
   ) async {
     // UserInfo is called with a bearer access token, not a session.
-    // The route handler injects the Authorization header as '_authorization'.
-    final authHeader = input['_authorization']?.toString();
+    final authHeader = invocation.request.headers['authorization'];
     final token = _extractBearerToken(authHeader);
     if (token == null || token.isEmpty) {
       throw AuthFlowException('invalid_token');
@@ -974,7 +985,10 @@ final class OAuthProviderModePlugin<TContext>
     AuthOperationInvocation<TContext> invocation,
     Map<String, dynamic> input,
   ) async {
-    await _requireClientCredentials(input);
+    await _requireClientCredentials(
+      input,
+      invocation.request.headers['authorization'],
+    );
     final token = input['token']?.toString();
     if (token == null) {
       throw AuthFlowException('invalid_request');
@@ -1267,8 +1281,9 @@ final class OAuthProviderModePlugin<TContext>
 
   Future<OAuthClient> _requireClientCredentials(
     Map<String, dynamic> input,
+    String? authorization,
   ) async {
-    final credentials = _clientCredentials(input);
+    final credentials = _clientCredentials(authorization);
     final clientId = credentials.$1 ?? input['client_id']?.toString();
     final secret = credentials.$2 ?? input['client_secret']?.toString();
     if (clientId == null || secret == null) {
@@ -1283,8 +1298,7 @@ final class OAuthProviderModePlugin<TContext>
     return client;
   }
 
-  (String?, String?) _clientCredentials(Map<String, dynamic> input) {
-    final authorization = input['_authorization']?.toString();
+  (String?, String?) _clientCredentials(String? authorization) {
     if (authorization == null || !authorization.startsWith('Basic ')) {
       return (null, null);
     }
@@ -1311,8 +1325,9 @@ bool _containsScope(String value, String expected) => value
     .where((scope) => scope.isNotEmpty)
     .contains(expected);
 
-String _absoluteEndpoint(Uri issuer, String path) =>
-    issuer.resolve(path).toString();
+String _absoluteEndpoint(Uri issuer, AuthRoutePath path) => issuer
+    .resolve(path.resolve(const <AuthRouteParameterKey, String>{}))
+    .toString();
 
 const Set<String> _reservedUserInfoClaims = {
   'sub',

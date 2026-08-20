@@ -11,6 +11,9 @@ import 'saml_models.dart';
 import 'saml_store.dart';
 import 'tokens.dart' show secureRandomToken;
 
+const AuthRouteParameterKey authSamlProviderIdRouteParameter =
+    AuthRouteParameterKey('providerId');
+
 const _samlProtocol = 'urn:oasis:names:tc:SAML:2.0:protocol';
 const _samlAssertion = 'urn:oasis:names:tc:SAML:2.0:assertion';
 const _samlPostBinding = 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST';
@@ -121,14 +124,17 @@ final class AuthSamlPlugin<TContext>
     _endpoint(
       id: 'saml.metadata',
       method: AuthOperationMethod.get,
-      path: '/sso/saml/metadata/{providerId}',
+      path: const AuthRoutePath(
+        '/sso/saml/metadata/{providerId}',
+        parameters: <AuthRouteParameterKey>[authSamlProviderIdRouteParameter],
+      ),
       semantics: const AuthOperationSemantics.readOnly(),
       handler: _metadata,
     ),
     _endpoint(
       id: 'saml.signIn',
       method: AuthOperationMethod.post,
-      path: '/sso/saml/sign-in',
+      path: const AuthRoutePath('/sso/saml/sign-in'),
       semantics: const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
           atomicity: AuthMutationAtomicity.atomic,
@@ -145,7 +151,10 @@ final class AuthSamlPlugin<TContext>
     _endpoint(
       id: 'saml.acs',
       method: AuthOperationMethod.post,
-      path: '/sso/saml/acs/{providerId}',
+      path: const AuthRoutePath(
+        '/sso/saml/acs/{providerId}',
+        parameters: <AuthRouteParameterKey>[authSamlProviderIdRouteParameter],
+      ),
       semantics: const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
           atomicity: AuthMutationAtomicity.atomic,
@@ -165,7 +174,7 @@ final class AuthSamlPlugin<TContext>
   _endpoint({
     required String id,
     required AuthOperationMethod method,
-    required String path,
+    required AuthRoutePath path,
     required AuthOperationSemantics semantics,
     required FutureOr<Object?> Function(
       AuthOperationInvocation<TContext>,
@@ -210,7 +219,7 @@ final class AuthSamlPlugin<TContext>
     Map<String, dynamic> request,
   ) async {
     final connection = await _connectionByProvider(
-      _required(request, 'providerId'),
+      invocation.request.requirePath(authSamlProviderIdRouteParameter),
     );
     final document = _metadataDocument(connection);
     if (utf8.encode(document).length > options.limits.maxMetadataBytes) {
@@ -272,7 +281,9 @@ final class AuthSamlPlugin<TContext>
     Map<String, dynamic> request,
   ) async {
     try {
-      final providerId = _required(request, 'providerId');
+      final providerId = invocation.request.requirePath(
+        authSamlProviderIdRouteParameter,
+      );
       final connection = await _connectionByProvider(providerId);
       final encodedResponse = request['SAMLResponse']?.toString() ?? '';
       if (encodedResponse.isEmpty) {
@@ -579,6 +590,7 @@ final class AuthSamlPlugin<TContext>
       id: endpoint.id,
       method: endpoint.method,
       path: endpoint.path,
+      mount: endpoint.mount,
       serverOnly: endpoint.id == 'saml.acs',
     ),
   );
@@ -833,14 +845,6 @@ DateTime _requiredTime(XmlElement element, String name) {
     throw FormatException('invalid $name');
   }
   return value.toUtc();
-}
-
-String _required(Map<String, dynamic> value, String key) {
-  final result = value[key]?.toString().trim() ?? '';
-  if (result.isEmpty || result.length > 1024) {
-    throw FormatException('missing $key');
-  }
-  return result;
 }
 
 String _digest(String value) => sha256.convert(utf8.encode(value)).toString();

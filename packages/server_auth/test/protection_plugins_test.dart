@@ -323,8 +323,9 @@ void main() {
           }),
         );
         final exception = await catchError(
-          _runtimeWith(exceptionPlugin).registry
-              .enforcePasswordPolicy(_passwordRequest(password: password)),
+          _runtimeWith(exceptionPlugin).registry.enforcePasswordPolicy(
+            _passwordRequest(password: password),
+          ),
         );
         expect(exception.code, authBreachedPasswordRejectedErrorCode);
         expect(exception.toString(), isNot(contains(password)));
@@ -341,8 +342,9 @@ void main() {
           ),
         );
         await expectLater(
-          _runtimeWith(timeoutPlugin).registry
-              .enforcePasswordPolicy(_passwordRequest()),
+          _runtimeWith(
+            timeoutPlugin,
+          ).registry.enforcePasswordPolicy(_passwordRequest()),
           throwsA(
             isA<AuthFlowException>().having(
               (error) => error.code,
@@ -359,8 +361,9 @@ void main() {
           config: const AuthBreachedPasswordPluginConfig(maxPasswordLength: 12),
         );
         await expectLater(
-          _runtimeWith(oversized).registry
-              .enforcePasswordPolicy(_passwordRequest(password: password)),
+          _runtimeWith(oversized).registry.enforcePasswordPolicy(
+            _passwordRequest(password: password),
+          ),
           throwsA(
             isA<AuthFlowException>().having(
               (error) => error.code,
@@ -382,8 +385,9 @@ void main() {
       );
 
       await expectLater(
-        _runtimeWith(plugin).registry
-            .enforcePasswordPolicy(_passwordRequest(password: 'short')),
+        _runtimeWith(
+          plugin,
+        ).registry.enforcePasswordPolicy(_passwordRequest(password: 'short')),
         throwsA(
           isA<AuthFlowException>().having(
             (error) => error.code,

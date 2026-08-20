@@ -62,10 +62,15 @@ void main() {
       final plugin = _plugin();
       final signIn = _endpoint(plugin, 'saml.signIn');
       final first =
-          await signIn.invoke(_invocation('browser-binding-value-0001'), const {
-                'domain': 'example.test',
-                'callbackUrl': '/dashboard',
-              })
+          await signIn.invoke(
+                _invocation('browser-binding-value-0001'),
+                AuthEndpointRequest(
+                  body: const {
+                    'domain': 'example.test',
+                    'callbackUrl': '/dashboard',
+                  },
+                ),
+              )
               as Map<String, dynamic>;
 
       expect(first['providerId'], 'enterprise');
@@ -83,7 +88,7 @@ void main() {
       () async {
         final response = await _endpoint(_plugin(), 'saml.metadata').invoke(
           _invocation('browser-binding-value-0001'),
-          const {'providerId': 'enterprise'},
+          AuthEndpointRequest(body: const {'providerId': 'enterprise'}),
         );
         expect(response, isA<AuthEndpointHttpResponse>());
         final metadata = response as AuthEndpointHttpResponse;
@@ -118,10 +123,10 @@ void main() {
           'SAMLResponse': base64.encode(utf8.encode(responseXml)),
           'RelayState': started.relayState,
         };
-        final result = await _endpoint(
-          plugin,
-          'saml.acs',
-        ).invoke(_invocation('browser-binding-value-0001'), payload);
+        final result = await _endpoint(plugin, 'saml.acs').invoke(
+          _invocation('browser-binding-value-0001'),
+          AuthEndpointRequest(body: payload),
+        );
 
         expect(result, isA<AuthEndpointAuthenticationIntent>());
         final intent = result as AuthEndpointAuthenticationIntent;
@@ -134,10 +139,10 @@ void main() {
         );
 
         await expectLater(
-          () => _endpoint(
-            plugin,
-            'saml.acs',
-          ).invoke(_invocation('browser-binding-value-0001'), payload),
+          () => _endpoint(plugin, 'saml.acs').invoke(
+            _invocation('browser-binding-value-0001'),
+            AuthEndpointRequest(body: payload),
+          ),
           throwsA(
             isA<AuthFlowException>().having(
               (error) => error.code,
@@ -153,8 +158,10 @@ void main() {
       final plugin = _plugin();
       final started = await _start(plugin);
       await expectLater(
-        () => _endpoint(plugin, 'saml.acs')
-            .invoke(_invocation('different-browser-value-0002'), {
+        () => _endpoint(plugin, 'saml.acs').invoke(
+          _invocation('different-browser-value-0002'),
+          AuthEndpointRequest(
+            body: {
               'providerId': 'enterprise',
               'SAMLResponse': base64.encode(
                 utf8.encode(
@@ -165,7 +172,9 @@ void main() {
                 ),
               ),
               'RelayState': started.relayState,
-            }),
+            },
+          ),
+        ),
         throwsA(isA<AuthFlowException>()),
       );
     });
@@ -179,11 +188,15 @@ void main() {
         ).replaceAll(' InResponseTo="_unused"', '');
         final disabled = _plugin();
         await expectLater(
-          () => _endpoint(disabled, 'saml.acs')
-              .invoke(_invocation('browser-binding-value-0001'), {
+          () => _endpoint(disabled, 'saml.acs').invoke(
+            _invocation('browser-binding-value-0001'),
+            AuthEndpointRequest(
+              body: {
                 'providerId': 'enterprise',
                 'SAMLResponse': base64.encode(utf8.encode(xml)),
-              }),
+              },
+            ),
+          ),
           throwsA(isA<AuthFlowException>()),
         );
 
@@ -193,13 +206,15 @@ void main() {
           ),
         );
         final intent =
-            await _endpoint(
-                  enabled,
-                  'saml.acs',
-                ).invoke(_invocation('browser-binding-value-0001'), {
-                  'providerId': 'enterprise',
-                  'SAMLResponse': base64.encode(utf8.encode(xml)),
-                })
+            await _endpoint(enabled, 'saml.acs').invoke(
+                  _invocation('browser-binding-value-0001'),
+                  AuthEndpointRequest(
+                    body: {
+                      'providerId': 'enterprise',
+                      'SAMLResponse': base64.encode(utf8.encode(xml)),
+                    },
+                  ),
+                )
                 as AuthEndpointAuthenticationIntent;
         final projected = await intent.projectResponse(const {});
         expect(
@@ -261,8 +276,16 @@ void main() {
       final wrongProvider = _plugin();
       final wrongStarted = await _start(wrongProvider);
       await expectLater(
-        () => _endpoint(wrongProvider, 'saml.acs')
-            .invoke(_invocation('browser-binding-value-0001'), {
+        () => _endpoint(wrongProvider, 'saml.acs').invoke(
+          _invocation('browser-binding-value-0001').withRequest(
+            AuthEndpointRequest(
+              path: <AuthRouteParameterKey, String>{
+                authSamlProviderIdRouteParameter: 'other',
+              },
+            ),
+          ),
+          AuthEndpointRequest(
+            body: {
               'providerId': 'other',
               'SAMLResponse': base64.encode(
                 utf8.encode(
@@ -273,7 +296,9 @@ void main() {
                 ),
               ),
               'RelayState': wrongStarted.relayState,
-            }),
+            },
+          ),
+        ),
         throwsA(isA<AuthFlowException>()),
       );
     });
@@ -304,7 +329,15 @@ AuthSamlPlugin<String> _plugin({
 );
 
 AuthOperationInvocation<String> _invocation(String binding) =>
-    AuthOperationInvocation(context: binding, user: null);
+    AuthOperationInvocation(
+      context: binding,
+      user: null,
+      request: AuthEndpointRequest(
+        path: <AuthRouteParameterKey, String>{
+          authSamlProviderIdRouteParameter: 'enterprise',
+        },
+      ),
+    );
 
 AuthEndpointDescriptor<String> _endpoint(
   AuthSamlPlugin<String> plugin,
@@ -315,7 +348,12 @@ Future<_Started> _start(AuthSamlPlugin<String> plugin) async {
   final response =
       await _endpoint(plugin, 'saml.signIn').invoke(
             _invocation('browser-binding-value-0001'),
-            const {'providerId': 'enterprise', 'callbackUrl': '/dashboard'},
+            AuthEndpointRequest(
+              body: const {
+                'providerId': 'enterprise',
+                'callbackUrl': '/dashboard',
+              },
+            ),
           )
           as Map<String, dynamic>;
   final fields = Map<String, dynamic>.from(response['fields'] as Map);
@@ -329,12 +367,16 @@ Future<void> _expectGenericFailure(
   _Started started,
   String xml,
 ) => expectLater(
-  () => _endpoint(plugin, 'saml.acs')
-      .invoke(_invocation('browser-binding-value-0001'), {
+  () => _endpoint(plugin, 'saml.acs').invoke(
+    _invocation('browser-binding-value-0001'),
+    AuthEndpointRequest(
+      body: {
         'providerId': 'enterprise',
         'SAMLResponse': base64.encode(utf8.encode(xml)),
         'RelayState': started.relayState,
-      }),
+      },
+    ),
+  ),
   throwsA(
     isA<AuthFlowException>().having(
       (error) => error.code,

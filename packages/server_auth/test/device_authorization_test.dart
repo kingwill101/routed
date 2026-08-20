@@ -760,9 +760,9 @@ void main() {
         clientStore: InMemoryOAuthClientStore(),
         authorizationCodeExchangeStore:
             InMemoryOAuthAuthorizationCodeExchangeStore(
-          authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
-          accessTokenStore: InMemoryOAuthAccessTokenStore(),
-        ),
+              authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+              accessTokenStore: InMemoryOAuthAccessTokenStore(),
+            ),
       );
       final runtime = AuthRuntime<Object>(
         options: AuthOptions<Object>(
@@ -776,7 +776,7 @@ void main() {
           .where(
             (endpoint) =>
                 endpoint.method == AuthOperationMethod.post &&
-                endpoint.path == '/oauth/token',
+                endpoint.path.template == '/oauth/token',
           )
           .toList(growable: false);
       expect(tokenEndpoints, hasLength(1));
@@ -790,11 +790,14 @@ void main() {
       final response =
           await tokenEndpoints.single.invoke(
                 AuthOperationInvocation<Object>(context: Object(), user: null),
-                <String, dynamic>{
-                  'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',
-                  'client_id': 'cli-1',
-                  'device_code': request.deviceCode,
-                },
+                AuthEndpointRequest(
+                  body: <String, dynamic>{
+                    'grant_type':
+                        'urn:ietf:params:oauth:grant-type:device_code',
+                    'client_id': 'cli-1',
+                    'device_code': request.deviceCode,
+                  },
+                ),
               )
               as Map<String, dynamic>;
       expect(response['access_token'], 'device-access-token');
@@ -816,9 +819,9 @@ void main() {
         clientStore: InMemoryOAuthClientStore(),
         authorizationCodeExchangeStore:
             InMemoryOAuthAuthorizationCodeExchangeStore(
-          authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
-          accessTokenStore: InMemoryOAuthAccessTokenStore(),
-        ),
+              authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+              accessTokenStore: InMemoryOAuthAccessTokenStore(),
+            ),
       );
       final runtime = AuthRuntime<Object>(
         options: AuthOptions<Object>(
@@ -833,7 +836,7 @@ void main() {
         runtime.registry.endpoints.where(
           (endpoint) =>
               endpoint.method == AuthOperationMethod.post &&
-              endpoint.path == '/oauth/token',
+              endpoint.path.template == '/oauth/token',
         ),
         hasLength(1),
       );

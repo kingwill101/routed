@@ -292,7 +292,7 @@ final class AuthLastAuthenticationMethodPlugin<TContext>
         AuthClientOperationDescriptor(
           id: 'lastAuthenticationMethod.read',
           method: AuthOperationMethod.get,
-          path: '/last-authentication-method',
+          path: AuthRoutePath('/last-authentication-method'),
         ),
       ];
 
@@ -306,7 +306,7 @@ final class AuthLastAuthenticationMethodPlugin<TContext>
         >(
           id: 'lastAuthenticationMethod.read',
           method: AuthOperationMethod.get,
-          path: '/last-authentication-method',
+          path: const AuthRoutePath('/last-authentication-method'),
           semantics: const AuthOperationSemantics.readOnly(),
           authentication: AuthOperationAuthentication.none,
           originPolicy: AuthOperationOriginPolicy.browser,

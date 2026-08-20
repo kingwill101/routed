@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'client.dart';
+import 'plugin.dart';
 import 'models.dart';
 
 /// Installs only the phone-number API on an [AuthClient].
@@ -43,7 +44,7 @@ final class AuthPhoneNumberClient {
   }) async {
     final response = await transport.request(
       'POST',
-      '/phone-number/send-code',
+      const AuthRoutePath('/phone-number/send-code'),
       body: <String, dynamic>{'phoneNumber': phoneNumber},
     );
     final body = _mapBody(response.body);
@@ -61,7 +62,7 @@ final class AuthPhoneNumberClient {
   }) async {
     final response = await transport.request(
       'POST',
-      '/phone-number/verify-code',
+      const AuthRoutePath('/phone-number/verify-code'),
       body: <String, dynamic>{
         'phoneNumber': phoneNumber,
         'code': code,

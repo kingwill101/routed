@@ -430,7 +430,7 @@ final class WebAuthnPlugin<TContext>
         _endpoint(
           id: 'webauthn.registrationOptions',
           method: AuthOperationMethod.post,
-          path: '/webauthn/register/options',
+          path: const AuthRoutePath('/webauthn/register/options'),
           authentication: AuthOperationAuthentication.session,
           csrfPolicy: AuthOperationCsrfPolicy.required,
           operationName: 'registration-options',
@@ -438,7 +438,7 @@ final class WebAuthnPlugin<TContext>
         _endpoint(
           id: 'webauthn.registrationVerify',
           method: AuthOperationMethod.post,
-          path: '/webauthn/register/verify',
+          path: const AuthRoutePath('/webauthn/register/verify'),
           authentication: AuthOperationAuthentication.session,
           csrfPolicy: AuthOperationCsrfPolicy.required,
           operationName: 'registration-verify',
@@ -446,7 +446,7 @@ final class WebAuthnPlugin<TContext>
         _endpoint(
           id: 'webauthn.authenticationOptions',
           method: AuthOperationMethod.post,
-          path: '/webauthn/authenticate/options',
+          path: const AuthRoutePath('/webauthn/authenticate/options'),
           authentication: AuthOperationAuthentication.none,
           csrfPolicy: AuthOperationCsrfPolicy.none,
           operationName: 'authentication-options',
@@ -454,7 +454,7 @@ final class WebAuthnPlugin<TContext>
         _endpoint(
           id: 'webauthn.authenticationVerify',
           method: AuthOperationMethod.post,
-          path: '/webauthn/authenticate/verify',
+          path: const AuthRoutePath('/webauthn/authenticate/verify'),
           authentication: AuthOperationAuthentication.none,
           csrfPolicy: AuthOperationCsrfPolicy.none,
           operationName: 'authentication-verify',
@@ -462,7 +462,7 @@ final class WebAuthnPlugin<TContext>
         _endpoint(
           id: 'webauthn.credentialList',
           method: AuthOperationMethod.get,
-          path: '/webauthn/credentials',
+          path: const AuthRoutePath('/webauthn/credentials'),
           authentication: AuthOperationAuthentication.session,
           originPolicy: AuthOperationOriginPolicy.none,
           csrfPolicy: AuthOperationCsrfPolicy.none,
@@ -471,7 +471,7 @@ final class WebAuthnPlugin<TContext>
         _endpoint(
           id: 'webauthn.credentialDelete',
           method: AuthOperationMethod.post,
-          path: '/webauthn/credentials/delete',
+          path: const AuthRoutePath('/webauthn/credentials/delete'),
           authentication: AuthOperationAuthentication.session,
           csrfPolicy: AuthOperationCsrfPolicy.required,
           operationName: 'credential-delete',
@@ -479,7 +479,7 @@ final class WebAuthnPlugin<TContext>
         _endpoint(
           id: 'webauthn.credentialRename',
           method: AuthOperationMethod.post,
-          path: '/webauthn/credentials/rename',
+          path: const AuthRoutePath('/webauthn/credentials/rename'),
           authentication: AuthOperationAuthentication.session,
           csrfPolicy: AuthOperationCsrfPolicy.required,
           operationName: 'credential-rename',
@@ -492,6 +492,7 @@ final class WebAuthnPlugin<TContext>
       id: endpoint.id,
       method: endpoint.method,
       path: endpoint.path,
+      mount: endpoint.mount,
       serverOnly: endpoint.serverOnly,
     ),
   );
@@ -499,7 +500,7 @@ final class WebAuthnPlugin<TContext>
   AuthEndpointDescriptor<TContext> _endpoint({
     required String id,
     required AuthOperationMethod method,
-    required String path,
+    required AuthRoutePath path,
     required AuthOperationAuthentication authentication,
     required AuthOperationCsrfPolicy csrfPolicy,
     required String operationName,

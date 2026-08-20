@@ -107,9 +107,11 @@ void main() {
         }),
       );
 
-      final response = await transport.mutate('POST', '/feature/action', {
-        'value': 1,
-      });
+      final response = await transport.mutate(
+        'POST',
+        const AuthRoutePath('/feature/action'),
+        {'value': 1},
+      );
       expect(jsonDecode(response.body)['ok'], isTrue);
       expect(csrfCalls, 2);
       expect(mutations, 2);

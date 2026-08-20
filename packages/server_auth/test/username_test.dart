@@ -685,12 +685,15 @@ void main() {
         plugin.endpoints,
         everyElement(isA<AuthEndpointContractDescriptor>()),
       );
-      expect(plugin.clientOperations.map((operation) => operation.path), [
-        '/username/register',
-        '/username/sign-in',
-        '/username/change',
-        '/username/remove',
-      ]);
+      expect(
+        plugin.clientOperations.map((operation) => operation.path.template),
+        [
+          '/username/register',
+          '/username/sign-in',
+          '/username/change',
+          '/username/remove',
+        ],
+      );
       expect(
         plugin.rateLimitOperations,
         containsAll([

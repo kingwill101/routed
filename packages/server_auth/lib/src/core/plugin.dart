@@ -12,6 +12,258 @@ import 'store.dart';
 /// HTTP method exposed by a portable auth plugin operation.
 enum AuthOperationMethod { get, post, put, patch, delete }
 
+/// Where a portable auth endpoint is mounted by a framework host.
+enum AuthEndpointMount { auth, root }
+
+/// A declared key for one dynamic auth route segment.
+final class AuthRouteParameterKey {
+  const AuthRouteParameterKey(this.name);
+
+  final String name;
+
+  @override
+  bool operator ==(Object other) =>
+      other is AuthRouteParameterKey && other.name == name;
+
+  @override
+  int get hashCode => name.hashCode;
+
+  @override
+  String toString() => name;
+}
+
+/// A framework-neutral auth route using canonical `{parameter}` segments.
+final class AuthRoutePath {
+  const AuthRoutePath(
+    this.template, {
+    this.parameters = const <AuthRouteParameterKey>[],
+  });
+
+  final String template;
+  final List<AuthRouteParameterKey> parameters;
+
+  /// Validates this route and returns its canonical template.
+  String validate() {
+    final value = template.trim();
+    if (value != template ||
+        !value.startsWith('/') ||
+        value.startsWith('//') ||
+        (value.length > 1 && value.endsWith('/')) ||
+        value.contains('?') ||
+        value.contains('#')) {
+      throw ArgumentError.value(
+        template,
+        'template',
+        'must be a canonical absolute path without a query or fragment',
+      );
+    }
+
+    final declared = <String>{};
+    for (final parameter in parameters) {
+      if (!_authRouteParameterPattern.hasMatch(parameter.name)) {
+        throw ArgumentError.value(
+          parameter.name,
+          'parameters',
+          'must be a valid route parameter name',
+        );
+      }
+      if (!declared.add(parameter.name)) {
+        throw ArgumentError.value(
+          parameters,
+          'parameters',
+          'contains duplicate parameter "${parameter.name}"',
+        );
+      }
+    }
+
+    if (value == '/') {
+      if (declared.isNotEmpty) {
+        throw ArgumentError.value(
+          parameters,
+          'parameters',
+          'must be empty for the root route',
+        );
+      }
+      return value;
+    }
+
+    final placeholders = <String>{};
+    for (final segment in value.split('/').skip(1)) {
+      if (segment.isEmpty) {
+        throw ArgumentError.value(
+          template,
+          'template',
+          'must not contain empty path segments',
+        );
+      }
+      final match = _authRoutePlaceholderPattern.firstMatch(segment);
+      if (match != null && match.group(0) == segment) {
+        final name = match.group(1)!;
+        if (!placeholders.add(name)) {
+          throw ArgumentError.value(
+            template,
+            'template',
+            'contains duplicate placeholder "$name"',
+          );
+        }
+      } else if (segment.contains('{') ||
+          segment.contains('}') ||
+          !_authRouteStaticSegmentPattern.hasMatch(segment)) {
+        throw ArgumentError.value(
+          template,
+          'template',
+          'contains an invalid path segment "$segment"',
+        );
+      }
+    }
+
+    final missing = placeholders.difference(declared);
+    final extra = declared.difference(placeholders);
+    if (missing.isNotEmpty || extra.isNotEmpty) {
+      throw ArgumentError.value(
+        parameters,
+        'parameters',
+        'must exactly declare route placeholders; missing: '
+            '${missing.join(', ')}, extra: ${extra.join(', ')}',
+      );
+    }
+    return value;
+  }
+
+  /// Route shape used to detect collisions independent of parameter names.
+  String get collisionShape =>
+      validate().replaceAll(_authRoutePlaceholderPattern, '{}');
+
+  /// Resolves this route with an exact set of typed parameters.
+  String resolve(Map<AuthRouteParameterKey, String> values) {
+    final canonical = validate();
+    final expected = parameters.toSet();
+    final supplied = values.keys.toSet();
+    final missing = expected.difference(supplied);
+    final extra = supplied.difference(expected);
+    if (missing.isNotEmpty || extra.isNotEmpty) {
+      throw ArgumentError.value(
+        values,
+        'values',
+        'must exactly match route parameters; missing: '
+            '${missing.map((key) => key.name).join(', ')}, extra: '
+            '${extra.map((key) => key.name).join(', ')}',
+      );
+    }
+    return canonical.replaceAllMapped(_authRoutePlaceholderPattern, (match) {
+      final key = parameters.singleWhere(
+        (candidate) => candidate.name == match.group(1),
+      );
+      final value = values[key];
+      if (value == null || value.isEmpty) {
+        throw ArgumentError.value(value, key.name, 'must not be empty');
+      }
+      if (value == '.' || value == '..') {
+        throw ArgumentError.value(
+          value,
+          key.name,
+          'must not be a URI dot segment',
+        );
+      }
+      return Uri.encodeComponent(value);
+    });
+  }
+
+  /// Converts framework route parameters into their declared typed keys.
+  Map<AuthRouteParameterKey, String> bind(Map<String, Object?> values) {
+    validate();
+    final byName = <String, AuthRouteParameterKey>{
+      for (final parameter in parameters) parameter.name: parameter,
+    };
+    final supplied = values.keys.toSet();
+    final expected = byName.keys.toSet();
+    final missing = expected.difference(supplied);
+    final extra = supplied.difference(expected);
+    if (missing.isNotEmpty || extra.isNotEmpty) {
+      throw ArgumentError.value(
+        values,
+        'values',
+        'must exactly match route parameters; missing: ${missing.join(', ')}, '
+            'extra: ${extra.join(', ')}',
+      );
+    }
+    final bound = <AuthRouteParameterKey, String>{};
+    for (final entry in values.entries) {
+      final value = entry.value?.toString();
+      if (value == null || value.isEmpty) {
+        throw ArgumentError.value(value, entry.key, 'must not be empty');
+      }
+      bound[byName[entry.key]!] = value;
+    }
+    return Map<AuthRouteParameterKey, String>.unmodifiable(bound);
+  }
+
+  @override
+  String toString() => template;
+}
+
+final RegExp _authRouteParameterPattern = RegExp(r'^[A-Za-z][A-Za-z0-9_]*$');
+final RegExp _authRoutePlaceholderPattern = RegExp(
+  r'\{([A-Za-z][A-Za-z0-9_]*)\}',
+);
+final RegExp _authRouteStaticSegmentPattern = RegExp(r'^[A-Za-z0-9._~-]+$');
+
+const AuthRouteParameterKey authProviderRouteParameter = AuthRouteParameterKey(
+  'provider',
+);
+const AuthRoutePath authSignInProviderRoute = AuthRoutePath(
+  '/signin/{provider}',
+  parameters: <AuthRouteParameterKey>[authProviderRouteParameter],
+);
+const AuthRoutePath authRegisterProviderRoute = AuthRoutePath(
+  '/register/{provider}',
+  parameters: <AuthRouteParameterKey>[authProviderRouteParameter],
+);
+const AuthRoutePath authCallbackProviderRoute = AuthRoutePath(
+  '/callback/{provider}',
+  parameters: <AuthRouteParameterKey>[authProviderRouteParameter],
+);
+
+/// Namespaced request data supplied to a portable auth endpoint.
+final class AuthEndpointRequest {
+  const AuthEndpointRequest.empty()
+    : path = const <AuthRouteParameterKey, String>{},
+      query = const <String, dynamic>{},
+      body = const <String, dynamic>{},
+      headers = const <String, String>{};
+
+  AuthEndpointRequest({
+    Map<AuthRouteParameterKey, String> path =
+        const <AuthRouteParameterKey, String>{},
+    Map<String, dynamic> query = const <String, dynamic>{},
+    Map<String, dynamic> body = const <String, dynamic>{},
+    Map<String, String> headers = const <String, String>{},
+  }) : path = Map<AuthRouteParameterKey, String>.unmodifiable(path),
+       query = Map<String, dynamic>.unmodifiable(query),
+       body = Map<String, dynamic>.unmodifiable(body),
+       headers = Map<String, String>.unmodifiable(
+         headers.map((key, value) => MapEntry(key.toLowerCase(), value)),
+       );
+
+  final Map<AuthRouteParameterKey, String> path;
+  final Map<String, dynamic> query;
+  final Map<String, dynamic> body;
+
+  /// Host-allowlisted headers exposed to portable handlers.
+  ///
+  /// Framework adapters are not required to forward arbitrary request
+  /// headers. Routed currently forwards only `Authorization`.
+  final Map<String, String> headers;
+
+  String requirePath(AuthRouteParameterKey key) {
+    final value = path[key];
+    if (value == null || value.isEmpty) {
+      throw FormatException('Missing route parameter "${key.name}".');
+    }
+    return value;
+  }
+}
+
 /// Authentication boundary enforced for a portable auth plugin operation.
 ///
 /// [bearer] identifies service-protocol endpoints whose plugin owns token
@@ -178,6 +430,7 @@ final class AuthOperationInvocation<TContext> {
   const AuthOperationInvocation({
     required this.context,
     required this.user,
+    this.request = const AuthEndpointRequest.empty(),
     this.emailVerified = false,
     this.activeOrganizationId,
     this.activeTeamId,
@@ -187,12 +440,25 @@ final class AuthOperationInvocation<TContext> {
 
   final TContext context;
   final AuthUser? user;
+  final AuthEndpointRequest request;
   final bool emailVerified;
   final String? activeOrganizationId;
   final String? activeTeamId;
   final FutureOr<void> Function(String? organizationId, String? teamId)?
   writeActiveSelection;
   final AuthServerPluginSessionControl? sessionControl;
+
+  AuthOperationInvocation<TContext> withRequest(AuthEndpointRequest request) =>
+      AuthOperationInvocation<TContext>(
+        context: context,
+        user: user,
+        request: request,
+        emailVerified: emailVerified,
+        activeOrganizationId: activeOrganizationId,
+        activeTeamId: activeTeamId,
+        writeActiveSelection: writeActiveSelection,
+        sessionControl: sessionControl,
+      );
 }
 
 /// A framework-neutral redirect returned by an auth plugin endpoint.
@@ -388,7 +654,8 @@ abstract interface class AuthOAuthTokenEndpointHost<TContext> {
 abstract interface class AuthEndpointDescriptor<TContext> {
   String get id;
   AuthOperationMethod get method;
-  String get path;
+  AuthRoutePath get path;
+  AuthEndpointMount get mount;
   AuthOperationSemantics get semantics;
   AuthOperationAuthentication get authentication;
   AuthOperationOriginPolicy get originPolicy;
@@ -398,7 +665,7 @@ abstract interface class AuthEndpointDescriptor<TContext> {
 
   FutureOr<Object?> invoke(
     AuthOperationInvocation<TContext> invocation,
-    Map<String, dynamic> input,
+    AuthEndpointRequest request,
   );
 }
 
@@ -414,7 +681,7 @@ abstract interface class AuthEndpointRateLimitIdentifierDescriptor {
   /// Invalid endpoint input produces no identifier. The endpoint invocation
   /// still performs normal request decoding and returns its normal public
   /// validation error.
-  String? resolveRateLimitIdentifier(Map<String, dynamic> input);
+  String? resolveRateLimitIdentifier(AuthEndpointRequest request);
 }
 
 /// Derives a private limiter key from a successfully decoded endpoint request.
@@ -557,6 +824,7 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
     this.responseContracts = const <AuthEndpointResponseContract>[],
     this.publicErrorResponse,
     this.serverOnly = false,
+    this.mount = AuthEndpointMount.auth,
   });
 
   @override
@@ -564,7 +832,9 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
   @override
   final AuthOperationMethod method;
   @override
-  final String path;
+  final AuthRoutePath path;
+  @override
+  final AuthEndpointMount mount;
   @override
   final AuthOperationSemantics semantics;
   @override
@@ -597,12 +867,12 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
   ) => publicErrorResponse?.call(kind);
 
   @override
-  String? resolveRateLimitIdentifier(Map<String, dynamic> input) {
+  String? resolveRateLimitIdentifier(AuthEndpointRequest request) {
     final resolver = rateLimitIdentifier;
     if (resolver == null) return null;
     try {
       return normalizeAuthRateLimitIdentifier(
-        resolver(requestCodec.decode(input)),
+        resolver(requestCodec.decode(_requestPayload(request))),
       );
     } catch (_) {
       return null;
@@ -612,11 +882,22 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
   @override
   Future<Object?> invoke(
     AuthOperationInvocation<TContext> invocation,
-    Map<String, dynamic> input,
+    AuthEndpointRequest request,
   ) async {
-    final response = await handler(invocation, requestCodec.decode(input));
+    final response = await handler(
+      invocation.withRequest(request),
+      requestCodec.decode(_requestPayload(request)),
+    );
     return responseCodec.encode(response);
   }
+
+  Map<String, dynamic> _requestPayload(AuthEndpointRequest request) =>
+      switch (method) {
+        AuthOperationMethod.get || AuthOperationMethod.delete => request.query,
+        AuthOperationMethod.post ||
+        AuthOperationMethod.put ||
+        AuthOperationMethod.patch => request.body,
+      };
 }
 
 abstract interface class AuthEndpointContributor<TContext> {
@@ -651,12 +932,14 @@ final class AuthClientOperationDescriptor {
     required this.method,
     required this.path,
     this.serverOnly = false,
+    this.mount = AuthEndpointMount.auth,
   });
 
   final String id;
   final AuthOperationMethod method;
-  final String path;
+  final AuthRoutePath path;
   final bool serverOnly;
+  final AuthEndpointMount mount;
 }
 
 final class AuthPersistenceSchema {
@@ -871,8 +1154,8 @@ class AuthServerPluginRegistry<TContext> {
     final pluginId = rawPluginId.trim();
     for (final endpoint in endpoints) {
       final endpointId = endpoint.id.trim();
-      final path = _normalizeEndpointPath(endpoint.path);
-      if (endpointId.isEmpty || path.isEmpty) {
+      endpoint.path.validate();
+      if (endpointId.isEmpty) {
         throw ArgumentError(
           'Plugin "$rawPluginId" contributed an invalid endpoint.',
         );
@@ -880,9 +1163,11 @@ class AuthServerPluginRegistry<TContext> {
       if (_endpointPluginIds.containsKey(endpointId)) {
         throw StateError('Auth endpoint "$endpointId" is already registered.');
       }
-      final key = '${endpoint.method.name}:$path';
+      final key =
+          '${endpoint.mount.name}:${endpoint.method.name}:'
+          '${endpoint.path.collisionShape}';
       if (!_endpointKeys.add(key)) {
-        throw StateError('Auth endpoint path "$key" is already registered.');
+        throw StateError('Auth endpoint route "$key" is already registered.');
       }
       destination[endpointId] = endpoint;
       _endpointPluginIds[endpointId] = pluginId;
@@ -950,10 +1235,4 @@ class AuthServerPluginRegistry<TContext> {
           (plugin) => plugin.rateLimitOperations,
         ),
       );
-}
-
-String _normalizeEndpointPath(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) return '';
-  return '/${trimmed.replaceAll(RegExp(r'^/+|/+$'), '')}';
 }

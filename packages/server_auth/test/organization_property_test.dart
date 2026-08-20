@@ -88,7 +88,7 @@ void main() {
           store.executeOrganizationMutation(command('a')),
           store.executeOrganizationMutation(command('b')),
         ]);
-      expect(results[1].value.id, results[0].value.id);
+        expect(results[1].value.id, results[0].value.id);
         expect(
           await store.listInvitations(fixture.organization.id),
           hasLength(1),

@@ -202,7 +202,7 @@ void main() {
         (endpoint) => endpoint.id == 'apiKey.exchange',
       );
       expect(exchange.authentication, AuthOperationAuthentication.apiKey);
-      expect(exchange.path, '/api-keys/exchange');
+      expect(exchange.path.template, '/api-keys/exchange');
       expect(
         enabled.clientOperations.map((operation) => operation.id),
         contains('apiKey.exchange'),

@@ -201,27 +201,27 @@ final class AdminPlugin<TContext>
     }
   }
 
-  static const Map<String, String> _paths = {
-    'admin.listUsers': '/admin/list-users',
-    'admin.getUser': '/admin/get-user',
-    'admin.createUser': '/admin/create-user',
-    'admin.updateUser': '/admin/update-user',
-    'admin.setRole': '/admin/set-role',
-    'admin.setUserPassword': '/admin/set-user-password',
-    'admin.banUser': '/admin/ban-user',
-    'admin.unbanUser': '/admin/unban-user',
-    'admin.listUserSessions': '/admin/list-user-sessions',
-    'admin.revokeUserSession': '/admin/revoke-user-session',
-    'admin.revokeUserSessions': '/admin/revoke-user-sessions',
-    'admin.impersonateUser': '/admin/impersonate-user',
-    'admin.stopImpersonating': '/admin/stop-impersonating',
-    'admin.removeUser': '/admin/remove-user',
-    'admin.hasPermission': '/admin/has-permission',
-    'admin.disableUser': '/admin/disable-user',
-    'admin.enableUser': '/admin/enable-user',
-    'admin.verifyEmail': '/admin/verify-email',
-    'admin.unlockUser': '/admin/unlock-user',
-    'admin.getAccountState': '/admin/get-account-state',
+  static const Map<String, AuthRoutePath> _paths = {
+    'admin.listUsers': AuthRoutePath('/admin/list-users'),
+    'admin.getUser': AuthRoutePath('/admin/get-user'),
+    'admin.createUser': AuthRoutePath('/admin/create-user'),
+    'admin.updateUser': AuthRoutePath('/admin/update-user'),
+    'admin.setRole': AuthRoutePath('/admin/set-role'),
+    'admin.setUserPassword': AuthRoutePath('/admin/set-user-password'),
+    'admin.banUser': AuthRoutePath('/admin/ban-user'),
+    'admin.unbanUser': AuthRoutePath('/admin/unban-user'),
+    'admin.listUserSessions': AuthRoutePath('/admin/list-user-sessions'),
+    'admin.revokeUserSession': AuthRoutePath('/admin/revoke-user-session'),
+    'admin.revokeUserSessions': AuthRoutePath('/admin/revoke-user-sessions'),
+    'admin.impersonateUser': AuthRoutePath('/admin/impersonate-user'),
+    'admin.stopImpersonating': AuthRoutePath('/admin/stop-impersonating'),
+    'admin.removeUser': AuthRoutePath('/admin/remove-user'),
+    'admin.hasPermission': AuthRoutePath('/admin/has-permission'),
+    'admin.disableUser': AuthRoutePath('/admin/disable-user'),
+    'admin.enableUser': AuthRoutePath('/admin/enable-user'),
+    'admin.verifyEmail': AuthRoutePath('/admin/verify-email'),
+    'admin.unlockUser': AuthRoutePath('/admin/unlock-user'),
+    'admin.getAccountState': AuthRoutePath('/admin/get-account-state'),
   };
 
   static const Set<String> _reads = {
@@ -336,6 +336,7 @@ final class AdminPlugin<TContext>
       id: endpoint.id,
       method: endpoint.method,
       path: endpoint.path,
+      mount: endpoint.mount,
       serverOnly: endpoint.serverOnly,
     ),
   );

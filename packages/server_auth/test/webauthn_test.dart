@@ -278,15 +278,21 @@ void main() {
       );
 
       final known = Map<String, dynamic>.from(
-        (await endpoint.invoke(invocation, <String, dynamic>{
-              'userId': fixture.user.id,
-            }))!
+        (await endpoint.invoke(
+              invocation,
+              AuthEndpointRequest(
+                body: <String, dynamic>{'userId': fixture.user.id},
+              ),
+            ))!
             as Map,
       );
       final unknown = Map<String, dynamic>.from(
-        (await endpoint.invoke(invocation, <String, dynamic>{
-              'userId': 'unknown-user',
-            }))!
+        (await endpoint.invoke(
+              invocation,
+              AuthEndpointRequest(
+                body: <String, dynamic>{'userId': 'unknown-user'},
+              ),
+            ))!
             as Map,
       );
 
@@ -324,7 +330,7 @@ void main() {
                 context: fixture.context,
                 user: fixture.user,
               ),
-              const <String, dynamic>{},
+              AuthEndpointRequest(body: const <String, dynamic>{}),
             ))!
             as Map,
       );
@@ -334,7 +340,9 @@ void main() {
                 context: fixture.context,
                 user: fixture.user,
               ),
-              const <String, dynamic>{'userId': 'another-user'},
+              AuthEndpointRequest(
+                body: const <String, dynamic>{'userId': 'another-user'},
+              ),
             ))!
             as Map,
       );
@@ -2743,15 +2751,17 @@ void main() {
             user: null,
             sessionControl: sessionControl,
           ),
-          <String, dynamic>{
-            'credential': _assertionCredential(
-              challenge: authentication.challenge,
-              credentialId: saved.credentialId,
-              keyPair: fixture.keyPair,
-              counter: 1,
-            ),
-            'userId': fixture.user.id,
-          },
+          AuthEndpointRequest(
+            body: <String, dynamic>{
+              'credential': _assertionCredential(
+                challenge: authentication.challenge,
+                credentialId: saved.credentialId,
+                keyPair: fixture.keyPair,
+                counter: 1,
+              ),
+              'userId': fixture.user.id,
+            },
+          ),
         );
 
         final intent = response! as AuthEndpointAuthenticationIntent;

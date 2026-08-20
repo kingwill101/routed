@@ -36,7 +36,7 @@ void main() {
         TypedAuthEndpointDescriptor<String, _LimiterInput, Object?>(
           id: 'sample.limit',
           method: AuthOperationMethod.post,
-          path: '/sample',
+          path: const AuthRoutePath('/sample'),
           semantics: const AuthOperationSemantics.readOnly(),
           requestCodec: AuthOperationCodec<_LimiterInput>(
             schema: const <String, Object?>{},
@@ -53,11 +53,18 @@ void main() {
         );
 
     expect(
-      endpoint.resolveRateLimitIdentifier({'value': '  ALICE  '}),
+      endpoint.resolveRateLimitIdentifier(
+        AuthEndpointRequest(body: {'value': '  ALICE  '}),
+      ),
       'alice',
     );
-    expect(endpoint.resolveRateLimitIdentifier(const {}), isNull);
-    expect(endpoint.resolveRateLimitIdentifier({'value': 7}), isNull);
+    expect(endpoint.resolveRateLimitIdentifier(AuthEndpointRequest()), isNull);
+    expect(
+      endpoint.resolveRateLimitIdentifier(
+        AuthEndpointRequest(body: {'value': 7}),
+      ),
+      isNull,
+    );
   });
 
   test('rate-limit requests expose only non-secret auth context', () async {

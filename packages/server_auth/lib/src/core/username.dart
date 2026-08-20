@@ -399,7 +399,7 @@ final class UsernamePlugin<TContext>
         >(
           id: 'username.register',
           method: AuthOperationMethod.post,
-          path: '/username/register',
+          path: const AuthRoutePath('/username/register'),
           semantics: const AuthOperationSemantics.mutation(
             persistence: AuthMutationPersistence.durable(
               atomicity: AuthMutationAtomicity.atomic,
@@ -436,7 +436,7 @@ final class UsernamePlugin<TContext>
         >(
           id: 'username.signIn',
           method: AuthOperationMethod.post,
-          path: '/username/sign-in',
+          path: const AuthRoutePath('/username/sign-in'),
           semantics: const AuthOperationSemantics.mutation(
             persistence: AuthMutationPersistence.session(),
             replaySafety: AuthMutationReplaySafety.repeatable,
@@ -467,7 +467,7 @@ final class UsernamePlugin<TContext>
         >(
           id: 'username.change',
           method: AuthOperationMethod.post,
-          path: '/username/change',
+          path: const AuthRoutePath('/username/change'),
           semantics: const AuthOperationSemantics.mutation(
             persistence: AuthMutationPersistence.durable(
               atomicity: AuthMutationAtomicity.atomic,
@@ -492,7 +492,7 @@ final class UsernamePlugin<TContext>
         TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
           id: 'username.remove',
           method: AuthOperationMethod.post,
-          path: '/username/remove',
+          path: const AuthRoutePath('/username/remove'),
           semantics: const AuthOperationSemantics.mutation(
             persistence: AuthMutationPersistence.durable(
               atomicity: AuthMutationAtomicity.atomic,
@@ -522,6 +522,7 @@ final class UsernamePlugin<TContext>
       id: endpoint.id,
       method: endpoint.method,
       path: endpoint.path,
+      mount: endpoint.mount,
       serverOnly: endpoint.serverOnly,
     ),
   );

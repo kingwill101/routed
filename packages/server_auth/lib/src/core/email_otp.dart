@@ -172,7 +172,7 @@ final class EmailOtpPlugin<TContext>
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints => [
     _endpoint(
       id: 'emailOtp.sendVerificationOtp',
-      path: '/email-otp/send-verification-otp',
+      path: const AuthRoutePath('/email-otp/send-verification-otp'),
       authentication: AuthOperationAuthentication.none,
       originPolicy: AuthOperationOriginPolicy.none,
       csrfPolicy: AuthOperationCsrfPolicy.none,
@@ -180,7 +180,7 @@ final class EmailOtpPlugin<TContext>
     ),
     _endpoint(
       id: 'emailOtp.checkVerificationOtp',
-      path: '/email-otp/check-verification-otp',
+      path: const AuthRoutePath('/email-otp/check-verification-otp'),
       authentication: AuthOperationAuthentication.none,
       originPolicy: AuthOperationOriginPolicy.none,
       csrfPolicy: AuthOperationCsrfPolicy.none,
@@ -188,7 +188,7 @@ final class EmailOtpPlugin<TContext>
     ),
     _endpoint(
       id: 'emailOtp.signIn',
-      path: '/sign-in/email-otp',
+      path: const AuthRoutePath('/sign-in/email-otp'),
       authentication: AuthOperationAuthentication.none,
       originPolicy: AuthOperationOriginPolicy.browser,
       csrfPolicy: AuthOperationCsrfPolicy.none,
@@ -196,7 +196,7 @@ final class EmailOtpPlugin<TContext>
     ),
     _endpoint(
       id: 'emailOtp.verifyEmail',
-      path: '/email-otp/verify-email',
+      path: const AuthRoutePath('/email-otp/verify-email'),
       authentication: AuthOperationAuthentication.session,
       operationName: 'verify_email',
     ),
@@ -204,7 +204,7 @@ final class EmailOtpPlugin<TContext>
 
   AuthEndpointDescriptor<TContext> _endpoint({
     required String id,
-    required String path,
+    required AuthRoutePath path,
     required AuthOperationAuthentication authentication,
     AuthOperationOriginPolicy originPolicy = AuthOperationOriginPolicy.browser,
     AuthOperationCsrfPolicy csrfPolicy = AuthOperationCsrfPolicy.required,
@@ -267,6 +267,7 @@ final class EmailOtpPlugin<TContext>
       id: endpoint.id,
       method: endpoint.method,
       path: endpoint.path,
+      mount: endpoint.mount,
       serverOnly: endpoint.serverOnly,
     ),
   );

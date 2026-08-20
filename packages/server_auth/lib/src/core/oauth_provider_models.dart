@@ -1,5 +1,7 @@
 import 'package:jose/jose.dart' show JsonWebKey;
 
+import 'plugin.dart';
+
 /// Represents an OAuth client registered with this application.
 class OAuthClient {
   const OAuthClient({
@@ -306,10 +308,10 @@ class OAuthAccessToken {
 /// Options for the OAuth provider mode.
 class OAuthProviderModeOptions {
   const OAuthProviderModeOptions({
-    this.authorizationEndpoint = '/oauth/authorize',
-    this.tokenEndpoint = '/oauth/token',
-    this.userInfoEndpoint = '/oauth/userinfo',
-    this.introspectionEndpoint = '/oauth/introspect',
+    this.authorizationEndpoint = const AuthRoutePath('/oauth/authorize'),
+    this.tokenEndpoint = const AuthRoutePath('/oauth/token'),
+    this.userInfoEndpoint = const AuthRoutePath('/oauth/userinfo'),
+    this.introspectionEndpoint = const AuthRoutePath('/oauth/introspect'),
     this.oidc,
     this.codeLifetime = const Duration(minutes: 10),
     this.accessTokenLifetime = const Duration(hours: 1),
@@ -328,16 +330,16 @@ class OAuthProviderModeOptions {
   });
 
   /// Authorization endpoint path.
-  final String authorizationEndpoint;
+  final AuthRoutePath authorizationEndpoint;
 
   /// Token endpoint path.
-  final String tokenEndpoint;
+  final AuthRoutePath tokenEndpoint;
 
   /// UserInfo endpoint path.
-  final String userInfoEndpoint;
+  final AuthRoutePath userInfoEndpoint;
 
   /// Token introspection endpoint path.
-  final String introspectionEndpoint;
+  final AuthRoutePath introspectionEndpoint;
 
   /// Explicit OpenID Connect signing and discovery configuration.
   ///
@@ -390,8 +392,10 @@ class OAuthOidcConfiguration {
     required this.issuer,
     required this.signingKey,
     this.signingAlgorithm = 'RS256',
-    this.discoveryEndpoint = '/.well-known/openid-configuration',
-    this.jwksEndpoint = '/oauth/jwks',
+    this.discoveryEndpoint = const AuthRoutePath(
+      '/.well-known/openid-configuration',
+    ),
+    this.jwksEndpoint = const AuthRoutePath('/oauth/jwks'),
     this.idTokenLifetime = const Duration(hours: 1),
   }) {
     if (!issuer.isAbsolute ||
@@ -433,11 +437,8 @@ class OAuthOidcConfiguration {
         'cannot sign with $signingAlgorithm',
       );
     }
-    if (!_isEndpointPath(discoveryEndpoint) || !_isEndpointPath(jwksEndpoint)) {
-      throw ArgumentError(
-        'OIDC endpoint paths must be absolute paths without a query or fragment',
-      );
-    }
+    discoveryEndpoint.validate();
+    jwksEndpoint.validate();
     if (idTokenLifetime <= Duration.zero) {
       throw ArgumentError.value(
         idTokenLifetime,
@@ -457,10 +458,10 @@ class OAuthOidcConfiguration {
   final String signingAlgorithm;
 
   /// Standard OpenID Provider configuration endpoint path.
-  final String discoveryEndpoint;
+  final AuthRoutePath discoveryEndpoint;
 
   /// Public JSON Web Key Set endpoint path.
-  final String jwksEndpoint;
+  final AuthRoutePath jwksEndpoint;
 
   /// Lifetime of an issued ID token.
   final Duration idTokenLifetime;
@@ -480,16 +481,5 @@ class OAuthOidcConfiguration {
     json['use'] = 'sig';
     json['key_ops'] = const <String>['verify'];
     return Map<String, dynamic>.unmodifiable(json);
-  }
-
-  static bool _isEndpointPath(String value) {
-    final uri = Uri.tryParse(value);
-    return uri != null &&
-        value.startsWith('/') &&
-        !value.startsWith('//') &&
-        !uri.hasScheme &&
-        !uri.hasAuthority &&
-        !uri.hasQuery &&
-        !uri.hasFragment;
   }
 }

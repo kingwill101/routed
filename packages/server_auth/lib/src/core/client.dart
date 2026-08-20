@@ -6,6 +6,7 @@ import 'package:http_parser/http_parser.dart' show parseHttpDate;
 
 import 'email_otp_store.dart';
 import 'models.dart';
+import 'plugin.dart';
 
 /// A cookie received from an auth response.
 ///
@@ -808,7 +809,7 @@ class AuthClientTransport {
   void clearCsrfToken() => _csrfToken = null;
 
   Future<String> getCsrfToken() async {
-    final response = await request('GET', '/csrf');
+    final response = await request('GET', const AuthRoutePath('/csrf'));
     final token = _mapBody(response.body)['csrfToken']?.toString().trim() ?? '';
     if (token.isEmpty) {
       throw const FormatException('Invalid auth CSRF response');
@@ -819,14 +820,19 @@ class AuthClientTransport {
 
   Future<AuthClientResponse> mutate(
     String method,
-    String relativePath,
-    Map<String, dynamic> body,
-  ) async {
+    AuthRoutePath route,
+    Map<String, dynamic> body, {
+    Map<AuthRouteParameterKey, String> pathParameters =
+        const <AuthRouteParameterKey, String>{},
+    AuthEndpointMount mount = AuthEndpointMount.auth,
+  }) async {
     final csrf = _csrfToken ?? await getCsrfToken();
     try {
       return await request(
         method,
-        relativePath,
+        route,
+        pathParameters: pathParameters,
+        mount: mount,
         body: <String, dynamic>{...body, '_csrf': csrf},
         headers: {'x-csrf-token': csrf},
       );
@@ -836,7 +842,9 @@ class AuthClientTransport {
       final refreshed = await getCsrfToken();
       return request(
         method,
-        relativePath,
+        route,
+        pathParameters: pathParameters,
+        mount: mount,
         body: <String, dynamic>{...body, '_csrf': refreshed},
         headers: {'x-csrf-token': refreshed},
       );
@@ -845,13 +853,21 @@ class AuthClientTransport {
 
   Future<AuthClientResponse> request(
     String method,
-    String relativePath, {
+    AuthRoutePath route, {
+    Map<AuthRouteParameterKey, String> pathParameters =
+        const <AuthRouteParameterKey, String>{},
+    AuthEndpointMount mount = AuthEndpointMount.auth,
     Map<String, dynamic>? body,
     Map<String, String>? queryParameters,
     Map<String, String>? headers,
     bool followRedirects = true,
   }) async {
-    final uri = endpoint(relativePath, queryParameters: queryParameters);
+    final uri = endpoint(
+      route,
+      pathParameters: pathParameters,
+      mount: mount,
+      queryParameters: queryParameters,
+    );
     final request = http.Request(method, uri)
       ..followRedirects = followRedirects
       ..headers.addAll({
@@ -889,11 +905,26 @@ class AuthClientTransport {
     return result;
   }
 
-  Uri endpoint(String relativePath, {Map<String, String>? queryParameters}) {
-    final normalized = _normalizePath(relativePath);
-    final path =
-        '${_baseUrl.path.replaceFirst(RegExp(r'/*$'), '')}$_basePath$normalized';
-    return _baseUrl.replace(path: path, queryParameters: queryParameters);
+  Uri endpoint(
+    AuthRoutePath route, {
+    Map<AuthRouteParameterKey, String> pathParameters =
+        const <AuthRouteParameterKey, String>{},
+    AuthEndpointMount mount = AuthEndpointMount.auth,
+    Map<String, String>? queryParameters,
+  }) {
+    final resolved = Uri.parse(route.resolve(pathParameters));
+    final segments = <String>[
+      ..._baseUrl.pathSegments.where((segment) => segment.isNotEmpty),
+      if (mount == AuthEndpointMount.auth)
+        ...Uri.parse(
+          _basePath,
+        ).pathSegments.where((segment) => segment.isNotEmpty),
+      ...resolved.pathSegments,
+    ];
+    return _baseUrl.replace(
+      pathSegments: segments,
+      queryParameters: queryParameters,
+    );
   }
 
   Future<void> _storeResponseCookies(http.Response response) async {
@@ -1066,7 +1097,7 @@ class AuthClientCore {
 
   /// Lists the providers exposed by the auth server.
   Future<List<AuthClientProvider>> getProviders() async {
-    final response = await _request('GET', '/providers');
+    final response = await _request('GET', const AuthRoutePath('/providers'));
     final body = _mapBody(response.body);
     final providers = body['providers'];
     if (providers is! List) {
@@ -1094,7 +1125,7 @@ class AuthClientCore {
   }) async {
     final response = await _request(
       'POST',
-      '/oauth/device/authorize',
+      const AuthRoutePath('/oauth/device/authorize'),
       body: {'client_id': clientId, 'scope': scopes.join(' ')},
     );
     return AuthClientDeviceAuthorization.fromJson(
@@ -1113,7 +1144,7 @@ class AuthClientCore {
   }) async {
     final response = await _request(
       'POST',
-      '/oauth/token',
+      const AuthRoutePath('/oauth/token'),
       body: {
         'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',
         'client_id': clientId,
@@ -1125,14 +1156,16 @@ class AuthClientCore {
 
   /// Approves a device code from an authenticated browser session.
   Future<void> approveDeviceAuthorization({required String userCode}) async {
-    await _mutatingRequest('POST', '/oauth/device/approve', {
-      'user_code': userCode,
-    });
+    await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/oauth/device/approve'),
+      {'user_code': userCode},
+    );
   }
 
   /// Denies a device code from an authenticated browser session.
   Future<void> denyDeviceAuthorization({required String userCode}) async {
-    await _mutatingRequest('POST', '/oauth/device/deny', {
+    await _mutatingRequest('POST', const AuthRoutePath('/oauth/device/deny'), {
       'user_code': userCode,
     });
   }
@@ -1144,7 +1177,7 @@ class AuthClientCore {
   }) async {
     await _request(
       'POST',
-      '/email-otp/send-verification-otp',
+      const AuthRoutePath('/email-otp/send-verification-otp'),
       body: {'email': email, 'type': _emailOtpTypeName(type)},
     );
   }
@@ -1157,7 +1190,7 @@ class AuthClientCore {
   }) async {
     await _request(
       'POST',
-      '/email-otp/check-verification-otp',
+      const AuthRoutePath('/email-otp/check-verification-otp'),
       body: {'email': email, 'type': _emailOtpTypeName(type), 'otp': otp},
     );
   }
@@ -1171,7 +1204,7 @@ class AuthClientCore {
   }) async {
     final response = await _request(
       'POST',
-      '/sign-in/email-otp',
+      const AuthRoutePath('/sign-in/email-otp'),
       body: {'email': email, 'otp': otp, 'name': ?name, 'image': ?image},
     );
     return _sessionFromBody(response.body);
@@ -1179,9 +1212,11 @@ class AuthClientCore {
 
   /// Verifies the current user's email with an OTP.
   Future<AuthUser> verifyEmailWithOtp({required String otp}) async {
-    final response = await _mutatingRequest('POST', '/email-otp/verify-email', {
-      'otp': otp,
-    });
+    final response = await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/email-otp/verify-email'),
+      {'otp': otp},
+    );
     final value = _mapBody(response.body)['user'];
     if (value is! Map) {
       throw const FormatException('Invalid email OTP response');
@@ -1193,7 +1228,7 @@ class AuthClientCore {
   Future<AuthSession> signInAnonymously() async {
     final response = await _request(
       'POST',
-      '/sign-in/anonymous',
+      const AuthRoutePath('/sign-in/anonymous'),
       body: const {},
     );
     return _sessionFromBody(response.body);
@@ -1201,7 +1236,11 @@ class AuthClientCore {
 
   /// Deletes the current anonymous account and signs the client out.
   Future<void> deleteAnonymousUser() async {
-    await _mutatingRequest('POST', '/delete-anonymous-user', const {});
+    await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/delete-anonymous-user'),
+      const {},
+    );
     transport.clearCsrfToken();
   }
 
@@ -1212,14 +1251,14 @@ class AuthClientCore {
 
   /// Returns the current session, or `null` when the client is signed out.
   Future<AuthSession?> getSession() async {
-    final response = await _request('GET', '/session');
+    final response = await _request('GET', const AuthRoutePath('/session'));
     if (response.body.trim() == 'null') return null;
     return _sessionFromBody(response.body);
   }
 
   /// Lists active server-side sessions for the current user.
   Future<List<AuthClientSession>> getSessions() async {
-    final response = await _request('GET', '/sessions');
+    final response = await _request('GET', const AuthRoutePath('/sessions'));
     final sessions = _mapBody(response.body)['sessions'];
     if (sessions is! List) {
       throw const FormatException('Invalid auth sessions response');
@@ -1236,7 +1275,10 @@ class AuthClientCore {
 
   /// Lists API-key metadata for the current user.
   Future<List<AuthClientApiKey>> getApiKeys() async {
-    final response = await _request('GET', '/api-keys/list');
+    final response = await _request(
+      'GET',
+      const AuthRoutePath('/api-keys/list'),
+    );
     final values = _mapBody(response.body)['apiKeys'];
     if (values is! List) {
       throw const FormatException('Invalid API-key response');
@@ -1256,7 +1298,7 @@ class AuthClientCore {
   beginWebAuthnRegistration() async {
     final response = await _mutatingRequest(
       'POST',
-      '/webauthn/register/options',
+      const AuthRoutePath('/webauthn/register/options'),
       const <String, dynamic>{},
     );
     return AuthClientWebAuthnRegistrationOptions.fromJson(
@@ -1271,7 +1313,7 @@ class AuthClientCore {
   }) async {
     final response = await _mutatingRequest(
       'POST',
-      '/webauthn/register/verify',
+      const AuthRoutePath('/webauthn/register/verify'),
       <String, dynamic>{
         'credential': <String, dynamic>{...credential, 'name': ?name},
       },
@@ -1291,7 +1333,7 @@ class AuthClientCore {
   }) async {
     final response = await _mutatingRequest(
       'POST',
-      '/webauthn/authenticate/options',
+      const AuthRoutePath('/webauthn/authenticate/options'),
       <String, dynamic>{'userId': ?userId},
     );
     return AuthClientWebAuthnAuthenticationOptions.fromJson(
@@ -1308,7 +1350,7 @@ class AuthClientCore {
   }) async {
     final response = await _mutatingRequest(
       'POST',
-      '/webauthn/authenticate/verify',
+      const AuthRoutePath('/webauthn/authenticate/verify'),
       <String, dynamic>{'credential': credential, 'userId': ?userId},
     );
     return AuthClientWebAuthnAuthenticationResult.fromJson(
@@ -1318,7 +1360,10 @@ class AuthClientCore {
 
   /// Lists passkeys registered for the current user.
   Future<List<AuthClientWebAuthnCredential>> getWebAuthnCredentials() async {
-    final response = await _request('GET', '/webauthn/credentials');
+    final response = await _request(
+      'GET',
+      const AuthRoutePath('/webauthn/credentials'),
+    );
     final values = _mapBody(response.body)['credentials'];
     if (values is! List) {
       throw const FormatException('Invalid WebAuthn credential response');
@@ -1341,17 +1386,23 @@ class AuthClientCore {
     Iterable<String> scopes = const <String>[],
     DateTime? expiresAt,
   }) async {
-    final response = await _mutatingRequest('POST', '/api-keys/create', {
-      'name': name,
-      'scopes': scopes.toList(growable: false),
-      'expiresAt': expiresAt?.toUtc().toIso8601String(),
-    });
+    final response = await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/api-keys/create'),
+      {
+        'name': name,
+        'scopes': scopes.toList(growable: false),
+        'expiresAt': expiresAt?.toUtc().toIso8601String(),
+      },
+    );
     return AuthClientIssuedApiKey.fromJson(_mapBody(response.body));
   }
 
   /// Revokes one API key belonging to the current user.
   Future<void> revokeApiKey({required String id}) async {
-    await _mutatingRequest('POST', '/api-keys/revoke', {'id': id});
+    await _mutatingRequest('POST', const AuthRoutePath('/api-keys/revoke'), {
+      'id': id,
+    });
   }
 
   /// Atomically rotates one API key. The replacement secret is returned once.
@@ -1361,12 +1412,16 @@ class AuthClientCore {
     Iterable<String>? scopes,
     DateTime? expiresAt,
   }) async {
-    final response = await _mutatingRequest('POST', '/api-keys/rotate', {
-      'id': id,
-      'name': ?name,
-      'scopes': scopes?.toList(growable: false),
-      'expiresAt': expiresAt?.toUtc().toIso8601String(),
-    });
+    final response = await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/api-keys/rotate'),
+      {
+        'id': id,
+        'name': ?name,
+        'scopes': scopes?.toList(growable: false),
+        'expiresAt': expiresAt?.toUtc().toIso8601String(),
+      },
+    );
     return AuthClientIssuedApiKey.fromJson(_mapBody(response.body));
   }
 
@@ -1376,15 +1431,20 @@ class AuthClientCore {
   /// `sessionExchangeEnabled: true`. The transport stores the returned
   /// session cookie alongside its existing cookies.
   Future<AuthSession> exchangeApiKeyForSession() async {
-    final response = await _request('POST', '/api-keys/exchange');
+    final response = await _request(
+      'POST',
+      const AuthRoutePath('/api-keys/exchange'),
+    );
     return _sessionFromBody(response.body);
   }
 
   /// Deletes one passkey belonging to the current user.
   Future<void> deleteWebAuthnCredential({required String credentialId}) async {
-    await _mutatingRequest('POST', '/webauthn/credentials/delete', {
-      'credentialId': credentialId,
-    });
+    await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/webauthn/credentials/delete'),
+      {'credentialId': credentialId},
+    );
   }
 
   /// Renames one passkey belonging to the current user.
@@ -1394,7 +1454,7 @@ class AuthClientCore {
   }) async {
     final response = await _mutatingRequest(
       'POST',
-      '/webauthn/credentials/rename',
+      const AuthRoutePath('/webauthn/credentials/rename'),
       <String, dynamic>{'credentialId': credentialId, 'name': name},
     );
     final rawCredential = _mapBody(response.body)['credential'];
@@ -1408,7 +1468,7 @@ class AuthClientCore {
 
   /// Returns the current two-factor status for the signed-in user.
   Future<AuthClientTwoFactorStatus> getTwoFactorStatus() async {
-    final response = await _request('GET', '/2fa/status');
+    final response = await _request('GET', const AuthRoutePath('/2fa/status'));
     return AuthClientTwoFactorStatus.fromJson(_mapBody(response.body));
   }
 
@@ -1416,9 +1476,11 @@ class AuthClientCore {
   Future<AuthClientTwoFactorEnrollment> beginTwoFactorEnrollment({
     String? accountLabel,
   }) async {
-    final response = await _mutatingRequest('POST', '/2fa/enroll', {
-      'accountLabel': ?accountLabel,
-    });
+    final response = await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/2fa/enroll'),
+      {'accountLabel': ?accountLabel},
+    );
     return AuthClientTwoFactorEnrollment.fromJson(_mapBody(response.body));
   }
 
@@ -1426,15 +1488,19 @@ class AuthClientCore {
   Future<AuthClientTwoFactorRecoveryCodes> verifyTwoFactorEnrollment({
     required String code,
   }) async {
-    final response = await _mutatingRequest('POST', '/2fa/enroll/verify', {
-      'code': code,
-    });
+    final response = await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/2fa/enroll/verify'),
+      {'code': code},
+    );
     return AuthClientTwoFactorRecoveryCodes.fromJson(_mapBody(response.body));
   }
 
   /// Verifies an enabled TOTP code.
   Future<void> verifyTwoFactor({required String code}) async {
-    await _mutatingRequest('POST', '/2fa/verify', {'code': code});
+    await _mutatingRequest('POST', const AuthRoutePath('/2fa/verify'), {
+      'code': code,
+    });
   }
 
   /// Completes a pending credential sign-in with a TOTP code.
@@ -1443,11 +1509,15 @@ class AuthClientCore {
     required String code,
     bool trustDevice = false,
   }) async {
-    final response = await _mutatingRequest('POST', '/2fa/challenge/verify', {
-      'challengeToken': challengeToken,
-      'code': code,
-      'trustDevice': trustDevice,
-    });
+    final response = await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/2fa/challenge/verify'),
+      {
+        'challengeToken': challengeToken,
+        'code': code,
+        'trustDevice': trustDevice,
+      },
+    );
     return _sessionFromBody(response.body);
   }
 
@@ -1458,7 +1528,7 @@ class AuthClientCore {
   }) async {
     final response = await _mutatingRequest(
       'POST',
-      '/2fa/challenge/recovery-code',
+      const AuthRoutePath('/2fa/challenge/recovery-code'),
       {'challengeToken': challengeToken, 'recoveryCode': recoveryCode},
     );
     return _sessionFromBody(response.body);
@@ -1466,27 +1536,37 @@ class AuthClientCore {
 
   /// Revokes all trusted two-factor devices for the current session.
   Future<void> revokeTwoFactorTrustedDevices() async {
-    await _mutatingRequest('POST', '/2fa/trusted-devices/revoke', const {});
+    await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/2fa/trusted-devices/revoke'),
+      const {},
+    );
   }
 
   /// Verifies TOTP for a sensitive action and stores the short-lived proof.
   Future<AuthClientTwoFactorStepUp> verifyTwoFactorStepUp({
     required String code,
   }) async {
-    final response = await _mutatingRequest('POST', '/2fa/step-up', {
-      'code': code,
-    });
+    final response = await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/2fa/step-up'),
+      {'code': code},
+    );
     return AuthClientTwoFactorStepUp.fromJson(_mapBody(response.body));
   }
 
   /// Revokes the current session's step-up proof.
   Future<void> revokeTwoFactorStepUp() async {
-    await _mutatingRequest('POST', '/2fa/step-up/revoke', const {});
+    await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/2fa/step-up/revoke'),
+      const {},
+    );
   }
 
   /// Consumes one recovery code.
   Future<void> useTwoFactorRecoveryCode({required String code}) async {
-    await _mutatingRequest('POST', '/2fa/recovery-code', {
+    await _mutatingRequest('POST', const AuthRoutePath('/2fa/recovery-code'), {
       'recoveryCode': code,
     });
   }
@@ -1497,7 +1577,7 @@ class AuthClientCore {
   }) async {
     final response = await _mutatingRequest(
       'POST',
-      '/2fa/recovery-codes/regenerate',
+      const AuthRoutePath('/2fa/recovery-codes/regenerate'),
       {'code': code},
     );
     return AuthClientTwoFactorRecoveryCodes.fromJson(_mapBody(response.body));
@@ -1505,7 +1585,9 @@ class AuthClientCore {
 
   /// Disables two-factor authentication after verifying the current TOTP code.
   Future<void> disableTwoFactor({required String code}) async {
-    await _mutatingRequest('POST', '/2fa/disable', {'code': code});
+    await _mutatingRequest('POST', const AuthRoutePath('/2fa/disable'), {
+      'code': code,
+    });
   }
 
   /// Signs in with a credentials provider.
@@ -1519,13 +1601,16 @@ class AuthClientCore {
   }) async {
     final response = await _mutatingRequest(
       'POST',
-      '/signin/${_pathSegment(provider)}',
+      authSignInProviderRoute,
       <String, dynamic>{
         ...?attributes,
         'email': ?email,
         'username': ?username,
         'password': password,
         'captchaToken': ?captchaToken,
+      },
+      pathParameters: <AuthRouteParameterKey, String>{
+        authProviderRouteParameter: provider,
       },
     );
     final body = _mapBody(response.body);
@@ -1553,13 +1638,16 @@ class AuthClientCore {
   }) async {
     final response = await _mutatingRequest(
       'POST',
-      '/register/${_pathSegment(provider)}',
+      authRegisterProviderRoute,
       <String, dynamic>{
         ...?attributes,
         'email': ?email,
         'username': ?username,
         'password': password,
         'captchaToken': ?captchaToken,
+      },
+      pathParameters: <AuthRouteParameterKey, String>{
+        authProviderRouteParameter: provider,
       },
     );
     return _sessionFromBody(response.body);
@@ -1573,8 +1661,11 @@ class AuthClientCore {
   }) async {
     final response = await _mutatingRequest(
       'POST',
-      '/signin/${_pathSegment(provider)}',
+      authSignInProviderRoute,
       <String, dynamic>{'email': email, 'callbackUrl': ?callbackUrl},
+      pathParameters: <AuthRouteParameterKey, String>{
+        authProviderRouteParameter: provider,
+      },
     );
     final body = _mapBody(response.body);
     return AuthClientVerificationSent(
@@ -1589,7 +1680,10 @@ class AuthClientCore {
   }) async {
     final response = await _request(
       'GET',
-      '/signin/${_pathSegment(provider)}',
+      authSignInProviderRoute,
+      pathParameters: <AuthRouteParameterKey, String>{
+        authProviderRouteParameter: provider,
+      },
       queryParameters: {'callbackUrl': ?callbackUrl},
       followRedirects: false,
     );
@@ -1633,11 +1727,15 @@ class AuthClientCore {
     required String currentPassword,
     required String newPassword,
   }) async {
-    await _mutatingRequest('POST', '/password/change', <String, dynamic>{
-      'identifier': identifier,
-      'currentPassword': currentPassword,
-      'newPassword': newPassword,
-    });
+    await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/password/change'),
+      <String, dynamic>{
+        'identifier': identifier,
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      },
+    );
     transport.clearCsrfToken();
   }
 
@@ -1647,16 +1745,20 @@ class AuthClientCore {
     required String currentPassword,
     String? identifier,
   }) async {
-    await _mutatingRequest('POST', '/email/change/request', <String, dynamic>{
-      'newEmail': newEmail,
-      'currentPassword': currentPassword,
-      'identifier': ?identifier,
-    });
+    await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/email/change/request'),
+      <String, dynamic>{
+        'newEmail': newEmail,
+        'currentPassword': currentPassword,
+        'identifier': ?identifier,
+      },
+    );
   }
 
   /// Lists linked external identities without provider tokens.
   Future<List<AuthAccount>> getLinkedAccounts() async {
-    final response = await _request('GET', '/accounts');
+    final response = await _request('GET', const AuthRoutePath('/accounts'));
     final values = _mapBody(response.body)['accounts'];
     if (values is! List) {
       throw const FormatException('Invalid linked-account response');
@@ -1677,18 +1779,24 @@ class AuthClientCore {
     required String providerAccountId,
     String? currentPassword,
   }) async {
-    await _mutatingRequest('POST', '/accounts/unlink', <String, dynamic>{
-      'providerId': providerId,
-      'providerAccountId': providerAccountId,
-      'currentPassword': ?currentPassword,
-    });
+    await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/accounts/unlink'),
+      <String, dynamic>{
+        'providerId': providerId,
+        'providerAccountId': providerAccountId,
+        'currentPassword': ?currentPassword,
+      },
+    );
   }
 
   /// Reauthenticates and permanently deletes the current account.
   Future<void> deleteAccount({required String currentPassword}) async {
-    await _mutatingRequest('POST', '/account/delete', <String, dynamic>{
-      'currentPassword': currentPassword,
-    });
+    await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/account/delete'),
+      <String, dynamic>{'currentPassword': currentPassword},
+    );
     transport.clearCsrfToken();
   }
 
@@ -1696,7 +1804,7 @@ class AuthClientCore {
   Future<AuthUser> confirmEmailChange({required String token}) async {
     final response = await _mutatingRequest(
       'POST',
-      '/email/change/confirm',
+      const AuthRoutePath('/email/change/confirm'),
       <String, dynamic>{'token': token},
     );
     final value = _mapBody(response.body)['user'];
@@ -1709,16 +1817,18 @@ class AuthClientCore {
 
   /// Revokes one server-side session by its public session ID.
   Future<void> revokeSession(String sessionId) async {
-    await _mutatingRequest('POST', '/sessions/revoke', <String, dynamic>{
-      'sessionId': sessionId,
-    });
+    await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/sessions/revoke'),
+      <String, dynamic>{'sessionId': sessionId},
+    );
   }
 
   /// Revokes every server-side session except the current session.
   Future<int> revokeOtherSessions() async {
     final response = await _mutatingRequest(
       'POST',
-      '/sessions/revoke-others',
+      const AuthRoutePath('/sessions/revoke-others'),
       const <String, dynamic>{},
     );
     final revoked = _mapBody(response.body)['revoked'];
@@ -1727,7 +1837,11 @@ class AuthClientCore {
 
   /// Signs the current session out and processes expired auth cookies.
   Future<void> signOut() async {
-    await _mutatingRequest('POST', '/signout', const <String, dynamic>{});
+    await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/signout'),
+      const <String, dynamic>{},
+    );
     transport.clearCsrfToken();
   }
 
@@ -1737,7 +1851,10 @@ class AuthClientCore {
   }) async {
     final response = await _request(
       'GET',
-      '/callback/${_pathSegment(provider)}',
+      authCallbackProviderRoute,
+      pathParameters: <AuthRouteParameterKey, String>{
+        authProviderRouteParameter: provider,
+      },
       queryParameters: parameters,
       followRedirects: false,
     );
@@ -1755,15 +1872,24 @@ class AuthClientCore {
 
   Future<AuthClientResponse> _mutatingRequest(
     String method,
-    String relativePath,
-    Map<String, dynamic> body,
-  ) async {
-    return transport.mutate(method, relativePath, body);
+    AuthRoutePath route,
+    Map<String, dynamic> body, {
+    Map<AuthRouteParameterKey, String> pathParameters =
+        const <AuthRouteParameterKey, String>{},
+  }) async {
+    return transport.mutate(
+      method,
+      route,
+      body,
+      pathParameters: pathParameters,
+    );
   }
 
   Future<AuthClientResponse> _request(
     String method,
-    String relativePath, {
+    AuthRoutePath route, {
+    Map<AuthRouteParameterKey, String> pathParameters =
+        const <AuthRouteParameterKey, String>{},
     Map<String, dynamic>? body,
     Map<String, String>? queryParameters,
     Map<String, String>? headers,
@@ -1771,7 +1897,8 @@ class AuthClientCore {
   }) async {
     return transport.request(
       method,
-      relativePath,
+      route,
+      pathParameters: pathParameters,
       body: body,
       queryParameters: queryParameters,
       headers: headers,
@@ -1917,14 +2044,6 @@ Uri _normalizeBaseUrl(Uri value) {
     throw ArgumentError.value(value, 'baseUrl', 'must be an absolute URI');
   }
   return value;
-}
-
-String _pathSegment(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty || trimmed.contains('/')) {
-    throw ArgumentError.value(value, 'provider', 'must be one path segment');
-  }
-  return Uri.encodeComponent(trimmed);
 }
 
 Iterable<String> _splitSetCookieHeader(String header) {

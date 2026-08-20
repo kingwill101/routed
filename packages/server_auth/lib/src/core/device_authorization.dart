@@ -232,7 +232,7 @@ final class DeviceAuthorizationPlugin<TContext>
     _endpoint(
       id: 'deviceAuthorization.request',
       method: AuthOperationMethod.post,
-      path: '/oauth/device/authorize',
+      path: const AuthRoutePath('/oauth/device/authorize'),
       authentication: AuthOperationAuthentication.none,
       originPolicy: AuthOperationOriginPolicy.none,
       csrfPolicy: AuthOperationCsrfPolicy.none,
@@ -241,14 +241,14 @@ final class DeviceAuthorizationPlugin<TContext>
     _endpoint(
       id: 'deviceAuthorization.approve',
       method: AuthOperationMethod.post,
-      path: '/oauth/device/approve',
+      path: const AuthRoutePath('/oauth/device/approve'),
       authentication: AuthOperationAuthentication.session,
       operationName: 'approve',
     ),
     _endpoint(
       id: 'deviceAuthorization.deny',
       method: AuthOperationMethod.post,
-      path: '/oauth/device/deny',
+      path: const AuthRoutePath('/oauth/device/deny'),
       authentication: AuthOperationAuthentication.session,
       operationName: 'deny',
     ),
@@ -256,7 +256,7 @@ final class DeviceAuthorizationPlugin<TContext>
       _endpoint(
         id: 'deviceAuthorization.token',
         method: AuthOperationMethod.post,
-        path: '/oauth/token',
+        path: const AuthRoutePath('/oauth/token'),
         authentication: AuthOperationAuthentication.none,
         originPolicy: AuthOperationOriginPolicy.none,
         csrfPolicy: AuthOperationCsrfPolicy.none,
@@ -267,7 +267,7 @@ final class DeviceAuthorizationPlugin<TContext>
   AuthEndpointDescriptor<TContext> _endpoint({
     required String id,
     required AuthOperationMethod method,
-    required String path,
+    required AuthRoutePath path,
     required AuthOperationAuthentication authentication,
     required String operationName,
     AuthOperationOriginPolicy originPolicy = AuthOperationOriginPolicy.browser,
@@ -305,6 +305,7 @@ final class DeviceAuthorizationPlugin<TContext>
       id: endpoint.id,
       method: endpoint.method,
       path: endpoint.path,
+      mount: endpoint.mount,
       serverOnly: endpoint.serverOnly,
     ),
   );

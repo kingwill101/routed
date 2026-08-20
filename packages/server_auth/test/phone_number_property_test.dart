@@ -149,14 +149,21 @@ void main() {
                   .single
               as AuthEndpointRateLimitIdentifierDescriptor;
       final expected = verifyEndpoint.resolveRateLimitIdentifier(
-        const <String, dynamic>{
-          'phoneNumber': '+18765551234',
-          'code': 'baseline-code',
-        },
+        AuthEndpointRequest(
+          body: const <String, dynamic>{
+            'phoneNumber': '+18765551234',
+            'code': 'baseline-code',
+          },
+        ),
       );
       final runner = PropertyTestRunner<String>(_hostileCodes(), (code) {
         final identifier = verifyEndpoint.resolveRateLimitIdentifier(
-          <String, dynamic>{'phoneNumber': ' +18765551234 ', 'code': code},
+          AuthEndpointRequest(
+            body: <String, dynamic>{
+              'phoneNumber': ' +18765551234 ',
+              'code': code,
+            },
+          ),
         );
         expect(identifier, expected);
         expect(identifier, isNotNull);

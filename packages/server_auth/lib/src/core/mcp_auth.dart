@@ -179,29 +179,38 @@ final class McpAuthPlugin<TContext>
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints => [
     _metadataEndpoint(
       id: 'mcpAuth.protectedResourceMetadata',
-      path: '/.well-known/oauth-protected-resource',
+      path: const AuthRoutePath('/.well-known/oauth-protected-resource'),
       payload: protectedResource.toJson(),
     ),
     _metadataEndpoint(
       id: 'mcpAuth.authorizationServerMetadata',
-      path: '/.well-known/oauth-authorization-server',
+      path: const AuthRoutePath('/.well-known/oauth-authorization-server'),
       payload: authorizationServer.toJson(),
     ),
     if (_registerClient != null) _registrationEndpoint(),
   ];
 
   @override
-  Iterable<AuthClientOperationDescriptor> get clientOperations =>
-      _registerClient == null
-      ? const <AuthClientOperationDescriptor>[]
-      : const <AuthClientOperationDescriptor>[
-          AuthClientOperationDescriptor(
-            id: 'mcpAuth.registerClient',
-            method: AuthOperationMethod.post,
-            path: '/oauth/register',
-            serverOnly: true,
-          ),
-        ];
+  Iterable<AuthClientOperationDescriptor> get clientOperations => [
+    const AuthClientOperationDescriptor(
+      id: 'mcpAuth.protectedResourceMetadata',
+      method: AuthOperationMethod.get,
+      path: AuthRoutePath('/.well-known/oauth-protected-resource'),
+      mount: AuthEndpointMount.root,
+    ),
+    const AuthClientOperationDescriptor(
+      id: 'mcpAuth.authorizationServerMetadata',
+      method: AuthOperationMethod.get,
+      path: AuthRoutePath('/.well-known/oauth-authorization-server'),
+      mount: AuthEndpointMount.root,
+    ),
+    if (_registerClient != null)
+      const AuthClientOperationDescriptor(
+        id: 'mcpAuth.registerClient',
+        method: AuthOperationMethod.post,
+        path: AuthRoutePath('/oauth/register'),
+      ),
+  ];
 
   @override
   Iterable<AuthRateLimitOperation> get rateLimitOperations => endpoints
@@ -210,12 +219,13 @@ final class McpAuthPlugin<TContext>
 
   AuthEndpointDescriptor<TContext> _metadataEndpoint({
     required String id,
-    required String path,
+    required AuthRoutePath path,
     required Map<String, dynamic> payload,
   }) => TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
     id: id,
     method: AuthOperationMethod.get,
     path: path,
+    mount: AuthEndpointMount.root,
     semantics: const AuthOperationSemantics.readOnly(),
     requestCodec: _requestCodec,
     responseCodec: _responseCodec,
@@ -233,7 +243,7 @@ final class McpAuthPlugin<TContext>
       >(
         id: 'mcpAuth.registerClient',
         method: AuthOperationMethod.post,
-        path: '/oauth/register',
+        path: const AuthRoutePath('/oauth/register'),
         semantics: const AuthOperationSemantics.mutation(
           persistence: AuthMutationPersistence.external(),
           replaySafety: AuthMutationReplaySafety.unguarded,

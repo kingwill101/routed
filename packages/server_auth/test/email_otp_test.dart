@@ -135,10 +135,12 @@ void main() {
                 )
                 as AuthEndpointRateLimitIdentifierDescriptor;
         final expected = send.resolveRateLimitIdentifier(
-          const <String, dynamic>{
-            'email': ' Ada@Example.COM ',
-            'type': 'sign-in',
-          },
+          AuthEndpointRequest(
+            body: const <String, dynamic>{
+              'email': ' Ada@Example.COM ',
+              'type': 'sign-in',
+            },
+          ),
         );
 
         expect(expected, startsWith('email:'));
@@ -148,10 +150,14 @@ void main() {
         );
         expect(expected, isNot(contains('ada@example.com')));
         expect(
-          send.resolveRateLimitIdentifier(const <String, dynamic>{
-            'email': 'ada@example.com',
-            'type': 'email-verification',
-          }),
+          send.resolveRateLimitIdentifier(
+            AuthEndpointRequest(
+              body: const <String, dynamic>{
+                'email': 'ada@example.com',
+                'type': 'email-verification',
+              },
+            ),
+          ),
           expected,
         );
 
@@ -170,11 +176,13 @@ void main() {
           ]),
           (otp) {
             final identifier = check.resolveRateLimitIdentifier(
-              <String, dynamic>{
-                'email': 'ADA@example.com',
-                'type': 'sign-in',
-                'otp': otp,
-              },
+              AuthEndpointRequest(
+                body: <String, dynamic>{
+                  'email': 'ADA@example.com',
+                  'type': 'sign-in',
+                  'otp': otp,
+                },
+              ),
             );
             expect(identifier, expected);
             if (otp.isNotEmpty) expect(identifier, isNot(contains(otp)));
@@ -184,10 +192,17 @@ void main() {
         final result = await runner.run();
         expect(result.success, isTrue, reason: '${result.error}');
 
-        expect(send.resolveRateLimitIdentifier(const {}), isNull);
-        expect(send.resolveRateLimitIdentifier(const {'email': 7}), isNull);
+        expect(send.resolveRateLimitIdentifier(AuthEndpointRequest()), isNull);
         expect(
-          send.resolveRateLimitIdentifier(const {'email': 'not-an-email'}),
+          send.resolveRateLimitIdentifier(
+            AuthEndpointRequest(body: const {'email': 7}),
+          ),
+          isNull,
+        );
+        expect(
+          send.resolveRateLimitIdentifier(
+            AuthEndpointRequest(body: const {'email': 'not-an-email'}),
+          ),
           isNull,
         );
       },

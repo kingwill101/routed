@@ -750,7 +750,7 @@ void main() {
           context: Object(),
           user: AuthUser(id: 'admin-1', roles: ['admin']),
         ),
-        {'userId': 'user-1'},
+        AuthEndpointRequest(query: {'userId': 'user-1'}),
       );
       final state = result as Map<String, dynamic>;
       expect(state['userId'], equals('user-1'));
@@ -770,7 +770,7 @@ void main() {
           context: Object(),
           user: AuthUser(id: 'admin-1', roles: ['admin']),
         ),
-        {'userId': 'user-1'},
+        AuthEndpointRequest(query: {'userId': 'user-1'}),
       );
       final state = result as Map<String, dynamic>;
       expect(state['failedLoginAttempts'], equals(1));

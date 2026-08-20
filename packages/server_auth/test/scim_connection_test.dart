@@ -33,7 +33,9 @@ void main() {
             context: Object(),
             user: AuthUser(id: 'session-user'),
           ),
-          <String, dynamic>{'organizationId': 'organization-a'},
+          AuthEndpointRequest(
+            query: <String, dynamic>{'organizationId': 'organization-a'},
+          ),
         ),
         throwsA(
           isA<AuthFlowException>().having(

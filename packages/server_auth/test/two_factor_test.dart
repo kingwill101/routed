@@ -91,7 +91,7 @@ void main() {
       expect(withPlugin.endpoints, isEmpty);
       expect(withPlugin.publicEndpoints, hasLength(12));
       expect(
-        withPlugin.publicEndpoints.map((endpoint) => endpoint.path),
+        withPlugin.publicEndpoints.map((endpoint) => endpoint.path.template),
         containsAll(<String>[
           '/2fa/status',
           '/2fa/enroll',

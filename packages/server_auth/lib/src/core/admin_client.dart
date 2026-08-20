@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'admin.dart' show AuthAdminAccessControl;
 import 'admin_models.dart';
 import 'client.dart';
+import 'plugin.dart';
 import 'models.dart';
 
 /// Installs the typed administrative API on an [AuthClient].
@@ -48,7 +49,7 @@ final class AuthAdminClient {
     int limit = 100,
     int offset = 0,
   }) async => AuthAdminUserPage.fromJson(
-    await _get('/admin/list-users', {
+    await _get(const AuthRoutePath('/admin/list-users'), {
       'search': ?search,
       'id': ?id,
       'email': ?email,
@@ -62,8 +63,9 @@ final class AuthAdminClient {
     }),
   );
 
-  Future<AuthAdminUser> getUser(String userId) async =>
-      AuthAdminUser.fromJson(await _get('/admin/get-user', {'userId': userId}));
+  Future<AuthAdminUser> getUser(String userId) async => AuthAdminUser.fromJson(
+    await _get(const AuthRoutePath('/admin/get-user'), {'userId': userId}),
+  );
 
   Future<AuthAdminMutationResult<AuthAdminUser>> createUser({
     String? id,
@@ -73,7 +75,7 @@ final class AuthAdminClient {
     String? image,
     Iterable<String>? roles,
     Map<String, dynamic>? attributes,
-  }) => _userMutation('/admin/create-user', {
+  }) => _userMutation(const AuthRoutePath('/admin/create-user'), {
     'id': id,
     'email': email,
     'name': name,
@@ -90,7 +92,7 @@ final class AuthAdminClient {
     Object? image,
     bool clearImage = false,
     Map<String, dynamic>? attributes,
-  }) => _userMutation('/admin/update-user', {
+  }) => _userMutation(const AuthRoutePath('/admin/update-user'), {
     'userId': userId,
     'email': ?email,
     'name': ?name,
@@ -101,7 +103,7 @@ final class AuthAdminClient {
   Future<AuthAdminMutationResult<AuthAdminUser>> setRole({
     required String userId,
     required Iterable<String> roles,
-  }) => _userMutation('/admin/set-role', {
+  }) => _userMutation(const AuthRoutePath('/admin/set-role'), {
     'userId': userId,
     'roles': roles.toList(),
   });
@@ -109,7 +111,7 @@ final class AuthAdminClient {
   Future<AuthAdminMutationResult<AuthAdminUser>> setUserPassword({
     required String userId,
     required String newPassword,
-  }) => _userMutation('/admin/set-user-password', {
+  }) => _userMutation(const AuthRoutePath('/admin/set-user-password'), {
     'userId': userId,
     'newPassword': newPassword,
   });
@@ -118,19 +120,22 @@ final class AuthAdminClient {
     required String userId,
     String? reason,
     DateTime? expiresAt,
-  }) => _userMutation('/admin/ban-user', {
+  }) => _userMutation(const AuthRoutePath('/admin/ban-user'), {
     'userId': userId,
     'banReason': reason,
     'banExpiresAt': expiresAt?.toUtc().toIso8601String(),
   });
 
   Future<AuthAdminMutationResult<AuthAdminUser>> unbanUser(String userId) =>
-      _userMutation('/admin/unban-user', {'userId': userId});
+      _userMutation(const AuthRoutePath('/admin/unban-user'), {
+        'userId': userId,
+      });
 
   Future<List<AuthAdminSession>> listUserSessions(String userId) async {
-    final values = (await _post('/admin/list-user-sessions', {
-      'userId': userId,
-    }))['sessions'];
+    final values = (await _post(
+      const AuthRoutePath('/admin/list-user-sessions'),
+      {'userId': userId},
+    ))['sessions'];
     return _list(values, AuthAdminSession.fromJson);
   }
 
@@ -138,25 +143,31 @@ final class AuthAdminClient {
     required String userId,
     required String sessionId,
   }) async {
-    await _post('/admin/revoke-user-session', {
+    await _post(const AuthRoutePath('/admin/revoke-user-session'), {
       'userId': userId,
       'sessionId': sessionId,
     });
   }
 
   Future<int> revokeUserSessions(String userId) async {
-    final value = (await _post('/admin/revoke-user-sessions', {
-      'userId': userId,
-    }))['revoked'];
+    final value = (await _post(
+      const AuthRoutePath('/admin/revoke-user-sessions'),
+      {'userId': userId},
+    ))['revoked'];
     return value is int ? value : int.tryParse('$value') ?? 0;
   }
 
   Future<AuthAdminMutationResult<AuthSession>> impersonateUser(String userId) =>
-      _sessionMutation('/admin/impersonate-user', {'userId': userId});
+      _sessionMutation(const AuthRoutePath('/admin/impersonate-user'), {
+        'userId': userId,
+      });
 
   Future<AuthAdminMutationResult<AuthAdminStopImpersonatingResult>>
   stopImpersonating() async {
-    final json = await _post('/admin/stop-impersonating', const {});
+    final json = await _post(
+      const AuthRoutePath('/admin/stop-impersonating'),
+      const {},
+    );
     final data = _map(json['data']);
     final rawSession = data['session'];
     return AuthAdminMutationResult(
@@ -169,7 +180,9 @@ final class AuthAdminClient {
   }
 
   Future<AuthAdminMutationResult<bool>> removeUser(String userId) async {
-    final json = await _post('/admin/remove-user', {'userId': userId});
+    final json = await _post(const AuthRoutePath('/admin/remove-user'), {
+      'userId': userId,
+    });
     return AuthAdminMutationResult(
       data: _map(json)['data'] == true,
       warnings: _warnings(json),
@@ -181,7 +194,7 @@ final class AuthAdminClient {
     required String action,
     String? userId,
   }) async =>
-      (await _post('/admin/has-permission', {
+      (await _post(const AuthRoutePath('/admin/has-permission'), {
         'resource': resource,
         'action': action,
         'userId': userId,
@@ -189,7 +202,7 @@ final class AuthAdminClient {
       true;
 
   Future<AuthAdminMutationResult<AuthAdminUser>> _userMutation(
-    String path,
+    AuthRoutePath path,
     Map<String, dynamic> body,
   ) async {
     final json = await _post(path, body);
@@ -200,7 +213,7 @@ final class AuthAdminClient {
   }
 
   Future<AuthAdminMutationResult<AuthSession>> _sessionMutation(
-    String path,
+    AuthRoutePath path,
     Map<String, dynamic> body,
   ) async {
     final json = await _post(path, body);
@@ -211,14 +224,14 @@ final class AuthAdminClient {
   }
 
   Future<Map<String, dynamic>> _get(
-    String path, [
+    AuthRoutePath path, [
     Map<String, String>? query,
   ]) async => _body(
     (await transport.request('GET', path, queryParameters: query)).body,
   );
 
   Future<Map<String, dynamic>> _post(
-    String path,
+    AuthRoutePath path,
     Map<String, dynamic> body,
   ) async => _body((await transport.mutate('POST', path, body)).body);
 }

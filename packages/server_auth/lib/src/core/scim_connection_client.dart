@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'client.dart';
+import 'plugin.dart';
 import 'scim_connection_models.dart';
 import 'scim_models.dart';
 
@@ -32,15 +33,18 @@ final class AuthScimConnectionClient {
     required String idempotencyKey,
     DateTime? expiresAt,
   }) async => AuthScimConnectionCreation.fromJson(
-    await _post('/scim/connections/create', <String, dynamic>{
-      'organizationId': organizationId,
-      'name': name,
-      'provisioningDomainId': provisioningDomainId,
-      'scopes': scopes.map((value) => value.name).toList(growable: false),
-      'credentialName': credentialName,
-      'idempotencyKey': idempotencyKey,
-      if (expiresAt != null) 'expiresAt': expiresAt.toUtc().toIso8601String(),
-    }),
+    await _post(
+      const AuthRoutePath('/scim/connections/create'),
+      <String, dynamic>{
+        'organizationId': organizationId,
+        'name': name,
+        'provisioningDomainId': provisioningDomainId,
+        'scopes': scopes.map((value) => value.name).toList(growable: false),
+        'credentialName': credentialName,
+        'idempotencyKey': idempotencyKey,
+        if (expiresAt != null) 'expiresAt': expiresAt.toUtc().toIso8601String(),
+      },
+    ),
   );
 
   Future<AuthScimConnectionPage> list({
@@ -48,11 +52,14 @@ final class AuthScimConnectionClient {
     int limit = 100,
     int offset = 0,
   }) async {
-    final json = await _get('/scim/connections', <String, String>{
-      'organizationId': organizationId,
-      'limit': '$limit',
-      'offset': '$offset',
-    });
+    final json = await _get(
+      const AuthRoutePath('/scim/connections'),
+      <String, String>{
+        'organizationId': organizationId,
+        'limit': '$limit',
+        'offset': '$offset',
+      },
+    );
     return _connectionPage(json);
   }
 
@@ -64,24 +71,30 @@ final class AuthScimConnectionClient {
     required String provisioningDomainId,
     required Iterable<AuthScimScope> scopes,
   }) async => AuthScimManagedConnection.fromJson(
-    await _post('/scim/connections/update', <String, dynamic>{
-      'organizationId': organizationId,
-      'connectionId': connectionId,
-      'expectedUpdatedAt': expectedUpdatedAt.toUtc().toIso8601String(),
-      'name': name,
-      'provisioningDomainId': provisioningDomainId,
-      'scopes': scopes.map((value) => value.name).toList(growable: false),
-    }),
+    await _post(
+      const AuthRoutePath('/scim/connections/update'),
+      <String, dynamic>{
+        'organizationId': organizationId,
+        'connectionId': connectionId,
+        'expectedUpdatedAt': expectedUpdatedAt.toUtc().toIso8601String(),
+        'name': name,
+        'provisioningDomainId': provisioningDomainId,
+        'scopes': scopes.map((value) => value.name).toList(growable: false),
+      },
+    ),
   );
 
   Future<AuthScimManagedConnection> disable({
     required String organizationId,
     required String connectionId,
   }) async => AuthScimManagedConnection.fromJson(
-    await _post('/scim/connections/disable', <String, dynamic>{
-      'organizationId': organizationId,
-      'connectionId': connectionId,
-    }),
+    await _post(
+      const AuthRoutePath('/scim/connections/disable'),
+      <String, dynamic>{
+        'organizationId': organizationId,
+        'connectionId': connectionId,
+      },
+    ),
   );
 
   Future<AuthScimCredentialPage> listCredentials({
@@ -90,12 +103,15 @@ final class AuthScimConnectionClient {
     int limit = 100,
     int offset = 0,
   }) async {
-    final json = await _get('/scim/connections/credentials', <String, String>{
-      'organizationId': organizationId,
-      'connectionId': connectionId,
-      'limit': '$limit',
-      'offset': '$offset',
-    });
+    final json = await _get(
+      const AuthRoutePath('/scim/connections/credentials'),
+      <String, String>{
+        'organizationId': organizationId,
+        'connectionId': connectionId,
+        'limit': '$limit',
+        'offset': '$offset',
+      },
+    );
     return _credentialPage(json);
   }
 
@@ -107,14 +123,17 @@ final class AuthScimConnectionClient {
     required String idempotencyKey,
     DateTime? expiresAt,
   }) async => AuthScimCredentialIssuance.fromJson(
-    await _post('/scim/connections/credentials/issue', <String, dynamic>{
-      'organizationId': organizationId,
-      'connectionId': connectionId,
-      'name': name,
-      'scopes': scopes.map((value) => value.name).toList(growable: false),
-      'idempotencyKey': idempotencyKey,
-      if (expiresAt != null) 'expiresAt': expiresAt.toUtc().toIso8601String(),
-    }),
+    await _post(
+      const AuthRoutePath('/scim/connections/credentials/issue'),
+      <String, dynamic>{
+        'organizationId': organizationId,
+        'connectionId': connectionId,
+        'name': name,
+        'scopes': scopes.map((value) => value.name).toList(growable: false),
+        'idempotencyKey': idempotencyKey,
+        if (expiresAt != null) 'expiresAt': expiresAt.toUtc().toIso8601String(),
+      },
+    ),
   );
 
   Future<AuthScimCredentialIssuance> rotateCredential({
@@ -126,15 +145,18 @@ final class AuthScimConnectionClient {
     required String idempotencyKey,
     DateTime? expiresAt,
   }) async => AuthScimCredentialIssuance.fromJson(
-    await _post('/scim/connections/credentials/rotate', <String, dynamic>{
-      'organizationId': organizationId,
-      'connectionId': connectionId,
-      'credentialId': credentialId,
-      'name': name,
-      'scopes': scopes.map((value) => value.name).toList(growable: false),
-      'idempotencyKey': idempotencyKey,
-      if (expiresAt != null) 'expiresAt': expiresAt.toUtc().toIso8601String(),
-    }),
+    await _post(
+      const AuthRoutePath('/scim/connections/credentials/rotate'),
+      <String, dynamic>{
+        'organizationId': organizationId,
+        'connectionId': connectionId,
+        'credentialId': credentialId,
+        'name': name,
+        'scopes': scopes.map((value) => value.name).toList(growable: false),
+        'idempotencyKey': idempotencyKey,
+        if (expiresAt != null) 'expiresAt': expiresAt.toUtc().toIso8601String(),
+      },
+    ),
   );
 
   Future<AuthScimCredential> revokeCredential({
@@ -142,22 +164,25 @@ final class AuthScimConnectionClient {
     required String connectionId,
     required String credentialId,
   }) async => AuthScimCredential.fromJson(
-    await _post('/scim/connections/credentials/revoke', <String, dynamic>{
-      'organizationId': organizationId,
-      'connectionId': connectionId,
-      'credentialId': credentialId,
-    }),
+    await _post(
+      const AuthRoutePath('/scim/connections/credentials/revoke'),
+      <String, dynamic>{
+        'organizationId': organizationId,
+        'connectionId': connectionId,
+        'credentialId': credentialId,
+      },
+    ),
   );
 
   Future<Map<String, dynamic>> _get(
-    String path,
+    AuthRoutePath path,
     Map<String, String> query,
   ) async => _body(
     (await transport.request('GET', path, queryParameters: query)).body,
   );
 
   Future<Map<String, dynamic>> _post(
-    String path,
+    AuthRoutePath path,
     Map<String, dynamic> body,
   ) async => _body((await transport.mutate('POST', path, body)).body);
 }

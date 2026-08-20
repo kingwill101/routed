@@ -76,7 +76,7 @@ final class AnonymousPlugin<TContext>
     TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
       id: 'anonymous.signIn',
       method: AuthOperationMethod.post,
-      path: '/sign-in/anonymous',
+      path: const AuthRoutePath('/sign-in/anonymous'),
       semantics: const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
           atomicity: AuthMutationAtomicity.atomic,
@@ -98,7 +98,7 @@ final class AnonymousPlugin<TContext>
     TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
       id: 'anonymous.delete',
       method: AuthOperationMethod.post,
-      path: '/delete-anonymous-user',
+      path: const AuthRoutePath('/delete-anonymous-user'),
       semantics: const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
           atomicity: AuthMutationAtomicity.atomic,
@@ -125,6 +125,7 @@ final class AnonymousPlugin<TContext>
       id: endpoint.id,
       method: endpoint.method,
       path: endpoint.path,
+      mount: endpoint.mount,
       serverOnly: endpoint.serverOnly,
     ),
   );

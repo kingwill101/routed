@@ -3,6 +3,9 @@ import 'dart:async';
 import 'plugin.dart';
 import 'scim_models.dart';
 
+const AuthRouteParameterKey authScimResourceIdRouteParameter =
+    AuthRouteParameterKey('id');
+
 /// Stable server-plugin identifier for the SCIM 2.0 provisioning capability.
 const String authScimPluginId = 'scim';
 
@@ -479,245 +482,269 @@ final class ScimPlugin<TContext>
   ];
 
   @override
-  Iterable<AuthEndpointDescriptor<TContext>> get endpoints =>
-      <AuthEndpointDescriptor<TContext>>[
-        _endpoint(
-          id: 'scim.serviceProviderConfig',
-          method: AuthOperationMethod.get,
-          path: '/scim/v2/ServiceProviderConfig',
-          semantics: const AuthOperationSemantics.readOnly(),
-          scope: AuthScimScope.usersRead,
-          alternateScopes: const <AuthScimScope>{AuthScimScope.groupsRead},
-          requestCodec: _emptyRequestCodec,
-          responseCodec: _serviceProviderConfigResponseCodec,
-          handler: _serviceProviderConfig,
-        ),
-        _endpoint(
-          id: 'scim.resourceTypes',
-          method: AuthOperationMethod.get,
-          path: '/scim/v2/ResourceTypes',
-          semantics: const AuthOperationSemantics.readOnly(),
-          scope: AuthScimScope.usersRead,
-          alternateScopes: const <AuthScimScope>{AuthScimScope.groupsRead},
-          requestCodec: _emptyRequestCodec,
-          responseCodec: _resourceTypesResponseCodec,
-          handler: _resourceTypes,
-        ),
-        _endpoint(
-          id: 'scim.schemas',
-          method: AuthOperationMethod.get,
-          path: '/scim/v2/Schemas',
-          semantics: const AuthOperationSemantics.readOnly(),
-          scope: AuthScimScope.usersRead,
-          alternateScopes: const <AuthScimScope>{AuthScimScope.groupsRead},
-          requestCodec: _emptyRequestCodec,
-          responseCodec: _schemasResponseCodec,
-          handler: _schemas,
-        ),
-        _endpoint(
-          id: 'scim.users.list',
-          method: AuthOperationMethod.get,
-          path: '/scim/v2/Users',
-          semantics: const AuthOperationSemantics.readOnly(),
-          scope: AuthScimScope.usersRead,
-          requestCodec: _listUsersRequestCodec,
-          responseCodec: _userListResponseCodec,
-          handler: _listUsers,
-        ),
-        _endpoint(
-          id: 'scim.users.get',
-          method: AuthOperationMethod.get,
-          path: '/scim/v2/Users/{id}',
-          semantics: const AuthOperationSemantics.readOnly(),
-          scope: AuthScimScope.usersRead,
-          requestCodec: _resourceIdRequestCodec,
-          responseCodec: _userResponseCodec,
-          handler: _getUser,
-        ),
-        _endpoint(
-          id: 'scim.users.create',
-          method: AuthOperationMethod.post,
-          path: '/scim/v2/Users',
-          semantics: const AuthOperationSemantics.mutation(
-            persistence: AuthMutationPersistence.durable(
-              atomicity: AuthMutationAtomicity.atomic,
-              reference: AuthPersistenceOperationReference(
-                schemaId: _scimPersistenceSchemaId,
-                atomicOperationId: 'createUser',
-              ),
-            ),
-            replaySafety: AuthMutationReplaySafety.unguarded,
+  Iterable<AuthEndpointDescriptor<TContext>>
+  get endpoints => <AuthEndpointDescriptor<TContext>>[
+    _endpoint(
+      id: 'scim.serviceProviderConfig',
+      method: AuthOperationMethod.get,
+      path: const AuthRoutePath('/scim/v2/ServiceProviderConfig'),
+      semantics: const AuthOperationSemantics.readOnly(),
+      scope: AuthScimScope.usersRead,
+      alternateScopes: const <AuthScimScope>{AuthScimScope.groupsRead},
+      requestCodec: _emptyRequestCodec,
+      responseCodec: _serviceProviderConfigResponseCodec,
+      handler: _serviceProviderConfig,
+    ),
+    _endpoint(
+      id: 'scim.resourceTypes',
+      method: AuthOperationMethod.get,
+      path: const AuthRoutePath('/scim/v2/ResourceTypes'),
+      semantics: const AuthOperationSemantics.readOnly(),
+      scope: AuthScimScope.usersRead,
+      alternateScopes: const <AuthScimScope>{AuthScimScope.groupsRead},
+      requestCodec: _emptyRequestCodec,
+      responseCodec: _resourceTypesResponseCodec,
+      handler: _resourceTypes,
+    ),
+    _endpoint(
+      id: 'scim.schemas',
+      method: AuthOperationMethod.get,
+      path: const AuthRoutePath('/scim/v2/Schemas'),
+      semantics: const AuthOperationSemantics.readOnly(),
+      scope: AuthScimScope.usersRead,
+      alternateScopes: const <AuthScimScope>{AuthScimScope.groupsRead},
+      requestCodec: _emptyRequestCodec,
+      responseCodec: _schemasResponseCodec,
+      handler: _schemas,
+    ),
+    _endpoint(
+      id: 'scim.users.list',
+      method: AuthOperationMethod.get,
+      path: const AuthRoutePath('/scim/v2/Users'),
+      semantics: const AuthOperationSemantics.readOnly(),
+      scope: AuthScimScope.usersRead,
+      requestCodec: _listUsersRequestCodec,
+      responseCodec: _userListResponseCodec,
+      handler: _listUsers,
+    ),
+    _endpoint(
+      id: 'scim.users.get',
+      method: AuthOperationMethod.get,
+      path: const AuthRoutePath(
+        '/scim/v2/Users/{id}',
+        parameters: <AuthRouteParameterKey>[authScimResourceIdRouteParameter],
+      ),
+      semantics: const AuthOperationSemantics.readOnly(),
+      scope: AuthScimScope.usersRead,
+      requestCodec: _resourceIdRequestCodec,
+      responseCodec: _userResponseCodec,
+      handler: _getUser,
+    ),
+    _endpoint(
+      id: 'scim.users.create',
+      method: AuthOperationMethod.post,
+      path: const AuthRoutePath('/scim/v2/Users'),
+      semantics: const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: _scimPersistenceSchemaId,
+            atomicOperationId: 'createUser',
           ),
-          scope: AuthScimScope.usersWrite,
-          requestCodec: _userRequestCodec,
-          responseCodec: _userResponseCodec,
-          successStatusCode: 201,
-          handler: _createUser,
         ),
-        _endpoint(
-          id: 'scim.users.replace',
-          method: AuthOperationMethod.put,
-          path: '/scim/v2/Users/{id}',
-          semantics: const AuthOperationSemantics.mutation(
-            persistence: AuthMutationPersistence.durable(
-              atomicity: AuthMutationAtomicity.atomic,
-              reference: AuthPersistenceOperationReference(
-                schemaId: _scimPersistenceSchemaId,
-                atomicOperationId: 'replaceUser',
-              ),
-            ),
-            replaySafety: AuthMutationReplaySafety.idempotent,
+        replaySafety: AuthMutationReplaySafety.unguarded,
+      ),
+      scope: AuthScimScope.usersWrite,
+      requestCodec: _userRequestCodec,
+      responseCodec: _userResponseCodec,
+      successStatusCode: 201,
+      handler: _createUser,
+    ),
+    _endpoint(
+      id: 'scim.users.replace',
+      method: AuthOperationMethod.put,
+      path: const AuthRoutePath(
+        '/scim/v2/Users/{id}',
+        parameters: <AuthRouteParameterKey>[authScimResourceIdRouteParameter],
+      ),
+      semantics: const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: _scimPersistenceSchemaId,
+            atomicOperationId: 'replaceUser',
           ),
-          scope: AuthScimScope.usersWrite,
-          requestCodec: _userWithIdRequestCodec,
-          responseCodec: _userResponseCodec,
-          handler: _replaceUser,
         ),
-        _endpoint(
-          id: 'scim.users.patch',
-          method: AuthOperationMethod.patch,
-          path: '/scim/v2/Users/{id}',
-          semantics: const AuthOperationSemantics.mutation(
-            persistence: AuthMutationPersistence.durable(
-              atomicity: AuthMutationAtomicity.atomic,
-              reference: AuthPersistenceOperationReference(
-                schemaId: _scimPersistenceSchemaId,
-                atomicOperationId: 'patchUser',
-              ),
-            ),
-            replaySafety: AuthMutationReplaySafety.unguarded,
+        replaySafety: AuthMutationReplaySafety.idempotent,
+      ),
+      scope: AuthScimScope.usersWrite,
+      requestCodec: _userWithIdRequestCodec,
+      responseCodec: _userResponseCodec,
+      handler: _replaceUser,
+    ),
+    _endpoint(
+      id: 'scim.users.patch',
+      method: AuthOperationMethod.patch,
+      path: const AuthRoutePath(
+        '/scim/v2/Users/{id}',
+        parameters: <AuthRouteParameterKey>[authScimResourceIdRouteParameter],
+      ),
+      semantics: const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: _scimPersistenceSchemaId,
+            atomicOperationId: 'patchUser',
           ),
-          scope: AuthScimScope.usersWrite,
-          requestCodec: _patchWithIdRequestCodec,
-          responseCodec: _userResponseCodec,
-          handler: _patchUser,
         ),
-        _endpoint(
-          id: 'scim.users.delete',
-          method: AuthOperationMethod.delete,
-          path: '/scim/v2/Users/{id}',
-          semantics: const AuthOperationSemantics.mutation(
-            persistence: AuthMutationPersistence.durable(
-              atomicity: AuthMutationAtomicity.atomic,
-              reference: AuthPersistenceOperationReference(
-                schemaId: _scimPersistenceSchemaId,
-                atomicOperationId: 'tombstoneUser',
-              ),
-            ),
-            replaySafety: AuthMutationReplaySafety.idempotent,
+        replaySafety: AuthMutationReplaySafety.unguarded,
+      ),
+      scope: AuthScimScope.usersWrite,
+      requestCodec: _patchWithIdRequestCodec,
+      responseCodec: _userResponseCodec,
+      handler: _patchUser,
+    ),
+    _endpoint(
+      id: 'scim.users.delete',
+      method: AuthOperationMethod.delete,
+      path: const AuthRoutePath(
+        '/scim/v2/Users/{id}',
+        parameters: <AuthRouteParameterKey>[authScimResourceIdRouteParameter],
+      ),
+      semantics: const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: _scimPersistenceSchemaId,
+            atomicOperationId: 'tombstoneUser',
           ),
-          scope: AuthScimScope.usersWrite,
-          requestCodec: _resourceIdRequestCodec,
-          responseCodec: _emptyResponseCodec,
-          successStatusCode: 204,
-          responseHasBody: false,
-          handler: _deleteUser,
         ),
-        _endpoint(
-          id: 'scim.groups.list',
-          method: AuthOperationMethod.get,
-          path: '/scim/v2/Groups',
-          semantics: const AuthOperationSemantics.readOnly(),
-          scope: AuthScimScope.groupsRead,
-          requestCodec: _listGroupsRequestCodec,
-          responseCodec: _groupListResponseCodec,
-          handler: _listGroups,
-        ),
-        _endpoint(
-          id: 'scim.groups.get',
-          method: AuthOperationMethod.get,
-          path: '/scim/v2/Groups/{id}',
-          semantics: const AuthOperationSemantics.readOnly(),
-          scope: AuthScimScope.groupsRead,
-          requestCodec: _resourceIdRequestCodec,
-          responseCodec: _groupResponseCodec,
-          handler: _getGroup,
-        ),
-        _endpoint(
-          id: 'scim.groups.create',
-          method: AuthOperationMethod.post,
-          path: '/scim/v2/Groups',
-          semantics: const AuthOperationSemantics.mutation(
-            persistence: AuthMutationPersistence.durable(
-              atomicity: AuthMutationAtomicity.atomic,
-              reference: AuthPersistenceOperationReference(
-                schemaId: _scimPersistenceSchemaId,
-                atomicOperationId: 'createGroup',
-              ),
-            ),
-            replaySafety: AuthMutationReplaySafety.unguarded,
+        replaySafety: AuthMutationReplaySafety.idempotent,
+      ),
+      scope: AuthScimScope.usersWrite,
+      requestCodec: _resourceIdRequestCodec,
+      responseCodec: _emptyResponseCodec,
+      successStatusCode: 204,
+      responseHasBody: false,
+      handler: _deleteUser,
+    ),
+    _endpoint(
+      id: 'scim.groups.list',
+      method: AuthOperationMethod.get,
+      path: const AuthRoutePath('/scim/v2/Groups'),
+      semantics: const AuthOperationSemantics.readOnly(),
+      scope: AuthScimScope.groupsRead,
+      requestCodec: _listGroupsRequestCodec,
+      responseCodec: _groupListResponseCodec,
+      handler: _listGroups,
+    ),
+    _endpoint(
+      id: 'scim.groups.get',
+      method: AuthOperationMethod.get,
+      path: const AuthRoutePath(
+        '/scim/v2/Groups/{id}',
+        parameters: <AuthRouteParameterKey>[authScimResourceIdRouteParameter],
+      ),
+      semantics: const AuthOperationSemantics.readOnly(),
+      scope: AuthScimScope.groupsRead,
+      requestCodec: _resourceIdRequestCodec,
+      responseCodec: _groupResponseCodec,
+      handler: _getGroup,
+    ),
+    _endpoint(
+      id: 'scim.groups.create',
+      method: AuthOperationMethod.post,
+      path: const AuthRoutePath('/scim/v2/Groups'),
+      semantics: const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: _scimPersistenceSchemaId,
+            atomicOperationId: 'createGroup',
           ),
-          scope: AuthScimScope.groupsWrite,
-          requestCodec: _groupRequestCodec,
-          responseCodec: _groupResponseCodec,
-          successStatusCode: 201,
-          handler: _createGroup,
         ),
-        _endpoint(
-          id: 'scim.groups.replace',
-          method: AuthOperationMethod.put,
-          path: '/scim/v2/Groups/{id}',
-          semantics: const AuthOperationSemantics.mutation(
-            persistence: AuthMutationPersistence.durable(
-              atomicity: AuthMutationAtomicity.atomic,
-              reference: AuthPersistenceOperationReference(
-                schemaId: _scimPersistenceSchemaId,
-                atomicOperationId: 'replaceGroup',
-              ),
-            ),
-            replaySafety: AuthMutationReplaySafety.idempotent,
+        replaySafety: AuthMutationReplaySafety.unguarded,
+      ),
+      scope: AuthScimScope.groupsWrite,
+      requestCodec: _groupRequestCodec,
+      responseCodec: _groupResponseCodec,
+      successStatusCode: 201,
+      handler: _createGroup,
+    ),
+    _endpoint(
+      id: 'scim.groups.replace',
+      method: AuthOperationMethod.put,
+      path: const AuthRoutePath(
+        '/scim/v2/Groups/{id}',
+        parameters: <AuthRouteParameterKey>[authScimResourceIdRouteParameter],
+      ),
+      semantics: const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: _scimPersistenceSchemaId,
+            atomicOperationId: 'replaceGroup',
           ),
-          scope: AuthScimScope.groupsWrite,
-          requestCodec: _groupWithIdRequestCodec,
-          responseCodec: _groupResponseCodec,
-          handler: _replaceGroup,
         ),
-        _endpoint(
-          id: 'scim.groups.patch',
-          method: AuthOperationMethod.patch,
-          path: '/scim/v2/Groups/{id}',
-          semantics: const AuthOperationSemantics.mutation(
-            persistence: AuthMutationPersistence.durable(
-              atomicity: AuthMutationAtomicity.atomic,
-              reference: AuthPersistenceOperationReference(
-                schemaId: _scimPersistenceSchemaId,
-                atomicOperationId: 'patchGroup',
-              ),
-            ),
-            replaySafety: AuthMutationReplaySafety.unguarded,
+        replaySafety: AuthMutationReplaySafety.idempotent,
+      ),
+      scope: AuthScimScope.groupsWrite,
+      requestCodec: _groupWithIdRequestCodec,
+      responseCodec: _groupResponseCodec,
+      handler: _replaceGroup,
+    ),
+    _endpoint(
+      id: 'scim.groups.patch',
+      method: AuthOperationMethod.patch,
+      path: const AuthRoutePath(
+        '/scim/v2/Groups/{id}',
+        parameters: <AuthRouteParameterKey>[authScimResourceIdRouteParameter],
+      ),
+      semantics: const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: _scimPersistenceSchemaId,
+            atomicOperationId: 'patchGroup',
           ),
-          scope: AuthScimScope.groupsWrite,
-          requestCodec: _groupPatchWithIdRequestCodec,
-          responseCodec: _groupResponseCodec,
-          handler: _patchGroup,
         ),
-        _endpoint(
-          id: 'scim.groups.delete',
-          method: AuthOperationMethod.delete,
-          path: '/scim/v2/Groups/{id}',
-          semantics: const AuthOperationSemantics.mutation(
-            persistence: AuthMutationPersistence.durable(
-              atomicity: AuthMutationAtomicity.atomic,
-              reference: AuthPersistenceOperationReference(
-                schemaId: _scimPersistenceSchemaId,
-                atomicOperationId: 'tombstoneGroup',
-              ),
-            ),
-            replaySafety: AuthMutationReplaySafety.idempotent,
+        replaySafety: AuthMutationReplaySafety.unguarded,
+      ),
+      scope: AuthScimScope.groupsWrite,
+      requestCodec: _groupPatchWithIdRequestCodec,
+      responseCodec: _groupResponseCodec,
+      handler: _patchGroup,
+    ),
+    _endpoint(
+      id: 'scim.groups.delete',
+      method: AuthOperationMethod.delete,
+      path: const AuthRoutePath(
+        '/scim/v2/Groups/{id}',
+        parameters: <AuthRouteParameterKey>[authScimResourceIdRouteParameter],
+      ),
+      semantics: const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: _scimPersistenceSchemaId,
+            atomicOperationId: 'tombstoneGroup',
           ),
-          scope: AuthScimScope.groupsWrite,
-          requestCodec: _resourceIdRequestCodec,
-          responseCodec: _emptyResponseCodec,
-          successStatusCode: 204,
-          responseHasBody: false,
-          handler: _deleteGroup,
         ),
-      ];
+        replaySafety: AuthMutationReplaySafety.idempotent,
+      ),
+      scope: AuthScimScope.groupsWrite,
+      requestCodec: _resourceIdRequestCodec,
+      responseCodec: _emptyResponseCodec,
+      successStatusCode: 204,
+      responseHasBody: false,
+      handler: _deleteGroup,
+    ),
+  ];
 
   AuthEndpointDescriptor<TContext> _endpoint({
     required String id,
     required AuthOperationMethod method,
-    required String path,
+    required AuthRoutePath path,
     required AuthOperationSemantics semantics,
     required AuthScimScope scope,
     Set<AuthScimScope> alternateScopes = const <AuthScimScope>{},
@@ -770,8 +797,9 @@ final class ScimPlugin<TContext>
     csrfPolicy: AuthOperationCsrfPolicy.none,
     handler: (invocation, request) => _authorized(
       id,
-      invocation.context,
+      invocation,
       request,
+      path.parameters,
       <AuthScimScope>{scope, ...alternateScopes},
       handler,
     ),
@@ -779,8 +807,9 @@ final class ScimPlugin<TContext>
 
   Future<AuthEndpointHttpResponse> _authorized(
     String operation,
-    TContext context,
+    AuthOperationInvocation<TContext> invocation,
     Map<String, dynamic> rawRequest,
+    Iterable<AuthRouteParameterKey> pathParameters,
     Set<AuthScimScope> scopes,
     FutureOr<AuthEndpointHttpResponse> Function(
       AuthScimProvisioningContext context,
@@ -789,13 +818,19 @@ final class ScimPlugin<TContext>
     handler,
   ) async {
     final request = Map<String, dynamic>.of(rawRequest);
-    final authorization = request.remove('_authorization');
+    for (final parameter in pathParameters) {
+      request[parameter.name] = invocation.request.requirePath(parameter);
+    }
+    final authorization = invocation.request.headers['authorization'];
     AuthScimConnectionIdentity? connection;
     try {
       final token = _bearerToken(authorization);
       if (token == null) return _error(401, 'Unauthorized.');
       connection = await tokenResolver.resolve(
-        AuthScimBearerTokenRequest<TContext>(context: context, token: token),
+        AuthScimBearerTokenRequest<TContext>(
+          context: invocation.context,
+          token: token,
+        ),
       );
     } catch (error, stackTrace) {
       await _report(

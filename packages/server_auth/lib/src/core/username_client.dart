@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'client.dart';
+import 'plugin.dart';
 import 'models.dart';
 
 /// Installs only the username-first API on an [AuthClient].
@@ -49,27 +50,31 @@ final class AuthUsernameClient {
     required String password,
     String? email,
     String? captchaToken,
-  }) => _authenticate('/username/register', <String, dynamic>{
-    'username': username,
-    'email': ?email,
-    'password': password,
-    'captchaToken': ?captchaToken,
-  });
+  }) => _authenticate(
+    const AuthRoutePath('/username/register'),
+    <String, dynamic>{
+      'username': username,
+      'email': ?email,
+      'password': password,
+      'captchaToken': ?captchaToken,
+    },
+  );
 
   Future<AuthUsernameClientAuthentication> signIn({
     required String identifier,
     required String password,
     String? captchaToken,
-  }) => _authenticate('/username/sign-in', <String, dynamic>{
-    'identifier': identifier,
-    'password': password,
-    'captchaToken': ?captchaToken,
-  });
+  }) =>
+      _authenticate(const AuthRoutePath('/username/sign-in'), <String, dynamic>{
+        'identifier': identifier,
+        'password': password,
+        'captchaToken': ?captchaToken,
+      });
 
   Future<AuthUsernameClientChange> change({required String username}) async {
     final response = await transport.request(
       'POST',
-      '/username/change',
+      const AuthRoutePath('/username/change'),
       body: <String, dynamic>{'username': username},
     );
     final body = _mapBody(response.body);
@@ -92,7 +97,7 @@ final class AuthUsernameClient {
   Future<void> remove() async {
     final response = await transport.request(
       'POST',
-      '/username/remove',
+      const AuthRoutePath('/username/remove'),
       body: const <String, dynamic>{},
     );
     if (_mapBody(response.body)['status'] != 'username_removed') {
@@ -101,7 +106,7 @@ final class AuthUsernameClient {
   }
 
   Future<AuthUsernameClientAuthentication> _authenticate(
-    String path,
+    AuthRoutePath path,
     Map<String, dynamic> request,
   ) async {
     final response = await transport.request('POST', path, body: request);

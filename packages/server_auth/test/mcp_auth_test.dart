@@ -32,13 +32,14 @@ void main() {
       final protectedEndpoint = feature.endpoints.singleWhere(
         (endpoint) => endpoint.id == 'mcpAuth.protectedResourceMetadata',
       );
+      expect(protectedEndpoint.mount, AuthEndpointMount.root);
       final protectedPayload = Map<String, dynamic>.from(
         await protectedEndpoint.invoke(
               const AuthOperationInvocation<Object>(
                 context: Object(),
                 user: null,
               ),
-              const <String, dynamic>{},
+              AuthEndpointRequest(body: const <String, dynamic>{}),
             )
             as Map,
       );
@@ -51,18 +52,29 @@ void main() {
       final serverEndpoint = feature.endpoints.singleWhere(
         (endpoint) => endpoint.id == 'mcpAuth.authorizationServerMetadata',
       );
+      expect(serverEndpoint.mount, AuthEndpointMount.root);
       final serverPayload = Map<String, dynamic>.from(
         await serverEndpoint.invoke(
               const AuthOperationInvocation<Object>(
                 context: Object(),
                 user: null,
               ),
-              const <String, dynamic>{},
+              AuthEndpointRequest(body: const <String, dynamic>{}),
             )
             as Map,
       );
       expect(serverPayload['issuer'], 'https://auth.example.test');
       expect(serverPayload['code_challenge_methods_supported'], ['S256']);
+      final metadataClients = feature.clientOperations.where(
+        (operation) => operation.path.template.startsWith('/.well-known/'),
+      );
+      expect(metadataClients, hasLength(2));
+      expect(
+        metadataClients.every(
+          (operation) => operation.mount == AuthEndpointMount.root,
+        ),
+        isTrue,
+      );
     },
   );
 
@@ -129,14 +141,16 @@ void main() {
               context: 'request-context',
               user: null,
             ),
-            const <String, dynamic>{
-              'client_name': 'Example MCP client',
-              'redirect_uris': ['https://client.example/callback'],
-              'grant_types': ['authorization_code'],
-              'response_types': ['code'],
-              'token_endpoint_auth_method': 'none',
-              'scope': 'mcp:read',
-            },
+            AuthEndpointRequest(
+              body: const <String, dynamic>{
+                'client_name': 'Example MCP client',
+                'redirect_uris': ['https://client.example/callback'],
+                'grant_types': ['authorization_code'],
+                'response_types': ['code'],
+                'token_endpoint_auth_method': 'none',
+                'scope': 'mcp:read',
+              },
+            ),
           )
           as Map,
     );
@@ -148,7 +162,11 @@ void main() {
     expect(captured?.scope, 'mcp:read');
     expect(payload['client_id'], 'client-1');
     expect(payload['redirect_uris'], ['https://client.example/callback']);
-    expect(feature.clientOperations.single.serverOnly, isTrue);
+    final clientOperation = feature.clientOperations.singleWhere(
+      (operation) => operation.id == 'mcpAuth.registerClient',
+    );
+    expect(clientOperation.mount, AuthEndpointMount.auth);
+    expect(clientOperation.serverOnly, isFalse);
     expect(
       endpoint.rateLimitOperation,
       const AuthRateLimitOperation('mcp_auth', 'register_client'),
@@ -177,7 +195,7 @@ void main() {
 
     Future<Object?> invoke(Map<String, dynamic> input) async => endpoint.invoke(
       const AuthOperationInvocation<Object>(context: Object(), user: null),
-      input,
+      AuthEndpointRequest(body: input),
     );
 
     await expectLater(

@@ -309,43 +309,69 @@ final class OrganizationPlugin<TContext>
     'organization.removeTeamMember',
   ];
 
-  static const Map<String, String> _paths = {
-    'organization.create': '/organization/create',
-    'organization.checkSlug': '/organization/check-slug',
-    'organization.list': '/organization/list',
-    'organization.get': '/organization/get',
-    'organization.getFull': '/organization/get-full',
-    'organization.update': '/organization/update',
-    'organization.delete': '/organization/delete',
-    'organization.setActive': '/organization/set-active',
-    'organization.listMembers': '/organization/list-members',
-    'organization.removeMember': '/organization/remove-member',
-    'organization.updateMemberRole': '/organization/update-member-role',
-    'organization.getActiveMember': '/organization/get-active-member',
-    'organization.getActiveMemberRole': '/organization/get-active-member-role',
-    'organization.leave': '/organization/leave',
-    'organization.inviteMember': '/organization/invite-member',
-    'organization.acceptInvitation': '/organization/accept-invitation',
-    'organization.rejectInvitation': '/organization/reject-invitation',
-    'organization.cancelInvitation': '/organization/cancel-invitation',
-    'organization.getInvitation': '/organization/get-invitation',
-    'organization.listInvitations': '/organization/list-invitations',
-    'organization.listUserInvitations': '/organization/list-user-invitations',
-    'organization.hasPermission': '/organization/has-permission',
-    'organization.createRole': '/organization/create-role',
-    'organization.listRoles': '/organization/list-roles',
-    'organization.getRole': '/organization/get-role',
-    'organization.updateRole': '/organization/update-role',
-    'organization.deleteRole': '/organization/delete-role',
-    'organization.createTeam': '/organization/create-team',
-    'organization.listTeams': '/organization/list-teams',
-    'organization.updateTeam': '/organization/update-team',
-    'organization.removeTeam': '/organization/remove-team',
-    'organization.setActiveTeam': '/organization/set-active-team',
-    'organization.listUserTeams': '/organization/list-user-teams',
-    'organization.listTeamMembers': '/organization/list-team-members',
-    'organization.addTeamMember': '/organization/add-team-member',
-    'organization.removeTeamMember': '/organization/remove-team-member',
+  static const Map<String, AuthRoutePath> _paths = {
+    'organization.create': AuthRoutePath('/organization/create'),
+    'organization.checkSlug': AuthRoutePath('/organization/check-slug'),
+    'organization.list': AuthRoutePath('/organization/list'),
+    'organization.get': AuthRoutePath('/organization/get'),
+    'organization.getFull': AuthRoutePath('/organization/get-full'),
+    'organization.update': AuthRoutePath('/organization/update'),
+    'organization.delete': AuthRoutePath('/organization/delete'),
+    'organization.setActive': AuthRoutePath('/organization/set-active'),
+    'organization.listMembers': AuthRoutePath('/organization/list-members'),
+    'organization.removeMember': AuthRoutePath('/organization/remove-member'),
+    'organization.updateMemberRole': AuthRoutePath(
+      '/organization/update-member-role',
+    ),
+    'organization.getActiveMember': AuthRoutePath(
+      '/organization/get-active-member',
+    ),
+    'organization.getActiveMemberRole': AuthRoutePath(
+      '/organization/get-active-member-role',
+    ),
+    'organization.leave': AuthRoutePath('/organization/leave'),
+    'organization.inviteMember': AuthRoutePath('/organization/invite-member'),
+    'organization.acceptInvitation': AuthRoutePath(
+      '/organization/accept-invitation',
+    ),
+    'organization.rejectInvitation': AuthRoutePath(
+      '/organization/reject-invitation',
+    ),
+    'organization.cancelInvitation': AuthRoutePath(
+      '/organization/cancel-invitation',
+    ),
+    'organization.getInvitation': AuthRoutePath('/organization/get-invitation'),
+    'organization.listInvitations': AuthRoutePath(
+      '/organization/list-invitations',
+    ),
+    'organization.listUserInvitations': AuthRoutePath(
+      '/organization/list-user-invitations',
+    ),
+    'organization.hasPermission': AuthRoutePath('/organization/has-permission'),
+    'organization.createRole': AuthRoutePath('/organization/create-role'),
+    'organization.listRoles': AuthRoutePath('/organization/list-roles'),
+    'organization.getRole': AuthRoutePath('/organization/get-role'),
+    'organization.updateRole': AuthRoutePath('/organization/update-role'),
+    'organization.deleteRole': AuthRoutePath('/organization/delete-role'),
+    'organization.createTeam': AuthRoutePath('/organization/create-team'),
+    'organization.listTeams': AuthRoutePath('/organization/list-teams'),
+    'organization.updateTeam': AuthRoutePath('/organization/update-team'),
+    'organization.removeTeam': AuthRoutePath('/organization/remove-team'),
+    'organization.setActiveTeam': AuthRoutePath(
+      '/organization/set-active-team',
+    ),
+    'organization.listUserTeams': AuthRoutePath(
+      '/organization/list-user-teams',
+    ),
+    'organization.listTeamMembers': AuthRoutePath(
+      '/organization/list-team-members',
+    ),
+    'organization.addTeamMember': AuthRoutePath(
+      '/organization/add-team-member',
+    ),
+    'organization.removeTeamMember': AuthRoutePath(
+      '/organization/remove-team-member',
+    ),
   };
 
   static const Set<String> _readOperations = {
@@ -472,6 +498,7 @@ final class OrganizationPlugin<TContext>
       id: endpoint.id,
       method: endpoint.method,
       path: endpoint.path,
+      mount: endpoint.mount,
       serverOnly: endpoint.serverOnly,
     ),
   );

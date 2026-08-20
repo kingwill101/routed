@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'client.dart';
+import 'plugin.dart';
 import 'email_otp_store.dart';
 import 'models.dart';
 import 'providers.dart' show EmailProvider;
@@ -41,10 +42,14 @@ final class AuthMagicLinkClient {
     required String email,
     String? callbackUrl,
   }) async {
-    final response = await transport.mutate('POST', '/signin/$_providerPath', {
-      'email': email,
-      'callbackUrl': ?callbackUrl,
-    });
+    final response = await transport.mutate(
+      'POST',
+      authSignInProviderRoute,
+      {'email': email, 'callbackUrl': ?callbackUrl},
+      pathParameters: <AuthRouteParameterKey, String>{
+        authProviderRouteParameter: _providerPath,
+      },
+    );
     final body = _mapBody(response.body);
     return AuthClientVerificationSent(
       email: body['email']?.toString() ?? email,
@@ -58,7 +63,10 @@ final class AuthMagicLinkClient {
   }) async {
     final response = await transport.request(
       'GET',
-      '/callback/$_providerPath',
+      authCallbackProviderRoute,
+      pathParameters: <AuthRouteParameterKey, String>{
+        authProviderRouteParameter: _providerPath,
+      },
       queryParameters: {'email': email, 'token': token},
       followRedirects: false,
     );
@@ -94,7 +102,7 @@ final class AuthEmailOtpClient {
   }) async {
     await transport.request(
       'POST',
-      '/email-otp/send-verification-otp',
+      const AuthRoutePath('/email-otp/send-verification-otp'),
       body: {'email': email, 'type': _emailOtpTypeName(type)},
     );
   }
@@ -106,7 +114,7 @@ final class AuthEmailOtpClient {
   }) async {
     await transport.request(
       'POST',
-      '/email-otp/check-verification-otp',
+      const AuthRoutePath('/email-otp/check-verification-otp'),
       body: {'email': email, 'type': _emailOtpTypeName(type), 'otp': otp},
     );
   }
@@ -119,16 +127,18 @@ final class AuthEmailOtpClient {
   }) async {
     final response = await transport.request(
       'POST',
-      '/sign-in/email-otp',
+      const AuthRoutePath('/sign-in/email-otp'),
       body: {'email': email, 'otp': otp, 'name': ?name, 'image': ?image},
     );
     return _sessionFromBody(response.body);
   }
 
   Future<AuthUser> verifyEmail({required String otp}) async {
-    final response = await transport.mutate('POST', '/email-otp/verify-email', {
-      'otp': otp,
-    });
+    final response = await transport.mutate(
+      'POST',
+      const AuthRoutePath('/email-otp/verify-email'),
+      {'otp': otp},
+    );
     final user = _mapBody(response.body)['user'];
     if (user is! Map) {
       throw const FormatException('Invalid email OTP response');
@@ -192,10 +202,10 @@ Map<String, dynamic> _mapBody(String body) {
 
 String _pathSegment(String value) {
   final trimmed = value.trim();
-  if (trimmed.isEmpty || trimmed.contains('/')) {
-    throw ArgumentError.value(value, 'provider', 'must be one path segment');
+  if (trimmed.isEmpty) {
+    throw ArgumentError.value(value, 'provider', 'must not be empty');
   }
-  return Uri.encodeComponent(trimmed);
+  return trimmed;
 }
 
 void _validateProvider(String provider) {
