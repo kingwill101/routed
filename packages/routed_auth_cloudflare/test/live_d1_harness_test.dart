@@ -225,6 +225,8 @@ void main() {
             'sessions.rotation-contention',
             'scim.create_replay',
             'scim.rotate_atomic',
+            'username.atomic',
+            'oauth.authorization-code-exchange',
             'd1.batch-rollback',
             'd1.migration-prefix-isolation',
           ]),

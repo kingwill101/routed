@@ -286,6 +286,32 @@ final class DefaultLiveD1ConformanceExecutor
       }
 
       results.add(
+        await _runAdapterCase('username.atomic', () async {
+          final schema = await newSchema();
+          try {
+            await verifyAuthUsernameStoreConformance(
+              AuthUsernameStoreConformanceFixture(
+                store: CloudflareD1AuthStore(database, schema: schema),
+              ),
+            );
+          } finally {
+            await disposeSchema(schema);
+          }
+        }),
+      );
+      results.add(
+        await _runAdapterCase('oauth.authorization-code-exchange', () async {
+          await verifyOAuthAuthorizationCodeExchangeStoreConformance(() async {
+            final schema = await newSchema();
+            return CloudflareD1AuthStore(
+              database,
+              schema: schema,
+            ).oauthAuthorizationCodeExchangeStore;
+          });
+        }),
+      );
+
+      results.add(
         await _runAdapterCase(
           'd1.batch-rollback',
           () => _verifyBatchRollback(database, newSchema, disposeSchema),
