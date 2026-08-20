@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.0
 
 - Export namespaced `AuthRateLimitOperation` values so opt-in auth features can
   contribute operations without extending the legacy core enum.
@@ -8,6 +8,4 @@
 - Aligned the adapter with the serialized, method-aware rate-limit runtime.
 - Added `RoutedAuthRateLimiter` so existing rate-limit policies can enforce
   `server_auth` operations through `AuthOptions.rateLimiter`.
-
-## 0.1.0
 - Initial adapter (PR I)
