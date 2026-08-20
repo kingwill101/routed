@@ -1,5 +1,10 @@
 ## Unreleased
 
+- Add `RoutedAuthDeploymentBinding` helpers to bind typed auth options, create
+  the matching service provider, and apply explicit proxy policy to the Routed
+  engine configuration.
+- Publish `package:routed_auth/testing.dart` with a framework-neutral auth
+  runtime conformance contract shared by IO, Node, and Fetch host tests.
 - Use plugin terminology consistently across Routed auth endpoint mounting and
   management internals, and update public examples to compose typed client
   plugins through `AuthClient`.

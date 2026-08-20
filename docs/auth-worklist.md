@@ -13,7 +13,7 @@ core auth model.
 The work is intentionally split between framework-agnostic capabilities in
 `server_auth` and HTTP/session integration in `routed_auth`.
 
-> Status refreshed: 2026-08-19. Checked items describe capabilities currently
+> Status refreshed: 2026-08-20. Checked items describe capabilities currently
 > present in the workspace; unchecked items are the remaining product or
 > validation work.
 
@@ -112,14 +112,15 @@ The work is intentionally split between framework-agnostic capabilities in
   updates.
 - [x] Add `none`-attestation/ES256 registration and assertion verification with
   exact origin/RP-ID binding, user-presence checks, and replay protection.
+- [x] Add packed self/certificate attestation with ES256 and RS256 plus FIDO U2F
+  attestation, including browser DER signatures and bounded certificate/chain
+  validation.
 - [x] Expose the registration, assertion, listing, and deletion contracts
   through the typed plugin registry, Routed routes, and `AuthClient`.
-- [ ] Finish the broader WebAuthn subsystem. Routed now supports `none` and
-  packed self/certificate attestation with ES256 and RS256, including browser
-  DER signatures and packed-certificate validation. It issues a server-side
-  session after a verified assertion when that strategy is configured, and
-  passkeys can be renamed through the owner-checked store, plugin endpoint, and
-  client API. EdDSA and the remaining attestation formats are still pending.
+- [ ] Finish the broader WebAuthn subsystem. Session issuance and passkey rename
+  are implemented, but EdDSA and the remaining attestation formats are still
+  pending. Attestation-root trust and FIDO metadata require an explicit policy
+  before Routed can make hardware-provenance claims.
 - [x] Add an optional native `TwoFactorPlugin` with TOTP enrollment
   verification, protected-secret and typed-store boundaries, recovery-code
   hashing and atomic one-time consumption, lockout handling, disablement, and
@@ -158,18 +159,21 @@ The work is intentionally split between framework-agnostic capabilities in
 
 ## P2: Dart developer experience and platform integration
 
-- [ ] Add typed persistence adapters for the supported Routed storage paths,
-  including schema/migration guidance for SQL and D1.
+- [ ] Complete typed persistence adapters for the supported Routed storage
+  paths. `routed_auth_cloudflare` now supplies a typed, migrated D1 `AuthStore`
+  and passes local conformance/contention tests; a deployed live-D1 run, broader
+  SQL adapters, and a D1-compatible plugin-deletion transaction remain open.
 - [x] Define a stable public adapter conformance suite that can run against
-  every persistence implementation.
+  every persistence implementation through `package:server_auth/testing.dart`.
 - [x] Add a small, typed Dart client contract for browser/mobile auth calls
   without requiring application code to duplicate route and cookie
   conventions.
 - [x] Split the client contract into typed plugin modules while preserving a
   shared transport, cookie store, CSRF policy, error model, and request
   lifecycle.
-- [ ] Add ergonomic typed configuration builders or presets for common auth
-  deployments while keeping security-sensitive defaults explicit and safe.
+- [x] Add typed local-development, secure-session, JWT API, and service API-key
+  deployment presets with explicit production boundaries, plus Routed binding
+  helpers for options, provider setup, and proxy-aware engine configuration.
 - [x] Make plugins contribute their routes, schemas, hooks, and rate-limit
   rules through the public composition API instead of requiring consumers to
   edit central route switches.
@@ -178,8 +182,10 @@ The work is intentionally split between framework-agnostic capabilities in
   client-side backoff semantics.
 - [x] Add OpenAPI 3.1 endpoint and model generation for core auth routes and
   composed plugin routes, with generated-client compatibility tests.
-- [ ] Add reusable auth test utilities for route bootstrapping, cookie/session
-  handling, provider fixtures, and end-to-end plugin flows.
+- [x] Publish framework-neutral store and runtime conformance APIs for durable
+  adapters and IO, Node, and Fetch hosts.
+- [ ] Add reusable provider fixtures and end-to-end helpers for plugin-specific
+  flows beyond the shared runtime conformance contract.
 - [x] Update the package READMEs and examples only after the public APIs and
   security defaults settle.
 
@@ -259,11 +265,12 @@ native auth model.
   trusted-proxy configuration, explicit CSRF opt-out behavior, safe cookie
   defaults with a local insecure opt-out, and accidental in-memory persistence
   in production configuration.
-- [ ] Run integration tests for `routed_io`, `routed_node`, and Cloudflare
-  Fetch/D1-compatible adapters where the capability is supported.
-- [ ] Keep the full auth workspace, adapter integration, and conformance test
-  suites warning-free. The current `server_auth` and `routed_auth` suites and
-  analyzer pass locally; adapter coverage remains.
+- [x] Run the public auth runtime contract through native `routed_io`, portable
+  and native `routed_node`, and native Cloudflare Fetch request paths.
+- [ ] Run the D1 conformance harness against a deployed or remote-bound
+  Cloudflare database; compilation and local emulation are not live validation.
+- [x] Keep the current auth packages, host adapter integrations, and public
+  conformance suites analyzer-clean and passing on `master`.
 
 ## Definition of done
 
@@ -274,7 +281,9 @@ native auth model.
   replay-safety story.
 - [ ] Every auth endpoint has documented authentication, CSRF/origin,
   rate-limit, redirect, and error semantics.
-- [ ] The same auth behavior is verified through both `routed_io` and
-  `routed_node` where the plugin is advertised.
+- [x] The shared credentials/session runtime contract is verified through
+  `routed_io`, native Node, and native Cloudflare Fetch request paths.
+- [ ] Every advertised plugin flow has matching end-to-end coverage across its
+  applicable host runtimes.
 - [ ] Security-sensitive defaults are safe without requiring users to discover
   undocumented configuration switches.

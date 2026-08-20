@@ -1,5 +1,16 @@
 ## Unreleased
 
+- Consolidate application-hosted OAuth 2.0 and OpenID Connect on
+  `OAuthProviderModePlugin`, with digest-at-rest one-time authorization codes,
+  PKCE, grants, refresh, introspection, userinfo, discovery, asymmetric ID-token
+  signing, and JWKS.
+- Add RFC 8628 device-token polling with server intervals, `Retry-After`,
+  `slow_down` backoff, deadlines, and caller cancellation.
+- Add typed local-development, secure-session, JWT API, and service API-key
+  deployment presets with explicit production store, origin, proxy, delivery,
+  rate-limit, and verified-email decisions.
+- Publish `package:server_auth/testing.dart` with a framework-neutral
+  `AuthStoreConformanceSuite` for durable adapter implementations.
 - Rename auth capability APIs to server plugins and add an opt-in typed client plugin
   registry so applications select only the client APIs they use.
 - Keep the shared auth transport public while hiding the transport-backed core
@@ -30,11 +41,12 @@
 - Add typed account tombstone and retention-purge capabilities; self-service
   deletion now retains only a stable unavailable user ID and deletion time.
 
-- Added the opt-in typed `WebAuthnPlugin` with digest-at-rest one-time
-  challenges, durable authenticator/counter contracts, `none` attestation,
-  ES256 assertion verification, exact origin/RP-ID binding, and replay-safe
-  compare-and-set counter updates. Broader COSE algorithms and session issuance
-  remain follow-up capabilities.
+- Add the opt-in typed `WebAuthnPlugin` with digest-at-rest one-time challenges,
+  durable authenticator/counter contracts, `none`, packed self/certificate, and
+  FIDO U2F attestation, browser DER ES256 assertions, ES256/RS256 packed
+  verification, exact origin/RP-ID binding, and replay-safe counters. EdDSA,
+  remaining attestation formats, trust roots, and FIDO metadata remain explicit
+  follow-up work.
 - Make password reset/change fail closed by rotating JWT versions and revoking
   server sessions before replacing credentials.
 - Derive `AuthStoreMode` when framework composition replaces the configured

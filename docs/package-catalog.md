@@ -1,7 +1,7 @@
 # Routed package catalog
 
 Package inventory for the Routed ecosystem. Versions below match the package
-manifests in this checkout as of 2026-08-19.
+manifests in this checkout as of 2026-08-20.
 
 ## Framework and feature packages
 
@@ -9,7 +9,8 @@ manifests in this checkout as of 2026-08-19.
 | --- | --- | --- |
 | [`routed`](https://github.com/kingwill101/routed/tree/master/packages/routed) | `0.5.0` | Batteries-included framework facade and official provider catalogue |
 | [`routed_core`](https://github.com/kingwill101/routed/tree/master/packages/routed_core) | `0.4.0` | Slim engine, routing, contexts, configuration, and lifecycle |
-| [`routed_auth`](https://github.com/kingwill101/routed/tree/master/packages/routed_auth) | `0.2.0` | Routed authentication and authorization integration |
+| [`routed_auth`](https://github.com/kingwill101/routed/tree/master/packages/routed_auth) | `0.2.0` | Routed auth plugin mounting, typed deployment binding, and runtime conformance support |
+| [`routed_auth_cloudflare`](https://github.com/kingwill101/routed/tree/master/packages/routed_auth_cloudflare) | `0.1.0` | Durable Cloudflare D1 `AuthStore` adapter and typed migrations |
 | [`routed_cache`](https://github.com/kingwill101/routed/tree/master/packages/routed_cache) | `0.2.0` | Cache services and context helpers for Routed |
 | [`routed_logging`](https://github.com/kingwill101/routed/tree/master/packages/routed_logging) | `0.2.0` | HTTP logging provider and request logger helpers |
 | [`routed_observability`](https://github.com/kingwill101/routed/tree/master/packages/routed_observability) | `0.1.0` | Health, metrics, tracing, and error observation |
@@ -21,14 +22,14 @@ manifests in this checkout as of 2026-08-19.
 | [`routed_http`](https://github.com/kingwill101/routed/tree/master/packages/routed_http) | `0.1.0` | Binding, multipart, negotiation, buffered gzip compression, SSE, and conditional requests |
 | [`routed_hotwire`](https://github.com/kingwill101/routed/tree/master/packages/routed_hotwire) | `0.1.4` | Turbo and Stimulus response helpers |
 | [`routed_validation`](https://github.com/kingwill101/routed/tree/master/packages/routed_validation) | `0.1.0` | Validation rules and validation utilities |
-| [`routed_openapi`](https://github.com/kingwill101/routed/tree/master/packages/routed_openapi) | `0.1.0` | OpenAPI route metadata and manifest generation |
+| [`routed_openapi`](https://github.com/kingwill101/routed/tree/master/packages/routed_openapi) | `0.1.0` | OpenAPI route manifests plus OpenAPI 3.1 generation from composed auth plugins |
 
 ## Host runtimes
 
 | Package | Version | Role |
 | --- | --- | --- |
 | [`routed_io`](https://github.com/kingwill101/routed/tree/master/packages/routed_io) | `0.1.0` | `dart:io` server transport |
-| [`routed_node`](https://github.com/kingwill101/routed/tree/master/packages/routed_node) | `0.1.0` | Node.js, Bun, Deno, and Fetch-based edge transports |
+| [`routed_node`](https://github.com/kingwill101/routed/tree/master/packages/routed_node) | `0.1.0` | Node.js, Bun, Deno, and Fetch/Cloudflare edge transports and bindings |
 | [`server_native`](https://github.com/kingwill101/routed/tree/master/packages/server_native) | `0.1.3+1` | Rust-backed native HTTP server runtime |
 
 ## Server runtimes and contracts
@@ -36,7 +37,7 @@ manifests in this checkout as of 2026-08-19.
 | Package | Version | Role |
 | --- | --- | --- |
 | [`server_contracts`](https://github.com/kingwill101/routed/tree/master/packages/server_contracts) | `0.1.0` | Framework-agnostic interfaces and value contracts |
-| [`server_auth`](https://github.com/kingwill101/routed/tree/master/packages/server_auth) | `0.1.0` | Authentication providers, JWT, OAuth, and authorization primitives |
+| [`server_auth`](https://github.com/kingwill101/routed/tree/master/packages/server_auth) | `0.1.0` | Typed auth plugins, stores, clients, OAuth/OIDC, WebAuthn, deployment presets, and conformance support |
 | [`server_cache`](https://github.com/kingwill101/routed/tree/master/packages/server_cache) | `0.2.0` | Framework-agnostic cache stores and repositories |
 | [`server_sessions`](https://github.com/kingwill101/routed/tree/master/packages/server_sessions) | `0.1.0` | Framework-agnostic session runtime |
 | [`server_storage`](https://github.com/kingwill101/routed/tree/master/packages/server_storage) | `0.1.0` | Framework-agnostic storage runtime |

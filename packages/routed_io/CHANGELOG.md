@@ -1,3 +1,8 @@
+## Unreleased
+
+- Verify native `dart:io` request handling against the public Routed auth
+  runtime conformance contract.
+
 ## 0.1.0
 
 - Add `serveIo(...)` and `serveSecureIo(...)` boot helpers for Routed apps.

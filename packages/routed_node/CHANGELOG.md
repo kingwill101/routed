@@ -1,5 +1,9 @@
 ## Unreleased
 
+- Enumerate native Fetch headers at the portable request boundary and retain
+  the actual bound Node listener port, including ephemeral-port listeners.
+- Verify native Node and Cloudflare Fetch request handling against the same
+  public Routed auth runtime conformance contract used by `routed_io`.
 - Adopted null-aware collection elements in the Cloudflare Fetch binding
   serialization paths so the host adapter remains analyzer-clean.
 
