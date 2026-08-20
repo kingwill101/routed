@@ -1,14 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:routed_auth/testing.dart';
 import 'package:routed_io/routed_io.dart';
 import 'package:test/test.dart';
 
-import '../../routed_auth/test/integration/support/runtime_auth_contract.dart';
-
 void main() {
   test('dart:io listener satisfies the routed auth runtime contract', () async {
-    final engine = createRuntimeAuthEngine();
+    final engine = createAuthRuntimeConformanceEngine();
     await engine.initialize();
     final handle = await serveIo(
       engine,
@@ -24,17 +23,17 @@ void main() {
     });
     final origin = Uri.parse('http://127.0.0.1:${handle.port}');
 
-    await verifyRuntimeAuthContract(
+    await verifyAuthRuntimeConformance(
       origin: origin,
       send: (request) => _send(client, origin, request),
     );
   });
 }
 
-Future<RuntimeAuthResponse> _send(
+Future<AuthRuntimeConformanceResponse> _send(
   HttpClient client,
   Uri origin,
-  RuntimeAuthRequest source,
+  AuthRuntimeConformanceRequest source,
 ) async {
   final request = await client.openUrl(
     source.method,
@@ -53,7 +52,7 @@ Future<RuntimeAuthResponse> _send(
   response.headers.forEach((name, values) {
     headers[name] = List<String>.from(values);
   });
-  return RuntimeAuthResponse(
+  return AuthRuntimeConformanceResponse(
     statusCode: response.statusCode,
     headers: headers,
     body: await utf8.decodeStream(response),

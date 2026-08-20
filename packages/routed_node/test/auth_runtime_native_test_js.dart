@@ -1,11 +1,10 @@
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
+import 'package:routed_auth/testing.dart';
 import 'package:routed_node/cloudflare.dart';
 import 'package:routed_node/node.dart';
 import 'package:test/test.dart';
-
-import '../../routed_auth/test/integration/support/runtime_auth_contract.dart';
 
 const _nodeOrigin = 'http://127.0.0.1';
 const _cloudflareOrigin = 'https://runtime.example';
@@ -14,7 +13,7 @@ void runNativeAuthRuntimeTests() {
   _stabilizeNodeCryptoBinding();
 
   test('native Node listener satisfies the auth runtime contract', () async {
-    final engine = createRuntimeAuthEngine();
+    final engine = createAuthRuntimeConformanceEngine();
     await engine.initialize();
     final handle = await serveNode(
       engine,
@@ -24,7 +23,7 @@ void runNativeAuthRuntimeTests() {
     );
     final origin = Uri.parse('$_nodeOrigin:${handle.port}');
     try {
-      await verifyRuntimeAuthContract(
+      await verifyAuthRuntimeConformance(
         origin: origin,
         send: (request) => _sendWithFetch(origin, request),
       );
@@ -37,11 +36,11 @@ void runNativeAuthRuntimeTests() {
   test(
     'native Cloudflare Fetch export satisfies the auth runtime contract',
     () async {
-      final engine = createRuntimeAuthEngine();
+      final engine = createAuthRuntimeConformanceEngine();
       await engine.initialize();
       try {
         defineCloudflareFetch(engine);
-        await verifyRuntimeAuthContract(
+        await verifyAuthRuntimeConformance(
           origin: Uri.parse(_cloudflareOrigin),
           send: (request) => _sendToCloudflareExport(request),
         );
@@ -53,15 +52,15 @@ void runNativeAuthRuntimeTests() {
 
   test('native Cloudflare Fetch startup errors are generic', () async {
     defineCloudflareFetchAsync(
-      Future.error(StateError(runtimeAuthFailureMarker)),
+      Future.error(StateError(authRuntimeConformanceFailureMarker)),
     );
     final response = await _sendToCloudflareExport(
-      const RuntimeAuthRequest(method: 'GET', path: '/auth/session'),
+      const AuthRuntimeConformanceRequest(method: 'GET', path: '/auth/session'),
     );
 
     expect(response.statusCode, 500);
     expect(response.body, 'Internal Server Error');
-    expect(response.body, isNot(contains(runtimeAuthFailureMarker)));
+    expect(response.body, isNot(contains(authRuntimeConformanceFailureMarker)));
   });
 }
 
@@ -81,9 +80,9 @@ void _stabilizeNodeCryptoBinding() {
   );
 }
 
-Future<RuntimeAuthResponse> _sendWithFetch(
+Future<AuthRuntimeConformanceResponse> _sendWithFetch(
   Uri origin,
-  RuntimeAuthRequest request,
+  AuthRuntimeConformanceRequest request,
 ) async {
   final fetch = globalContext.getProperty('fetch'.toJS) as JSFunction;
   final response = await _invokeFetch(
@@ -94,8 +93,8 @@ Future<RuntimeAuthResponse> _sendWithFetch(
   return _readResponse(response);
 }
 
-Future<RuntimeAuthResponse> _sendToCloudflareExport(
-  RuntimeAuthRequest request,
+Future<AuthRuntimeConformanceResponse> _sendToCloudflareExport(
+  AuthRuntimeConformanceRequest request,
 ) async {
   final handler =
       globalContext.getProperty('__routed_fetch__'.toJS) as JSFunction;
@@ -113,14 +112,14 @@ Future<RuntimeAuthResponse> _sendToCloudflareExport(
 Future<JSObject> _invokeFetch(
   JSFunction fetch,
   String url,
-  RuntimeAuthRequest request,
+  AuthRuntimeConformanceRequest request,
 ) async {
   final promise = fetch.callAsFunction(null, url.toJS, _requestInit(request));
   final response = await (promise as JSPromise<JSAny?>).toDart;
   return response as JSObject;
 }
 
-JSObject _requestInit(RuntimeAuthRequest request) {
+JSObject _requestInit(AuthRuntimeConformanceRequest request) {
   final init = JSObject()
     ..setProperty('method'.toJS, request.method.toJS)
     ..setProperty('headers'.toJS, request.headers.jsify());
@@ -129,7 +128,7 @@ JSObject _requestInit(RuntimeAuthRequest request) {
   return init;
 }
 
-Future<RuntimeAuthResponse> _readResponse(JSObject response) async {
+Future<AuthRuntimeConformanceResponse> _readResponse(JSObject response) async {
   final status = (response.getProperty('status'.toJS) as JSNumber).toDartInt;
   final headersObject = response.getProperty('headers'.toJS) as JSObject;
   final headers = <String, List<String>>{};
@@ -143,7 +142,7 @@ Future<RuntimeAuthResponse> _readResponse(JSObject response) async {
   }
   final bodyPromise = response.callMethod<JSAny?>('text'.toJS);
   final body = await (bodyPromise as JSPromise<JSAny?>).toDart;
-  return RuntimeAuthResponse(
+  return AuthRuntimeConformanceResponse(
     statusCode: status,
     headers: headers,
     body: (body as JSString).toDart,

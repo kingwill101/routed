@@ -2,17 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:routed_auth/testing.dart';
 import 'package:routed_node/routed_node.dart';
 import 'package:test/test.dart';
-
-import '../../routed_auth/test/integration/support/runtime_auth_contract.dart';
 
 const _origin = 'https://runtime.example';
 
 final class _NodeIncoming implements NodeIncomingView {
   _NodeIncoming(this.source);
 
-  final RuntimeAuthRequest source;
+  final AuthRuntimeConformanceRequest source;
 
   @override
   String get method => source.method;
@@ -64,7 +63,7 @@ final class _NodeOutgoing implements NodeServerResponseView {
 final class _FetchRequest implements FetchRequestView {
   _FetchRequest(this.source);
 
-  final RuntimeAuthRequest source;
+  final AuthRuntimeConformanceRequest source;
 
   @override
   String get method => source.method;
@@ -89,11 +88,11 @@ final class _FetchRequest implements FetchRequestView {
 
 void main() {
   test('Node portable adapter satisfies the auth runtime contract', () async {
-    final engine = createRuntimeAuthEngine();
+    final engine = createAuthRuntimeConformanceEngine();
     await engine.initialize();
     addTearDown(engine.close);
 
-    await verifyRuntimeAuthContract(
+    await verifyAuthRuntimeConformance(
       origin: Uri.parse(_origin),
       send: (source) async {
         final outgoing = _NodeOutgoing();
@@ -103,7 +102,7 @@ void main() {
           outgoing,
           baseUri: Uri.parse(_origin),
         );
-        return RuntimeAuthResponse(
+        return AuthRuntimeConformanceResponse(
           statusCode: outgoing.statusCode,
           headers: outgoing.responseHeaders,
           body: utf8.decode(outgoing.body.takeBytes()),
@@ -113,11 +112,11 @@ void main() {
   });
 
   test('mocked Cloudflare Fetch edge satisfies the auth contract', () async {
-    final engine = createRuntimeAuthEngine();
+    final engine = createAuthRuntimeConformanceEngine();
     await engine.initialize();
     addTearDown(engine.close);
 
-    await verifyRuntimeAuthContract(
+    await verifyAuthRuntimeConformance(
       origin: Uri.parse(_origin),
       send: (source) async {
         final response = await dispatchFetchExchange(
@@ -128,7 +127,7 @@ void main() {
             capabilities: cloudflareCapabilities,
           ),
         );
-        return RuntimeAuthResponse(
+        return AuthRuntimeConformanceResponse(
           statusCode: response.statusCode,
           headers: response.headers,
           body: await utf8.decodeStream(response.body),
