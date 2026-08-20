@@ -114,10 +114,12 @@ The work is intentionally split between framework-agnostic capabilities in
   exact origin/RP-ID binding, user-presence checks, and replay protection.
 - [x] Expose the registration, assertion, listing, and deletion contracts
   through the typed plugin registry, Routed routes, and `AuthClient`.
-- [ ] Finish the broader WebAuthn subsystem: support additional attestation and
-  COSE algorithms. Routed now issues a server-side session after a verified
-  assertion when that strategy is configured, and passkeys can be renamed
-  through the owner-checked store, plugin endpoint, and client API.
+- [ ] Finish the broader WebAuthn subsystem. Routed now supports `none` and
+  packed self/certificate attestation with ES256 and RS256, including browser
+  DER signatures and packed-certificate validation. It issues a server-side
+  session after a verified assertion when that strategy is configured, and
+  passkeys can be renamed through the owner-checked store, plugin endpoint, and
+  client API. EdDSA and the remaining attestation formats are still pending.
 - [x] Add an optional native `TwoFactorPlugin` with TOTP enrollment
   verification, protected-secret and typed-store boundaries, recovery-code
   hashing and atomic one-time consumption, lockout handling, disablement, and
@@ -150,15 +152,16 @@ The work is intentionally split between framework-agnostic capabilities in
   authorization checks and audit events.
 - [x] Extend the existing RBAC, policy, and Haigate APIs to support tenant
   context and resource ownership without relying on global role strings.
-- [ ] Add an OAuth/OIDC provider mode if Routed applications need to act as an
-  identity provider, not only consume external providers.
+- [x] Add an OAuth/OIDC provider mode for applications acting as an identity
+  provider, with hashed one-time authorization codes, PKCE, grants, refresh,
+  introspection, userinfo, discovery, asymmetric ID-token signing, and JWKS.
 
 ## P2: Dart developer experience and platform integration
 
 - [ ] Add typed persistence adapters for the supported Routed storage paths,
   including schema/migration guidance for SQL and D1.
-- [ ] Define a stable adapter conformance suite that can run against every
-  persistence implementation.
+- [x] Define a stable public adapter conformance suite that can run against
+  every persistence implementation.
 - [x] Add a small, typed Dart client contract for browser/mobile auth calls
   without requiring application code to duplicate route and cookie
   conventions.
@@ -170,10 +173,10 @@ The work is intentionally split between framework-agnostic capabilities in
 - [x] Make plugins contribute their routes, schemas, hooks, and rate-limit
   rules through the public composition API instead of requiring consumers to
   edit central route switches.
-- [ ] Add a CLI/device authorization flow for limited-input clients, including
+- [x] Add a CLI/device authorization flow for limited-input clients, including
   device-code issuance, browser approval, polling, denial, expiry, and
   client-side backoff semantics.
-- [ ] Add OpenAPI 3.1 endpoint and model generation for core auth routes and
+- [x] Add OpenAPI 3.1 endpoint and model generation for core auth routes and
   composed plugin routes, with generated-client compatibility tests.
 - [ ] Add reusable auth test utilities for route bootstrapping, cookie/session
   handling, provider fixtures, and end-to-end plugin flows.
