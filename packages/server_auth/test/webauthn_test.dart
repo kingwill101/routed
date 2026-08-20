@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:cbor/simple.dart' as cbor;
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:pointycastle/asn1.dart';
 import 'package:pointycastle/export.dart';
 import 'package:property_testing/property_testing.dart';
 import 'package:server_auth/server_auth.dart';
@@ -21,7 +22,7 @@ String _propertyReport(PropertyResult result) {
 }
 
 final class _Fixture {
-  _Fixture() {
+  _Fixture({WebAuthnRegistrationOptions? registrationOptions}) {
     provider = WebAuthnProvider(
       getUserInfo: (_, _, _) => null,
       getRelyingParty: (_, _) => const WebAuthnRelyingParty(
@@ -29,6 +30,8 @@ final class _Fixture {
         name: 'Example',
         origin: 'https://example.com',
       ),
+      registrationOptions:
+          registrationOptions ?? const WebAuthnRegistrationOptions(),
     );
     store = InMemoryAuthStore();
     user = AuthUser(
@@ -258,6 +261,275 @@ void main() {
         );
         expect(result.user.id, fixture.user.id);
         expect(result.authenticator.counter, 1);
+      },
+    );
+
+    test('registers a browser-shaped packed ES256 self-attestation', () async {
+      final fixture = _Fixture(
+        registrationOptions: const WebAuthnRegistrationOptions(
+          attestation: 'direct',
+        ),
+      );
+      await fixture.store.users.create(fixture.user);
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+
+      expect(registration.attestation, 'direct');
+      final saved = await fixture.feature.finishRegistration(
+        context: fixture.context,
+        user: fixture.user,
+        credential: _registrationCredential(
+          challenge: registration.challenge,
+          keyPair: fixture.keyPair,
+          attestationFormat: 'packed',
+        ),
+      );
+
+      expect(saved.userId, fixture.user.id);
+      expect(saved.publicKey, isNotEmpty);
+    });
+
+    test('registers a browser-shaped packed RS256 self-attestation', () async {
+      final fixture = _Fixture();
+      final keyPair = _RsaKeyPair.create();
+      await fixture.store.users.create(fixture.user);
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+
+      final saved = await fixture.feature.finishRegistration(
+        context: fixture.context,
+        user: fixture.user,
+        credential: _rsaRegistrationCredential(
+          challenge: registration.challenge,
+          keyPair: keyPair,
+        ),
+      );
+
+      expect(saved.userId, fixture.user.id);
+      expect(saved.publicKey, base64UrlNoPadding(keyPair.cosePublicKey));
+    });
+
+    test(
+      'rejects a forged packed self-attestation without consuming challenge',
+      () async {
+        final fixture = _Fixture();
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        final forged = _registrationCredential(
+          challenge: registration.challenge,
+          keyPair: fixture.keyPair,
+          attestationFormat: 'packed',
+          corruptPackedSignature: true,
+        );
+
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: forged,
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'webauthn_attestation_invalid',
+            ),
+          ),
+        );
+
+        final saved = await fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _registrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            attestationFormat: 'packed',
+          ),
+        );
+        expect(saved.credentialId, isNotEmpty);
+      },
+    );
+
+    test('rejects packed attestation with a mismatched algorithm', () async {
+      final fixture = _Fixture();
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+
+      await expectLater(
+        () => fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _registrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            attestationFormat: 'packed',
+            packedAlgorithm: -257,
+          ),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'webauthn_attestation_invalid',
+          ),
+        ),
+      );
+    });
+
+    test('registers certificate-backed packed ES256 attestation', () async {
+      final fixture = _Fixture();
+      final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+
+      final saved = await fixture.feature.finishRegistration(
+        context: fixture.context,
+        user: fixture.user,
+        credential: _registrationCredential(
+          challenge: registration.challenge,
+          keyPair: fixture.keyPair,
+          attestationFormat: 'packed',
+          packedSigningKey: attestationKey,
+          packedCertificateChain: <Object?>[
+            _packedAttestationCertificate(attestationKey),
+          ],
+        ),
+      );
+
+      expect(saved.userId, fixture.user.id);
+    });
+
+    test('registers certificate-backed packed RS256 attestation', () async {
+      final fixture = _Fixture();
+      final keyPair = _RsaKeyPair.create();
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+
+      final saved = await fixture.feature.finishRegistration(
+        context: fixture.context,
+        user: fixture.user,
+        credential: _rsaRegistrationCredential(
+          challenge: registration.challenge,
+          keyPair: keyPair,
+          certificateChain: <Object?>[
+            _packedRsaAttestationCertificate(keyPair),
+          ],
+        ),
+      );
+
+      expect(saved.userId, fixture.user.id);
+    });
+
+    test('rejects malformed certificate-backed packed attestation', () async {
+      final fixture = _Fixture();
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+
+      await expectLater(
+        () => fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _registrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            attestationFormat: 'packed',
+            packedCertificateChain: <Object?>[
+              List<int>.generate(32, (index) => index),
+            ],
+          ),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'webauthn_attestation_invalid',
+          ),
+        ),
+      );
+    });
+
+    test('rejects a forged certificate-backed packed signature', () async {
+      final fixture = _Fixture();
+      final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+
+      await expectLater(
+        () => fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _registrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            attestationFormat: 'packed',
+            packedSigningKey: attestationKey,
+            corruptPackedSignature: true,
+            packedCertificateChain: <Object?>[
+              _packedAttestationCertificate(attestationKey),
+            ],
+          ),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'webauthn_attestation_invalid',
+          ),
+        ),
+      );
+    });
+
+    test(
+      'rejects packed attestation certificates with invalid subject',
+      () async {
+        final fixture = _Fixture();
+        final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: _registrationCredential(
+              challenge: registration.challenge,
+              keyPair: fixture.keyPair,
+              attestationFormat: 'packed',
+              packedSigningKey: attestationKey,
+              packedCertificateChain: <Object?>[
+                _packedAttestationCertificate(
+                  attestationKey,
+                  organizationalUnit: 'Not an authenticator',
+                ),
+              ],
+            ),
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'webauthn_attestation_invalid',
+            ),
+          ),
+        );
       },
     );
 
@@ -610,6 +882,11 @@ Map<String, dynamic> _registrationCredential({
   required String challenge,
   required _KeyPair keyPair,
   String origin = 'https://example.com',
+  String attestationFormat = 'none',
+  int packedAlgorithm = -7,
+  bool corruptPackedSignature = false,
+  List<Object?>? packedCertificateChain,
+  _KeyPair? packedSigningKey,
 }) {
   final credentialId = Uint8List.fromList(
     List<int>.generate(16, (index) => index + 1),
@@ -635,16 +912,32 @@ Map<String, dynamic> _registrationCredential({
     ...credentialId,
     ...coseKey,
   ];
-  final attestationObject = cbor.cbor.encode(<String, Object?>{
-    'fmt': 'none',
-    'authData': authData,
-    'attStmt': <String, Object?>{},
-  });
   final clientDataJson = _clientData(
     type: 'webauthn.create',
     challenge: challenge,
     origin: origin,
   );
+  final attestationStatement = <String, Object?>{};
+  if (attestationFormat == 'packed') {
+    final signature = _signEs256(packedSigningKey ?? keyPair, <int>[
+      ...authData,
+      ...crypto.sha256.convert(clientDataJson).bytes,
+    ]);
+    if (corruptPackedSignature) {
+      signature[signature.length - 1] ^= 0x01;
+    }
+    attestationStatement
+      ..['alg'] = packedAlgorithm
+      ..['sig'] = signature;
+    if (packedCertificateChain != null) {
+      attestationStatement['x5c'] = packedCertificateChain;
+    }
+  }
+  final attestationObject = cbor.cbor.encode(<String, Object?>{
+    'fmt': attestationFormat,
+    'authData': authData,
+    'attStmt': attestationStatement,
+  });
   final encodedId = base64UrlNoPadding(credentialId);
   return <String, dynamic>{
     'id': encodedId,
@@ -690,6 +983,59 @@ Map<String, dynamic> _assertionCredential({
       'clientDataJSON': base64UrlNoPadding(clientDataJson),
       'authenticatorData': base64UrlNoPadding(authenticatorData),
       'signature': base64UrlNoPadding(signature),
+    },
+  };
+}
+
+Map<String, dynamic> _rsaRegistrationCredential({
+  required String challenge,
+  required _RsaKeyPair keyPair,
+  List<Object?>? certificateChain,
+}) {
+  final credentialId = Uint8List.fromList(
+    List<int>.generate(16, (index) => 0x20 + index),
+  );
+  final rpIdHash = crypto.sha256.convert(utf8.encode('example.com')).bytes;
+  final authData = <int>[
+    ...rpIdHash,
+    0x41,
+    0,
+    0,
+    0,
+    0,
+    ...List<int>.filled(16, 0),
+    credentialId.length >> 8,
+    credentialId.length & 0xff,
+    ...credentialId,
+    ...keyPair.cosePublicKey,
+  ];
+  final clientDataJson = _clientData(
+    type: 'webauthn.create',
+    challenge: challenge,
+    origin: 'https://example.com',
+  );
+  final signature = _signRs256(keyPair, <int>[
+    ...authData,
+    ...crypto.sha256.convert(clientDataJson).bytes,
+  ]);
+  final attestationObject = cbor.cbor.encode(<String, Object?>{
+    'fmt': 'packed',
+    'authData': authData,
+    'attStmt': <String, Object?>{
+      'alg': -257,
+      'sig': signature,
+      'x5c': ?certificateChain,
+    },
+  });
+  final encodedId = base64UrlNoPadding(credentialId);
+  return <String, dynamic>{
+    'id': encodedId,
+    'rawId': encodedId,
+    'type': 'public-key',
+    'response': <String, dynamic>{
+      'clientDataJSON': base64UrlNoPadding(clientDataJson),
+      'attestationObject': base64UrlNoPadding(attestationObject),
+      'transports': <String>['usb'],
     },
   };
 }
@@ -763,9 +1109,7 @@ Map<String, dynamic> _rsaAssertionCredential({
     ...authenticatorData,
     ...crypto.sha256.convert(clientDataJson).bytes,
   ];
-  final signer = RSASigner(SHA256Digest(), '0609608648016503040201')
-    ..init(true, PrivateKeyParameter<RSAPrivateKey>(keyPair.privateKey));
-  final signature = signer.generateSignature(Uint8List.fromList(signedData));
+  final signature = _signRs256(keyPair, signedData);
   return <String, dynamic>{
     'id': credentialId,
     'rawId': credentialId,
@@ -773,9 +1117,16 @@ Map<String, dynamic> _rsaAssertionCredential({
     'response': <String, dynamic>{
       'clientDataJSON': base64UrlNoPadding(clientDataJson),
       'authenticatorData': base64UrlNoPadding(authenticatorData),
-      'signature': base64UrlNoPadding(signature.bytes),
+      'signature': base64UrlNoPadding(signature),
     },
   };
+}
+
+Uint8List _signRs256(_RsaKeyPair keyPair, List<int> message) {
+  final signer = RSASigner(SHA256Digest(), '0609608648016503040201')
+    ..init(true, PrivateKeyParameter<RSAPrivateKey>(keyPair.privateKey));
+  final signature = signer.generateSignature(Uint8List.fromList(message));
+  return Uint8List.fromList(signature.bytes);
 }
 
 List<int> _bigIntBytes(BigInt value, int length) {
@@ -788,15 +1139,155 @@ List<int> _bigIntBytes(BigInt value, int length) {
   return result;
 }
 
+Uint8List _packedAttestationCertificate(
+  _KeyPair keyPair, {
+  String organizationalUnit = 'Authenticator Attestation',
+}) {
+  final signatureAlgorithm = ASN1Sequence()
+    ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.10045.4.3.2'));
+  final subject = _certificateName(organizationalUnit);
+  final publicKeyAlgorithm = ASN1Sequence()
+    ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.10045.2.1'))
+    ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.10045.3.1.7'));
+  final subjectPublicKeyInfo = ASN1Sequence()
+    ..add(publicKeyAlgorithm)
+    ..add(ASN1BitString(stringValues: <int>[0x04, ...keyPair.x, ...keyPair.y]));
+  final basicConstraints = ASN1Sequence();
+  final extensions = ASN1Sequence()
+    ..add(
+      ASN1Sequence()
+        ..add(ASN1ObjectIdentifier.fromIdentifierString('2.5.29.19'))
+        ..add(ASN1Boolean(true))
+        ..add(ASN1OctetString(octets: basicConstraints.encode())),
+    )
+    ..add(
+      ASN1Sequence()
+        ..add(
+          ASN1ObjectIdentifier.fromIdentifierString('1.3.6.1.4.1.45724.1.1.4'),
+        )
+        ..add(
+          ASN1OctetString(
+            octets: ASN1OctetString(octets: Uint8List(16)).encode(),
+          ),
+        ),
+    );
+  final tbsCertificate = ASN1Sequence()
+    ..add(_explicitAsn1(0xa0, ASN1Integer(BigInt.two).encode()))
+    ..add(ASN1Integer(BigInt.one))
+    ..add(signatureAlgorithm)
+    ..add(subject)
+    ..add(
+      ASN1Sequence()
+        ..add(ASN1UtcTime(DateTime.utc(2020, 1, 1)))
+        ..add(ASN1UtcTime(DateTime.utc(2040, 1, 1))),
+    )
+    ..add(subject)
+    ..add(subjectPublicKeyInfo)
+    ..add(_explicitAsn1(0xa3, extensions.encode()));
+  final tbsBytes = tbsCertificate.encode();
+  final signature = _signEs256(keyPair, tbsBytes);
+  return Uint8List.fromList(
+    (ASN1Sequence()
+          ..add(tbsCertificate)
+          ..add(signatureAlgorithm)
+          ..add(ASN1BitString(stringValues: signature)))
+        .encode(),
+  );
+}
+
+Uint8List _packedRsaAttestationCertificate(_RsaKeyPair keyPair) {
+  final signatureAlgorithm = ASN1Sequence()
+    ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.113549.1.1.11'))
+    ..add(ASN1Null());
+  final publicKeyAlgorithm = ASN1Sequence()
+    ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.113549.1.1.1'))
+    ..add(ASN1Null());
+  final rsaPublicKey = ASN1Sequence()
+    ..add(ASN1Integer(keyPair.publicKey.modulus!))
+    ..add(ASN1Integer(keyPair.publicKey.publicExponent!));
+  final subjectPublicKeyInfo = ASN1Sequence()
+    ..add(publicKeyAlgorithm)
+    ..add(ASN1BitString(stringValues: rsaPublicKey.encode()));
+  final subject = _certificateName('Authenticator Attestation');
+  final basicConstraints = ASN1Sequence();
+  final extensions = ASN1Sequence()
+    ..add(
+      ASN1Sequence()
+        ..add(ASN1ObjectIdentifier.fromIdentifierString('2.5.29.19'))
+        ..add(ASN1Boolean(true))
+        ..add(ASN1OctetString(octets: basicConstraints.encode())),
+    )
+    ..add(
+      ASN1Sequence()
+        ..add(
+          ASN1ObjectIdentifier.fromIdentifierString('1.3.6.1.4.1.45724.1.1.4'),
+        )
+        ..add(
+          ASN1OctetString(
+            octets: ASN1OctetString(octets: Uint8List(16)).encode(),
+          ),
+        ),
+    );
+  final tbsCertificate = ASN1Sequence()
+    ..add(_explicitAsn1(0xa0, ASN1Integer(BigInt.two).encode()))
+    ..add(ASN1Integer(BigInt.two))
+    ..add(signatureAlgorithm)
+    ..add(subject)
+    ..add(
+      ASN1Sequence()
+        ..add(ASN1UtcTime(DateTime.utc(2020, 1, 1)))
+        ..add(ASN1UtcTime(DateTime.utc(2040, 1, 1))),
+    )
+    ..add(subject)
+    ..add(subjectPublicKeyInfo)
+    ..add(_explicitAsn1(0xa3, extensions.encode()));
+  final signature = _signRs256(keyPair, tbsCertificate.encode());
+  return Uint8List.fromList(
+    (ASN1Sequence()
+          ..add(tbsCertificate)
+          ..add(signatureAlgorithm)
+          ..add(ASN1BitString(stringValues: signature)))
+        .encode(),
+  );
+}
+
+ASN1Sequence _certificateName(String organizationalUnit) => ASN1Sequence()
+  ..add(_certificateNameAttribute('2.5.4.6', 'JM', printable: true))
+  ..add(_certificateNameAttribute('2.5.4.10', 'Routed Tests'))
+  ..add(_certificateNameAttribute('2.5.4.11', organizationalUnit))
+  ..add(_certificateNameAttribute('2.5.4.3', 'Test Authenticator'));
+
+ASN1Set _certificateNameAttribute(
+  String identifier,
+  String value, {
+  bool printable = false,
+}) => ASN1Set()
+  ..add(
+    ASN1Sequence()
+      ..add(ASN1ObjectIdentifier.fromIdentifierString(identifier))
+      ..add(
+        printable
+            ? ASN1PrintableString(stringValue: value)
+            : ASN1UTF8String(utf8StringValue: value),
+      ),
+  );
+
+ASN1Object _explicitAsn1(int tag, Uint8List value) {
+  final object = ASN1Object(tag: tag)
+    ..valueBytes = value
+    ..valueByteLength = value.length;
+  return object;
+}
+
 final class _KeyPair {
   _KeyPair._({required this.privateKey, required this.x, required this.y});
 
-  factory _KeyPair.create() {
+  factory _KeyPair.create({BigInt? privateValue}) {
     final parameters = ECDomainParameters('secp256r1');
-    final privateValue = BigInt.one;
-    final point = (parameters.G * privateValue)!;
+    final value = privateValue ?? BigInt.one;
+    final point = (parameters.G * value)!;
     return _KeyPair._(
-      privateKey: ECPrivateKey(privateValue, parameters),
+      privateKey: ECPrivateKey(value, parameters),
       x: Uint8List.fromList(_bigIntBytes(point.x!.toBigInteger()!, 32)),
       y: Uint8List.fromList(_bigIntBytes(point.y!.toBigInteger()!, 32)),
     );
@@ -808,7 +1299,11 @@ final class _KeyPair {
 }
 
 final class _RsaKeyPair {
-  _RsaKeyPair._({required this.privateKey, required this.cosePublicKey});
+  _RsaKeyPair._({
+    required this.privateKey,
+    required this.publicKey,
+    required this.cosePublicKey,
+  });
 
   factory _RsaKeyPair.create() {
     final random = FortunaRandom()
@@ -835,6 +1330,7 @@ final class _RsaKeyPair {
     );
     return _RsaKeyPair._(
       privateKey: privateKey,
+      publicKey: publicKey,
       cosePublicKey: Uint8List.fromList(
         cbor.cbor.encode(<Object?, Object?>{
           1: 3,
@@ -847,5 +1343,6 @@ final class _RsaKeyPair {
   }
 
   final RSAPrivateKey privateKey;
+  final RSAPublicKey publicKey;
   final Uint8List cosePublicKey;
 }

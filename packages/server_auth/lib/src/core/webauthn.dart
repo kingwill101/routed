@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:cbor/simple.dart' as cbor;
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:pointycastle/asn1.dart';
 import 'package:pointycastle/export.dart';
 
 import 'deletion_transaction.dart';
@@ -118,8 +119,9 @@ final class AuthWebAuthnAuthenticationResult {
 
 /// Typed WebAuthn/passkey plugin for `server_auth` runtimes.
 ///
-/// This plugin supports `none` attestation, ES256 (`alg: -7`), and
-/// RS256 (`alg: -257`) passkeys.
+/// This plugin supports `none` attestation plus cryptographically verified
+/// packed self- and X.509 certificate-backed attestation with ES256
+/// (`alg: -7`) and RS256 (`alg: -257`) passkeys.
 /// It deliberately rejects unsupported attestation formats and COSE
 /// algorithms instead of accepting an assertion that has not been verified.
 /// Applications that need other WebAuthn algorithms can add them after the
@@ -520,6 +522,9 @@ final class WebAuthnPlugin<TContext>
     final attestation = _parseAttestationObject(
       parsed.attestationObject!,
       relyingPartyId: relyingParty.id,
+      clientDataHash: Uint8List.fromList(
+        crypto.sha256.convert(parsed.clientDataJson).bytes,
+      ),
       requireUserVerification:
           provider
               .registrationOptions
@@ -868,6 +873,7 @@ final class WebAuthnPlugin<TContext>
   _ParsedAttestation _parseAttestationObject(
     Uint8List bytes, {
     required String relyingPartyId,
+    required Uint8List clientDataHash,
     required bool requireUserVerification,
   }) {
     dynamic decoded;
@@ -876,29 +882,418 @@ final class WebAuthnPlugin<TContext>
     } catch (_) {
       throw AuthFlowException('webauthn_attestation_invalid');
     }
-    if (decoded is! Map ||
-        decoded['fmt'] != 'none' ||
-        decoded['attStmt'] is! Map ||
-        (decoded['attStmt'] as Map).isNotEmpty) {
-      throw AuthFlowException('webauthn_attestation_unsupported');
+    if (decoded is! Map || decoded['fmt'] is! String) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    final format = decoded['fmt'] as String;
+    final statement = decoded['attStmt'];
+    if (statement is! Map) {
+      throw AuthFlowException('webauthn_attestation_invalid');
     }
     final authData = decoded['authData'];
     if (authData is! List ||
         authData.any((value) => value is! int || value < 0 || value > 255)) {
       throw AuthFlowException('webauthn_attestation_invalid');
     }
+    final authDataBytes = Uint8List.fromList(authData.cast<int>());
     final parsed = _parseAuthenticatorData(
-      Uint8List.fromList(authData.cast<int>()),
+      authDataBytes,
       relyingPartyId: relyingPartyId,
       requireAttestedCredential: true,
       requireUserVerification: requireUserVerification,
     );
+    if (format == 'none') {
+      if (statement.isNotEmpty) {
+        throw AuthFlowException('webauthn_attestation_invalid');
+      }
+    } else if (format == 'packed') {
+      _verifyPackedAttestation(
+        statement: statement,
+        authenticatorData: authDataBytes,
+        clientDataHash: clientDataHash,
+        credentialPublicKey: parsed.publicKeyCose!,
+        aaguid: parsed.aaguid!,
+      );
+    } else {
+      throw AuthFlowException('webauthn_attestation_unsupported');
+    }
     return _ParsedAttestation(
       credentialId: parsed.credentialId!,
       publicKeyCose: parsed.publicKeyCose!,
       counter: parsed.counter,
     );
   }
+
+  void _verifyPackedAttestation({
+    required Map statement,
+    required Uint8List authenticatorData,
+    required Uint8List clientDataHash,
+    required Uint8List credentialPublicKey,
+    required Uint8List aaguid,
+  }) {
+    if (statement.containsKey('ecdaaKeyId')) {
+      throw AuthFlowException('webauthn_attestation_unsupported');
+    }
+    final algorithm = statement['alg'];
+    final signatureValue = statement['sig'];
+    if (algorithm is! int || signatureValue is! List) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    if (signatureValue.any(
+      (value) => value is! int || value < 0 || value > 255,
+    )) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    if (algorithm != -7 && algorithm != -257) {
+      throw AuthFlowException('webauthn_attestation_unsupported');
+    }
+    final certificateChain = statement['x5c'];
+    if (statement.length != (certificateChain == null ? 2 : 3)) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    final signedData = Uint8List.fromList(<int>[
+      ...authenticatorData,
+      ...clientDataHash,
+    ]);
+    final _CosePublicKey key;
+    if (certificateChain == null) {
+      key = _decodeCosePublicKey(credentialPublicKey);
+      if (key.algorithm != algorithm) {
+        throw AuthFlowException('webauthn_attestation_invalid');
+      }
+    } else {
+      final certificates = _parsePackedCertificateChain(
+        certificateChain,
+        aaguid: aaguid,
+      );
+      key = certificates.first.publicKey;
+      if (key.algorithm != algorithm) {
+        throw AuthFlowException('webauthn_attestation_invalid');
+      }
+      for (var index = 0; index + 1 < certificates.length; index++) {
+        final certificate = certificates[index];
+        final issuer = certificates[index + 1];
+        if (!_constantTimeBytesEqual(certificate.issuer, issuer.subject) ||
+            !issuer.isCertificateAuthority ||
+            !_verifyCertificateSignature(certificate, issuer.publicKey)) {
+          throw AuthFlowException('webauthn_attestation_invalid');
+        }
+      }
+    }
+    if (!_verifySignatureWithKey(
+      key: key,
+      algorithm: algorithm,
+      message: signedData,
+      signature: Uint8List.fromList(signatureValue.cast<int>()),
+    )) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+  }
+
+  List<_PackedAttestationCertificate> _parsePackedCertificateChain(
+    Object value, {
+    required Uint8List aaguid,
+  }) {
+    if (value is! List || value.isEmpty || value.length > 8) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    final certificates = <_PackedAttestationCertificate>[];
+    for (final item in value) {
+      if (item is! List ||
+          item.isEmpty ||
+          item.length > 16384 ||
+          item.any((byte) => byte is! int || byte < 0 || byte > 255)) {
+        throw AuthFlowException('webauthn_attestation_invalid');
+      }
+      certificates.add(
+        _parsePackedCertificate(Uint8List.fromList(item.cast<int>())),
+      );
+    }
+    final leaf = certificates.first;
+    if (!leaf.isVersion3 ||
+        leaf.isCertificateAuthority ||
+        leaf.country?.isNotEmpty != true ||
+        leaf.organization?.isNotEmpty != true ||
+        leaf.organizationalUnit != 'Authenticator Attestation' ||
+        leaf.commonName?.isNotEmpty != true ||
+        (leaf.aaguid != null &&
+            !_constantTimeBytesEqual(leaf.aaguid!, aaguid))) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    return certificates;
+  }
+
+  _PackedAttestationCertificate _parsePackedCertificate(Uint8List bytes) {
+    try {
+      final parser = ASN1Parser(bytes);
+      final certificate = parser.nextObject();
+      if (parser.hasNext() || certificate is! ASN1Sequence) {
+        throw const FormatException();
+      }
+      final certificateElements = certificate.elements;
+      if (certificateElements == null || certificateElements.length != 3) {
+        throw const FormatException();
+      }
+      final tbsCertificate = certificateElements[0];
+      final signatureAlgorithm = certificateElements[1];
+      final signatureValue = certificateElements[2];
+      if (tbsCertificate is! ASN1Sequence ||
+          signatureAlgorithm is! ASN1Sequence ||
+          signatureValue is! ASN1BitString ||
+          signatureValue.unusedbits != 0 ||
+          signatureValue.stringValues == null) {
+        throw const FormatException();
+      }
+      final elements = tbsCertificate.elements;
+      if (elements == null || elements.length < 7) {
+        throw const FormatException();
+      }
+      var offset = 0;
+      var isVersion3 = false;
+      if (elements.first.tag == 0xa0) {
+        final versionParser = ASN1Parser(elements.first.valueBytes);
+        final version = versionParser.nextObject();
+        if (versionParser.hasNext() || version is! ASN1Integer) {
+          throw const FormatException();
+        }
+        isVersion3 = version.integer == BigInt.two;
+        offset = 1;
+      }
+      if (elements.length < offset + 7) throw const FormatException();
+      final tbsSignatureAlgorithm = elements[offset + 1];
+      final issuer = elements[offset + 2];
+      final validity = elements[offset + 3];
+      final subject = elements[offset + 4];
+      final subjectPublicKeyInfo = elements[offset + 5];
+      if (issuer is! ASN1Sequence ||
+          tbsSignatureAlgorithm is! ASN1Sequence ||
+          validity is! ASN1Sequence ||
+          subject is! ASN1Sequence ||
+          subjectPublicKeyInfo is! ASN1Sequence) {
+        throw const FormatException();
+      }
+      if (!_constantTimeBytesEqual(
+        tbsSignatureAlgorithm.encodedBytes!,
+        signatureAlgorithm.encodedBytes!,
+      )) {
+        throw const FormatException();
+      }
+      _validateCertificateValidity(validity);
+      final names = _certificateNames(subject);
+      var isCertificateAuthority = false;
+      Uint8List? certificateAaguid;
+      for (final element in elements.skip(offset + 6)) {
+        if (element.tag != 0xa3) continue;
+        final extensionParser = ASN1Parser(element.valueBytes);
+        final extensions = extensionParser.nextObject();
+        if (extensionParser.hasNext() || extensions is! ASN1Sequence) {
+          throw const FormatException();
+        }
+        for (final extension in extensions.elements ?? const <ASN1Object>[]) {
+          if (extension is! ASN1Sequence) throw const FormatException();
+          final extensionElements = extension.elements;
+          if (extensionElements == null ||
+              (extensionElements.length != 2 &&
+                  extensionElements.length != 3)) {
+            throw const FormatException();
+          }
+          final identifier = extensionElements.first;
+          final value = extensionElements.last;
+          if (identifier is! ASN1ObjectIdentifier ||
+              value is! ASN1OctetString) {
+            throw const FormatException();
+          }
+          final isCritical = extensionElements.length == 3;
+          if (isCritical && extensionElements[1] is! ASN1Boolean) {
+            throw const FormatException();
+          }
+          if (identifier.objectIdentifierAsString == '2.5.29.19') {
+            final basicConstraints = ASN1Parser(value.octets).nextObject();
+            if (basicConstraints is! ASN1Sequence) {
+              throw const FormatException();
+            }
+            final fields = basicConstraints.elements;
+            if (fields?.isNotEmpty == true && fields!.first is ASN1Boolean) {
+              isCertificateAuthority =
+                  (fields.first as ASN1Boolean).boolValue == true;
+            }
+          } else if (identifier.objectIdentifierAsString ==
+              '1.3.6.1.4.1.45724.1.1.4') {
+            if (isCritical &&
+                (extensionElements[1] as ASN1Boolean).boolValue == true) {
+              throw const FormatException();
+            }
+            final encodedAaguid = ASN1Parser(value.octets).nextObject();
+            if (encodedAaguid is! ASN1OctetString ||
+                encodedAaguid.octets?.length != 16) {
+              throw const FormatException();
+            }
+            certificateAaguid = Uint8List.fromList(encodedAaguid.octets!);
+          }
+        }
+      }
+      return _PackedAttestationCertificate(
+        tbsCertificate: Uint8List.fromList(tbsCertificate.encodedBytes!),
+        signatureAlgorithm: _certificateSignatureAlgorithm(signatureAlgorithm),
+        signature: Uint8List.fromList(signatureValue.stringValues!),
+        publicKey: _certificatePublicKey(subjectPublicKeyInfo),
+        issuer: Uint8List.fromList(issuer.encodedBytes!),
+        subject: Uint8List.fromList(subject.encodedBytes!),
+        isVersion3: isVersion3,
+        isCertificateAuthority: isCertificateAuthority,
+        country: names['2.5.4.6'],
+        organization: names['2.5.4.10'],
+        organizationalUnit: names['2.5.4.11'],
+        commonName: names['2.5.4.3'],
+        aaguid: certificateAaguid,
+      );
+    } catch (_) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+  }
+
+  void _validateCertificateValidity(ASN1Sequence validity) {
+    final elements = validity.elements;
+    if (elements == null || elements.length != 2) {
+      throw const FormatException();
+    }
+    DateTime? date(ASN1Object value) => switch (value) {
+      ASN1UtcTime() => value.time,
+      ASN1GeneralizedTime() => value.dateTimeValue,
+      _ => null,
+    };
+
+    final notBefore = date(elements[0])?.toUtc();
+    final notAfter = date(elements[1])?.toUtc();
+    final current = DateTime.now().toUtc();
+    if (notBefore == null ||
+        notAfter == null ||
+        current.isBefore(notBefore) ||
+        current.isAfter(notAfter)) {
+      throw const FormatException();
+    }
+  }
+
+  Map<String, String> _certificateNames(ASN1Sequence name) {
+    final result = <String, String>{};
+    for (final relativeName in name.elements ?? const <ASN1Object>[]) {
+      if (relativeName is! ASN1Set) throw const FormatException();
+      for (final attribute in relativeName.elements ?? const <ASN1Object>[]) {
+        if (attribute is! ASN1Sequence || attribute.elements?.length != 2) {
+          throw const FormatException();
+        }
+        final identifier = attribute.elements![0];
+        final value = attribute.elements![1];
+        if (identifier is! ASN1ObjectIdentifier || value.valueBytes == null) {
+          throw const FormatException();
+        }
+        final objectIdentifier = identifier.objectIdentifierAsString;
+        if ((objectIdentifier == '2.5.4.6' && value is! ASN1PrintableString) ||
+            (const <String>{
+                  '2.5.4.3',
+                  '2.5.4.10',
+                  '2.5.4.11',
+                }.contains(objectIdentifier) &&
+                value is! ASN1UTF8String)) {
+          throw const FormatException();
+        }
+        final decoded = utf8.decode(value.valueBytes!, allowMalformed: false);
+        result[objectIdentifier!] = decoded;
+      }
+    }
+    return result;
+  }
+
+  int _certificateSignatureAlgorithm(ASN1Sequence algorithm) {
+    final elements = algorithm.elements;
+    if (elements == null ||
+        elements.isEmpty ||
+        elements.first is! ASN1ObjectIdentifier) {
+      throw const FormatException();
+    }
+    return switch ((elements.first as ASN1ObjectIdentifier)
+        .objectIdentifierAsString) {
+      '1.2.840.10045.4.3.2' => -7,
+      '1.2.840.113549.1.1.11' => -257,
+      _ => throw const FormatException(),
+    };
+  }
+
+  _CosePublicKey _certificatePublicKey(ASN1Sequence subjectPublicKeyInfo) {
+    final elements = subjectPublicKeyInfo.elements;
+    if (elements == null ||
+        elements.length != 2 ||
+        elements[0] is! ASN1Sequence ||
+        elements[1] is! ASN1BitString) {
+      throw const FormatException();
+    }
+    final algorithm = elements[0] as ASN1Sequence;
+    final keyBits = elements[1] as ASN1BitString;
+    final algorithmElements = algorithm.elements;
+    final keyBytes = keyBits.stringValues;
+    if (keyBits.unusedbits != 0 ||
+        algorithmElements == null ||
+        algorithmElements.isEmpty ||
+        algorithmElements.first is! ASN1ObjectIdentifier ||
+        keyBytes == null) {
+      throw const FormatException();
+    }
+    final identifier = (algorithmElements.first as ASN1ObjectIdentifier)
+        .objectIdentifierAsString;
+    if (identifier == '1.2.840.10045.2.1') {
+      if (algorithmElements.length != 2 ||
+          algorithmElements[1] is! ASN1ObjectIdentifier ||
+          (algorithmElements[1] as ASN1ObjectIdentifier)
+                  .objectIdentifierAsString !=
+              '1.2.840.10045.3.1.7' ||
+          keyBytes.length != 65 ||
+          keyBytes.first != 0x04) {
+        throw const FormatException();
+      }
+      return _CosePublicKey(
+        algorithm: -7,
+        x: Uint8List.fromList(keyBytes.sublist(1, 33)),
+        y: Uint8List.fromList(keyBytes.sublist(33)),
+      );
+    }
+    if (identifier == '1.2.840.113549.1.1.1') {
+      final parser = ASN1Parser(Uint8List.fromList(keyBytes));
+      final rsaKey = parser.nextObject();
+      if (parser.hasNext() ||
+          rsaKey is! ASN1Sequence ||
+          rsaKey.elements?.length != 2) {
+        throw const FormatException();
+      }
+      final modulus = rsaKey.elements![0];
+      final exponent = rsaKey.elements![1];
+      if (modulus is! ASN1Integer || exponent is! ASN1Integer) {
+        throw const FormatException();
+      }
+      final modulusBytes = _bigIntToUnsignedBytes(modulus.integer!);
+      final exponentBytes = _bigIntToUnsignedBytes(exponent.integer!);
+      if (modulusBytes.length < 256 ||
+          modulusBytes.length > 1024 ||
+          exponentBytes.length > 8) {
+        throw const FormatException();
+      }
+      return _CosePublicKey(
+        algorithm: -257,
+        modulus: modulusBytes,
+        exponent: exponentBytes,
+      );
+    }
+    throw const FormatException();
+  }
+
+  bool _verifyCertificateSignature(
+    _PackedAttestationCertificate certificate,
+    _CosePublicKey issuerKey,
+  ) => _verifySignatureWithKey(
+    key: issuerKey,
+    algorithm: certificate.signatureAlgorithm,
+    message: certificate.tbsCertificate,
+    signature: certificate.signature,
+  );
 
   _ParsedAuthenticatorData _parseAssertionAuthenticatorData(
     Uint8List bytes, {
@@ -961,6 +1356,7 @@ final class WebAuthnPlugin<TContext>
       counter: counter,
       credentialId: Uint8List.fromList(credentialId),
       publicKeyCose: Uint8List.fromList(publicKeyCose),
+      aaguid: Uint8List.fromList(bytes.sublist(37, 53)),
     );
   }
 
@@ -971,7 +1367,25 @@ final class WebAuthnPlugin<TContext>
   }) {
     try {
       final key = _decodeCosePublicKey(coseKey);
-      switch (key.algorithm) {
+      return _verifySignatureWithKey(
+        key: key,
+        algorithm: key.algorithm,
+        message: message,
+        signature: signature,
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool _verifySignatureWithKey({
+    required _CosePublicKey key,
+    required int algorithm,
+    required Uint8List message,
+    required Uint8List signature,
+  }) {
+    try {
+      switch (algorithm) {
         case -7:
           if (key.x == null || key.y == null) {
             return false;
@@ -1162,7 +1576,7 @@ final class WebAuthnPlugin<TContext>
   }
 
   static String _validateAttestationPreference(String value) {
-    const supported = <String>{'none'};
+    const supported = <String>{'none', 'direct', 'indirect'};
     if (!supported.contains(value)) {
       throw AuthFlowException('webauthn_attestation_unsupported');
     }
@@ -1267,11 +1681,45 @@ final class _ParsedAuthenticatorData {
     required this.counter,
     this.credentialId,
     this.publicKeyCose,
+    this.aaguid,
   });
 
   final int counter;
   final Uint8List? credentialId;
   final Uint8List? publicKeyCose;
+  final Uint8List? aaguid;
+}
+
+final class _PackedAttestationCertificate {
+  const _PackedAttestationCertificate({
+    required this.tbsCertificate,
+    required this.signatureAlgorithm,
+    required this.signature,
+    required this.publicKey,
+    required this.issuer,
+    required this.subject,
+    required this.isVersion3,
+    required this.isCertificateAuthority,
+    this.country,
+    this.organization,
+    this.organizationalUnit,
+    this.commonName,
+    this.aaguid,
+  });
+
+  final Uint8List tbsCertificate;
+  final int signatureAlgorithm;
+  final Uint8List signature;
+  final _CosePublicKey publicKey;
+  final Uint8List issuer;
+  final Uint8List subject;
+  final bool isVersion3;
+  final bool isCertificateAuthority;
+  final String? country;
+  final String? organization;
+  final String? organizationalUnit;
+  final String? commonName;
+  final Uint8List? aaguid;
 }
 
 final class _CosePublicKey {
@@ -1296,6 +1744,17 @@ BigInt _bytesToBigInt(List<int> bytes) {
     value = (value << 8) | BigInt.from(byte);
   }
   return value;
+}
+
+Uint8List _bigIntToUnsignedBytes(BigInt value) {
+  if (value <= BigInt.zero) throw const FormatException();
+  final result = <int>[];
+  var remaining = value;
+  while (remaining > BigInt.zero) {
+    result.add((remaining & BigInt.from(0xff)).toInt());
+    remaining >>= 8;
+  }
+  return Uint8List.fromList(result.reversed.toList(growable: false));
 }
 
 bool _constantTimeBytesEqual(List<int> left, List<int> right) {
