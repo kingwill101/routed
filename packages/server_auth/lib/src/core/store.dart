@@ -332,11 +332,15 @@ abstract interface class AuthStore {
 ///
 /// Durable adapters must consume the token and remove the user-owned core data
 /// in one transaction. Returning `false` leaves both the token and account
-/// unchanged so callers can safely retry.
+/// unchanged so callers can safely retry. [deleteContributedData] is invoked
+/// after the token is validated but before the transaction commits; it must be
+/// idempotent, and any exception must roll the token consumption and core
+/// deletion back.
 abstract interface class AuthAccountDeletionStore {
   FutureOr<bool> confirmAndDeleteUser({
     required String userId,
     required String token,
+    required FutureOr<void> Function() deleteContributedData,
     DateTime? now,
   });
 }
@@ -510,6 +514,7 @@ class InMemoryAuthStore
   Future<bool> confirmAndDeleteUser({
     required String userId,
     required String token,
+    required FutureOr<void> Function() deleteContributedData,
     DateTime? now,
   }) async {
     final id = userId.trim();
@@ -522,21 +527,30 @@ class InMemoryAuthStore
     );
     if (consumed == null) return false;
 
-    // All following mutations are in-memory and non-failing. Durable stores
-    // implement this interface with their database transaction primitive.
-    await _credentials.deleteForUser(id);
-    await _accounts.deleteForUser(id);
-    _sessions.deleteForUser(id);
-    await passwordResetTokens.deleteForUser(id);
-    await emailChangeTokens.deleteForUser(id);
-    await deviceAuthorizations.deleteForUser(id);
-    await _accountStates.delete(id);
-    if (user.email != null) {
-      await emailOtps.deleteForEmail(user.email!);
-      await verificationTokens.delete(user.email!);
+    try {
+      await deleteContributedData();
+      // All following mutations are in-memory and non-failing. Durable stores
+      // implement this interface with their database transaction primitive.
+      await _credentials.deleteForUser(id);
+      await _accounts.deleteForUser(id);
+      _sessions.deleteForUser(id);
+      await passwordResetTokens.deleteForUser(id);
+      await emailChangeTokens.deleteForUser(id);
+      await deviceAuthorizations.deleteForUser(id);
+      await _accountStates.delete(id);
+      if (user.email != null) {
+        await emailOtps.deleteForEmail(user.email!);
+        await verificationTokens.delete(user.email!);
+      }
+      await jwtVersions.rotate(id);
+      return await _users.delete(id);
+    } catch (_) {
+      // The local store has no failing core mutations. Restoring the consumed
+      // token makes contributor failures retryable. Durable implementations
+      // must roll the complete transaction back instead.
+      await verificationTokens.save(consumed);
+      rethrow;
     }
-    await jwtVersions.rotate(id);
-    return _users.delete(id);
   }
 
   @override
@@ -860,8 +874,7 @@ class CallbackAuthStore implements AuthStore {
   final AuthEmailOtpStore emailOtps;
 }
 
-class _CallbackPasswordResetTokenStore
-    implements AuthPasswordResetTokenStore, AuthPasswordResetTokenLookupStore {
+class _CallbackPasswordResetTokenStore implements AuthPasswordResetTokenStore {
   const _CallbackPasswordResetTokenStore({
     this.onSave,
     this.onConsume,

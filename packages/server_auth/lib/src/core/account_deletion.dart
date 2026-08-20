@@ -156,6 +156,7 @@ Future<AuthAccountDeletionConfirmed> confirmAccountDeletion({
   final deleted = await deletionStore.confirmAndDeleteUser(
     userId: normalizedUserId,
     token: token,
+    deleteContributedData: () {},
     now: now,
   );
   if (!deleted) {

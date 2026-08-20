@@ -148,8 +148,7 @@ void main() {
 
     await store.passwordResetTokens.save(record);
     expect(
-      await (store.passwordResetTokens as AuthPasswordResetTokenLookupStore)
-          .findActive('raw-secret'),
+      await store.passwordResetTokens.findActive('raw-secret'),
       same(record),
     );
     expect(

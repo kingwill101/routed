@@ -37,21 +37,19 @@ abstract interface class AuthPasswordResetTokenStore {
   /// replay-safe under concurrent reset requests.
   FutureOr<AuthPasswordResetToken?> consume(String token);
 
+  /// Returns active token metadata without consuming or extending it.
+  ///
+  /// This capability is required so account policy can be checked before the
+  /// one-time token is consumed.
+  FutureOr<AuthPasswordResetToken?> findActive(String token);
+
   /// Invalidates all outstanding reset tokens for [userId].
   FutureOr<void> deleteForUser(String userId);
 }
 
-/// Optional active-token lookup used to enforce account policy before consume.
-///
-/// Implementations return metadata only and must not consume or extend the
-/// token. The raw token must still be hashed before lookup.
-abstract interface class AuthPasswordResetTokenLookupStore {
-  FutureOr<AuthPasswordResetToken?> findActive(String token);
-}
-
 /// In-memory password-reset token store for tests and local development.
 class InMemoryAuthPasswordResetTokenStore
-    implements AuthPasswordResetTokenStore, AuthPasswordResetTokenLookupStore {
+    implements AuthPasswordResetTokenStore {
   InMemoryAuthPasswordResetTokenStore({DateTime Function()? clock})
     : _clock = clock ?? DateTime.now;
 

@@ -45,6 +45,7 @@ import 'package:server_auth/server_auth.dart'
         AuthEmailChangeRequest,
         AuthAccountDeletionDelivery,
         AuthAccountDeletionConfirmed,
+        AuthAccountDeletionStore,
         AuthAdminStoreCapabilities,
         AuthUserDataDeletionContributor,
         AuthUser,
@@ -55,7 +56,6 @@ import 'package:server_auth/server_auth.dart'
         AuthAccountState,
         AuthAccountStateStore,
         AuthEmailChangeTokenConditionalDeleteStore,
-        AuthPasswordResetTokenLookupStore,
         AuthVerificationTokenConditionalDeleteStore,
         AuthStore,
         resolveAuthEmailVerificationSignIn,
@@ -558,11 +558,7 @@ class AuthManager {
       action: AuthRateLimitAction.passwordResetConfirm,
     );
     final tokenStore = store.passwordResetTokens;
-    if (tokenStore is! AuthPasswordResetTokenLookupStore) {
-      throw AuthFlowException('invalid_password_reset_token');
-    }
-    final pending = await (tokenStore as AuthPasswordResetTokenLookupStore)
-        .findActive(token);
+    final pending = await tokenStore.findActive(token);
     final user = pending == null
         ? null
         : await store.users.findById(pending.userId);
@@ -762,19 +758,30 @@ class AuthManager {
       action: AuthRateLimitAction.accountDeletion,
       identifier: session.user.id,
     );
-    await _deleteUserLifecycle(
-      ctx,
-      session.user,
-      afterValidation: () async {
-        final consumed = await store.verificationTokens.consume(
-          'account_deletion:${session.user.id}',
-          token,
-        );
-        if (consumed == null) {
-          throw AuthFlowException('invalid_deletion_token');
+    final deletionStore = store is AuthAccountDeletionStore
+        ? store as AuthAccountDeletionStore
+        : null;
+    if (deletionStore == null) {
+      throw AuthFlowException('account_deletion_unavailable');
+    }
+    final contributors = runtime.registry.values
+        .whereType<AuthUserDataDeletionContributor>()
+        .toList(growable: false);
+    for (final contributor in contributors) {
+      await contributor.validateUserDeletion(session.user.id);
+    }
+    final deleted = await deletionStore.confirmAndDeleteUser(
+      userId: session.user.id,
+      token: token,
+      deleteContributedData: () async {
+        for (final contributor in contributors) {
+          await contributor.deleteUserData(session.user.id);
         }
       },
     );
+    if (!deleted) throw AuthFlowException('invalid_deletion_token');
+    await sessionAuth.logout(ctx);
+    if (ctx.hasSession) ctx.session.destroy();
     return AuthAccountDeletionConfirmed(userId: session.user.id, deleted: true);
   }
 
@@ -884,11 +891,7 @@ class AuthManager {
     );
   }
 
-  Future<void> _deleteUserLifecycle(
-    EngineContext ctx,
-    AuthUser user, {
-    Future<void> Function()? afterValidation,
-  }) async {
+  Future<void> _deleteUserLifecycle(EngineContext ctx, AuthUser user) async {
     final capabilities = store is AuthAdminStoreCapabilities
         ? store as AuthAdminStoreCapabilities
         : null;
@@ -901,7 +904,6 @@ class AuthManager {
     for (final contributor in contributors) {
       await contributor.validateUserDeletion(user.id);
     }
-    await afterValidation?.call();
     for (final contributor in contributors) {
       await contributor.deleteUserData(user.id);
     }
@@ -1328,7 +1330,7 @@ class AuthManager {
     );
   }
 
-  /// Replaces the current server-session identity for a portable plugin.
+  /// Replaces the current identity for a portable plugin.
   Future<AuthSession> replacePluginSession(
     EngineContext ctx,
     AuthUser user, {
@@ -1336,10 +1338,12 @@ class AuthManager {
     Duration? maximumAge,
     String? impersonatedBy,
   }) async {
-    if (options.sessionStrategy != AuthSessionStrategy.session) {
+    if (impersonatedBy != null &&
+        options.sessionStrategy != AuthSessionStrategy.session) {
       throw AuthFlowException('impersonation_requires_server_session');
     }
-    if (ctx.hasSession) {
+    if (options.sessionStrategy == AuthSessionStrategy.session &&
+        ctx.hasSession) {
       await store.sessions.revoke(hashOpaqueToken(ctx.sessionId));
     }
     final result = await _completeSignIn(
@@ -1458,18 +1462,15 @@ class AuthManager {
       throw AuthFlowException('user_resolution_failed');
     }
     final anonymous = this.anonymous;
-    final principal = SessionAuth.current(ctx);
-    if (anonymous != null &&
-        principal != null &&
-        principal.id != user.id &&
-        principal.attributes['isAnonymous'] == true) {
-      final anonymousUser = await store.users.findById(principal.id);
-      if (anonymousUser?.isAnonymous == true) {
-        await anonymous.linkAnonymousAccount(
-          context: ctx,
-          anonymousUser: anonymousUser!,
-          newUser: user,
-        );
+    AuthUser? anonymousUser;
+    if (anonymous != null) {
+      final current = await resolveSession(ctx);
+      final principal = current?.user;
+      if (principal != null &&
+          principal.id != user.id &&
+          principal.isAnonymous) {
+        final stored = await store.users.findById(principal.id);
+        if (stored?.isAnonymous == true) anonymousUser = stored;
       }
     }
     await _synchronizeAccountState(
@@ -1504,6 +1505,14 @@ class AuthManager {
           resolveRedirect: (candidate) =>
               resolveRedirect(ctx, candidate, provider: provider),
         );
+
+    if (anonymousUser != null) {
+      await anonymous!.migrateAnonymousAccount(
+        context: ctx,
+        anonymousUser: anonymousUser,
+        newUser: user,
+      );
+    }
 
     if (isNewUser) {
       await _emitAuthEvent(
@@ -1558,6 +1567,10 @@ class AuthManager {
     final issuedJwt = resolvedSignIn.issuedJwt;
     if (issuedJwt != null) {
       ctx.response.cookies.add(issuedJwt.cookie);
+    }
+
+    if (anonymousUser != null) {
+      await anonymous!.deleteMigratedAnonymousUser(anonymousUser);
     }
 
     final result = resolvedSignIn.result;

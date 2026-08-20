@@ -350,6 +350,99 @@ void main() {
       },
     );
 
+    test(
+      'confirmed deletion restores its token when contributor cleanup fails',
+      () async {
+        final store = InMemoryAuthStore();
+        final user = AuthUser(id: 'user-1', email: 'user@example.com');
+        final hasher = Argon2idPasswordHasher(
+          iterations: 1,
+          memoryKiB: 8,
+          derivedKeyLength: 16,
+        );
+        final now = DateTime.now().toUtc();
+        await store.credentials.register(
+          user,
+          AuthPasswordCredential(
+            id: 'credential-1',
+            userId: user.id,
+            identifier: user.email!,
+            passwordHash: hasher.hash('current-password'),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+        final contributor = _FailOnceDeletionPlugin();
+        AuthAccountDeletionDelivery<EngineContext>? delivery;
+        final manager = AuthManager(
+          AuthOptions<EngineContext>(
+            store: store,
+            storeMode: AuthStoreMode.ephemeral,
+            providers: [CredentialsProvider()],
+            plugins: [contributor],
+            passwordHasher: hasher,
+            accountDeletionSender: (sent) => delivery = sent,
+            enforceCsrf: false,
+          ),
+        );
+        final engine = _authEngine(manager);
+        await engine.initialize();
+        final client = TestClient(RoutedRequestHandler(engine));
+        addTearDown(() async => await client.close());
+
+        final csrfResponse = await client.get('/auth/csrf');
+        final csrf = csrfResponse.json()['csrfToken'] as String;
+        final initialCookie = csrfResponse.cookie('test_session')!;
+        final signIn = await client.postJson(
+          '/auth/signin/credentials',
+          <String, dynamic>{
+            'email': user.email,
+            'password': 'current-password',
+            '_csrf': csrf,
+          },
+          headers: {
+            HttpHeaders.cookieHeader: [_cookieHeader(initialCookie)],
+          },
+        );
+        signIn.assertStatus(HttpStatus.ok);
+        final sessionCookie = signIn.cookie('test_session') ?? initialCookie;
+
+        final requested = await client.postJson(
+          '/auth/account/delete/request',
+          <String, dynamic>{
+            'currentPassword': 'current-password',
+            '_csrf': csrf,
+          },
+          headers: {
+            HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+          },
+        );
+        requested.assertStatus(HttpStatus.accepted);
+
+        final first = await client.postJson(
+          '/auth/account/delete/confirm',
+          <String, dynamic>{'token': delivery!.token, '_csrf': csrf},
+          headers: {
+            HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+          },
+        );
+        first.assertStatus(HttpStatus.unauthorized);
+        expect(first.json()['error'], 'cleanup_failed');
+        expect(await store.users.findById(user.id), isNotNull);
+
+        final retry = await client.postJson(
+          '/auth/account/delete/confirm',
+          <String, dynamic>{'token': delivery!.token, '_csrf': csrf},
+          headers: {
+            HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+          },
+        );
+        retry.assertStatus(HttpStatus.ok);
+        expect(contributor.deleteAttempts, 2);
+        expect(await store.users.findById(user.id), isNull);
+      },
+    );
+
     test('accepts providers created from package:server_auth', () async {
       final manager = AuthManager(
         AuthOptions<EngineContext>(
@@ -914,4 +1007,29 @@ void main() {
       expect(refreshedCookie!.value, isNot(tokenCookie.value));
     });
   });
+}
+
+final class _FailOnceDeletionPlugin
+    implements
+        AuthServerPlugin<EngineContext>,
+        AuthUserDataDeletionContributor {
+  int deleteAttempts = 0;
+
+  @override
+  String get id => 'fail_once_deletion';
+
+  @override
+  String get userDataNamespace => id;
+
+  @override
+  void configure(AuthServerPluginContext<EngineContext> context) {}
+
+  @override
+  Future<void> validateUserDeletion(String userId) async {}
+
+  @override
+  Future<void> deleteUserData(String userId) async {
+    deleteAttempts += 1;
+    if (deleteAttempts == 1) throw AuthFlowException('cleanup_failed');
+  }
 }

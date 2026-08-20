@@ -379,6 +379,7 @@ void main() {
       final deleted = await store.confirmAndDeleteUser(
         userId: 'u1',
         token: 'delete-token',
+        deleteContributedData: () {},
       );
 
       expect(deleted, isTrue);

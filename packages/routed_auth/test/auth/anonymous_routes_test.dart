@@ -76,4 +76,155 @@ void main() {
     expect(deleted.json()['status'], 'anonymous_deleted');
     expect(await manager.store.users.findById(anonymousId), isNull);
   });
+
+  test(
+    'JWT account upgrade keeps anonymous data when sign-in is denied',
+    () async {
+      final store = InMemoryAuthStore();
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: store,
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [
+            CredentialsProvider(
+              authorize: (_, _, credentials) =>
+                  AuthUser(id: 'target-user', email: credentials.email),
+            ),
+          ],
+          plugins: [AnonymousPlugin<EngineContext>()],
+          sessionStrategy: AuthSessionStrategy.jwt,
+          jwtOptions: const JwtSessionOptions(secret: 'anonymous-jwt-secret'),
+          callbacks: AuthCallbacks<EngineContext>(
+            signIn: (context) => context.user.isAnonymous
+                ? const AuthSignInResult.allow()
+                : const AuthSignInResult.deny(),
+          ),
+        ),
+      );
+      final engine = testEngine(
+        config: EngineConfig(
+          security: const EngineSecurityFeatures(csrfProtection: false),
+        ),
+        providers: [RoutedSessionsProvider(_sessionConfig())],
+      );
+      engine.addGlobalMiddleware(sessionMiddleware());
+      engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
+      AuthRoutes(manager).register(engine.defaultRouter);
+      await engine.initialize();
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+
+      final csrf = await client.get('/auth/csrf');
+      final sessionCookie = csrf.cookie('test_session')!;
+      final anonymous = await client.postJson(
+        '/auth/sign-in/anonymous',
+        const <String, dynamic>{},
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+        },
+      );
+      expect(anonymous.statusCode, HttpStatus.ok, reason: anonymous.body);
+      final anonymousId = anonymous.json()['user']['id'] as String;
+      final anonymousJwt = anonymous.cookie('auth_token')!;
+
+      final denied = await client.postJson(
+        '/auth/signin/credentials',
+        <String, dynamic>{
+          'email': 'target@example.com',
+          'password': 'password',
+          '_csrf': csrf.json()['csrfToken'],
+        },
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+          HttpHeaders.authorizationHeader: ['Bearer ${anonymousJwt.value}'],
+        },
+      );
+
+      denied.assertStatus(HttpStatus.unauthorized);
+      expect(denied.json()['error'], 'sign_in_blocked');
+      expect(await store.users.findById(anonymousId), isNotNull);
+    },
+  );
+
+  test(
+    'JWT account upgrade migrates then deletes the anonymous identity',
+    () async {
+      final store = InMemoryAuthStore();
+      String? migratedAnonymousId;
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: store,
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [
+            CredentialsProvider(
+              authorize: (_, _, credentials) =>
+                  AuthUser(id: 'target-user', email: credentials.email),
+            ),
+          ],
+          plugins: [
+            AnonymousPlugin<EngineContext>(
+              onLinkAccount:
+                  ({
+                    required context,
+                    required anonymousUser,
+                    required newUser,
+                  }) async {
+                    migratedAnonymousId = anonymousUser.id;
+                    expect(newUser.id, 'target-user');
+                    expect(
+                      await store.users.findById(anonymousUser.id),
+                      isNotNull,
+                    );
+                  },
+            ),
+          ],
+          sessionStrategy: AuthSessionStrategy.jwt,
+          jwtOptions: const JwtSessionOptions(secret: 'anonymous-jwt-secret'),
+        ),
+      );
+      final engine = testEngine(
+        config: EngineConfig(
+          security: const EngineSecurityFeatures(csrfProtection: false),
+        ),
+        providers: [RoutedSessionsProvider(_sessionConfig())],
+      );
+      engine.addGlobalMiddleware(sessionMiddleware());
+      engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
+      AuthRoutes(manager).register(engine.defaultRouter);
+      await engine.initialize();
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+
+      final csrf = await client.get('/auth/csrf');
+      final sessionCookie = csrf.cookie('test_session')!;
+      final anonymous = await client.postJson(
+        '/auth/sign-in/anonymous',
+        const <String, dynamic>{},
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+        },
+      );
+      expect(anonymous.statusCode, HttpStatus.ok, reason: anonymous.body);
+      final anonymousId = anonymous.json()['user']['id'] as String;
+      final anonymousJwt = anonymous.cookie('auth_token')!;
+
+      final upgraded = await client.postJson(
+        '/auth/signin/credentials',
+        <String, dynamic>{
+          'email': 'target@example.com',
+          'password': 'password',
+          '_csrf': csrf.json()['csrfToken'],
+        },
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+          HttpHeaders.authorizationHeader: ['Bearer ${anonymousJwt.value}'],
+        },
+      );
+
+      upgraded.assertStatus(HttpStatus.ok);
+      expect(migratedAnonymousId, anonymousId);
+      expect(await store.users.findById(anonymousId), isNull);
+      expect(upgraded.cookie('auth_token'), isNotNull);
+    },
+  );
 }
