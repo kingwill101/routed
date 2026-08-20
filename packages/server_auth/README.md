@@ -28,6 +28,34 @@ Use the package umbrella library for the public API.
 - Use `server_contracts` for contract-only abstractions.
 - Use adapter packages (`routed`, `shelf_auth`, etc.) for framework-specific HTTP/session wiring.
 
+## Durable store conformance
+
+Production `AuthStore` adapters should run the framework-neutral contract from
+`package:server_auth/testing.dart` against a fresh database or namespace for
+every case:
+
+```dart
+final suite = AuthStoreConformanceSuite.fromStoreFactory(
+  createStore: openIsolatedStore,
+  disposeStore: (store) => (store as MyAuthStore).close(),
+);
+
+for (final conformanceCase in suite.cases) {
+  test(conformanceCase.id, () async {
+    final result = await conformanceCase.run();
+    if (result.isSkipped) markTestSkipped(result.skippedReason!);
+  });
+}
+```
+
+The public case IDs cover canonical identity and credential races, globally
+unique account links, exactly-one-winner session rotation with no persisted
+losers, verification/password-reset/OAuth replay, monotonic JWT rotation,
+device authorization, email OTPs, and account-deletion rollback. The suite has
+no dependency on `package:test`; adapters may register its cases with any test
+runner. Optional capabilities are reported as explicit skips, while every core
+`AuthStore` contract is required.
+
 ## Quick start
 
 ```dart

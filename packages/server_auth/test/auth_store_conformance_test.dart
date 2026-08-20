@@ -14,6 +14,38 @@ void main() {
       });
     }
 
+    test('publishes stable unique case identifiers', () {
+      const expectedCaseIds = <String>[
+        'users.create-find',
+        'users.email-uniqueness',
+        'users.email-update-atomicity',
+        'users.create-or-find-contention',
+        'credentials.registration-lookup',
+        'credentials.registration-contention',
+        'credentials.user-lookup',
+        'accounts.uniqueness',
+        'accounts.link-contention',
+        'accounts.safe-unlink',
+        'sessions.rotation',
+        'sessions.rotation-contention',
+        'sessions.revocation',
+        'tokens.verification-single-use',
+        'tokens.verification-replay-contention',
+        'tokens.password-reset-single-use',
+        'tokens.password-reset-replay-contention',
+        'oauth.challenge-replay-contention',
+        'jwt.version-rotation',
+        'jwt.version-rotation-contention',
+        'device-authorization.approve-claim-contention',
+        'email-otp.verification-contention',
+        'account-deletion.transaction',
+      ];
+      final caseIds = suite.cases.map((conformanceCase) => conformanceCase.id);
+
+      expect(caseIds, orderedEquals(expectedCaseIds));
+      expect(caseIds.toSet(), hasLength(expectedCaseIds.length));
+    });
+
     test(
       'does not require optional WebAuthn or deletion capabilities',
       () async {
@@ -24,15 +56,18 @@ void main() {
         final results = await Future.wait(
           coreOnlySuite.cases.map((conformanceCase) => conformanceCase.run()),
         );
-        final skipped = <AuthStoreConformanceCapability>[
+        final skipped = <String, String>{
           for (var index = 0; index < results.length; index++)
             if (results[index].isSkipped)
-              coreOnlySuite.cases[index].optionalCapability!,
-        ];
+              coreOnlySuite.cases[index].id: results[index].skippedReason!,
+        };
 
         expect(
           skipped,
-          equals([AuthStoreConformanceCapability.accountDeletion]),
+          equals({
+            'account-deletion.transaction':
+                'Adapter does not expose accountDeletion.',
+          }),
         );
       },
     );

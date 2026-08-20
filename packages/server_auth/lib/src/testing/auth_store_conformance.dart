@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import '../core/device_authorization_store.dart';
+import '../core/email_otp_store.dart';
 import '../core/models.dart';
+import '../core/oauth_challenge_store.dart';
 import '../core/password_reset_token_store.dart';
 import '../core/store.dart';
 
@@ -126,6 +129,8 @@ final class AuthStoreConformanceCase {
 /// Every case receives a new fixture. Base cases only use [AuthStore]. Cases
 /// for optional interfaces report a skipped result when the interface is not
 /// present. In particular, WebAuthn stores are not required by this suite.
+/// Case IDs are stable public contract identifiers suitable for CI reports and
+/// adapter allowlists; additions do not change existing identifiers.
 final class AuthStoreConformanceSuite {
   /// Creates a suite backed by an isolated fixture factory.
   AuthStoreConformanceSuite({
@@ -169,9 +174,19 @@ final class AuthStoreConformanceSuite {
           verify: _verifyUserEmailUpdateAtomicity,
         ),
         _case(
+          id: 'users.create-or-find-contention',
+          description: 'creates one canonical email identity under contention',
+          verify: _verifyUserCreateOrFindContention,
+        ),
+        _case(
           id: 'credentials.registration-lookup',
           description: 'registers and resolves password credentials atomically',
           verify: _verifyCredentialRegistration,
+        ),
+        _case(
+          id: 'credentials.registration-contention',
+          description: 'registers one credential owner under contention',
+          verify: _verifyCredentialRegistrationContention,
         ),
         _case(
           id: 'credentials.user-lookup',
@@ -187,6 +202,11 @@ final class AuthStoreConformanceSuite {
           verify: _verifyAccountUniqueness,
         ),
         _case(
+          id: 'accounts.link-contention',
+          description: 'selects one canonical account owner under contention',
+          verify: _verifyAccountLinkContention,
+        ),
+        _case(
           id: 'accounts.safe-unlink',
           description: 'prevents unlinking the last authentication method',
           verify: _verifySafeAccountUnlink,
@@ -195,6 +215,11 @@ final class AuthStoreConformanceSuite {
           id: 'sessions.rotation',
           description: 'rotates sessions atomically and rejects replay',
           verify: _verifySessionRotation,
+        ),
+        _case(
+          id: 'sessions.rotation-contention',
+          description: 'commits exactly one session rotation replacement',
+          verify: _verifySessionRotationContention,
         ),
         _case(
           id: 'sessions.revocation',
@@ -207,14 +232,44 @@ final class AuthStoreConformanceSuite {
           verify: _verifyVerificationTokens,
         ),
         _case(
+          id: 'tokens.verification-replay-contention',
+          description: 'rejects concurrent verification-token replay',
+          verify: _verifyVerificationTokenContention,
+        ),
+        _case(
           id: 'tokens.password-reset-single-use',
           description: 'replaces and consumes password-reset tokens atomically',
           verify: _verifyPasswordResetTokens,
         ),
         _case(
+          id: 'tokens.password-reset-replay-contention',
+          description: 'rejects concurrent password-reset token replay',
+          verify: _verifyPasswordResetTokenContention,
+        ),
+        _case(
+          id: 'oauth.challenge-replay-contention',
+          description: 'consumes one OAuth challenge under contention',
+          verify: _verifyOAuthChallengeContention,
+        ),
+        _case(
           id: 'jwt.version-rotation',
           description: 'tracks independent atomic JWT versions',
           verify: _verifyJwtVersions,
+        ),
+        _case(
+          id: 'jwt.version-rotation-contention',
+          description: 'returns distinct monotonic JWT rotation versions',
+          verify: _verifyJwtVersionContention,
+        ),
+        _case(
+          id: 'device-authorization.approve-claim-contention',
+          description: 'approves and claims a device authorization once',
+          verify: _verifyDeviceAuthorizationContention,
+        ),
+        _case(
+          id: 'email-otp.verification-contention',
+          description: 'replaces and verifies an email OTP exactly once',
+          verify: _verifyEmailOtpContention,
         ),
         _case(
           id: 'account-deletion.transaction',
@@ -334,8 +389,41 @@ Future<void> _verifyUserEmailUpdateAtomicity(AuthStore store) async {
   );
 }
 
+Future<void> _verifyUserCreateOrFindContention(AuthStore store) async {
+  const email = 'contended@example.com';
+  final candidates = <AuthUser>[
+    for (var index = 0; index < 16; index++)
+      _user('contended-user-$index', email),
+  ];
+  final results = await Future.wait([
+    for (final candidate in candidates)
+      Future.sync(() => store.users.createOrFindByEmail(candidate)),
+  ]);
+
+  final created = results.where((result) => result.created).toList();
+  _check(created.length == 1, 'contention created more than one email owner');
+  final canonicalId = created.single.user.id;
+  _check(
+    results.every((result) => result.user.id == canonicalId),
+    'createOrFindByEmail returned conflicting canonical users',
+  );
+  _check(
+    (await Future.sync(() => store.users.findByEmail(email)))?.id ==
+        canonicalId,
+    'email lookup did not preserve the contention winner',
+  );
+  final persisted = await Future.wait([
+    for (final candidate in candidates)
+      Future.sync(() => store.users.findById(candidate.id)),
+  ]);
+  _check(
+    persisted.whereType<AuthUser>().length == 1,
+    'losing email candidates were persisted',
+  );
+}
+
 Future<void> _verifyCredentialRegistration(AuthStore store) async {
-  final now = DateTime.now().toUtc();
+  final now = _conformanceNow();
   final user = _user('user-1', 'credential@example.com');
   final credential = _credential(user, now: now);
   final registered = await Future.sync(
@@ -373,8 +461,44 @@ Future<void> _verifyCredentialRegistration(AuthStore store) async {
   );
 }
 
+Future<void> _verifyCredentialRegistrationContention(AuthStore store) async {
+  final now = _conformanceNow();
+  const identifier = 'contended-login';
+  final users = <AuthUser>[
+    for (var index = 0; index < 16; index++)
+      AuthUser(id: 'credential-user-$index'),
+  ];
+  final results = await Future.wait([
+    for (final user in users)
+      _rejectedWriteAsNull(
+        () => store.credentials.register(
+          user,
+          _credential(user, identifier: identifier, now: now),
+        ),
+      ),
+  ]);
+
+  final registered = results.whereType<AuthUser>().toList();
+  _check(registered.length == 1, 'contention registered multiple credentials');
+  final ownerId = registered.single.id;
+  _check(
+    (await Future.sync(
+          () => store.credentials.findByIdentifier(identifier),
+        ))?.userId ==
+        ownerId,
+    'credential lookup did not preserve the contention winner',
+  );
+  final persisted = await Future.wait([
+    for (final user in users) Future.sync(() => store.users.findById(user.id)),
+  ]);
+  _check(
+    persisted.whereType<AuthUser>().length == 1,
+    'losing credential registrations persisted users',
+  );
+}
+
 Future<void> _verifyCredentialUserLookup(AuthStore store) async {
-  final now = DateTime.now().toUtc();
+  final now = _conformanceNow();
   final user = _user('lookup-user', 'lookup@example.com');
   final credential = _credential(user, now: now);
   await Future.sync(() => store.credentials.register(user, credential));
@@ -404,6 +528,42 @@ Future<void> _verifyAccountUniqueness(AuthStore store) async {
   _check(
     (await Future.sync(() => store.accounts.listForUser('user-2'))).isEmpty,
     'conflicting provider identity appeared in the second user account',
+  );
+}
+
+Future<void> _verifyAccountLinkContention(AuthStore store) async {
+  final candidates = <AuthAccount>[
+    for (var index = 0; index < 16; index++)
+      _account('account-user-$index', accountId: 'contended-account'),
+  ];
+  final linked = await Future.wait([
+    for (final candidate in candidates)
+      Future.sync(() => store.accounts.link(candidate)),
+  ]);
+  final owners = linked.map((account) => account.userId).toSet();
+  _check(
+    owners.length == 1,
+    'account link contention returned multiple owners',
+  );
+  final ownerId = owners.single;
+  _check(ownerId != null, 'account link contention returned no owner');
+  _check(
+    (await Future.sync(
+          () => store.accounts.find(
+            candidates.first.providerId,
+            candidates.first.providerAccountId,
+          ),
+        ))?.userId ==
+        ownerId,
+    'account lookup did not preserve the contention winner',
+  );
+  final listings = await Future.wait([
+    for (final candidate in candidates)
+      Future.sync(() => store.accounts.listForUser(candidate.userId!)),
+  ]);
+  _check(
+    listings.fold<int>(0, (count, accounts) => count + accounts.length) == 1,
+    'provider identity was persisted for multiple users',
   );
 }
 
@@ -452,7 +612,7 @@ Future<void> _verifySafeAccountUnlink(AuthStore store) async {
 }
 
 Future<void> _verifySessionRotation(AuthStore store) async {
-  final now = DateTime.now().toUtc();
+  final now = _conformanceNow();
   final previous = _session('session-1', 'token-hash-1', now: now);
   final replacement = _session('session-2', 'token-hash-2', now: now);
   final collision = _session(
@@ -511,8 +671,62 @@ Future<void> _verifySessionRotation(AuthStore store) async {
   );
 }
 
+Future<void> _verifySessionRotationContention(AuthStore store) async {
+  final now = _conformanceNow();
+  final original = _session(
+    'rotation-original',
+    'rotation-original-hash',
+    userId: 'rotation-user',
+    now: now,
+  );
+  await Future.sync(() => store.sessions.create(original));
+  final replacements = <AuthSessionRecord>[
+    for (var index = 0; index < 16; index++)
+      _session(
+        'rotation-replacement-$index',
+        'rotation-replacement-hash-$index',
+        userId: original.userId,
+        now: now,
+      ),
+  ];
+  final results = await Future.wait([
+    for (final replacement in replacements)
+      Future.sync(
+        () => store.sessions.rotate(
+          previousTokenHash: original.tokenHash,
+          replacement: replacement,
+        ),
+      ),
+  ]);
+
+  final winners = results.whereType<AuthSessionRecord>().toList();
+  _check(winners.length == 1, 'session rotation had multiple winners');
+  final winner = winners.single;
+  final stored = await Future.sync(
+    () => store.sessions.listForUser(original.userId),
+  );
+  _check(stored.length == 2, 'session rotation persisted losing replacements');
+  _check(
+    stored.where((session) => session.id == original.id).single.revokedAt !=
+        null,
+    'session rotation did not revoke the original session',
+  );
+  _check(
+    stored.where((session) => session.id == winner.id).single.revokedAt == null,
+    'session rotation winner was not active',
+  );
+  for (final losing in replacements.where(
+    (replacement) => replacement.id != winner.id,
+  )) {
+    _check(
+      await Future.sync(() => store.sessions.find(losing.tokenHash)) == null,
+      'a losing session replacement was persisted',
+    );
+  }
+}
+
 Future<void> _verifySessionRevocation(AuthStore store) async {
-  final now = DateTime.now().toUtc();
+  final now = _conformanceNow();
   final current = _session('current', 'current-hash', now: now);
   final other = _session('other', 'other-hash', now: now);
   final foreign = _session(
@@ -561,13 +775,38 @@ Future<void> _verifyVerificationTokens(AuthStore store) async {
   final token = AuthVerificationToken(
     identifier: 'verify@example.com',
     token: 'verification-secret',
-    expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 10)),
+    expiresAt: _conformanceNow().add(const Duration(minutes: 10)),
     metadata: const <String, dynamic>{'purpose': 'conformance'},
+  );
+  await Future.sync(() => store.verificationTokens.save(token));
+  final consumed = await Future.sync(
+    () => store.verificationTokens.consume(token.identifier, token.token),
+  );
+  _check(consumed != null, 'verification token could not be consumed');
+  _check(
+    consumed!.metadata['purpose'] == 'conformance',
+    'verification token metadata was not preserved',
+  );
+  _check(
+    await Future.sync(
+          () => store.verificationTokens.consume(token.identifier, token.token),
+        ) ==
+        null,
+    'verification token could be replayed',
+  );
+}
+
+Future<void> _verifyVerificationTokenContention(AuthStore store) async {
+  final token = AuthVerificationToken(
+    identifier: 'verification-contention@example.com',
+    token: 'verification-contention-secret',
+    expiresAt: _conformanceNow().add(const Duration(minutes: 10)),
+    metadata: const <String, dynamic>{'purpose': 'contention'},
   );
   await Future.sync(() => store.verificationTokens.save(token));
   final results = await Future.wait(
     List<Future<AuthVerificationToken?>>.generate(
-      8,
+      16,
       (_) => Future.sync(
         () => store.verificationTokens.consume(token.identifier, token.token),
       ),
@@ -576,16 +815,23 @@ Future<void> _verifyVerificationTokens(AuthStore store) async {
   final consumed = results.whereType<AuthVerificationToken>().toList();
   _check(
     consumed.length == 1,
-    'verification token was consumed more than once',
+    'verification token contention did not have exactly one winner',
   );
   _check(
-    consumed.single.metadata['purpose'] == 'conformance',
+    consumed.single.metadata['purpose'] == 'contention',
     'verification token metadata was not preserved',
+  );
+  _check(
+    await Future.sync(
+          () => store.verificationTokens.consume(token.identifier, token.token),
+        ) ==
+        null,
+    'verification token was available after contention',
   );
 }
 
 Future<void> _verifyPasswordResetTokens(AuthStore store) async {
-  final now = DateTime.now().toUtc();
+  final now = _conformanceNow();
   final first = buildAuthPasswordResetToken(
     userId: 'user-1',
     token: 'reset-secret-1',
@@ -614,17 +860,83 @@ Future<void> _verifyPasswordResetTokens(AuthStore store) async {
         'user-1',
     'active password-reset lookup consumed or lost the token',
   );
+  final consumed = await Future.sync(
+    () => store.passwordResetTokens.consume('reset-secret-2'),
+  );
+  _check(consumed?.userId == 'user-1', 'password-reset token was not consumed');
+  _check(
+    await Future.sync(
+          () => store.passwordResetTokens.consume('reset-secret-2'),
+        ) ==
+        null,
+    'password-reset token could be replayed',
+  );
+}
+
+Future<void> _verifyPasswordResetTokenContention(AuthStore store) async {
+  final now = _conformanceNow();
+  const rawToken = 'reset-contention-secret';
+  await Future.sync(
+    () => store.passwordResetTokens.save(
+      buildAuthPasswordResetToken(
+        userId: 'reset-contention-user',
+        token: rawToken,
+        ttl: const Duration(minutes: 10),
+        now: now,
+      ),
+    ),
+  );
   final results = await Future.wait(
     List<Future<AuthPasswordResetToken?>>.generate(
-      8,
-      (_) => Future.sync(
-        () => store.passwordResetTokens.consume('reset-secret-2'),
-      ),
+      16,
+      (_) => Future.sync(() => store.passwordResetTokens.consume(rawToken)),
     ),
   );
   _check(
     results.whereType<AuthPasswordResetToken>().length == 1,
-    'password-reset token was consumed more than once',
+    'password-reset contention did not have exactly one winner',
+  );
+  _check(
+    await Future.sync(() => store.passwordResetTokens.consume(rawToken)) ==
+        null,
+    'password-reset token was available after contention',
+  );
+}
+
+Future<void> _verifyOAuthChallengeContention(AuthStore store) async {
+  final challenge = AuthOAuthChallenge(
+    providerId: 'conformance-provider',
+    state: 'oauth-contention-state',
+    expiresAt: _conformanceNow().add(const Duration(minutes: 10)),
+    codeVerifier: 'oauth-code-verifier',
+    nonce: 'oauth-nonce',
+  );
+  await Future.sync(() => store.oauthChallenges.save(challenge));
+  final results = await Future.wait([
+    for (var index = 0; index < 16; index++)
+      Future.sync(
+        () => store.oauthChallenges.consume(
+          challenge.providerId,
+          challenge.state,
+        ),
+      ),
+  ]);
+  final consumed = results.whereType<AuthOAuthChallenge>().toList();
+  _check(consumed.length == 1, 'OAuth challenge had multiple consumers');
+  _check(
+    consumed.single.codeVerifier == challenge.codeVerifier &&
+        consumed.single.nonce == challenge.nonce,
+    'OAuth challenge bindings were not preserved',
+  );
+  _check(
+    await Future.sync(
+          () => store.oauthChallenges.consume(
+            challenge.providerId,
+            challenge.state,
+          ),
+        ) ==
+        null,
+    'OAuth challenge was available after contention',
   );
 }
 
@@ -647,9 +959,150 @@ Future<void> _verifyJwtVersions(AuthStore store) async {
   );
 }
 
+Future<void> _verifyJwtVersionContention(AuthStore store) async {
+  const userId = 'jwt-contention-user';
+  final versions = await Future.wait([
+    for (var index = 0; index < 16; index++)
+      Future.sync(() => store.jwtVersions.rotate(userId)),
+  ]);
+  _check(
+    versions.toSet().length == versions.length,
+    'JWT rotations returned duplicate versions',
+  );
+  _check(
+    versions.toSet().containsAll(<int>{
+      for (var value = 1; value <= 16; value++) value,
+    }),
+    'JWT rotations did not return the complete monotonic sequence',
+  );
+  _check(
+    await Future.sync(() => store.jwtVersions.current(userId)) == 16,
+    'JWT rotation contention persisted the wrong current version',
+  );
+}
+
+Future<void> _verifyDeviceAuthorizationContention(AuthStore store) async {
+  final now = _conformanceNow();
+  final authorization = AuthDeviceAuthorization(
+    id: 'device-contention',
+    deviceCodeHash: 'device-contention-hash',
+    userCodeHash: 'user-contention-hash',
+    clientId: 'device-contention-client',
+    scopes: const <String>['openid'],
+    createdAt: now,
+    expiresAt: now.add(const Duration(minutes: 10)),
+    interval: const Duration(seconds: 5),
+  );
+  await Future.sync(() => store.deviceAuthorizations.create(authorization));
+  final approvals = await Future.wait([
+    for (var index = 0; index < 8; index++)
+      Future.sync(
+        () => store.deviceAuthorizations.approve(
+          authorization.userCodeHash,
+          'device-user-$index',
+          now: now,
+        ),
+      ),
+  ]);
+  final approved = approvals.whereType<AuthDeviceAuthorization>().toList();
+  _check(approved.length == 1, 'device authorization had multiple approvers');
+
+  final claims = await Future.wait([
+    for (var index = 0; index < 16; index++)
+      Future.sync(
+        () => store.deviceAuthorizations.claimApproved(
+          authorization.deviceCodeHash,
+          clientId: authorization.clientId,
+          now: now,
+        ),
+      ),
+  ]);
+  final claimed = claims.whereType<AuthDeviceAuthorization>().toList();
+  _check(claimed.length == 1, 'device authorization had multiple claimants');
+  _check(
+    claimed.single.userId == approved.single.userId,
+    'device authorization claim changed the approved user',
+  );
+  _check(
+    await Future.sync(
+          () => store.deviceAuthorizations.claimApproved(
+            authorization.deviceCodeHash,
+            clientId: authorization.clientId,
+            now: now,
+          ),
+        ) ==
+        null,
+    'device authorization was claimable after contention',
+  );
+}
+
+Future<void> _verifyEmailOtpContention(AuthStore store) async {
+  final now = _conformanceNow();
+  const email = 'otp-contention@example.com';
+  const staleCode = '111111';
+  const activeCode = '222222';
+  AuthEmailOtp otp(String id, String code) => AuthEmailOtp(
+    id: id,
+    email: email,
+    codeHash: hashAuthEmailOtpCode(code),
+    type: AuthEmailOtpType.signIn,
+    createdAt: now,
+    expiresAt: now.add(const Duration(minutes: 5)),
+    maxAttempts: 32,
+  );
+
+  await Future.sync(() => store.emailOtps.save(otp('otp-stale', staleCode)));
+  await Future.sync(() => store.emailOtps.save(otp('otp-active', activeCode)));
+  final stale = await Future.sync(
+    () => store.emailOtps.verify(
+      email,
+      AuthEmailOtpType.signIn,
+      staleCode,
+      now: now,
+    ),
+  );
+  _check(
+    stale.status == AuthEmailOtpVerificationStatus.invalid,
+    'a replaced email OTP remained valid',
+  );
+  final results = await Future.wait([
+    for (var index = 0; index < 16; index++)
+      Future.sync(
+        () => store.emailOtps.verify(
+          email,
+          AuthEmailOtpType.signIn,
+          activeCode,
+          now: now,
+        ),
+      ),
+  ]);
+  _check(
+    results
+            .where(
+              (result) =>
+                  result.status == AuthEmailOtpVerificationStatus.verified,
+            )
+            .length ==
+        1,
+    'email OTP contention did not have exactly one winner',
+  );
+  final replay = await Future.sync(
+    () => store.emailOtps.verify(
+      email,
+      AuthEmailOtpType.signIn,
+      activeCode,
+      now: now,
+    ),
+  );
+  _check(
+    replay.status != AuthEmailOtpVerificationStatus.verified,
+    'email OTP was accepted after contention',
+  );
+}
+
 Future<void> _verifyAccountDeletionTransaction(AuthStore store) async {
   final deletionStore = store as AuthAccountDeletionStore;
-  final now = DateTime.now().toUtc();
+  final now = _conformanceNow();
   final user = _user('delete-user', 'delete@example.com');
   final credential = _credential(user, now: now);
   final account = _account(user.id, accountId: 'delete-account');
@@ -790,6 +1243,8 @@ Future<void> _checkUserDataPresent(
 
 AuthUser _user(String id, String email) => AuthUser(id: id, email: email);
 
+DateTime _conformanceNow() => DateTime.utc(2100, 1, 1, 12);
+
 AuthPasswordCredential _credential(
   AuthUser user, {
   required DateTime now,
@@ -839,6 +1294,15 @@ Future<void> _allowRejectedWrite(FutureOr<Object?> Function() write) async {
     rethrow;
   } catch (_) {
     // Constraint errors are a valid way to reject conflicting writes.
+  }
+}
+
+Future<T?> _rejectedWriteAsNull<T>(FutureOr<T?> Function() write) async {
+  try {
+    return await Future.sync(write);
+  } catch (_) {
+    // Constraint errors are a valid losing result for contended writes.
+    return null;
   }
 }
 
