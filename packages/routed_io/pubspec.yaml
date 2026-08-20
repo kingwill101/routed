@@ -20,4 +20,6 @@ dependencies:
 
 dev_dependencies:
   lints: ^6.0.0
+  routed_auth: any
+  routed_sessions: any
   test: ^1.29.0

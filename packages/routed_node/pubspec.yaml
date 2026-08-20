@@ -23,5 +23,7 @@ dependencies:
 
 dev_dependencies:
   lints: ^6.0.0
+  routed_auth: any
   test: ^1.29.0
   routed_node_api_sample: any
+  routed_sessions: any
