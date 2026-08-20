@@ -149,6 +149,12 @@ WebAuthn, two-factor auth, accounts, passwords, organizations, and admin
 operations. The client does not persist secrets or silently provision local
 accounts.
 
+The public [auth endpoint security contract](https://kingwill101.github.io/routed/docs/routed/security/auth-endpoint-contract)
+maps the core and opt-in HTTP operations to authentication, browser Origin,
+CSRF, rate-limit keys, redirects, session/JWT projection, and generic public
+errors. `server_auth` defines the portable descriptors; a framework adapter is
+responsible for enforcing that contract.
+
 ## Optional username plugin
 
 Username-first authentication is opt-in and keeps its client API separately

@@ -1,0 +1,318 @@
+---
+title: Auth endpoint security contract
+description: Public authentication, browser protection, CSRF, rate-limit, redirect, session, and error behavior
+authors: routed
+sidebar_position: 7
+---
+
+# Auth endpoint security contract
+
+This page is the public HTTP security contract for Routed authentication. It
+describes the routes an application receives from its selected providers and
+server plugins. It does not describe storage tables or internal implementation
+types.
+
+The default auth base path is `/auth`. Paths in the matrices below are relative
+to that base path unless they begin with `/.well-known/`. Applications may
+choose another base path through their typed deployment or `AuthOptions`.
+
+Use the public Dart entrypoints:
+
+```dart
+import 'package:routed_auth/routed_auth.dart';
+import 'package:server_auth/server_auth.dart';
+```
+
+See the [routed_auth API](https://pub.dev/documentation/routed_auth/latest/routed_auth/),
+the [server_auth API](https://pub.dev/documentation/server_auth/latest/server_auth/),
+the [Routed OAuth example](https://github.com/kingwill101/routed/blob/master/packages/routed_auth/example/oauth_example.dart),
+and the [framework-neutral auth example](https://github.com/kingwill101/routed/blob/master/packages/server_auth/example/main.dart).
+
+## How to read the matrix
+
+- **Public** means no existing Routed identity is required. A one-time code,
+  passkey assertion, OAuth client credential, bearer token, or API key may
+  still be required by that operation.
+- **Session** means the configured server-session or JWT identity is required.
+  Organization and Admin operations apply their own permission checks after
+  authentication.
+- **Browser Origin** means Routed validates an exact same or explicitly trusted
+  `Origin`, rejects untrusted cross-site Fetch Metadata, and applies the
+  configured Referer and content-type policy. Native clients without browser
+  headers remain supported unless `requireOrigin` is enabled.
+- **CSRF** means the request must present the token obtained from `GET /csrf`
+  through `X-CSRF-Token` or `_csrf`. The typed client transport fetches,
+  caches, and retries this token automatically for mutation methods that use
+  its `mutate` operation.
+- **Context key** means the endpoint contributes no user identifier. The
+  application limiter can still use the trusted client address, method, path,
+  operation, and provider namespace.
+
+Every configured limiter receives a non-secret namespaced operation. Core
+operations use `core.*`; plugin operations use the plugin namespace shown in
+the matrix. Passwords, OTPs, captcha tokens, OAuth codes, bearer tokens, and
+API keys are never limiter identifiers. A blocked request returns `429` with
+`Retry-After`.
+
+## Core providers and account routes
+
+These routes are supplied by Routed auth itself. Provider-specific sign-in and
+registration behavior exists only for providers included in
+`AuthOptions.providers`.
+
+The concrete provider route templates are `GET|POST /signin/{provider}`,
+`POST /register/{provider}`, and `GET|POST /callback/{provider}`. The rows
+below separate their security behavior by provider type.
+
+| Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Redirect, session, and public result |
+| --- | --- | --- | --- | --- |
+| `GET /providers`, `GET /csrf` | Public | Neither | None | Provider metadata or a CSRF token; never creates an identity. |
+| `GET /session` | Public | Neither | None | `null` when signed out; otherwise the current safe session projection. |
+| `POST /signin/{credentials}`, `POST /register/{credentials}` | Public | Browser Origin + CSRF | `core.signIn` or `core.register`; provider ID plus normalized email or supplied username | Issues the configured server session or JWT. A pending 2FA policy returns `202 two_factor_required` instead. |
+| `GET` or `POST /signin/{oauth}` | Public | Neither; OAuth protocol start | `core.oauthStart`; provider ID + context key | Redirects to the provider after storing state, PKCE, nonce, callback, and browser-binding state. |
+| `GET` or `POST /callback/{oauth}` | Public | Neither; OAuth protocol callback | `core.oauthCallback`; provider ID + context key | Verifies state and browser binding, then issues the configured identity or redirects to the sanitized application callback. |
+| `POST /signin/{email}` | Public | Browser Origin + CSRF | `core.emailVerification`; provider ID + normalized email | Sends a magic link and returns the same public delivery shape. |
+| `GET /callback/{email}` | Public; one-time link | Neither | `core.emailCallback`; provider ID + normalized email | Requires the link's browser binding, then issues the configured identity or redirects to a sanitized callback. |
+| `GET` or `POST /callback/{custom}` | Public; provider proof | Neither | `core.customCallback`; provider ID + context key | Provider failures are sanitized; success issues the configured identity or follows a sanitized redirect. |
+| `POST /signout` | Existing identity optional | Browser Origin + CSRF | None | Revokes the server session or expires the JWT cookie and returns `{ok: true}`. |
+| `POST /password-reset/request` | Public; route exists only with a sender | Browser Origin + CSRF | `core.passwordResetRequest`; normalized email | Always returns the same accepted response for known and unknown accounts. |
+| `POST /password-reset/confirm` | Public; one-time token | Browser Origin + CSRF | `core.passwordResetConfirm`; context key | Replaces the password and revokes prior access; returns JSON, not a session. |
+| `POST /password/change` | Session + current password | Browser Origin + CSRF | None | Changes the password, revokes prior access, and expires the current auth cookie. |
+| `POST /email/change/request`, `POST /email/change/confirm` | Session + reauthentication or one-time token; routes require a sender | Browser Origin + CSRF | `core.emailChangeRequest` or `core.emailChangeConfirm`; current user ID | Returns an accepted or completed JSON status; no redirect. |
+| `GET /accounts` | Session | Neither | None | Returns safe linked-account projections. |
+| `POST /accounts/link`, `POST /accounts/unlink` | Session + provider proof or current password | Browser Origin + CSRF | `core.accountLink` or `core.accountUnlink`; current user ID | Returns JSON. Provider access tokens are not echoed. |
+| `POST /account/delete` | Session + current password | Browser Origin + CSRF | `core.accountDeletion`; current user ID | Deletes the current account and signs it out. |
+| `POST /account/delete/request`, `POST /account/delete/confirm` | Session + current password or one-time token; routes require a sender | Browser Origin + CSRF | `core.accountDeletion`; current user ID | Returns accepted/completed JSON and signs out after confirmation. |
+| `GET /sessions` | Server-session strategy only | Neither | None | Returns safe session/device metadata without client tokens or stored digests. |
+| `POST /sessions/revoke`, `POST /sessions/revoke-others` | Server-session strategy only | Browser Origin + CSRF | None | Revokes the selected session or every other session. |
+
+## Optional server plugins
+
+Descriptor-based plugin routes are mounted only when their server plugin is in
+`AuthOptions.plugins`. Selecting a matching client plugin does not enable a
+server route.
+
+### Anonymous
+
+| Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Result |
+| --- | --- | --- | --- | --- |
+| `POST /sign-in/anonymous` | Public | Browser Origin; no CSRF | `anonymous.sign_in`; context key | Creates an anonymous user and issues the configured identity. |
+| `POST /delete-anonymous-user` | Session; anonymous users only | Browser Origin; no CSRF | `anonymous.delete`; current user ID | Signs out and deletes the anonymous user. |
+
+### Email OTP
+
+| Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Result |
+| --- | --- | --- | --- | --- |
+| `POST /email-otp/send-verification-otp`, `POST /email-otp/check-verification-otp` | Public; OTP proof for check | Neither | `email_otp.send` or `email_otp.check`; context key | Generic delivery/check result; the OTP is never returned. |
+| `POST /sign-in/email-otp` | Public; OTP proof | Browser Origin; no CSRF | `email_otp.sign_in`; context key | Consumes the OTP and issues the configured identity. |
+| `POST /email-otp/verify-email` | Session + OTP | Browser Origin + CSRF | `email_otp.verify_email`; current user ID | Marks the current email verified and returns a safe user projection. |
+
+### Phone number
+
+| Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Result |
+| --- | --- | --- | --- | --- |
+| `POST /phone-number/send-code` | Public | Browser Origin; no CSRF | `phone_number.send_code`; keyed digest of the canonical E.164 number | Returns only delivery status and expiry. |
+| `POST /phone-number/verify-code` | Public; one-time code | Browser Origin; no CSRF | `phone_number.verify_code`; keyed digest of the canonical E.164 number | Consumes the code and issues the configured identity. |
+
+### Username
+
+| Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Result |
+| --- | --- | --- | --- | --- |
+| `POST /username/register` | Public | Browser Origin; no CSRF | `username.registration`; canonical username | Creates the credential and issues the configured identity, or returns a 2FA challenge when policy requires it. |
+| `POST /username/sign-in` | Public | Browser Origin; no CSRF | `username.sign_in`; canonical username or email selected by the typed identifier policy | Issues the configured identity, or returns a 2FA challenge. Ambiguous identifiers are rejected. |
+
+### WebAuthn / passkeys
+
+| Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Result |
+| --- | --- | --- | --- | --- |
+| `POST /webauthn/register/options`, `POST /webauthn/register/verify` | Session | Browser Origin + CSRF | `webauthn.registration-options` or `webauthn.registration-verify`; current user ID | Starts or completes passkey enrollment; never creates a new login identity. |
+| `POST /webauthn/authenticate/options`, `POST /webauthn/authenticate/verify` | Public; passkey proof for verify | Browser Origin; no CSRF | `webauthn.authentication-options` or `webauthn.authentication-verify`; context key | Public options do not reveal enrollment or credential IDs. Verification issues the configured identity. |
+| `GET /webauthn/credentials` | Session | Neither | `webauthn.credential-list`; current user ID | Lists safe credential metadata. |
+| `POST /webauthn/credentials/delete`, `POST /webauthn/credentials/rename` | Session | Browser Origin + CSRF | `webauthn.credential-delete` or `webauthn.credential-rename`; current user ID | Mutates only credentials owned by the current user. |
+
+### Two factor
+
+The Routed adapter currently keeps the 2FA route shell mounted even when
+`TwoFactorPlugin` is absent; those requests return `two_factor_unavailable`.
+Composing the plugin enables the operations below.
+
+| Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Result |
+| --- | --- | --- | --- | --- |
+| `GET /2fa/status` | Session | Neither | None | Returns enabled, recovery-code, enrollment, and lockout status. |
+| `POST /2fa/enroll`, `/2fa/enroll/verify`, `/2fa/verify`, `/2fa/recovery-code`, `/2fa/recovery-codes/regenerate`, `/2fa/disable`, `/2fa/trusted-devices/revoke`, `/2fa/step-up`, `/2fa/step-up/revoke` | Session | Browser Origin + CSRF | `core.twoFactor`; provider `two-factor`, context key | Returns bounded status, one-time recovery codes where applicable, or manages trusted-device/step-up proof cookies. |
+| `POST /2fa/challenge/verify`, `POST /2fa/challenge/recovery-code` | Public; pending challenge + TOTP or recovery code | Browser Origin + CSRF | `core.twoFactor`; provider `two-factor`, context key | Consumes the pending challenge and issues the configured identity. |
+
+### API keys
+
+| Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Result |
+| --- | --- | --- | --- | --- |
+| `GET /api-keys/list` | Session | Neither | `api_key.list`; current user ID | Lists metadata, scopes, expiry, use, and revocation state; never raw keys. |
+| `POST /api-keys/create`, `/api-keys/rotate`, `/api-keys/revoke` | Session | Browser Origin + CSRF | `api_key.create`, `api_key.rotate`, or `api_key.revoke`; current user ID | Create and rotate display a raw key exactly once; revoke/list never do. |
+| `POST /api-keys/exchange` | Public HTTP identity; active API key header required | Neither | `api_key.exchange`; context key | Exists only when exchange is enabled with the server-session strategy; issues a normal server session. |
+
+API-key authentication for application routes is separate middleware. It reads
+`X-API-Key` or `Authorization: ApiKey ...`, installs a scoped request
+principal, and does not create a browser session unless exchange is explicitly
+enabled.
+
+### Organization
+
+`GET /organization/check-slug` is public. Every other organization operation
+requires a session and the operation's membership or permission check.
+
+| Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Result |
+| --- | --- | --- | --- | --- |
+| GET reads: `/organization/check-slug`, `/organization/list`, `/organization/get`, `/organization/get-full`, `/organization/list-members`, `/organization/get-active-member`, `/organization/get-active-member-role`, `/organization/get-invitation`, `/organization/list-invitations`, `/organization/list-user-invitations`, `/organization/has-permission`, `/organization/list-roles`, `/organization/get-role`, `/organization/list-teams`, `/organization/list-user-teams`, `/organization/list-team-members` | Public only for `check-slug`; Session for all others | Neither | `organization.<operation>`; context key for `check-slug`, otherwise current user ID | Returns tenant-scoped safe projections. Active organization/team state is convenience state, not authorization. |
+| POST mutations: `/organization/create`, `/organization/update`, `/organization/delete`, `/organization/set-active`, `/organization/remove-member`, `/organization/update-member-role`, `/organization/leave`, `/organization/invite-member`, `/organization/accept-invitation`, `/organization/reject-invitation`, `/organization/cancel-invitation`, `/organization/create-role`, `/organization/update-role`, `/organization/delete-role`, `/organization/create-team`, `/organization/update-team`, `/organization/remove-team`, `/organization/set-active-team`, `/organization/add-team-member`, `/organization/remove-team-member` | Session + scoped authorization | Browser Origin + CSRF | `organization.<operation>`; current user ID | Returns JSON; never redirects or reissues a JWT. Last-owner mutations are rejected atomically by capable stores. |
+
+See [Organizations & Tenancy](/docs/routed/security/organizations) for the
+permission and store contract.
+
+### Admin
+
+All Admin routes require a session plus the configured global Admin permission.
+
+| Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Result |
+| --- | --- | --- | --- | --- |
+| GET reads: `/admin/list-users`, `/admin/get-user`, `/admin/get-account-state` | Session + Admin permission | Neither | `admin.<operation>`; current administrator ID | Returns safe user or account-state projections. |
+| POST mutations: `/admin/create-user`, `/admin/update-user`, `/admin/set-role`, `/admin/set-user-password`, `/admin/ban-user`, `/admin/unban-user`, `/admin/list-user-sessions`, `/admin/revoke-user-session`, `/admin/revoke-user-sessions`, `/admin/impersonate-user`, `/admin/stop-impersonating`, `/admin/remove-user`, `/admin/has-permission`, `/admin/disable-user`, `/admin/enable-user`, `/admin/verify-email`, `/admin/unlock-user` | Session + operation-specific Admin permission | Browser Origin + CSRF | `admin.<operation>`; current administrator ID | Returns JSON. Impersonation is server-session only; no Admin operation redirects. |
+
+See [Administrative Auth](/docs/routed/security/admin) for the role and hard
+deletion contract.
+
+### Device authorization
+
+| Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Result |
+| --- | --- | --- | --- | --- |
+| `POST /oauth/device/authorize` | Public; valid client | Neither; device protocol | `device_authorization.request`; context key | Returns one-time device and user codes plus verification URI and polling interval. |
+| `POST /oauth/device/approve`, `POST /oauth/device/deny` | Session | Browser Origin + CSRF | `device_authorization.approve` or `.deny`; current user ID | Approves or denies a user code. |
+| `POST /oauth/token` | Public; device code + client | Neither; OAuth protocol | `device_authorization.token`; context key | Polling returns stable RFC-style pending, slow-down, denied, expired, or token results. When OAuth provider mode is also selected, this grant shares its token endpoint. |
+
+### OAuth / OIDC provider mode
+
+Endpoint paths below are the typed defaults and may be replaced in the plugin
+options.
+
+| Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Redirect or result |
+| --- | --- | --- | --- | --- |
+| `GET /oauth/authorize` | Session + registered client request | Neither | `oauth_provider.authorize`; current user ID | Redirects only to an exact registered client URI with code and state. |
+| `POST /oauth/token`, `POST /oauth/introspect` | Public protocol endpoint; client/grant proof required | Neither | `oauth_provider.token` or `.introspect`; context key | Returns OAuth token or introspection JSON. |
+| `GET /oauth/userinfo` | Bearer access token | Neither | `oauth_provider.userinfo`; context key | Returns claims authorized by the token. |
+| `GET /.well-known/openid-configuration`, `GET /oauth/jwks` | Public | Neither | `oauth_provider.discovery` or `.jwks`; context key | Returns discovery or public signing-key metadata. The discovery path is mounted at the site root. |
+| `GET /oauth/clients/list`, `POST /oauth/clients/create`, `POST /oauth/clients/delete` | Session + provider-mode administrator check | GET: neither; POST: Browser Origin + CSRF | `oauth_provider.clients.<operation>`; current user ID | Manages registered clients; a raw client secret is returned only at creation. |
+
+### MCP authorization metadata
+
+| Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Result |
+| --- | --- | --- | --- | --- |
+| `GET /.well-known/oauth-protected-resource`, `GET /.well-known/oauth-authorization-server` | Public | Neither | None | Returns protocol metadata from the site root. |
+| `POST /oauth/register` when a registrar is supplied | Public; application registrar policy | Neither | `mcp_auth.register_client`; context key | Returns the registrar's public client registration. |
+
+### Captcha and breached-password policy
+
+These plugins add no endpoints.
+
+- `CaptchaPlugin` gates credentials and username sign-in/registration. It
+  receives a bounded captcha token only at the verifier boundary and always
+  returns `captcha_failed` for malformed, rejected, timed-out, replayed, or
+  provider-failed verification. `AuthCaptchaClientPlugin` adds captcha-aware
+  credentials methods to a selected client.
+- `BreachedPasswordPlugin` gates credentials and username registration,
+  password reset, and authenticated password change according to its typed
+  options. A breached password and lookup failure both return
+  `password_rejected`. It adds no client API because no extra client field is
+  required.
+
+## Session and body-token behavior
+
+Every successful auth-producing operation goes through the host-owned session
+path, including plugin sign-ins and 2FA completion. This applies account
+policy, callbacks, session events, and the configured strategy consistently.
+
+| Deployment strategy | Cookie | Successful JSON body |
+| --- | --- | --- |
+| Server session | Secure/HttpOnly in production; server-side record is authoritative | Safe user/session fields; never the raw session cookie or stored token digest. |
+| JWT API | Secure/HttpOnly JWT cookie | The JWT is omitted by default. It appears as `token` only when `exposeJwtTokenInSessionResponse` is explicitly enabled. |
+| API-key service | API-key middleware does not create a cookie | Key exchange, when enabled, produces a normal server session. Lifecycle responses never echo an existing raw API key. |
+
+A successful redirect carries the cookie but no JSON body. The shared
+`AuthClientTransport` stores response cookies; bearer clients may copy an
+explicitly exposed JWT into `setBearerToken`.
+
+## Public errors
+
+Expected failures use bounded lowercase codes in an `{error: ...}` JSON body.
+Unexpected plugin failures become `auth_request_failed`; provider exceptions,
+stack traces, paths, tokens, and credentials are not returned. Authentication
+and authorization failures generally use `401`, browser or CSRF rejection uses
+`403`, malformed requests use `400`, an unknown provider uses `404`, and rate
+limits use `429` with `Retry-After`. Protocol endpoints may use their stable
+OAuth/device error codes.
+
+Account-enumeration boundaries deliberately collapse detail. Password-reset
+requests return the same accepted result for known and unknown emails, and OTP
+delivery responses do not reveal stored codes.
+
+## Compose server and client plugins separately
+
+The server and client are intentionally not one "god client". Add only the
+server capabilities the application exposes, then independently select only
+the client APIs each frontend or service uses:
+
+```dart
+final phone = PhoneNumberPlugin<EngineContext>(
+  store: phoneStore,
+  sendCode: sendPhoneCode,
+  codeHashKey: phoneCodeHashKey,
+);
+final passkeyProvider = WebAuthnProvider(
+  getUserInfo: resolvePasskeyUser,
+  getRelyingParty: resolveRelyingParty,
+);
+final passkeys = WebAuthnPlugin<EngineContext>(
+  provider: passkeyProvider,
+);
+
+final deployment = AuthDeploymentPresets.secureSessionProduction<EngineContext>(
+  store: authStore,
+  providers: [CredentialsProvider(), passkeyProvider],
+  plugins: [phone, passkeys],
+  boundary: productionBoundary,
+  lifecycleDelivery: lifecycleDelivery,
+  rateLimiter: rateLimiter,
+  requireVerifiedEmail: true,
+);
+
+const phoneClientPlugin = AuthPhoneNumberClientPlugin();
+final client = AuthClient(
+  baseUrl: Uri.parse('https://api.example.com'),
+  plugins: const [phoneClientPlugin],
+);
+final phoneClient = client.plugins.use(phoneClientPlugin);
+```
+
+Installing `WebAuthnPlugin` on the server does not add passkey methods to this
+phone-only client. Add `AuthWebAuthnClientPlugin` only to clients that perform
+passkey ceremonies. The same pairing applies to credentials, providers,
+sessions, OAuth, magic links, email OTP, anonymous users, username, 2FA, API
+keys, accounts/passwords, organizations, Admin, and device authorization.
+
+## Typed deployment presets
+
+| Preset | Intended boundary | Identity strategy |
+| --- | --- | --- |
+| `localDevelopment` | Local HTTP/tests with explicitly ephemeral storage | Server session with development cookie settings. |
+| `secureSessionProduction` | Browser application with durable storage, exact HTTPS origins, explicit proxy policy, lifecycle delivery, and rate limiting | Durable server session. |
+| `jwtApiProduction` | API/mobile clients with durable storage and explicit issuer/audience/signing choices | JWT cookie; body token exposure is an explicit required choice. |
+| `serviceApiKeyProduction` | Service clients with durable auth/API-key stores and an explicit exchange choice | API-key request identity plus optional server-session exchange. |
+
+For Routed, construct `AuthDeployment<EngineContext>`, add
+`deployment.serviceProvider()` to the engine, create the engine with
+`deployment.engineConfig()`, call `deployment.bindTo(engine)`, and then
+initialize. A deployment for another request-context type cannot be silently
+bound to Routed.
+
+See [Authentication & Authorization](/docs/routed/security/auth),
+[Auth Providers & Adapters](/docs/routed/security/auth-providers), and the
+[session-auth example](/docs/routed/examples/session-auth) for the surrounding
+application setup.

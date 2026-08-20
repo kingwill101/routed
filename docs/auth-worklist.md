@@ -190,8 +190,9 @@ The work is intentionally split between framework-agnostic capabilities in
   composed plugin routes, with generated-client compatibility tests.
 - [x] Publish framework-neutral store and runtime conformance APIs for durable
   adapters and IO, Node, and Fetch hosts.
-- [ ] Add reusable provider fixtures and end-to-end helpers for plugin-specific
-  flows beyond the shared runtime conformance contract.
+- [x] Add reusable provider fixtures and end-to-end helpers for credentials,
+  email/phone OTP, OAuth/OIDC, WebAuthn, API keys, and two-factor flows beyond
+  the shared runtime conformance contract.
 - [x] Update the package READMEs and examples only after the public APIs and
   security defaults settle.
 
@@ -224,13 +225,13 @@ native auth model.
 
 ## Active security-audit remediation
 
-- [ ] Route every plugin-authenticated identity through host-owned session
+- [x] Route every plugin-authenticated identity through host-owned session
   issuance. WebAuthn JWT authentication must not report success without a
   usable session, and phone, anonymous, email-OTP, username, and WebAuthn must
   all honor the configured JWT body-token policy, callbacks, and events.
 - [x] Require browser-origin protection for anonymous and email-OTP sign-in
   while retaining explicit native-client behavior.
-- [ ] Derive bounded, non-secret rate-limit identifiers from typed plugin
+- [x] Derive bounded, non-secret rate-limit identifiers from typed plugin
   requests, use each operation namespace as provider identity, and preserve
   that metadata through the Routed rate-limit adapter.
 - [x] Prevent public WebAuthn authentication options from revealing enrollment
@@ -316,8 +317,11 @@ native auth model.
   configured password hasher.
 - [ ] Every state-changing auth operation has an explicit persistence and
   replay-safety story.
-- [ ] Every auth endpoint has documented authentication, CSRF/origin,
-  rate-limit, redirect, and error semantics.
+- [x] Every advertised auth endpoint has documented authentication,
+  CSRF/origin, rate-limit, redirect, session/body-token, and error semantics in
+  the public auth endpoint security contract. The matrix also calls out the
+  current 2FA route-shell behavior instead of describing plugin absence as a
+  `404`.
 - [x] The shared credentials/session runtime contract is verified through
   `routed_io`, native Node, and native Cloudflare Fetch request paths.
 - [ ] Every advertised plugin flow has matching end-to-end coverage across its

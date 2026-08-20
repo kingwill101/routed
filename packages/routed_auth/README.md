@@ -168,6 +168,13 @@ await authClient.plugins.use(captchaClient).signIn(
 Installing a server plugin does not add unrelated client methods, and omitting
 a server plugin means its routes are not mounted.
 
+The public [auth endpoint security contract](https://kingwill101.github.io/routed/docs/routed/security/auth-endpoint-contract)
+catalogues every core and opt-in operation with its authentication, browser
+Origin, CSRF, rate-limit key, redirect, session/JWT, and generic-error
+behavior. The one current adapter exception is 2FA: its route shell remains
+mounted and returns `two_factor_unavailable` until `TwoFactorPlugin` is
+composed.
+
 `AuthServiceProvider` creates the `AuthRuntime` and exposes it through the
 `AuthManager`. Applications provide a typed `AuthStore`; persistence is not
 created implicitly by the framework. `RoutedAuthRateLimiter` is exported by
@@ -218,7 +225,8 @@ Server-side session management is available through:
 Session responses include safe device metadata and never include the persisted
 session-token digest. These routes are not registered for JWT sessions.
 
-When `TwoFactorPlugin` is composed, Routed also registers:
+Routed exposes the following 2FA route shell; composing `TwoFactorPlugin`
+enables it, while an absent plugin returns `two_factor_unavailable`:
 
 - `GET /auth/2fa/status`
 - `POST /auth/2fa/enroll`

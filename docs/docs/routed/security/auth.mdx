@@ -105,6 +105,15 @@ The provider mounts `/auth/*` routes and resolves the configured auth manager.
 The `AuthOptions` object is the application contract; there is no auth YAML
 manifest or runtime string override.
 
+For the complete public route-by-route contract—including authentication,
+Origin, CSRF, rate-limit keys, redirects, session/JWT projection, and generic
+errors—see [Auth endpoint security contract](/docs/routed/security/auth-endpoint-contract).
+
+Optional server plugins and client plugins are selected separately. Composing
+a server plugin mounts only that server capability; it does not add methods to
+an `AuthClient`. Install the matching typed client plugin only in clients that
+need that API.
+
 ## Organizations and tenant authorization
 
 Organizations are an optional auth plugin. Compose `OrganizationPlugin` to
