@@ -32,6 +32,7 @@ export 'email_client.dart';
 export 'email_otp_store.dart';
 export 'email_otp.dart';
 export 'exceptions.dart';
+export 'fido_metadata.dart';
 export 'plugin.dart';
 export 'gates.dart';
 export 'guards.dart';

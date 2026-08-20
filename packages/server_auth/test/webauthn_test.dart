@@ -2296,6 +2296,276 @@ void main() {
       expect(policyCalled, isFalse);
     });
 
+    test(
+      'evaluates packed attestation provenance with an offline MDS blob',
+      () async {
+        final aaguid = List<int>.generate(16, (index) => index + 1);
+        final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+        final certificate = _packedAttestationCertificate(
+          attestationKey,
+          aaguid: aaguid,
+        );
+        final metadata = await _loadFidoMetadata(
+          certificate: certificate,
+          aaguid: aaguid,
+          status: 'FIDO_CERTIFIED',
+        );
+        final evaluator = FidoMetadataWebAuthnTrustEvaluator(blob: metadata);
+        final fixture = _Fixture(
+          attestationTrustPolicy: evaluator.asWebAuthnTrustPolicy(),
+        );
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+
+        final saved = await fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _registrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            attestationFormat: 'packed',
+            packedSigningKey: attestationKey,
+            packedCertificateChain: <Object?>[certificate],
+            aaguid: aaguid,
+          ),
+        );
+
+        expect(saved.credentialId, isNotEmpty);
+      },
+    );
+
+    test('rejects a revoked authenticator through the MDS policy', () async {
+      final aaguid = List<int>.generate(16, (index) => index + 1);
+      final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+      final certificate = _packedAttestationCertificate(
+        attestationKey,
+        aaguid: aaguid,
+      );
+      final metadata = await _loadFidoMetadata(
+        certificate: certificate,
+        aaguid: aaguid,
+        status: 'REVOKED',
+      );
+      final fixture = _Fixture(
+        attestationTrustPolicy: FidoMetadataWebAuthnTrustEvaluator(
+          blob: metadata,
+        ).asWebAuthnTrustPolicy(),
+      );
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+
+      await expectLater(
+        () => fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _registrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            attestationFormat: 'packed',
+            packedSigningKey: attestationKey,
+            packedCertificateChain: <Object?>[certificate],
+            aaguid: aaguid,
+          ),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'webauthn_attestation_untrusted',
+          ),
+        ),
+      );
+    });
+
+    test('rejects all security-critical MDS authenticator statuses', () async {
+      final aaguid = List<int>.generate(16, (index) => index + 1);
+      final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+      final certificate = _packedAttestationCertificate(
+        attestationKey,
+        aaguid: aaguid,
+      );
+      for (final status in <String>[
+        'USER_VERIFICATION_BYPASS',
+        'ATTESTATION_KEY_COMPROMISE',
+        'USER_KEY_REMOTE_COMPROMISE',
+        'USER_KEY_PHYSICAL_COMPROMISE',
+        'FUTURE_UNKNOWN_STATUS',
+      ]) {
+        final metadata = await _loadFidoMetadata(
+          certificate: certificate,
+          aaguid: aaguid,
+          status: status,
+        );
+        final fixture = _Fixture(
+          attestationTrustPolicy: FidoMetadataWebAuthnTrustEvaluator(
+            blob: metadata,
+          ).asWebAuthnTrustPolicy(),
+        );
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: _registrationCredential(
+              challenge: registration.challenge,
+              keyPair: fixture.keyPair,
+              attestationFormat: 'packed',
+              packedSigningKey: attestationKey,
+              packedCertificateChain: <Object?>[certificate],
+              aaguid: aaguid,
+            ),
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'webauthn_attestation_untrusted',
+            ),
+          ),
+        );
+      }
+    });
+
+    test('uses the final MDS status report as the current status', () async {
+      final aaguid = List<int>.generate(16, (index) => index + 1);
+      final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+      final certificate = _packedAttestationCertificate(
+        attestationKey,
+        aaguid: aaguid,
+      );
+      final metadata = await _loadFidoMetadata(
+        certificate: certificate,
+        aaguid: aaguid,
+        previousStatuses: const <String>['USER_VERIFICATION_BYPASS'],
+        status: 'UPDATE_AVAILABLE',
+      );
+      final fixture = _Fixture(
+        attestationTrustPolicy: FidoMetadataWebAuthnTrustEvaluator(
+          blob: metadata,
+          updateAvailable: WebAuthnAttestationTrustDecision.accept,
+        ).asWebAuthnTrustPolicy(),
+      );
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+
+      final saved = await fixture.feature.finishRegistration(
+        context: fixture.context,
+        user: fixture.user,
+        credential: _registrationCredential(
+          challenge: registration.challenge,
+          keyPair: fixture.keyPair,
+          attestationFormat: 'packed',
+          packedSigningKey: attestationKey,
+          packedCertificateChain: <Object?>[certificate],
+          aaguid: aaguid,
+        ),
+      );
+
+      expect(saved.credentialId, isNotEmpty);
+    });
+
+    test(
+      'allows an explicit downgrade policy for uncertified metadata',
+      () async {
+        final aaguid = List<int>.generate(16, (index) => index + 1);
+        final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+        final certificate = _packedAttestationCertificate(
+          attestationKey,
+          aaguid: aaguid,
+        );
+        final metadata = await _loadFidoMetadata(
+          certificate: certificate,
+          aaguid: aaguid,
+          status: 'NOT_FIDO_CERTIFIED',
+        );
+        final fixture = _Fixture(
+          attestationTrustPolicy: FidoMetadataWebAuthnTrustEvaluator(
+            blob: metadata,
+            uncertified: WebAuthnAttestationTrustDecision.downgrade,
+          ).asWebAuthnTrustPolicy(),
+        );
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+
+        final saved = await fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _registrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            attestationFormat: 'packed',
+            packedSigningKey: attestationKey,
+            packedCertificateChain: <Object?>[certificate],
+            aaguid: aaguid,
+          ),
+        );
+
+        expect(saved.credentialId, isNotEmpty);
+      },
+    );
+
+    test('rejects a certificate path outside MDS metadata roots', () async {
+      final aaguid = List<int>.generate(16, (index) => index + 1);
+      final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+      final certificate = _packedAttestationCertificate(
+        attestationKey,
+        aaguid: aaguid,
+      );
+      final unrelatedRoot = _packedAttestationCertificate(
+        _KeyPair.create(privateValue: BigInt.from(3)),
+        aaguid: aaguid,
+      );
+      final metadata = await _loadFidoMetadata(
+        certificate: certificate,
+        metadataRoot: unrelatedRoot,
+        aaguid: aaguid,
+        status: 'FIDO_CERTIFIED',
+      );
+      final fixture = _Fixture(
+        attestationTrustPolicy: FidoMetadataWebAuthnTrustEvaluator(
+          blob: metadata,
+        ).asWebAuthnTrustPolicy(),
+      );
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+
+      await expectLater(
+        () => fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _registrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            attestationFormat: 'packed',
+            packedSigningKey: attestationKey,
+            packedCertificateChain: <Object?>[certificate],
+            aaguid: aaguid,
+          ),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'webauthn_attestation_untrusted',
+          ),
+        ),
+      );
+    });
+
     test('rejects a forged certificate-backed packed signature', () async {
       final fixture = _Fixture();
       final attestationKey = _KeyPair.create(privateValue: BigInt.two);
@@ -3226,6 +3496,7 @@ Map<String, dynamic> _registrationCredential({
   bool corruptPackedSignature = false,
   List<Object?>? packedCertificateChain,
   _KeyPair? packedSigningKey,
+  List<int>? aaguid,
 }) {
   final credentialId = Uint8List.fromList(
     List<int>.generate(16, (index) => index + 1),
@@ -3245,7 +3516,7 @@ Map<String, dynamic> _registrationCredential({
     0,
     0,
     0,
-    ...List<int>.filled(16, 0),
+    ...(aaguid ?? List<int>.filled(16, 0)),
     credentialId.length >> 8,
     credentialId.length & 0xff,
     ...credentialId,
@@ -3803,10 +4074,81 @@ List<int> _bigIntBytes(BigInt value, int length) {
   return result;
 }
 
+Future<FidoMetadataBlob> _loadFidoMetadata({
+  required List<int> certificate,
+  required List<int> aaguid,
+  required String status,
+  List<String> previousStatuses = const <String>[],
+  List<int>? metadataRoot,
+}) async {
+  final now = DateTime.utc(2030, 1, 2, 12);
+  final encodedAaguid = aaguid
+      .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+      .join();
+  final formattedAaguid =
+      '${encodedAaguid.substring(0, 8)}-'
+      '${encodedAaguid.substring(8, 12)}-'
+      '${encodedAaguid.substring(12, 16)}-'
+      '${encodedAaguid.substring(16, 20)}-'
+      '${encodedAaguid.substring(20)}';
+  final header = <String, dynamic>{
+    'alg': 'ES256',
+    'typ': 'JWT',
+    'x5c': <String>[base64.encode(certificate)],
+  };
+  final payload = <String, dynamic>{
+    'legalHeader': 'https://fidoalliance.org/metadata/metadata-legal-terms/',
+    'no': 8,
+    'nextUpdate': '2030-01-03',
+    'entries': <Map<String, dynamic>>[
+      <String, dynamic>{
+        'aaguid': formattedAaguid,
+        'metadataStatement': <String, dynamic>{
+          'legalHeader':
+              'https://fidoalliance.org/metadata/metadata-statement-legal-header/',
+          'description': 'Offline test authenticator',
+          'authenticatorVersion': 7,
+          'protocolFamily': 'fido2',
+          'schema': 3,
+          'attestationCertificateKeyIdentifiers': const <String>[],
+          'attestationRootCertificates': <String>[
+            base64.encode(metadataRoot ?? certificate),
+          ],
+          'aaguid': formattedAaguid,
+        },
+        'statusReports': <Map<String, dynamic>>[
+          for (final previousStatus in previousStatuses)
+            <String, dynamic>{
+              'status': previousStatus,
+              'effectiveDate': '2029-11-01',
+            },
+          <String, dynamic>{
+            'status': status,
+            'effectiveDate': '2029-12-01',
+            if (status == 'UPDATE_AVAILABLE') 'authenticatorVersion': 7,
+          },
+        ],
+        'timeOfLastStatusChange': '2029-12-01',
+      },
+    ],
+  };
+  final compact = [header, payload]
+      .map((value) => base64UrlNoPadding(utf8.encode(jsonEncode(value))))
+      .followedBy(<String>[
+        base64UrlNoPadding(const <int>[1, 2, 3]),
+      ])
+      .join('.');
+  return FidoMetadataBlobLoader(
+    trustAnchors: <List<int>>[certificate],
+    verifyJws: (_) => const FidoMetadataJwsVerificationResult.verified(),
+  ).load(compact, now: now);
+}
+
 Uint8List _packedAttestationCertificate(
   _KeyPair keyPair, {
   String organizationalUnit = 'Authenticator Attestation',
   bool includeBasicConstraints = true,
+  List<int>? aaguid,
 }) {
   final signatureAlgorithm = ASN1Sequence()
     ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.10045.4.3.2'));
@@ -3834,7 +4176,9 @@ Uint8List _packedAttestationCertificate(
       )
       ..add(
         ASN1OctetString(
-          octets: ASN1OctetString(octets: Uint8List(16)).encode(),
+          octets: ASN1OctetString(
+            octets: Uint8List.fromList(aaguid ?? List<int>.filled(16, 0)),
+          ).encode(),
         ),
       ),
   );
