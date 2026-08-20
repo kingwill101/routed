@@ -753,7 +753,12 @@ void main() {
         downloader.refresh(),
         throwsA(isA<FidoMetadataException>()),
       );
-      expect(transport.requests, hasLength(3));
+      // Every 20 ms hop is below the 100 ms per-request budget, while the
+      // three-hop path exceeds the non-resetting 50 ms refresh budget. Timer
+      // scheduling may expire that budget just before or just after the final
+      // request starts, so the exact terminal hop is deliberately not part of
+      // the contract.
+      expect(transport.requests.length, inInclusiveRange(2, 3));
 
       final verificationTransport = _QueueTransport(<_TransportStep>[
         (_) => FidoMetadataHttpResponse(
