@@ -2,6 +2,30 @@ import 'dart:async';
 
 import 'exceptions.dart';
 
+/// Maximum UTF-16 code-unit length accepted for a limiter identifier.
+///
+/// Endpoint-specific resolvers should normally return substantially shorter
+/// canonical or keyed-hashed values. The host applies this absolute bound so
+/// custom plugins cannot accidentally feed unbounded request data into a
+/// limiter backend.
+const int authRateLimitIdentifierMaximumLength = 256;
+
+/// Applies the common safety boundary for endpoint-derived limiter keys.
+///
+/// Empty, overlong, or control-character-bearing values are discarded. The
+/// function does not lowercase or otherwise reinterpret identifiers because
+/// that canonicalization belongs to the endpoint's typed identifier policy.
+String? normalizeAuthRateLimitIdentifier(String? value) {
+  if (value == null) return null;
+  final normalized = value.trim();
+  if (normalized.isEmpty ||
+      normalized.length > authRateLimitIdentifierMaximumLength ||
+      normalized.runes.any((rune) => rune <= 0x1f || rune == 0x7f)) {
+    return null;
+  }
+  return normalized;
+}
+
 /// The externally reachable authentication operation being rate limited.
 enum AuthRateLimitAction {
   /// A credentials or email sign-in attempt.

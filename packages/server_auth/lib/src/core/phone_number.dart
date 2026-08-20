@@ -270,6 +270,8 @@ final class PhoneNumberPlugin<TContext>
           originPolicy: AuthOperationOriginPolicy.browser,
           csrfPolicy: AuthOperationCsrfPolicy.none,
           rateLimitOperation: authPhoneNumberSendRateLimitOperation,
+          rateLimitIdentifier: (request) =>
+              _phoneRateLimitIdentifier(request.phoneNumber),
           handler: (invocation, request) async {
             final issued = await issueCode(
               context: invocation.context,
@@ -292,6 +294,8 @@ final class PhoneNumberPlugin<TContext>
           originPolicy: AuthOperationOriginPolicy.browser,
           csrfPolicy: AuthOperationCsrfPolicy.none,
           rateLimitOperation: authPhoneNumberVerifyRateLimitOperation,
+          rateLimitIdentifier: (request) =>
+              _phoneRateLimitIdentifier(request.phoneNumber),
           handler: (invocation, request) async {
             final result = await verifyCode(
               context: invocation.context,
@@ -308,6 +312,16 @@ final class PhoneNumberPlugin<TContext>
           },
         ),
       ];
+
+  String? _phoneRateLimitIdentifier(String input) {
+    final phoneNumber = phoneNumberPolicy.normalize(input);
+    if (phoneNumber == null) return null;
+    final digest = Hmac(
+      sha256,
+      _codeHashKey,
+    ).convert(utf8.encode('rate-limit:phone:$phoneNumber'));
+    return 'phone:${base64UrlNoPadding(digest.bytes)}';
+  }
 
   @override
   Iterable<AuthClientOperationDescriptor> get clientOperations => endpoints.map(

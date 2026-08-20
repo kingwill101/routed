@@ -173,6 +173,56 @@ void main() {
   });
 
   group('PhoneNumberPlugin', () {
+    test(
+      'derives one bounded keyed limiter identifier from decoded requests',
+      () {
+        final plugin = PhoneNumberPlugin<Object>(
+          store: InMemoryAuthPhoneNumberStore(),
+          sendCode: (_) {},
+          codeHashKey: _hashKey,
+        );
+        final endpoints = <String, AuthEndpointRateLimitIdentifierDescriptor>{
+          for (final endpoint in plugin.endpoints)
+            endpoint.id: endpoint as AuthEndpointRateLimitIdentifierDescriptor,
+        };
+        final sendKey = endpoints['phoneNumber.sendCode']!
+            .resolveRateLimitIdentifier(const <String, dynamic>{
+              'phoneNumber': ' +18765551234 ',
+            });
+        final verifyKey = endpoints['phoneNumber.verifyCode']!
+            .resolveRateLimitIdentifier(const <String, dynamic>{
+              'phoneNumber': '+18765551234',
+              'code': '123456',
+            });
+        final otherCodeKey = endpoints['phoneNumber.verifyCode']!
+            .resolveRateLimitIdentifier(const <String, dynamic>{
+              'phoneNumber': '+18765551234',
+              'code': 'never-copy-this-otp',
+            });
+
+        expect(sendKey, startsWith('phone:'));
+        expect(sendKey, verifyKey);
+        expect(verifyKey, otherCodeKey);
+        expect(sendKey, hasLength(49));
+        expect(sendKey!.length, lessThan(authRateLimitIdentifierMaximumLength));
+        expect(sendKey, isNot(contains('+18765551234')));
+        expect(sendKey, isNot(contains('123456')));
+        expect(sendKey, isNot(contains('never-copy-this-otp')));
+        expect(
+          endpoints['phoneNumber.sendCode']!.resolveRateLimitIdentifier(
+            const <String, dynamic>{'phoneNumber': 'not-a-phone'},
+          ),
+          isNull,
+        );
+        expect(
+          endpoints['phoneNumber.verifyCode']!.resolveRateLimitIdentifier(
+            const <String, dynamic>{'phoneNumber': '+18765551234'},
+          ),
+          isNull,
+        );
+      },
+    );
+
     test('verification responses never serialize session tokens', () {
       final response = AuthPhoneNumberVerifyResponse(
         phoneNumber: '+18765551234',

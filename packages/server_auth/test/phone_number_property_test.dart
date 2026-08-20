@@ -108,7 +108,7 @@ void main() {
       );
       AuthRuntime<Object>(
         options: AuthOptions<Object>(
-            providers: const <AuthProvider>[],
+          providers: const <AuthProvider>[],
           store: InMemoryAuthStore(),
           storeMode: AuthStoreMode.ephemeral,
           plugins: <AuthServerPlugin<Object>>[plugin],
@@ -134,4 +134,42 @@ void main() {
     final result = await runner.run();
     expect(result.success, isTrue, reason: _report(result));
   });
+
+  test(
+    'property: limiter keys are bounded and independent of OTP input',
+    () async {
+      final plugin = PhoneNumberPlugin<Object>(
+        store: InMemoryAuthPhoneNumberStore(),
+        sendCode: (_) {},
+        codeHashKey: _hashKey,
+      );
+      final verifyEndpoint =
+          plugin.endpoints
+                  .where((endpoint) => endpoint.id == 'phoneNumber.verifyCode')
+                  .single
+              as AuthEndpointRateLimitIdentifierDescriptor;
+      final expected = verifyEndpoint.resolveRateLimitIdentifier(
+        const <String, dynamic>{
+          'phoneNumber': '+18765551234',
+          'code': 'baseline-code',
+        },
+      );
+      final runner = PropertyTestRunner<String>(_hostileCodes(), (code) {
+        final identifier = verifyEndpoint.resolveRateLimitIdentifier(
+          <String, dynamic>{'phoneNumber': ' +18765551234 ', 'code': code},
+        );
+        expect(identifier, expected);
+        expect(identifier, isNotNull);
+        expect(
+          identifier!.length,
+          lessThanOrEqualTo(authRateLimitIdentifierMaximumLength),
+        );
+        expect(identifier, isNot(contains('+18765551234')));
+        if (code.isNotEmpty) expect(identifier, isNot(contains(code)));
+      }, PropertyConfig(numTests: 500, seed: 20260823));
+
+      final result = await runner.run();
+      expect(result.success, isTrue, reason: _report(result));
+    },
+  );
 }

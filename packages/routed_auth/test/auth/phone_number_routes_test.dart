@@ -102,7 +102,7 @@ void main() {
       final fixture = await _fixture(manager);
 
       await fixture.client.postJson('/auth/phone-number/send-code', {
-        'phoneNumber': '+18765551234',
+        'phoneNumber': ' +18765551234 ',
       });
       for (var attempt = 0; attempt < 2; attempt++) {
         final response = await fixture.client.postJson(
@@ -124,6 +124,30 @@ void main() {
         limiter.operations,
         contains(authPhoneNumberVerifyRateLimitOperation),
       );
+      final sendRequest = limiter.requests.first;
+      final verifyRequest = limiter.requests[1];
+      expect(sendRequest.providerId, authPhoneNumberPluginId);
+      expect(verifyRequest.providerId, authPhoneNumberPluginId);
+      expect(sendRequest.providerId, sendRequest.operation.namespace);
+      expect(verifyRequest.providerId, verifyRequest.operation.namespace);
+      expect(sendRequest.identifier, verifyRequest.identifier);
+      expect(sendRequest.identifier, startsWith('phone:'));
+      expect(
+        sendRequest.identifier!.length,
+        lessThanOrEqualTo(authRateLimitIdentifierMaximumLength),
+      );
+      expect(sendRequest.identifier, isNot(contains('+18765551234')));
+      expect(verifyRequest.identifier, isNot(contains('000000')));
+
+      final malformed = await fixture.client.postJson(
+        '/auth/phone-number/verify-code',
+        const <String, dynamic>{'phoneNumber': '+18765551234'},
+      );
+      malformed.assertStatus(HttpStatus.unauthorized);
+      expect(malformed.json(), const <String, dynamic>{
+        'error': 'invalid_request',
+      });
+      expect(limiter.requests.last.identifier, isNull);
 
       limiter.blockVerify = true;
       final blocked = await fixture.client.postJson(
@@ -221,12 +245,15 @@ final class _Fixture {
 }
 
 final class _PhoneRateLimiter implements AuthRateLimiter<EngineContext> {
-  final List<AuthRateLimitOperation> operations = <AuthRateLimitOperation>[];
+  final List<AuthRateLimitRequest<EngineContext>> requests =
+      <AuthRateLimitRequest<EngineContext>>[];
+  Iterable<AuthRateLimitOperation> get operations =>
+      requests.map((request) => request.operation);
   bool blockVerify = false;
 
   @override
   AuthRateLimitDecision check(AuthRateLimitRequest<EngineContext> request) {
-    operations.add(request.operation);
+    requests.add(request);
     if (blockVerify &&
         request.operation == authPhoneNumberVerifyRateLimitOperation) {
       return const AuthRateLimitDecision.block(

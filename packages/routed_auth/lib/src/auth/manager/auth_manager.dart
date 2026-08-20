@@ -25,6 +25,7 @@ import 'package:server_auth/server_auth.dart'
         AuthRateLimitOperation,
         AuthRateLimitRequest,
         enforceAuthRateLimit,
+        normalizeAuthRateLimitIdentifier,
         hashOpaqueToken,
         baseUrlFromUri,
         resolveOAuthAuthorizationStart,
@@ -1763,16 +1764,15 @@ class AuthManager {
   Future<void> enforceRateLimitOperation(
     EngineContext ctx, {
     required AuthRateLimitOperation operation,
-    String providerId = 'organization',
     String? identifier,
   }) {
     return enforceAuthRateLimit<EngineContext>(
       limiter: options.rateLimiter,
       request: AuthRateLimitRequest<EngineContext>.operation(
         operation: operation,
-        providerId: providerId,
+        providerId: operation.namespace,
         context: ctx,
-        identifier: identifier?.trim(),
+        identifier: normalizeAuthRateLimitIdentifier(identifier),
       ),
     );
   }

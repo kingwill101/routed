@@ -88,6 +88,15 @@ void main() {
       expect(registered.body, isNot(contains(captcha)));
       expect(registered.cookie('username_session'), isNotNull);
       expect(limiter.requests.single.identifier, 'routed.user');
+      expect(limiter.requests.single.providerId, authUsernamePluginId);
+      expect(
+        limiter.requests.single.providerId,
+        limiter.requests.single.operation.namespace,
+      );
+      expect(
+        limiter.requests.single.identifier!.length,
+        lessThanOrEqualTo(authRateLimitIdentifierMaximumLength),
+      );
       expect(
         limiter.requests.single.operation,
         authUsernameRegistrationRateLimitOperation,
@@ -110,6 +119,7 @@ void main() {
       signedIn.assertStatus(HttpStatus.ok);
       expect(signedIn.json()['user']['id'], userId);
       expect(limiter.requests.last.identifier, 'routed@example.com');
+      expect(limiter.requests.last.providerId, authUsernamePluginId);
       expect(
         limiter.requests.last.operation,
         authUsernameSignInRateLimitOperation,

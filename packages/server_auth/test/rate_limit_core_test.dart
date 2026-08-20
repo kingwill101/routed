@@ -9,6 +9,56 @@ final class _BlockingLimiter implements AuthRateLimiter<String> {
 }
 
 void main() {
+  test('endpoint limiter identifiers are trimmed and absolutely bounded', () {
+    expect(
+      normalizeAuthRateLimitIdentifier('  canonical-user  '),
+      'canonical-user',
+    );
+    expect(normalizeAuthRateLimitIdentifier(''), isNull);
+    expect(normalizeAuthRateLimitIdentifier('   '), isNull);
+    expect(normalizeAuthRateLimitIdentifier('user\r\nsecret'), isNull);
+    expect(
+      normalizeAuthRateLimitIdentifier(
+        'a' * (authRateLimitIdentifierMaximumLength + 1),
+      ),
+      isNull,
+    );
+    expect(
+      normalizeAuthRateLimitIdentifier(
+        'a' * authRateLimitIdentifierMaximumLength,
+      ),
+      hasLength(authRateLimitIdentifierMaximumLength),
+    );
+  });
+
+  test('typed endpoint resolver sees decoded input and fails closed', () {
+    final endpoint =
+        TypedAuthEndpointDescriptor<String, _LimiterInput, Object?>(
+          id: 'sample.limit',
+          method: AuthOperationMethod.post,
+          path: '/sample',
+          requestCodec: AuthOperationCodec<_LimiterInput>(
+            schema: const <String, Object?>{},
+            decode: (json) => _LimiterInput(json['value'] as String),
+            encode: (value) => <String, dynamic>{'value': value.value},
+          ),
+          responseCodec: AuthOperationCodec<Object?>(
+            schema: const <String, Object?>{},
+            decode: (json) => json,
+            encode: (value) => value,
+          ),
+          rateLimitIdentifier: (request) => request.value.toLowerCase(),
+          handler: (_, _) => null,
+        );
+
+    expect(
+      endpoint.resolveRateLimitIdentifier({'value': '  ALICE  '}),
+      'alice',
+    );
+    expect(endpoint.resolveRateLimitIdentifier(const {}), isNull);
+    expect(endpoint.resolveRateLimitIdentifier({'value': 7}), isNull);
+  });
+
   test('rate-limit requests expose only non-secret auth context', () async {
     final request = const AuthRateLimitRequest<String>(
       action: AuthRateLimitAction.signIn,
@@ -54,6 +104,12 @@ void main() {
   test('auth error status maps rate limiting to 429', () {
     expect(authErrorStatusCode('rate_limited'), 429);
   });
+}
+
+final class _LimiterInput {
+  const _LimiterInput(this.value);
+
+  final String value;
 }
 
 final class _RecordingLimiter implements AuthRateLimiter<String> {

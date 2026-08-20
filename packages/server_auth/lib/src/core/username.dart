@@ -326,9 +326,8 @@ final class UsernamePlugin<TContext>
           authentication: AuthOperationAuthentication.none,
           originPolicy: AuthOperationOriginPolicy.browser,
           rateLimitOperation: authUsernameRegistrationRateLimitOperation,
-          rateLimitIdentifier: (input) => identifierPolicy.normalizeUsername(
-            input['username'] is String ? input['username'] as String : '',
-          ),
+          rateLimitIdentifier: (request) =>
+              identifierPolicy.normalizeUsername(request.username),
           handler: (invocation, request) async {
             final result = await register(
               context: invocation.context,
@@ -356,13 +355,8 @@ final class UsernamePlugin<TContext>
           authentication: AuthOperationAuthentication.none,
           originPolicy: AuthOperationOriginPolicy.browser,
           rateLimitOperation: authUsernameSignInRateLimitOperation,
-          rateLimitIdentifier: (input) => identifierPolicy
-              .resolve(
-                input['identifier'] is String
-                    ? input['identifier'] as String
-                    : '',
-              )
-              ?.value,
+          rateLimitIdentifier: (request) =>
+              identifierPolicy.resolve(request.identifier)?.value,
           handler: (invocation, request) async {
             final result = await signIn(
               context: invocation.context,

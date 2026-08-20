@@ -236,8 +236,18 @@ abstract interface class AuthEndpointDescriptor<TContext> {
 /// must return a canonical non-secret identifier and must never return a
 /// password, captcha token, bearer credential, or other request secret.
 abstract interface class AuthEndpointRateLimitIdentifierDescriptor {
+  /// Decodes [input], derives an endpoint-specific key, and applies the common
+  /// limiter-identifier safety boundary.
+  ///
+  /// Invalid endpoint input produces no identifier. The endpoint invocation
+  /// still performs normal request decoding and returns its normal public
+  /// validation error.
   String? resolveRateLimitIdentifier(Map<String, dynamic> input);
 }
+
+/// Derives a private limiter key from a successfully decoded endpoint request.
+typedef AuthEndpointRateLimitIdentifierResolver<TRequest> =
+    String? Function(TRequest request);
 
 /// A successful plugin authentication that the host must serialize.
 ///
@@ -309,13 +319,22 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
   final AuthOperationCsrfPolicy csrfPolicy;
   @override
   final AuthRateLimitOperation? rateLimitOperation;
-  final String? Function(Map<String, dynamic> input)? rateLimitIdentifier;
+  final AuthEndpointRateLimitIdentifierResolver<TRequest>? rateLimitIdentifier;
   @override
   final bool serverOnly;
 
   @override
-  String? resolveRateLimitIdentifier(Map<String, dynamic> input) =>
-      rateLimitIdentifier?.call(input);
+  String? resolveRateLimitIdentifier(Map<String, dynamic> input) {
+    final resolver = rateLimitIdentifier;
+    if (resolver == null) return null;
+    try {
+      return normalizeAuthRateLimitIdentifier(
+        resolver(requestCodec.decode(input)),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   Future<Object?> invoke(

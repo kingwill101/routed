@@ -48,14 +48,47 @@ final class RoutedAuthRateLimiter implements AuthRateLimiter<EngineContext> {
   Future<AuthRateLimitDecision> check(
     AuthRateLimitRequest<EngineContext> request,
   ) async {
-    final outcome = await service.check(
-      _ContextRateLimitRequest(request.context),
-    );
+    final outcome = await service.check(RoutedAuthRateLimitRequest._(request));
     if (outcome == null || outcome.allowed) {
       return const AuthRateLimitDecision.allow();
     }
     return AuthRateLimitDecision.block(retryAfter: outcome.retryAfter);
   }
+}
+
+/// Rate-limit request carrying the non-secret auth metadata supplied by
+/// `server_auth`.
+///
+/// A [CustomResolver] can inspect this type to combine [operation],
+/// [providerId], and [identifier] with request-derived properties such as the
+/// trusted client address. No password, OTP, captcha token, bearer token, or
+/// other endpoint payload is retained here.
+final class RoutedAuthRateLimitRequest implements RateLimitRequest {
+  RoutedAuthRateLimitRequest._(AuthRateLimitRequest<EngineContext> request)
+    : operation = request.operation,
+      providerId = request.providerId,
+      identifier = request.identifier,
+      _context = request.context;
+
+  final AuthRateLimitOperation operation;
+  final String providerId;
+  final String? identifier;
+  final EngineContext _context;
+
+  @override
+  String get method => _context.request.method;
+
+  @override
+  String get path => _context.request.uri.path;
+
+  @override
+  String get clientIP => _context.request.clientIP;
+
+  @override
+  String get remoteAddr => _context.request.remoteAddr;
+
+  @override
+  String header(String name) => _context.request.header(name);
 }
 
 Middleware rateLimitMiddleware(RateLimitService service) {
