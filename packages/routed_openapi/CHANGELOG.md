@@ -1,5 +1,8 @@
 ## 0.1.0
 
+- Generate the exact frozen opt-in auth topology, including host-owned routes,
+  API-key and session security alternatives, client-safe operation IDs,
+  generic public error schemas, and read-only one-time secret fields.
 - Add `package:routed_openapi/server_auth.dart` and
   `AuthServerPluginRegistry.toOpenApi31(...)` for generating OpenAPI 3.1
   documents directly from the composed auth plugin registry.
