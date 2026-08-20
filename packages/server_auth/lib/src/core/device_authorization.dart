@@ -92,7 +92,7 @@ final class DeviceAuthorizationPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
-        AuthReversibleUserDataDeletionContributor,
+        AuthUserDeletionPlanContributor,
         AuthUserAccessRevocationContributor,
         AuthServerPluginTopologyAware<TContext> {
   DeviceAuthorizationPlugin({
@@ -112,6 +112,7 @@ final class DeviceAuthorizationPlugin<TContext>
   final Duration pollInterval;
 
   late AuthDeviceAuthorizationStore _store;
+  late AuthUserDeletionDomain _deletionDomain;
   AuthStore? _authStore;
   bool _contributesTokenEndpoint = true;
   bool _configured = false;
@@ -129,25 +130,48 @@ final class DeviceAuthorizationPlugin<TContext>
   void configure(AuthServerPluginContext<TContext> context) {
     _store = context.store.deviceAuthorizations;
     _authStore = context.store;
+    final host = context.store;
+    if (host is! AuthUserDeletionCoordinatorHost) {
+      throw StateError(
+        'DeviceAuthorizationPlugin requires a deletion-coordinator host store.',
+      );
+    }
+    _deletionDomain = (host as AuthUserDeletionCoordinatorHost)
+        .userDeletionCoordinator
+        .domain;
     _configured = true;
   }
 
   @override
-  Future<void> validateUserDeletion(String userId) async {
-    if (userId.trim().isEmpty) {
-      throw ArgumentError.value(userId, 'userId', 'must be non-empty');
-    }
-  }
-
-  @override
-  Future<void> deleteUserData(String userId) async {
-    await _store.deleteForUser(userId);
-  }
-
-  @override
-  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) {
+  Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) {
     _ensureConfigured();
-    return AuthUserDataDeletionCheckpoint.capture([_store]);
+    final deletionStore = _store;
+    if (deletionStore is AuthUserDeletionPlanFactory) {
+      return Future.sync(
+        () => (deletionStore as AuthUserDeletionPlanFactory).createDeletionPlan(
+          domain: _deletionDomain,
+          user: user,
+          namespace: userDataNamespace,
+        ),
+      );
+    }
+    if (_deletionDomain is! AuthInMemoryUserDeletionDomain ||
+        deletionStore is! AuthInMemoryUserDeletionStore) {
+      throw StateError(
+        'The device-authorization adapter has no plan for this domain.',
+      );
+    }
+    return Future.value(
+      AuthInMemoryUserDeletionPlan(
+        domain: _deletionDomain as AuthInMemoryUserDeletionDomain,
+        userId: user.id,
+        namespace: userDataNamespace,
+        operation: AuthInMemoryStoreDeletionOperation(
+          store: deletionStore as AuthInMemoryUserDeletionStore,
+          userId: user.id,
+        ),
+      ),
+    );
   }
 
   @override

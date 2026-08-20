@@ -47,8 +47,8 @@ void main() {
       final state = AuthAccountState(
         userId: 'u1',
         lockedUntil: DateTime.now().toUtc().subtract(
-              const Duration(minutes: 1),
-            ),
+          const Duration(minutes: 1),
+        ),
       );
       expect(state.isLocked(), isFalse);
     });
@@ -268,6 +268,7 @@ void main() {
 
     setUp(() async {
       store = InMemoryAuthStore();
+      store.bindUserDeletionPlanContributors(const []);
       await _seedUser(store, 'u1', 'user@example.com');
       await store.credentials.updatePasswordForUser(
         userId: 'u1',
@@ -376,10 +377,9 @@ void main() {
         ),
       );
 
-      final deleted = await store.confirmAndDeleteUser(
+      final deleted = await store.userDeletionCoordinator.confirmAndDeleteUser(
         userId: 'u1',
         token: 'delete-token',
-        deleteContributedData: () {},
       );
 
       expect(deleted, isTrue);

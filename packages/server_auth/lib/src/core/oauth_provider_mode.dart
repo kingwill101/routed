@@ -34,7 +34,7 @@ final class OAuthProviderModePlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
-        AuthReversibleUserDataDeletionContributor,
+        AuthUserDeletionPlanContributor,
         AuthUserAccessRevocationContributor,
         AuthOAuthTokenEndpointHost<TContext> {
   OAuthProviderModePlugin({
@@ -66,6 +66,7 @@ final class OAuthProviderModePlugin<TContext>
 
   /// Core auth store for user lookups.
   late AuthStore _store;
+  late AuthUserDeletionDomain _deletionDomain;
   final Map<String, AuthOAuthTokenGrantHandler<TContext>> _grantHandlers = {};
 
   @override
@@ -75,24 +76,32 @@ final class OAuthProviderModePlugin<TContext>
   String get userAccessNamespace => authOAuthProviderModePluginId;
 
   @override
-  Future<void> validateUserDeletion(String userId) async {
-    if (userId.trim().isEmpty) {
-      throw ArgumentError.value(userId, 'userId', 'must not be empty');
+  Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) {
+    if (_deletionDomain is! AuthInMemoryUserDeletionDomain ||
+        authorizationCodeStore is! AuthInMemoryUserDeletionStore ||
+        accessTokenStore is! AuthInMemoryUserDeletionStore) {
+      throw StateError(
+        'The OAuth provider adapter has no plan for this domain.',
+      );
     }
+    return Future.value(
+      AuthInMemoryUserDeletionPlan(
+        domain: _deletionDomain as AuthInMemoryUserDeletionDomain,
+        userId: user.id,
+        namespace: userDataNamespace,
+        operation: AuthInMemoryCompositeDeletionOperation([
+          AuthInMemoryStoreDeletionOperation(
+            store: authorizationCodeStore as AuthInMemoryUserDeletionStore,
+            userId: user.id,
+          ),
+          AuthInMemoryStoreDeletionOperation(
+            store: accessTokenStore as AuthInMemoryUserDeletionStore,
+            userId: user.id,
+          ),
+        ]),
+      ),
+    );
   }
-
-  @override
-  Future<void> deleteUserData(String userId) async {
-    await authorizationCodeStore.deleteForUser(userId);
-    await accessTokenStore.revokeAllForUser(userId);
-  }
-
-  @override
-  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) =>
-      AuthUserDataDeletionCheckpoint.capture(<Object>[
-        authorizationCodeStore,
-        accessTokenStore,
-      ]);
 
   @override
   Future<void> revokeUserAccess(String userId) async {
@@ -106,6 +115,15 @@ final class OAuthProviderModePlugin<TContext>
   @override
   void configure(AuthServerPluginContext<TContext> context) {
     _store = context.store;
+    final host = context.store;
+    if (host is! AuthUserDeletionCoordinatorHost) {
+      throw StateError(
+        'OAuthProviderModePlugin requires a deletion-coordinator host store.',
+      );
+    }
+    _deletionDomain = (host as AuthUserDeletionCoordinatorHost)
+        .userDeletionCoordinator
+        .domain;
   }
 
   @override

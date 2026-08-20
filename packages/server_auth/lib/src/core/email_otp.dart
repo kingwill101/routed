@@ -49,7 +49,7 @@ final class EmailOtpPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
-        AuthReversibleUserDataDeletionContributor {
+        AuthUserDeletionPlanContributor {
   EmailOtpPlugin({
     required this.sendCode,
     required String rateLimitHashKey,
@@ -81,6 +81,7 @@ final class EmailOtpPlugin<TContext>
 
   late AuthEmailOtpStore _store;
   late AuthUserStore _users;
+  late AuthUserDeletionDomain _deletionDomain;
   bool _configured = false;
 
   @override
@@ -93,28 +94,52 @@ final class EmailOtpPlugin<TContext>
   void configure(AuthServerPluginContext<TContext> context) {
     _store = context.store.emailOtps;
     _users = context.store.users;
+    final host = context.store;
+    if (host is! AuthUserDeletionCoordinatorHost) {
+      throw StateError(
+        'EmailOtpPlugin requires a deletion-coordinator host store.',
+      );
+    }
+    _deletionDomain = (host as AuthUserDeletionCoordinatorHost)
+        .userDeletionCoordinator
+        .domain;
     _configured = true;
   }
 
   @override
-  Future<void> validateUserDeletion(String userId) async {
-    if (userId.trim().isEmpty) {
-      throw ArgumentError.value(userId, 'userId', 'must be non-empty');
+  Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) async {
+    _ensureConfigured();
+    final email = user.email;
+    final deletionStore = _store;
+    if (deletionStore is AuthUserDeletionPlanFactory) {
+      return Future.sync(
+        () => (deletionStore as AuthUserDeletionPlanFactory).createDeletionPlan(
+          domain: _deletionDomain,
+          user: user,
+          namespace: userDataNamespace,
+        ),
+      );
     }
-  }
-
-  @override
-  Future<void> deleteUserData(String userId) async {
-    _ensureConfigured();
-    final user = await _users.findById(userId);
-    final email = user?.email;
-    if (email != null) await _store.deleteForEmail(email);
-  }
-
-  @override
-  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) {
-    _ensureConfigured();
-    return AuthUserDataDeletionCheckpoint.capture([_store]);
+    if (email == null || email.trim().isEmpty) {
+      return AuthNoopUserDeletionPlan(
+        domain: _deletionDomain,
+        userId: user.id,
+        namespace: userDataNamespace,
+      );
+    }
+    if (_deletionDomain is! AuthInMemoryUserDeletionDomain ||
+        deletionStore is! InMemoryAuthEmailOtpStore) {
+      throw StateError('The email OTP adapter has no plan for this domain.');
+    }
+    return AuthInMemoryUserDeletionPlan(
+      domain: _deletionDomain as AuthInMemoryUserDeletionDomain,
+      userId: user.id,
+      namespace: userDataNamespace,
+      operation: _InMemoryEmailOtpDeletionOperation(
+        store: deletionStore,
+        email: email,
+      ),
+    );
   }
 
   @override
@@ -487,4 +512,24 @@ final class EmailOtpPlugin<TContext>
       List<int>.generate(length, (index) => 48 + random.codeUnitAt(index) % 10),
     );
   }
+}
+
+final class _InMemoryEmailOtpDeletionOperation
+    implements AuthInMemoryUserDeletionOperation {
+  const _InMemoryEmailOtpDeletionOperation({
+    required this.store,
+    required this.email,
+  });
+
+  final InMemoryAuthEmailOtpStore store;
+  final String email;
+
+  @override
+  Object captureState() => store.captureDeletionState();
+
+  @override
+  Future<void> apply() => store.deleteForEmail(email);
+
+  @override
+  void restoreState(Object state) => store.restoreDeletionState(state);
 }

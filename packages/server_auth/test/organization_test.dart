@@ -20,7 +20,12 @@ void main() {
         userStore: InMemoryAuthStore().users,
       );
       final runtime = AuthRuntime<Object>(
-        options: base.copyWith(plugins: [feature]),
+        options: AuthOptions<Object>(
+          providers: const [],
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
+          plugins: [feature],
+        ),
       );
       expect(runtime.plugin(authOrganizationPluginId), same(feature));
       expect(runtime.registry.isFrozen, isTrue);

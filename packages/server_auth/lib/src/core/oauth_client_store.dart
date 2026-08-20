@@ -133,19 +133,19 @@ class InMemoryOAuthClientStore implements OAuthClientStore {
 
 /// In-memory authorization code store for tests and development.
 class InMemoryOAuthAuthorizationCodeStore
-    implements OAuthAuthorizationCodeStore, AuthInMemoryTransactionParticipant {
+    implements OAuthAuthorizationCodeStore, AuthInMemoryUserDeletionStore {
   InMemoryOAuthAuthorizationCodeStore({this.maxEntries = 1024})
-      : assert(maxEntries > 0);
+    : assert(maxEntries > 0);
 
   final int maxEntries;
   final Map<String, OAuthAuthorizationCode> _codes = {};
 
   @override
-  Object createInMemoryCheckpoint() =>
+  Object captureDeletionState() =>
       Map<String, OAuthAuthorizationCode>.of(_codes);
 
   @override
-  void restoreInMemoryCheckpoint(Object checkpoint) {
+  void restoreDeletionState(Object checkpoint) {
     final codes = checkpoint as Map<String, OAuthAuthorizationCode>;
     _codes
       ..clear()
@@ -208,19 +208,22 @@ class InMemoryOAuthAuthorizationCodeStore
   Future<void> deleteForUser(String userId) async {
     _codes.removeWhere((_, code) => code.userId == userId);
   }
+
+  @override
+  Future<void> deleteUserDataForDeletion(String userId) =>
+      deleteForUser(userId);
 }
 
 /// In-memory access token store for tests and development.
 class InMemoryOAuthAccessTokenStore
-    implements OAuthAccessTokenStore, AuthInMemoryTransactionParticipant {
+    implements OAuthAccessTokenStore, AuthInMemoryUserDeletionStore {
   final Map<String, OAuthAccessToken> _tokens = {};
 
   @override
-  Object createInMemoryCheckpoint() =>
-      Map<String, OAuthAccessToken>.of(_tokens);
+  Object captureDeletionState() => Map<String, OAuthAccessToken>.of(_tokens);
 
   @override
-  void restoreInMemoryCheckpoint(Object checkpoint) {
+  void restoreDeletionState(Object checkpoint) {
     final tokens = checkpoint as Map<String, OAuthAccessToken>;
     _tokens
       ..clear()
@@ -300,6 +303,11 @@ class InMemoryOAuthAccessTokenStore
   }
 
   @override
+  Future<void> deleteUserDataForDeletion(String userId) async {
+    await revokeAllForUser(userId);
+  }
+
+  @override
   Future<int> revokeAllForClient(String clientId) async {
     final tokensToRemove = _tokens.entries
         .where((entry) => entry.value.clientId == clientId)
@@ -341,7 +349,8 @@ void _validateAuthorizationCode(OAuthAuthorizationCode code) {
       !redirectUri.isAbsolute ||
       redirectUri.hasFragment) {
     throw ArgumentError(
-        'OAuth redirect URI must be absolute and fragment-free');
+      'OAuth redirect URI must be absolute and fragment-free',
+    );
   }
   final challenge = code.codeChallenge;
   if (challenge != null &&

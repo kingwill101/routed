@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
 import 'exceptions.dart';
 import 'plugin.dart';
 import 'models.dart';
@@ -33,7 +34,8 @@ final class AnonymousPlugin<TContext>
         AuthEndpointContributor<TContext>,
         AuthPersistenceContributor,
         AuthClientOperationContributor,
-        AuthRateLimitContributor {
+        AuthRateLimitContributor,
+        AuthUserDeletionPlanContributor {
   AnonymousPlugin({
     this.generateName,
     this.onLinkAccount,
@@ -45,6 +47,7 @@ final class AnonymousPlugin<TContext>
   final bool disableDeleteAnonymousUser;
 
   late AuthStore _store;
+  late AuthUserDeletionCoordinator _deletionCoordinator;
   bool _configured = false;
 
   @override
@@ -53,8 +56,25 @@ final class AnonymousPlugin<TContext>
   @override
   void configure(AuthServerPluginContext<TContext> context) {
     _store = context.store;
+    final host = context.store;
+    if (host is! AuthUserDeletionCoordinatorHost) {
+      throw StateError('AnonymousPlugin requires a deletion-coordinator host.');
+    }
+    _deletionCoordinator =
+        (host as AuthUserDeletionCoordinatorHost).userDeletionCoordinator;
     _configured = true;
   }
+
+  @override
+  String get userDataNamespace => authAnonymousPluginId;
+
+  @override
+  AuthUserDeletionPlan createUserDeletionPlan(AuthUser user) =>
+      AuthNoopUserDeletionPlan(
+        domain: _deletionCoordinator.domain,
+        userId: user.id,
+        namespace: userDataNamespace,
+      );
 
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints => [
@@ -135,13 +155,7 @@ final class AnonymousPlugin<TContext>
     if (disableDeleteAnonymousUser) {
       throw AuthFlowException('anonymous_delete_disabled');
     }
-    final capabilities = _store is AuthAdminStoreCapabilities
-        ? _store as AuthAdminStoreCapabilities
-        : null;
-    if (capabilities == null) {
-      throw AuthFlowException('anonymous_delete_unavailable');
-    }
-    if (!await capabilities.deleteUserForAdministration(user.id)) {
+    if (!await _deletionCoordinator.deleteUser(user.id)) {
       throw AuthFlowException('anonymous_user_not_found');
     }
   }
@@ -169,11 +183,7 @@ final class AnonymousPlugin<TContext>
     if (!anonymousUser.isAnonymous) {
       throw AuthFlowException('anonymous_required');
     }
-    final capabilities = _store is AuthAdminStoreCapabilities
-        ? _store as AuthAdminStoreCapabilities
-        : null;
-    if (capabilities == null ||
-        !await capabilities.deleteUserForAdministration(anonymousUser.id)) {
+    if (!await _deletionCoordinator.deleteUser(anonymousUser.id)) {
       throw AuthFlowException('anonymous_link_unavailable');
     }
   }

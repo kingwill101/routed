@@ -142,9 +142,7 @@ abstract interface class AuthDeviceAuthorizationStore {
 
 /// In-memory device authorization store for tests and local development.
 final class InMemoryAuthDeviceAuthorizationStore
-    implements
-        AuthDeviceAuthorizationStore,
-        AuthInMemoryTransactionParticipant {
+    implements AuthDeviceAuthorizationStore, AuthInMemoryUserDeletionStore {
   InMemoryAuthDeviceAuthorizationStore({this.maxEntries = 1024})
     : assert(maxEntries > 0);
 
@@ -153,11 +151,11 @@ final class InMemoryAuthDeviceAuthorizationStore
       <String, AuthDeviceAuthorization>{};
 
   @override
-  Object createInMemoryCheckpoint() =>
+  Object captureDeletionState() =>
       Map<String, AuthDeviceAuthorization>.of(_records);
 
   @override
-  void restoreInMemoryCheckpoint(Object checkpoint) {
+  void restoreDeletionState(Object checkpoint) {
     final records = checkpoint as Map<String, AuthDeviceAuthorization>;
     _records
       ..clear()
@@ -310,6 +308,10 @@ final class InMemoryAuthDeviceAuthorizationStore
     if (id.isEmpty) return;
     _records.removeWhere((_, value) => value.userId == id);
   }
+
+  @override
+  Future<void> deleteUserDataForDeletion(String userId) =>
+      deleteForUser(userId);
 
   AuthDeviceAuthorization? _findByUserCode(String hash) {
     if (hash.isEmpty) return null;

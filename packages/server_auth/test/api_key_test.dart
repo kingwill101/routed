@@ -215,6 +215,7 @@ void main() {
 
     test('deletes every key owned by an account', () async {
       final store = InMemoryAuthApiKeyStore();
+      final core = InMemoryAuthStore();
       final feature = AuthApiKeyPlugin<Never>(
         store: store,
         keyIdGenerator: _queuedGenerator(['one', 'two', 'other']),
@@ -227,8 +228,11 @@ void main() {
       await feature.issue(userId: 'user-1', name: 'one');
       await feature.issue(userId: 'user-1', name: 'two');
       final other = await feature.issue(userId: 'user-2', name: 'other');
+      await core.users.create(AuthUser(id: 'user-1'));
+      feature.configure(AuthServerPluginContext<Never>(store: core));
+      core.bindUserDeletionPlanContributors([feature]);
 
-      await feature.deleteUserData('user-1');
+      expect(await core.userDeletionCoordinator.deleteUser('user-1'), isTrue);
 
       expect(await feature.list('user-1'), isEmpty);
       expect(await feature.authenticate(other.key), isNotNull);

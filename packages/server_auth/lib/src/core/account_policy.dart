@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
 import 'exceptions.dart';
 
 /// Policy configuration for account states and authentication rules.
@@ -252,8 +253,19 @@ abstract interface class AuthAccountStateStore {
 }
 
 /// In-memory account state store for tests and development.
-class InMemoryAuthAccountStateStore implements AuthAccountStateStore {
+class InMemoryAuthAccountStateStore
+    implements AuthAccountStateStore, AuthInMemoryDeletionState {
   final Map<String, AuthAccountState> _states = {};
+
+  @override
+  Object captureDeletionState() => Map<String, AuthAccountState>.of(_states);
+
+  @override
+  void restoreDeletionState(Object state) {
+    _states
+      ..clear()
+      ..addAll(state as Map<String, AuthAccountState>);
+  }
 
   @override
   Future<AuthAccountState?> find(String userId) async {

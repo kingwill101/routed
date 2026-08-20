@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'account_policy.dart';
+import 'deletion_transaction.dart';
 import 'email_change_token_store.dart';
 import 'models.dart';
 import 'oauth_challenge_store.dart';
@@ -355,23 +356,6 @@ abstract interface class AuthStore {
   AuthEmailOtpStore get emailOtps;
 }
 
-/// Transactional boundary for confirmation-token account deletion.
-///
-/// Durable adapters must consume the token and remove the user-owned core data
-/// in one transaction. Returning `false` leaves both the token and account
-/// unchanged so callers can safely retry. [deleteContributedData] is invoked
-/// after the token is validated but before the transaction commits; it must be
-/// idempotent, and any exception must roll the token consumption and core
-/// deletion back.
-abstract interface class AuthAccountDeletionStore {
-  FutureOr<bool> confirmAndDeleteUser({
-    required String userId,
-    required String token,
-    required FutureOr<void> Function() deleteContributedData,
-    DateTime? now,
-  });
-}
-
 /// Optional data-plane operations required by the Admin plugin.
 ///
 /// Production adapters implement these operations transactionally. Keeping
@@ -407,6 +391,20 @@ abstract interface class AuthAdminStoreCapabilities {
   FutureOr<bool> purgeTombstonedUserForAdministration(String userId);
 }
 
+typedef _InMemoryAuthCoreDeletionState = ({
+  Map<String, AuthUser> usersById,
+  Map<String, AuthUser> usersByEmail,
+  Map<String, AuthPasswordCredential> credentialsById,
+  Map<String, String> credentialIdsByIdentifier,
+  Map<(String, String), AuthAccount> accounts,
+  Map<String, AuthSessionRecord> sessions,
+  Object passwordResetTokens,
+  Object verificationTokens,
+  Object emailChangeTokens,
+  Object jwtVersions,
+  Object accountStates,
+});
+
 /// In-memory store for tests, examples, and local development.
 ///
 /// This implementation deliberately keeps password hashes outside [AuthUser]
@@ -418,8 +416,9 @@ class InMemoryAuthStore
         AuthStore,
         AuthAdminStoreCapabilities,
         AuthWebAuthnStoreCapabilities,
-        AuthAccountDeletionStore,
-        AuthAccountStateStore {
+        AuthAccountStateStore,
+        AuthUserDeletionCoordinatorHost,
+        AuthInMemoryUserDeletionBackend {
   InMemoryAuthStore()
     : users = _InMemoryUserStore(),
       credentials = _InMemoryCredentialStore(),
@@ -434,8 +433,13 @@ class InMemoryAuthStore
       webAuthnAuthenticators = InMemoryAuthWebAuthnAuthenticatorStore(),
       deviceAuthorizations = InMemoryAuthDeviceAuthorizationStore(),
       emailOtps = InMemoryAuthEmailOtpStore(),
+      _deletionDomain = AuthInMemoryUserDeletionDomain(),
       _accountStates = InMemoryAuthAccountStateStore() {
     (credentials as _InMemoryCredentialStore).users = users;
+    _deletionCoordinator = AuthInMemoryUserDeletionCoordinator(
+      domain: _deletionDomain,
+      backend: this,
+    );
   }
 
   @override
@@ -478,6 +482,17 @@ class InMemoryAuthStore
   final AuthEmailOtpStore emailOtps;
 
   final InMemoryAuthAccountStateStore _accountStates;
+  final AuthInMemoryUserDeletionDomain _deletionDomain;
+  late final AuthInMemoryUserDeletionCoordinator _deletionCoordinator;
+
+  @override
+  AuthUserDeletionCoordinator get userDeletionCoordinator =>
+      _deletionCoordinator;
+
+  @override
+  void bindUserDeletionPlanContributors(
+    Iterable<AuthUserDeletionPlanContributor> contributors,
+  ) => _deletionCoordinator.bind(contributors);
 
   @override
   Future<AuthAccountState?> find(String userId) => _accountStates.find(userId);
@@ -539,49 +554,6 @@ class InMemoryAuthStore
       _accountStates.findInactiveAccounts(inactiveDays: inactiveDays, now: now);
 
   @override
-  Future<bool> confirmAndDeleteUser({
-    required String userId,
-    required String token,
-    required FutureOr<void> Function() deleteContributedData,
-    DateTime? now,
-  }) async {
-    final id = userId.trim();
-    if (id.isEmpty || token.trim().isEmpty) return false;
-    final user = await users.findById(id);
-    if (user == null) return false;
-    final consumed = await verificationTokens.consume(
-      'account_deletion:$id',
-      token,
-    );
-    if (consumed == null) return false;
-
-    try {
-      await deleteContributedData();
-      // All following mutations are in-memory and non-failing. Durable stores
-      // implement this interface with their database transaction primitive.
-      await _credentials.deleteForUser(id);
-      await _accounts.deleteForUser(id);
-      _sessions.deleteForUser(id);
-      await passwordResetTokens.deleteForUser(id);
-      await emailChangeTokens.deleteForUser(id);
-      await deviceAuthorizations.deleteForUser(id);
-      await _accountStates.delete(id);
-      if (user.email != null) {
-        await emailOtps.deleteForEmail(user.email!);
-        await verificationTokens.delete(user.email!);
-      }
-      await jwtVersions.rotate(id);
-      return await _users.delete(id);
-    } catch (_) {
-      // The local store has no failing core mutations. Restoring the consumed
-      // token makes contributor failures retryable. Durable implementations
-      // must roll the complete transaction back instead.
-      await verificationTokens.save(consumed);
-      rethrow;
-    }
-  }
-
-  @override
   Future<List<AuthUser>> listUsersForAdministration() async =>
       List<AuthUser>.unmodifiable(
         (_users).values.toList()..sort((a, b) => a.id.compareTo(b.id)),
@@ -612,7 +584,27 @@ class InMemoryAuthStore
   }
 
   @override
-  Future<bool> deleteUserForAdministration(String userId) async {
+  Future<bool> deleteUserForAdministration(String userId) =>
+      _deletionCoordinator.deleteUser(userId);
+
+  @override
+  Future<AuthUser?> findUserForDeletion(String userId) async =>
+      users.findById(userId);
+
+  @override
+  Future<void> validateUserDeletion(String userId) async {
+    if (userId.trim().isEmpty) {
+      throw ArgumentError.value(userId, 'userId', 'must be non-empty');
+    }
+  }
+
+  @override
+  Future<bool> consumeUserDeletionToken(String userId, String token) async =>
+      await verificationTokens.consume('account_deletion:$userId', token) !=
+      null;
+
+  @override
+  Future<bool> deleteCoreUserData(String userId) async {
     final id = userId.trim();
     final user = await users.findById(id);
     if (user == null) return false;
@@ -622,12 +614,70 @@ class InMemoryAuthStore
     await passwordResetTokens.deleteForUser(id);
     await verificationTokens.delete(id);
     await emailChangeTokens.deleteForUser(id);
-    await deviceAuthorizations.deleteForUser(id);
     await _accountStates.delete(id);
-    if (user.email != null) await emailOtps.deleteForEmail(user.email!);
     if (user.email != null) await verificationTokens.delete(user.email!);
+    await jwtVersions.rotate(id);
     _users.delete(id);
     return true;
+  }
+
+  @override
+  Object captureDeletionState() => (
+    usersById: Map<String, AuthUser>.of(_users._usersById),
+    usersByEmail: Map<String, AuthUser>.of(_users._usersByEmail),
+    credentialsById: Map<String, AuthPasswordCredential>.of(
+      _credentials._credentialsById,
+    ),
+    credentialIdsByIdentifier: Map<String, String>.of(
+      _credentials._credentialIdsByIdentifier,
+    ),
+    accounts: Map<(String, String), AuthAccount>.of(_accounts._accounts),
+    sessions: Map<String, AuthSessionRecord>.of(_sessions._sessions),
+    passwordResetTokens: (passwordResetTokens as AuthInMemoryDeletionState)
+        .captureDeletionState(),
+    verificationTokens: (verificationTokens as AuthInMemoryDeletionState)
+        .captureDeletionState(),
+    emailChangeTokens: (emailChangeTokens as AuthInMemoryDeletionState)
+        .captureDeletionState(),
+    jwtVersions: (jwtVersions as AuthInMemoryDeletionState)
+        .captureDeletionState(),
+    accountStates: _accountStates.captureDeletionState(),
+  );
+
+  @override
+  void restoreDeletionState(Object state) {
+    final value = state as _InMemoryAuthCoreDeletionState;
+    _users._usersById
+      ..clear()
+      ..addAll(value.usersById);
+    _users._usersByEmail
+      ..clear()
+      ..addAll(value.usersByEmail);
+    _credentials._credentialsById
+      ..clear()
+      ..addAll(value.credentialsById);
+    _credentials._credentialIdsByIdentifier
+      ..clear()
+      ..addAll(value.credentialIdsByIdentifier);
+    _accounts._accounts
+      ..clear()
+      ..addAll(value.accounts);
+    _sessions._sessions
+      ..clear()
+      ..addAll(value.sessions);
+    (passwordResetTokens as AuthInMemoryDeletionState).restoreDeletionState(
+      value.passwordResetTokens,
+    );
+    (verificationTokens as AuthInMemoryDeletionState).restoreDeletionState(
+      value.verificationTokens,
+    );
+    (emailChangeTokens as AuthInMemoryDeletionState).restoreDeletionState(
+      value.emailChangeTokens,
+    );
+    (jwtVersions as AuthInMemoryDeletionState).restoreDeletionState(
+      value.jwtVersions,
+    );
+    _accountStates.restoreDeletionState(value.accountStates);
   }
 
   @override

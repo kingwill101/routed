@@ -224,7 +224,7 @@ final class InMemoryAuthOrganizationStore
         AuthOrganizationStore,
         AuthOrganizationMembershipMutationStore,
         AuthOrganizationUserDeletionStore,
-        AuthInMemoryTransactionParticipant {
+        AuthInMemoryDeletionState {
   final Map<String, AuthOrganization> _organizations = {};
   final Map<String, AuthOrganizationMember> _members = {};
   final Map<String, AuthOrganizationInvitation> _invitations = {};
@@ -234,7 +234,7 @@ final class InMemoryAuthOrganizationStore
   Future<void> _tail = Future<void>.value();
 
   @override
-  Object createInMemoryCheckpoint() => (
+  Object captureDeletionState() => (
     organizations: Map<String, AuthOrganization>.of(_organizations),
     members: Map<String, AuthOrganizationMember>.of(_members),
     invitations: Map<String, AuthOrganizationInvitation>.of(_invitations),
@@ -244,7 +244,7 @@ final class InMemoryAuthOrganizationStore
   );
 
   @override
-  void restoreInMemoryCheckpoint(Object checkpoint) {
+  void restoreDeletionState(Object checkpoint) {
     final value = checkpoint as _AuthOrganizationStoreCheckpoint;
     _organizations
       ..clear()

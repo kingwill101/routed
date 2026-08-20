@@ -125,7 +125,7 @@ abstract interface class AuthPhoneNumberStore {
 
 /// Bounded process-local phone store for tests and local development.
 final class InMemoryAuthPhoneNumberStore
-    implements AuthPhoneNumberStore, AuthInMemoryTransactionParticipant {
+    implements AuthPhoneNumberStore, AuthInMemoryUserDeletionStore {
   InMemoryAuthPhoneNumberStore({this.maxVerifications = 2048}) {
     if (maxVerifications <= 0) {
       throw ArgumentError.value(
@@ -144,7 +144,7 @@ final class InMemoryAuthPhoneNumberStore
   final Map<String, String> _phoneByUser = <String, String>{};
 
   @override
-  Object createInMemoryCheckpoint() => _PhoneNumberStoreCheckpoint(
+  Object captureDeletionState() => _PhoneNumberStoreCheckpoint(
     verifications: Map<String, AuthPhoneNumberVerification>.of(_verifications),
     identitiesByPhone: Map<String, AuthPhoneNumberIdentity>.of(
       _identitiesByPhone,
@@ -153,7 +153,7 @@ final class InMemoryAuthPhoneNumberStore
   );
 
   @override
-  void restoreInMemoryCheckpoint(Object checkpoint) {
+  void restoreDeletionState(Object checkpoint) {
     final state = checkpoint as _PhoneNumberStoreCheckpoint;
     _verifications
       ..clear()
@@ -271,6 +271,10 @@ final class InMemoryAuthPhoneNumberStore
       _verifications.remove(phone);
     }
   }
+
+  @override
+  Future<void> deleteUserDataForDeletion(String userId) =>
+      deleteForUser(userId);
 
   void _removeExpired(DateTime now) {
     _verifications.removeWhere((_, value) => value.isExpired(now: now));

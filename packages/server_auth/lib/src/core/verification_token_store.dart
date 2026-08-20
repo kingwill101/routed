@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
 import 'models.dart' show AuthVerificationToken;
 import 'tokens.dart' show hashOpaqueToken;
 
@@ -30,7 +31,8 @@ abstract interface class AuthVerificationTokenConditionalDeleteStore {
 class InMemoryAuthVerificationTokenStore
     implements
         AuthVerificationTokenStore,
-        AuthVerificationTokenConditionalDeleteStore {
+        AuthVerificationTokenConditionalDeleteStore,
+        AuthInMemoryDeletionState {
   InMemoryAuthVerificationTokenStore({
     DateTime Function()? clock,
     this.maxTokens = 1024,
@@ -43,6 +45,24 @@ class InMemoryAuthVerificationTokenStore
   final Map<String, Map<String, _StoredVerificationToken>> _tokens =
       <String, Map<String, _StoredVerificationToken>>{};
   final DateTime Function() _clock;
+
+  @override
+  Object captureDeletionState() =>
+      <String, Map<String, _StoredVerificationToken>>{
+        for (final entry in _tokens.entries)
+          entry.key: Map<String, _StoredVerificationToken>.of(entry.value),
+      };
+
+  @override
+  void restoreDeletionState(Object state) {
+    final values = state as Map<String, Map<String, _StoredVerificationToken>>;
+    _tokens
+      ..clear()
+      ..addAll(<String, Map<String, _StoredVerificationToken>>{
+        for (final entry in values.entries)
+          entry.key: Map<String, _StoredVerificationToken>.of(entry.value),
+      });
+  }
 
   /// Maximum number of token digests retained by this local store.
   ///

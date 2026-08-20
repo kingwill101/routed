@@ -534,12 +534,12 @@ void main() {
           expiresAt: now.add(const Duration(minutes: 5)),
         );
         challengeStore.create(record);
-        final checkpoint = pendingStore.createInMemoryCheckpoint();
+        final checkpoint = pendingStore.captureDeletionState();
 
         pendingStore.deleteForUser('user-1');
         expect(challengeStore.findByTokenHash(record.tokenHash), isNull);
 
-        pendingStore.restoreInMemoryCheckpoint(checkpoint);
+        pendingStore.restoreDeletionState(checkpoint);
         expect(challengeStore.findByTokenHash(record.tokenHash), record);
         expect(() => pendingStore.deleteForUser('   '), throwsArgumentError);
       },
@@ -547,8 +547,18 @@ void main() {
 
     test('hard deletion removes every user-owned two-factor record', () async {
       final fixture = await _createDeletionFixture();
+      final core = InMemoryAuthStore();
+      await _seedUser(
+        core,
+        AuthUser(id: fixture.userId, email: 'user@example.com'),
+      );
+      fixture.plugin.configure(AuthServerPluginContext<Object>(store: core));
+      core.bindUserDeletionPlanContributors([fixture.plugin]);
 
-      await fixture.plugin.deleteUserData(fixture.userId);
+      expect(
+        await core.userDeletionCoordinator.deleteUser(fixture.userId),
+        isTrue,
+      );
 
       await _expectDeletionFixtureAbsent(fixture);
     });
@@ -564,11 +574,11 @@ void main() {
         );
         await _seedUser(core, user);
         final fixture = await _createDeletionFixture(userId: user.id);
-        final adminStore = InMemoryAuthAdminStore(core)
-          ..composeUserDataContributors([
-            fixture.plugin,
-            _FailingDeletionPlugin(),
-          ]);
+        final failure = _FailingDeletionPlugin();
+        fixture.plugin.configure(AuthServerPluginContext<Object>(store: core));
+        failure.configure(AuthServerPluginContext<Object>(store: core));
+        core.bindUserDeletionPlanContributors([fixture.plugin, failure]);
+        final adminStore = InMemoryAuthAdminStore(core);
 
         await expectLater(
           adminStore.deleteUser(
@@ -584,34 +594,31 @@ void main() {
       },
     );
 
-    test(
-      'core deletion failure checkpoint restores every two-factor record',
-      () async {
-        final fixture = await _createDeletionFixture();
-        final checkpoint = fixture.plugin.checkpointUserData(fixture.userId);
-
-        await expectLater(
-          _deleteThenFailCore(fixture, checkpoint),
-          throwsStateError,
-        );
-
-        await _expectDeletionFixturePresent(fixture);
-      },
-    );
-
-    test('hard deletion entry points reject blank user IDs', () async {
+    test('later plan failure restores every two-factor record', () async {
       final fixture = await _createDeletionFixture();
+      final core = InMemoryAuthStore();
+      await _seedUser(
+        core,
+        AuthUser(id: fixture.userId, email: 'user@example.com'),
+      );
+      final failure = _FailingDeletionPlugin();
+      fixture.plugin.configure(AuthServerPluginContext<Object>(store: core));
+      failure.configure(AuthServerPluginContext<Object>(store: core));
+      core.bindUserDeletionPlanContributors([fixture.plugin, failure]);
 
       await expectLater(
-        fixture.plugin.validateUserDeletion('  '),
-        throwsArgumentError,
+        core.userDeletionCoordinator.deleteUser(fixture.userId),
+        throwsStateError,
       );
+
+      expect(await core.users.findById(fixture.userId), isNotNull);
+      await _expectDeletionFixturePresent(fixture);
+    });
+
+    test('hard deletion coordinator rejects blank user IDs', () async {
+      final core = InMemoryAuthStore();
       await expectLater(
-        fixture.plugin.deleteUserData('\t'),
-        throwsArgumentError,
-      );
-      expect(
-        () => fixture.plugin.checkpointUserData('\n'),
+        core.userDeletionCoordinator.deleteUser('  '),
         throwsArgumentError,
       );
     });
@@ -1079,19 +1086,6 @@ Future<void> _expectDeletionFixtureAbsent(
   );
 }
 
-Future<void> _deleteThenFailCore(
-  _TwoFactorDeletionFixture fixture,
-  AuthUserDataDeletionCheckpoint checkpoint,
-) async {
-  try {
-    await fixture.plugin.deleteUserData(fixture.userId);
-    throw StateError('simulated core deletion failure');
-  } catch (error, stackTrace) {
-    await checkpoint.restore();
-    Error.throwWithStackTrace(error, stackTrace);
-  }
-}
-
 Future<void> _seedUser(InMemoryAuthStore store, AuthUser user) async {
   final now = DateTime.utc(2030, 1, 1);
   final created = await store.credentials.register(
@@ -1109,9 +1103,9 @@ Future<void> _seedUser(InMemoryAuthStore store, AuthUser user) async {
 }
 
 final class _FailingDeletionPlugin
-    implements
-        AuthServerPlugin<Object>,
-        AuthReversibleUserDataDeletionContributor {
+    implements AuthServerPlugin<Object>, AuthUserDeletionPlanContributor {
+  late AuthInMemoryUserDeletionDomain _domain;
+
   @override
   String get id => 'failing-two-factor-deletion-test';
 
@@ -1119,17 +1113,34 @@ final class _FailingDeletionPlugin
   String get userDataNamespace => 'failing-two-factor-deletion-test';
 
   @override
-  void configure(AuthServerPluginContext<Object> context) {}
-
-  @override
-  void validateUserDeletion(String userId) {}
-
-  @override
-  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) =>
-      AuthUserDataDeletionCheckpoint.capture(const []);
-
-  @override
-  void deleteUserData(String userId) {
-    throw StateError('simulated later contributor failure');
+  void configure(AuthServerPluginContext<Object> context) {
+    _domain =
+        (context.store as AuthUserDeletionCoordinatorHost)
+                .userDeletionCoordinator
+                .domain
+            as AuthInMemoryUserDeletionDomain;
   }
+
+  @override
+  AuthUserDeletionPlan createUserDeletionPlan(AuthUser user) =>
+      AuthInMemoryUserDeletionPlan(
+        domain: _domain,
+        userId: user.id,
+        namespace: userDataNamespace,
+        operation: const _FailingDeletionOperation(),
+      );
+}
+
+final class _FailingDeletionOperation
+    implements AuthInMemoryUserDeletionOperation {
+  const _FailingDeletionOperation();
+
+  @override
+  Object captureState() => const Object();
+
+  @override
+  void apply() => throw StateError('simulated later contributor failure');
+
+  @override
+  void restoreState(Object state) {}
 }

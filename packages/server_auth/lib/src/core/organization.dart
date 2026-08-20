@@ -203,7 +203,7 @@ final class OrganizationPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
-        AuthReversibleUserDataDeletionContributor {
+        AuthUserDeletionPlanContributor {
   OrganizationPlugin({
     required this.store,
     this.options = const AuthOrganizationOptions(),
@@ -218,6 +218,7 @@ final class OrganizationPlugin<TContext>
   final AuthOrganizationOptions<TContext> options;
   final AuthOrganizationAccessControl accessControl;
   AuthUserStore? _userStore;
+  late AuthUserDeletionDomain _deletionDomain;
 
   @override
   String get id => authOrganizationPluginId;
@@ -225,44 +226,46 @@ final class OrganizationPlugin<TContext>
   @override
   void configure(AuthServerPluginContext<TContext> context) {
     _userStore ??= context.store.users;
+    final host = context.store;
+    if (host is! AuthUserDeletionCoordinatorHost) {
+      throw StateError(
+        'OrganizationPlugin requires a deletion-coordinator host store.',
+      );
+    }
+    _deletionDomain = (host as AuthUserDeletionCoordinatorHost)
+        .userDeletionCoordinator
+        .domain;
   }
 
   @override
   String get userDataNamespace => 'organization';
 
   @override
-  Future<void> validateUserDeletion(String userId) async {
+  Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) async {
     final target = store;
-    if (target is! AuthOrganizationUserDeletionStore) {
+    if (target is! AuthOrganizationUserDeletionStore ||
+        target is! AuthInMemoryDeletionState ||
+        _deletionDomain is! AuthInMemoryUserDeletionDomain) {
       throw StateError(
-        'The organization store cannot participate in hard user deletion.',
+        'The organization adapter has no plan for this persistence domain.',
       );
     }
-    await (target as AuthOrganizationUserDeletionStore).validateUserDeletion(
-      userId,
+    final deletionTarget = target as AuthOrganizationUserDeletionStore;
+    await deletionTarget.validateUserDeletion(
+      user.id,
       creatorRole: _creatorRole,
     );
-  }
-
-  @override
-  Future<void> deleteUserData(String userId) async {
-    final target = store;
-    if (target is! AuthOrganizationUserDeletionStore) {
-      throw StateError(
-        'The organization store cannot participate in hard user deletion.',
-      );
-    }
-    final user = await _userStore?.findById(userId.trim());
-    await (target as AuthOrganizationUserDeletionStore).deleteUserData(
-      userId,
-      email: user?.email,
-      creatorRole: _creatorRole,
+    return AuthInMemoryUserDeletionPlan(
+      domain: _deletionDomain as AuthInMemoryUserDeletionDomain,
+      userId: user.id,
+      namespace: userDataNamespace,
+      operation: _InMemoryOrganizationDeletionOperation(
+        store: deletionTarget,
+        user: user,
+        creatorRole: _creatorRole,
+      ),
     );
   }
-
-  @override
-  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) =>
-      AuthUserDataDeletionCheckpoint.capture([store]);
 
   static const List<String> publicOperationIds = [
     'organization.create',
@@ -2514,6 +2517,37 @@ final class OrganizationPlugin<TContext>
 
   void _requireTeams() {
     if (!options.teams.enabled) throw AuthFlowException('teams_disabled');
+  }
+}
+
+final class _InMemoryOrganizationDeletionOperation
+    implements AuthInMemoryUserDeletionOperation {
+  const _InMemoryOrganizationDeletionOperation({
+    required this.store,
+    required this.user,
+    required this.creatorRole,
+  });
+
+  final AuthOrganizationUserDeletionStore store;
+  final AuthUser user;
+  final String creatorRole;
+
+  @override
+  Object captureState() =>
+      (store as AuthInMemoryDeletionState).captureDeletionState();
+
+  @override
+  Future<void> apply() async {
+    await store.deleteUserData(
+      user.id,
+      email: user.email,
+      creatorRole: creatorRole,
+    );
+  }
+
+  @override
+  Future<void> restoreState(Object state) async {
+    await (store as AuthInMemoryDeletionState).restoreDeletionState(state);
   }
 }
 

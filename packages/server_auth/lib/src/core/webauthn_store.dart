@@ -120,7 +120,7 @@ abstract interface class AuthWebAuthnStoreCapabilities {
 /// Production applications must provide durable implementations with the
 /// same atomic consume, unique credential, and compare-and-set guarantees.
 final class InMemoryAuthWebAuthnChallengeStore
-    implements AuthWebAuthnChallengeStore, AuthInMemoryTransactionParticipant {
+    implements AuthWebAuthnChallengeStore, AuthInMemoryUserDeletionStore {
   InMemoryAuthWebAuthnChallengeStore({this.maxEntries = 1024})
     : assert(maxEntries > 0);
 
@@ -129,11 +129,11 @@ final class InMemoryAuthWebAuthnChallengeStore
       <String, AuthWebAuthnChallenge>{};
 
   @override
-  Object createInMemoryCheckpoint() =>
+  Object captureDeletionState() =>
       Map<String, AuthWebAuthnChallenge>.of(_records);
 
   @override
-  void restoreInMemoryCheckpoint(Object checkpoint) {
+  void restoreDeletionState(Object checkpoint) {
     final records = checkpoint as Map<String, AuthWebAuthnChallenge>;
     _records
       ..clear()
@@ -184,22 +184,24 @@ final class InMemoryAuthWebAuthnChallengeStore
     if (normalized.isEmpty) return;
     _records.removeWhere((_, record) => record.userId == normalized);
   }
+
+  @override
+  Future<void> deleteUserDataForDeletion(String userId) =>
+      deleteForUser(userId);
 }
 
 /// In-memory registered-passkey store for tests and local development.
 final class InMemoryAuthWebAuthnAuthenticatorStore
-    implements
-        AuthWebAuthnAuthenticatorStore,
-        AuthInMemoryTransactionParticipant {
+    implements AuthWebAuthnAuthenticatorStore, AuthInMemoryUserDeletionStore {
   final Map<String, WebAuthnAuthenticator> _records =
       <String, WebAuthnAuthenticator>{};
 
   @override
-  Object createInMemoryCheckpoint() =>
+  Object captureDeletionState() =>
       Map<String, WebAuthnAuthenticator>.of(_records);
 
   @override
-  void restoreInMemoryCheckpoint(Object checkpoint) {
+  void restoreDeletionState(Object checkpoint) {
     final records = checkpoint as Map<String, WebAuthnAuthenticator>;
     _records
       ..clear()
@@ -276,6 +278,14 @@ final class InMemoryAuthWebAuthnAuthenticatorStore
     }
     _records.remove(normalizedCredentialId);
     return true;
+  }
+
+  @override
+  Future<void> deleteUserDataForDeletion(String userId) async {
+    final records = await listForUser(userId);
+    for (final record in records) {
+      await deleteForUser(userId, record.credentialId);
+    }
   }
 
   @override

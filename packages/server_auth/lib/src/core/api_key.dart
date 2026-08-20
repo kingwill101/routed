@@ -229,7 +229,7 @@ final class InMemoryAuthApiKeyStore
     implements
         AuthApiKeyStore,
         AuthApiKeyUserAccessRevocationStore,
-        AuthInMemoryTransactionParticipant {
+        AuthInMemoryUserDeletionStore {
   InMemoryAuthApiKeyStore({this.maxRecords = 10000}) {
     if (maxRecords <= 0) {
       throw ArgumentError.value(
@@ -244,11 +244,10 @@ final class InMemoryAuthApiKeyStore
   final Map<String, AuthApiKeyRecord> _records = <String, AuthApiKeyRecord>{};
 
   @override
-  Object createInMemoryCheckpoint() =>
-      Map<String, AuthApiKeyRecord>.of(_records);
+  Object captureDeletionState() => Map<String, AuthApiKeyRecord>.of(_records);
 
   @override
-  void restoreInMemoryCheckpoint(Object checkpoint) {
+  void restoreDeletionState(Object checkpoint) {
     final records = checkpoint as Map<String, AuthApiKeyRecord>;
     _records
       ..clear()
@@ -359,6 +358,10 @@ final class InMemoryAuthApiKeyStore
     _records.removeWhere((_, record) => record.userId == normalizedUserId);
   }
 
+  @override
+  Future<void> deleteUserDataForDeletion(String userId) =>
+      deleteForUser(userId);
+
   void _prune(DateTime now) {
     _records.removeWhere(
       (_, record) =>
@@ -377,7 +380,7 @@ final class AuthApiKeyPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
-        AuthReversibleUserDataDeletionContributor,
+        AuthUserDeletionPlanContributor,
         AuthUserAccessRevocationContributor {
   AuthApiKeyPlugin({
     required this.store,
@@ -428,6 +431,7 @@ final class AuthApiKeyPlugin<TContext>
   final AuthApiKeyTokenGenerator secretGenerator;
   final DateTime Function() _clock;
   AuthSessionStrategy _sessionStrategy = AuthSessionStrategy.session;
+  late AuthUserDeletionDomain _deletionDomain;
 
   @override
   String get id => authApiKeyPluginId;
@@ -439,20 +443,35 @@ final class AuthApiKeyPlugin<TContext>
   String get userAccessNamespace => 'api_keys';
 
   @override
-  Future<void> validateUserDeletion(String userId) async {
-    if (userId.trim().isEmpty) {
-      throw ArgumentError.value(userId, 'userId', 'must be non-empty');
+  Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) {
+    final deletionStore = store;
+    if (deletionStore is AuthUserDeletionPlanFactory) {
+      return Future.sync(
+        () => (deletionStore as AuthUserDeletionPlanFactory).createDeletionPlan(
+          domain: _deletionDomain,
+          user: user,
+          namespace: userDataNamespace,
+        ),
+      );
     }
+    if (_deletionDomain is! AuthInMemoryUserDeletionDomain ||
+        deletionStore is! AuthInMemoryUserDeletionStore) {
+      throw StateError(
+        'The API-key adapter has no plan for this persistence domain.',
+      );
+    }
+    return Future.value(
+      AuthInMemoryUserDeletionPlan(
+        domain: _deletionDomain as AuthInMemoryUserDeletionDomain,
+        userId: user.id,
+        namespace: userDataNamespace,
+        operation: AuthInMemoryStoreDeletionOperation(
+          store: deletionStore as AuthInMemoryUserDeletionStore,
+          userId: user.id,
+        ),
+      ),
+    );
   }
-
-  @override
-  Future<void> deleteUserData(String userId) async {
-    await store.deleteForUser(userId);
-  }
-
-  @override
-  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) =>
-      AuthUserDataDeletionCheckpoint.capture([store]);
 
   @override
   Future<void> revokeUserAccess(String userId) async {
@@ -474,6 +493,15 @@ final class AuthApiKeyPlugin<TContext>
   @override
   void configure(AuthServerPluginContext<TContext> context) {
     _sessionStrategy = context.sessionStrategy;
+    final host = context.store;
+    if (host is! AuthUserDeletionCoordinatorHost) {
+      throw StateError(
+        'AuthApiKeyPlugin requires a deletion-coordinator host store.',
+      );
+    }
+    _deletionDomain = (host as AuthUserDeletionCoordinatorHost)
+        .userDeletionCoordinator
+        .domain;
   }
 
   /// Issues a key and returns the raw secret exactly once.

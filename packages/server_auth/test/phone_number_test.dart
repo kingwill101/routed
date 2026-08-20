@@ -404,14 +404,17 @@ void main() {
       expect(await store.findIdentity('+18765551234'), isNull);
     });
 
-    test('participates in reversible user deletion', () async {
+    test('participates in coordinated user deletion', () async {
       final store = InMemoryAuthPhoneNumberStore();
+      final core = InMemoryAuthStore();
       final plugin = PhoneNumberPlugin<Object>(
         store: store,
         sendCode: (_) {},
         codeHashKey: _hashKey,
       );
-      _runtime(plugin);
+      plugin.configure(AuthServerPluginContext<Object>(store: core));
+      core.bindUserDeletionPlanContributors([plugin]);
+      await core.users.create(AuthUser(id: 'user-1'));
       final now = DateTime.utc(2026);
       await store.bindIdentity(
         AuthPhoneNumberIdentity(
@@ -421,12 +424,8 @@ void main() {
           verifiedAt: now,
         ),
       );
-      final checkpoint = plugin.checkpointUserData('user-1');
-
-      await plugin.deleteUserData('user-1');
+      expect(await core.userDeletionCoordinator.deleteUser('user-1'), isTrue);
       expect(await store.findIdentity('+18765551234'), isNull);
-      await checkpoint.restore();
-      expect(await store.findIdentity('+18765551234'), isNotNull);
     });
   });
 }

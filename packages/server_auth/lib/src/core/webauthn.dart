@@ -303,7 +303,7 @@ final class WebAuthnPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
-        AuthReversibleUserDataDeletionContributor {
+        AuthUserDeletionPlanContributor {
   WebAuthnPlugin({
     required this.provider,
     this.challengeTtl = const Duration(minutes: 5),
@@ -318,6 +318,7 @@ final class WebAuthnPlugin<TContext>
   late AuthWebAuthnChallengeStore _challengeStore;
   late AuthWebAuthnAuthenticatorStore _authenticatorStore;
   late AuthUserStore _userStore;
+  late AuthUserDeletionDomain _deletionDomain;
   bool _configured = false;
 
   @override
@@ -327,28 +328,30 @@ final class WebAuthnPlugin<TContext>
   String get userDataNamespace => 'webauthn';
 
   @override
-  Future<void> validateUserDeletion(String userId) async {
-    if (userId.trim().isEmpty) {
-      throw ArgumentError.value(userId, 'userId', 'must be non-empty');
-    }
-  }
-
-  @override
-  Future<void> deleteUserData(String userId) async {
-    await _challengeStore.deleteForUser(userId);
-    final credentials = await _authenticatorStore.listForUser(userId);
-    for (final credential in credentials) {
-      await _authenticatorStore.deleteForUser(userId, credential.credentialId);
-    }
-  }
-
-  @override
-  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) {
+  Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) {
     _ensureConfigured();
-    return AuthUserDataDeletionCheckpoint.capture([
-      _challengeStore,
-      _authenticatorStore,
-    ]);
+    if (_deletionDomain is! AuthInMemoryUserDeletionDomain ||
+        _challengeStore is! AuthInMemoryUserDeletionStore ||
+        _authenticatorStore is! AuthInMemoryUserDeletionStore) {
+      throw StateError('The WebAuthn adapter has no plan for this domain.');
+    }
+    return Future.value(
+      AuthInMemoryUserDeletionPlan(
+        domain: _deletionDomain as AuthInMemoryUserDeletionDomain,
+        userId: user.id,
+        namespace: userDataNamespace,
+        operation: AuthInMemoryCompositeDeletionOperation([
+          AuthInMemoryStoreDeletionOperation(
+            store: _challengeStore as AuthInMemoryUserDeletionStore,
+            userId: user.id,
+          ),
+          AuthInMemoryStoreDeletionOperation(
+            store: _authenticatorStore as AuthInMemoryUserDeletionStore,
+            userId: user.id,
+          ),
+        ]),
+      ),
+    );
   }
 
   @override
@@ -363,6 +366,15 @@ final class WebAuthnPlugin<TContext>
     _challengeStore = capabilities.webAuthnChallenges;
     _authenticatorStore = capabilities.webAuthnAuthenticators;
     _userStore = context.store.users;
+    final host = context.store;
+    if (host is! AuthUserDeletionCoordinatorHost) {
+      throw StateError(
+        'WebAuthnPlugin requires a deletion-coordinator host store.',
+      );
+    }
+    _deletionDomain = (host as AuthUserDeletionCoordinatorHost)
+        .userDeletionCoordinator
+        .domain;
     _configured = true;
   }
 

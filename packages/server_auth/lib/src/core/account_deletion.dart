@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
 import 'exceptions.dart';
 import 'models.dart';
 import 'password_hasher.dart';
@@ -147,18 +148,14 @@ Future<AuthAccountDeletionConfirmed> confirmAccountDeletion({
     throw AuthFlowException('invalid_request');
   }
 
-  final deletionStore = store is AuthAccountDeletionStore
-      ? store as AuthAccountDeletionStore
+  final deletionStore = store is AuthUserDeletionCoordinatorHost
+      ? store as AuthUserDeletionCoordinatorHost
       : null;
   if (deletionStore == null) {
     throw AuthFlowException('account_deletion_unavailable');
   }
-  final deleted = await deletionStore.confirmAndDeleteUser(
-    userId: normalizedUserId,
-    token: token,
-    deleteContributedData: () {},
-    now: now,
-  );
+  final deleted = await deletionStore.userDeletionCoordinator
+      .confirmAndDeleteUser(userId: normalizedUserId, token: token, now: now);
   if (!deleted) {
     throw AuthFlowException('invalid_deletion_token');
   }

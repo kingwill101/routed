@@ -176,7 +176,7 @@ final class PhoneNumberPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
-        AuthReversibleUserDataDeletionContributor {
+        AuthUserDeletionPlanContributor {
   PhoneNumberPlugin({
     required this.store,
     required this.sendCode,
@@ -225,6 +225,7 @@ final class PhoneNumberPlugin<TContext>
   final String Function(int length) _generateCode;
 
   late AuthUserStore _users;
+  late AuthUserDeletionDomain _deletionDomain;
   bool _configured = false;
 
   @override
@@ -236,6 +237,15 @@ final class PhoneNumberPlugin<TContext>
   @override
   void configure(AuthServerPluginContext<TContext> context) {
     _users = context.store.users;
+    final host = context.store;
+    if (host is! AuthUserDeletionCoordinatorHost) {
+      throw StateError(
+        'PhoneNumberPlugin requires a deletion-coordinator host store.',
+      );
+    }
+    _deletionDomain = (host as AuthUserDeletionCoordinatorHost)
+        .userDeletionCoordinator
+        .domain;
     _configured = true;
   }
 
@@ -517,22 +527,33 @@ final class PhoneNumberPlugin<TContext>
   }
 
   @override
-  Future<void> validateUserDeletion(String userId) async {
-    if (userId.trim().isEmpty) {
-      throw ArgumentError.value(userId, 'userId', 'must be non-empty');
+  Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) {
+    _ensureConfigured();
+    final deletionStore = store;
+    if (deletionStore is AuthUserDeletionPlanFactory) {
+      return Future.sync(
+        () => (deletionStore as AuthUserDeletionPlanFactory).createDeletionPlan(
+          domain: _deletionDomain,
+          user: user,
+          namespace: userDataNamespace,
+        ),
+      );
     }
-  }
-
-  @override
-  Future<void> deleteUserData(String userId) async {
-    _ensureConfigured();
-    await store.deleteForUser(userId);
-  }
-
-  @override
-  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) {
-    _ensureConfigured();
-    return AuthUserDataDeletionCheckpoint.capture(<Object>[store]);
+    if (_deletionDomain is! AuthInMemoryUserDeletionDomain ||
+        deletionStore is! AuthInMemoryUserDeletionStore) {
+      throw StateError('The phone-number adapter has no plan for this domain.');
+    }
+    return Future.value(
+      AuthInMemoryUserDeletionPlan(
+        domain: _deletionDomain as AuthInMemoryUserDeletionDomain,
+        userId: user.id,
+        namespace: userDataNamespace,
+        operation: AuthInMemoryStoreDeletionOperation(
+          store: deletionStore as AuthInMemoryUserDeletionStore,
+          userId: user.id,
+        ),
+      ),
+    );
   }
 
   String _normalizePhoneNumber(String value) {

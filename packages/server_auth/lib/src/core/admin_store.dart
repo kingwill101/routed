@@ -4,7 +4,6 @@ import 'account_policy.dart';
 import 'admin_models.dart';
 import 'deletion_transaction.dart';
 import 'exceptions.dart';
-import 'plugin.dart';
 import 'models.dart';
 import 'store.dart';
 
@@ -63,7 +62,8 @@ abstract interface class AuthAdminStore {
 /// It deliberately requires an [AuthStore] that exposes
 /// [AuthAdminStoreCapabilities], ensuring admin mutations update the same user
 /// records used by sign-in and session resolution.
-final class InMemoryAuthAdminStore implements AuthAdminStore {
+final class InMemoryAuthAdminStore
+    implements AuthAdminStore, AuthInMemoryUserDeletionStore {
   InMemoryAuthAdminStore(AuthStore coreStore)
     : _core = coreStore,
       _capabilities = _requireCapabilities(coreStore) {
@@ -78,14 +78,13 @@ final class InMemoryAuthAdminStore implements AuthAdminStore {
   final AuthStore _core;
   final AuthAdminStoreCapabilities _capabilities;
   final Map<String, AuthAdminUserState> _states = {};
-  List<AuthUserDataDeletionContributor> _userDataContributors = const [];
   Future<void> _tail = Future<void>.value();
 
   @override
   Set<String> get atomicUserDataNamespaces => Set.unmodifiable({
     'core',
-    'admin',
-    ..._userDataContributors.map((value) => value.userDataNamespace),
+    if (_core case AuthUserDeletionCoordinatorHost host)
+      ...host.userDeletionCoordinator.requiredUserDeletionNamespaces,
   });
 
   static AuthAdminStoreCapabilities _requireCapabilities(AuthStore store) {
@@ -109,10 +108,19 @@ final class InMemoryAuthAdminStore implements AuthAdminStore {
     return completer.future;
   }
 
-  void composeUserDataContributors(
-    Iterable<AuthUserDataDeletionContributor> contributors,
-  ) {
-    _userDataContributors = List.unmodifiable(contributors);
+  @override
+  Object captureDeletionState() => Map<String, AuthAdminUserState>.of(_states);
+
+  @override
+  void restoreDeletionState(Object state) {
+    _states
+      ..clear()
+      ..addAll(state as Map<String, AuthAdminUserState>);
+  }
+
+  @override
+  Future<void> deleteUserDataForDeletion(String userId) async {
+    _states.remove(userId.trim());
   }
 
   AuthAdminUserState _state(String userId) =>
@@ -297,30 +305,13 @@ final class InMemoryAuthAdminStore implements AuthAdminStore {
         administratorUserIds,
       );
     }
-    for (final contributor in _userDataContributors) {
-      await contributor.validateUserDeletion(user.id);
+    final host = _core is AuthUserDeletionCoordinatorHost
+        ? _core as AuthUserDeletionCoordinatorHost
+        : null;
+    if (host == null) {
+      throw StateError('Auth store does not coordinate hard user deletion.');
     }
-    final checkpoints = <AuthUserDataDeletionCheckpoint>[];
-    for (final contributor in _userDataContributors) {
-      checkpoints.add(
-        await (contributor as AuthReversibleUserDataDeletionContributor)
-            .checkpointUserData(user.id),
-      );
-    }
-    try {
-      for (final contributor in _userDataContributors) {
-        await contributor.deleteUserData(user.id);
-      }
-      await _revoke(user.id);
-      final deleted = await _capabilities.deleteUserForAdministration(user.id);
-      if (deleted) _states.remove(user.id);
-      return deleted;
-    } catch (error, stackTrace) {
-      for (final checkpoint in checkpoints.reversed) {
-        await checkpoint.restore();
-      }
-      Error.throwWithStackTrace(error, stackTrace);
-    }
+    return host.userDeletionCoordinator.deleteUser(user.id);
   });
 
   @override

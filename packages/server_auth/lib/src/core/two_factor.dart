@@ -172,16 +172,16 @@ abstract interface class AuthTwoFactorStore {
 
 /// In-memory two-factor store for tests and local examples.
 final class InMemoryAuthTwoFactorStore
-    implements AuthTwoFactorStore, AuthInMemoryTransactionParticipant {
+    implements AuthTwoFactorStore, AuthInMemoryUserDeletionStore {
   final Map<String, AuthTwoFactorRecord> _records =
       <String, AuthTwoFactorRecord>{};
 
   @override
-  Object createInMemoryCheckpoint() =>
+  Object captureDeletionState() =>
       Map<String, AuthTwoFactorRecord>.of(_records);
 
   @override
-  void restoreInMemoryCheckpoint(Object checkpoint) {
+  void restoreDeletionState(Object checkpoint) {
     final records = checkpoint as Map<String, AuthTwoFactorRecord>;
     _records
       ..clear()
@@ -212,6 +212,9 @@ final class InMemoryAuthTwoFactorStore
   void delete(String userId) {
     _records.remove(userId);
   }
+
+  @override
+  void deleteUserDataForDeletion(String userId) => delete(userId);
 
   @override
   bool consumeRecoveryCode(
@@ -452,9 +455,7 @@ abstract interface class AuthTwoFactorTrustedDeviceStore {
 
 /// In-memory trusted-device store for tests and local examples.
 final class InMemoryAuthTwoFactorTrustedDeviceStore
-    implements
-        AuthTwoFactorTrustedDeviceStore,
-        AuthInMemoryTransactionParticipant {
+    implements AuthTwoFactorTrustedDeviceStore, AuthInMemoryUserDeletionStore {
   InMemoryAuthTwoFactorTrustedDeviceStore({
     DateTime Function()? clock,
     this.maxEntries = 1024,
@@ -469,11 +470,11 @@ final class InMemoryAuthTwoFactorTrustedDeviceStore
   final DateTime Function() _clock;
 
   @override
-  Object createInMemoryCheckpoint() =>
+  Object captureDeletionState() =>
       Map<String, AuthTwoFactorTrustedDeviceRecord>.of(_records);
 
   @override
-  void restoreInMemoryCheckpoint(Object checkpoint) {
+  void restoreDeletionState(Object checkpoint) {
     final records = checkpoint as Map<String, AuthTwoFactorTrustedDeviceRecord>;
     _records
       ..clear()
@@ -528,6 +529,10 @@ final class InMemoryAuthTwoFactorTrustedDeviceStore
       }
     }
   }
+
+  @override
+  void deleteUserDataForDeletion(String userId) =>
+      revokeAll(userId, now: _clock().toUtc());
 
   void _removeInactive(DateTime now) {
     _records.removeWhere((_, record) => !record.isActive(now: now));
@@ -659,7 +664,7 @@ abstract interface class AuthTwoFactorChallengeStore {
 
 /// In-memory pending-challenge store for tests and local examples.
 final class InMemoryAuthTwoFactorChallengeStore
-    implements AuthTwoFactorChallengeStore, AuthInMemoryTransactionParticipant {
+    implements AuthTwoFactorChallengeStore, AuthInMemoryUserDeletionStore {
   InMemoryAuthTwoFactorChallengeStore({
     DateTime Function()? clock,
     this.maxEntries = 1024,
@@ -674,15 +679,20 @@ final class InMemoryAuthTwoFactorChallengeStore
   final DateTime Function() _clock;
 
   @override
-  Object createInMemoryCheckpoint() =>
+  Object captureDeletionState() =>
       Map<String, AuthTwoFactorChallengeRecord>.of(_records);
 
   @override
-  void restoreInMemoryCheckpoint(Object checkpoint) {
+  void restoreDeletionState(Object checkpoint) {
     final records = checkpoint as Map<String, AuthTwoFactorChallengeRecord>;
     _records
       ..clear()
       ..addAll(records);
+  }
+
+  @override
+  void deleteUserDataForDeletion(String userId) {
+    _records.removeWhere((_, record) => record.userId == userId.trim());
   }
 
   /// Maximum number of pending challenges retained by this local store.
@@ -813,7 +823,7 @@ abstract interface class AuthTwoFactorPendingRecoveryStore {
 final class InMemoryAuthTwoFactorPendingRecoveryStore
     implements
         AuthTwoFactorPendingRecoveryStore,
-        AuthInMemoryTransactionParticipant {
+        AuthInMemoryUserDeletionStore {
   const InMemoryAuthTwoFactorPendingRecoveryStore({
     required this.factorStore,
     required this.challengeStore,
@@ -823,16 +833,16 @@ final class InMemoryAuthTwoFactorPendingRecoveryStore
   final InMemoryAuthTwoFactorChallengeStore challengeStore;
 
   @override
-  Object createInMemoryCheckpoint() => (
-    factors: factorStore.createInMemoryCheckpoint(),
-    challenges: challengeStore.createInMemoryCheckpoint(),
+  Object captureDeletionState() => (
+    factors: factorStore.captureDeletionState(),
+    challenges: challengeStore.captureDeletionState(),
   );
 
   @override
-  void restoreInMemoryCheckpoint(Object checkpoint) {
+  void restoreDeletionState(Object checkpoint) {
     final state = checkpoint as ({Object factors, Object challenges});
-    factorStore.restoreInMemoryCheckpoint(state.factors);
-    challengeStore.restoreInMemoryCheckpoint(state.challenges);
+    factorStore.restoreDeletionState(state.factors);
+    challengeStore.restoreDeletionState(state.challenges);
   }
 
   @override
@@ -840,6 +850,9 @@ final class InMemoryAuthTwoFactorPendingRecoveryStore
     _requireUserId(userId);
     challengeStore._records.removeWhere((_, record) => record.userId == userId);
   }
+
+  @override
+  void deleteUserDataForDeletion(String userId) => deleteForUser(userId);
 
   @override
   AuthTwoFactorPendingRecoveryAttempt recordRecoveryAttempt(
@@ -1018,7 +1031,7 @@ abstract interface class AuthTwoFactorStepUpStore {
 
 /// In-memory step-up store for tests and local examples.
 final class InMemoryAuthTwoFactorStepUpStore
-    implements AuthTwoFactorStepUpStore, AuthInMemoryTransactionParticipant {
+    implements AuthTwoFactorStepUpStore, AuthInMemoryUserDeletionStore {
   InMemoryAuthTwoFactorStepUpStore({
     DateTime Function()? clock,
     this.maxEntries = 1024,
@@ -1033,11 +1046,11 @@ final class InMemoryAuthTwoFactorStepUpStore
   final DateTime Function() _clock;
 
   @override
-  Object createInMemoryCheckpoint() =>
+  Object captureDeletionState() =>
       Map<String, AuthTwoFactorStepUpRecord>.of(_records);
 
   @override
-  void restoreInMemoryCheckpoint(Object checkpoint) {
+  void restoreDeletionState(Object checkpoint) {
     final records = checkpoint as Map<String, AuthTwoFactorStepUpRecord>;
     _records
       ..clear()
@@ -1096,6 +1109,9 @@ final class InMemoryAuthTwoFactorStepUpStore
     _records.removeWhere((_, record) => record.userId == userId);
   }
 
+  @override
+  void deleteUserDataForDeletion(String userId) => revokeAllForUser(userId);
+
   void _removeExpired(DateTime now) {
     _records.removeWhere((_, record) => !record.isActive(now: now));
   }
@@ -1153,7 +1169,7 @@ final class TwoFactorPlugin<TContext>
     implements
         AuthServerPlugin<TContext>,
         AuthHostEndpointContributor<TContext>,
-        AuthReversibleUserDataDeletionContributor {
+        AuthUserDeletionPlanContributor {
   TwoFactorPlugin({
     required this.store,
     required this.secretProtector,
@@ -1264,11 +1280,17 @@ final class TwoFactorPlugin<TContext>
   final Duration stepUpTtl;
   final String stepUpCookieName;
   final List<int> Function(int length) _secretGenerator;
+  late AuthUserDeletionDomain _deletionDomain;
 
   @override
   void configure(AuthServerPluginContext<TContext> context) {
-    // The plugin owns its additional persistence contract. The shared store
-    // remains available for user/session lookups in future composed hooks.
+    final host = context.store;
+    if (host is! AuthUserDeletionCoordinatorHost) {
+      throw StateError('TwoFactorPlugin requires a deletion-coordinator host.');
+    }
+    _deletionDomain = (host as AuthUserDeletionCoordinatorHost)
+        .userDeletionCoordinator
+        .domain;
   }
 
   @override
@@ -1356,39 +1378,30 @@ final class TwoFactorPlugin<TContext>
   String get userDataNamespace => 'two_factor';
 
   @override
-  Future<void> validateUserDeletion(String userId) async {
-    _requireUserId(userId);
-  }
-
-  @override
-  Future<void> deleteUserData(String userId) async {
-    _requireUserId(userId);
-    await store.delete(userId);
-    await pendingRecoveryStore?.deleteForUser(userId);
-    final now = DateTime.now().toUtc();
-    final trusted = trustedDeviceStore;
-    if (trusted is InMemoryAuthTwoFactorTrustedDeviceStore) {
-      trusted._records.removeWhere((_, record) => record.userId == userId);
-    } else {
-      await trusted.revokeAll(userId, now: now);
+  Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) async {
+    if (_deletionDomain is! AuthInMemoryUserDeletionDomain ||
+        store is! AuthInMemoryDeletionState ||
+        trustedDeviceStore is! InMemoryAuthTwoFactorTrustedDeviceStore ||
+        challengeStore is! InMemoryAuthTwoFactorChallengeStore ||
+        (pendingRecoveryStore != null &&
+            pendingRecoveryStore is! AuthInMemoryDeletionState) ||
+        (stepUpStore != null && stepUpStore is! AuthInMemoryDeletionState)) {
+      throw StateError('The two-factor adapter has no plan for this domain.');
     }
-    final challenges = challengeStore;
-    if (challenges is InMemoryAuthTwoFactorChallengeStore) {
-      challenges._records.removeWhere((_, record) => record.userId == userId);
-    }
-    await stepUpStore?.revokeAllForUser(userId);
-  }
-
-  @override
-  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) {
-    _requireUserId(userId);
-    return AuthUserDataDeletionCheckpoint.capture([
-      store,
-      trustedDeviceStore,
-      challengeStore,
-      ?pendingRecoveryStore,
-      ?stepUpStore,
-    ]);
+    return AuthInMemoryUserDeletionPlan(
+      domain: _deletionDomain as AuthInMemoryUserDeletionDomain,
+      userId: user.id,
+      namespace: userDataNamespace,
+      operation: _InMemoryTwoFactorDeletionOperation(
+        userId: user.id,
+        factorStore: store,
+        trustedDeviceStore:
+            trustedDeviceStore as InMemoryAuthTwoFactorTrustedDeviceStore,
+        challengeStore: challengeStore as InMemoryAuthTwoFactorChallengeStore,
+        pendingRecoveryStore: pendingRecoveryStore,
+        stepUpStore: stepUpStore,
+      ),
+    );
   }
 
   /// Starts a short-lived challenge for a user whose TOTP is enabled.
@@ -1993,6 +2006,68 @@ String generateAuthTotpCode(
 }
 
 String _normalizeTotpCode(String code) => code.trim();
+
+final class _InMemoryTwoFactorDeletionOperation
+    implements AuthInMemoryUserDeletionOperation {
+  _InMemoryTwoFactorDeletionOperation({
+    required this.userId,
+    required this.factorStore,
+    required this.trustedDeviceStore,
+    required this.challengeStore,
+    required this.pendingRecoveryStore,
+    required this.stepUpStore,
+  });
+
+  final String userId;
+  final AuthTwoFactorStore factorStore;
+  final InMemoryAuthTwoFactorTrustedDeviceStore trustedDeviceStore;
+  final InMemoryAuthTwoFactorChallengeStore challengeStore;
+  final AuthTwoFactorPendingRecoveryStore? pendingRecoveryStore;
+  final AuthTwoFactorStepUpStore? stepUpStore;
+
+  List<AuthInMemoryDeletionState> get _stores {
+    final values = <AuthInMemoryDeletionState>[
+      factorStore as AuthInMemoryDeletionState,
+      trustedDeviceStore,
+      challengeStore,
+      if (pendingRecoveryStore case AuthInMemoryDeletionState value) value,
+      if (stepUpStore case AuthInMemoryDeletionState value) value,
+    ];
+    final unique = <AuthInMemoryDeletionState>[];
+    for (final value in values) {
+      if (!unique.any((existing) => identical(existing, value))) {
+        unique.add(value);
+      }
+    }
+    return unique;
+  }
+
+  @override
+  List<({AuthInMemoryDeletionState store, Object state})> captureState() => [
+    for (final store in _stores)
+      (store: store, state: store.captureDeletionState()),
+  ];
+
+  @override
+  Future<void> apply() async {
+    await factorStore.delete(userId);
+    await pendingRecoveryStore?.deleteForUser(userId);
+    trustedDeviceStore._records.removeWhere(
+      (_, record) => record.userId == userId,
+    );
+    challengeStore._records.removeWhere((_, record) => record.userId == userId);
+    await stepUpStore?.revokeAllForUser(userId);
+  }
+
+  @override
+  Future<void> restoreState(Object state) async {
+    final checkpoints =
+        state as List<({AuthInMemoryDeletionState store, Object state})>;
+    for (final checkpoint in checkpoints.reversed) {
+      await checkpoint.store.restoreDeletionState(checkpoint.state);
+    }
+  }
+}
 
 String _normalizeRecoveryCode(String code) =>
     code.replaceAll(RegExp(r'[-\s]'), '').toUpperCase();

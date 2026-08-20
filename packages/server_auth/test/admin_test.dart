@@ -27,13 +27,10 @@ void main() {
       await _seed(core, admin);
       await _seed(core, member);
       feature = AdminPlugin<Object>(store: adminStore);
-      AuthRuntime<Object>(
-        options: AuthOptions(
-          providers: const [],
+      feature.configure(
+        AuthServerPluginContext<Object>(
           store: core,
-          storeMode: AuthStoreMode.ephemeral,
           passwordHasher: const _Hasher(),
-          plugins: [feature],
         ),
       );
     });
@@ -715,9 +712,9 @@ final class _Hasher implements PasswordHasher {
 }
 
 final class _FailingDeletionPlugin
-    implements
-        AuthServerPlugin<Object>,
-        AuthReversibleUserDataDeletionContributor {
+    implements AuthServerPlugin<Object>, AuthUserDeletionPlanContributor {
+  late AuthInMemoryUserDeletionDomain _domain;
+
   @override
   String get id => 'failing-deletion';
 
@@ -725,19 +722,36 @@ final class _FailingDeletionPlugin
   String get userDataNamespace => 'failing-deletion';
 
   @override
-  void configure(AuthServerPluginContext<Object> context) {}
-
-  @override
-  void validateUserDeletion(String userId) {}
-
-  @override
-  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) =>
-      AuthUserDataDeletionCheckpoint.capture(const []);
-
-  @override
-  void deleteUserData(String userId) {
-    throw StateError('simulated deletion failure');
+  void configure(AuthServerPluginContext<Object> context) {
+    _domain =
+        (context.store as AuthUserDeletionCoordinatorHost)
+                .userDeletionCoordinator
+                .domain
+            as AuthInMemoryUserDeletionDomain;
   }
+
+  @override
+  AuthUserDeletionPlan createUserDeletionPlan(AuthUser user) =>
+      AuthInMemoryUserDeletionPlan(
+        domain: _domain,
+        userId: user.id,
+        namespace: userDataNamespace,
+        operation: const _FailingDeletionOperation(),
+      );
+}
+
+final class _FailingDeletionOperation
+    implements AuthInMemoryUserDeletionOperation {
+  const _FailingDeletionOperation();
+
+  @override
+  Object captureState() => const Object();
+
+  @override
+  void apply() => throw StateError('simulated deletion failure');
+
+  @override
+  void restoreState(Object state) {}
 }
 
 final class _SessionControl implements AuthServerPluginSessionControl {

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'account_policy.dart';
 import 'admin_models.dart';
 import 'admin_store.dart';
+import 'deletion_transaction.dart';
 import 'exceptions.dart';
 import 'plugin.dart';
 import 'models.dart';
@@ -102,6 +103,7 @@ final class AdminPlugin<TContext>
         AuthClientOperationContributor,
         AuthRateLimitContributor,
         AuthAuthenticationPolicyContributor<TContext>,
+        AuthUserDeletionPlanContributor,
         AuthServerPluginTopologyAware<TContext> {
   AdminPlugin({required this.store, AuthAdminOptions<TContext>? options})
     : options = options ?? AuthAdminOptions<TContext>(),
@@ -130,6 +132,7 @@ final class AdminPlugin<TContext>
   late PasswordHasher _passwordHasher;
   late PasswordPolicy _passwordPolicy;
   late AuthSessionStrategy _sessionStrategy;
+  late AuthUserDeletionDomain _deletionDomain;
   List<AuthUserAccessRevocationContributor> _accessRevocationContributors =
       const [];
 
@@ -143,9 +146,37 @@ final class AdminPlugin<TContext>
   @override
   void configure(AuthServerPluginContext<TContext> context) {
     _coreStore = context.store;
+    final host = context.store;
+    if (host is! AuthUserDeletionCoordinatorHost) {
+      throw StateError('AdminPlugin requires a deletion-coordinator host.');
+    }
+    _deletionDomain = (host as AuthUserDeletionCoordinatorHost)
+        .userDeletionCoordinator
+        .domain;
     _passwordHasher = context.passwordHasher ?? Argon2idPasswordHasher();
     _passwordPolicy = context.passwordPolicy;
     _sessionStrategy = context.sessionStrategy;
+  }
+
+  @override
+  String get userDataNamespace => 'admin';
+
+  @override
+  Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) async {
+    final target = store;
+    if (_deletionDomain is! AuthInMemoryUserDeletionDomain ||
+        target is! AuthInMemoryUserDeletionStore) {
+      throw StateError('The Admin adapter has no plan for this domain.');
+    }
+    return AuthInMemoryUserDeletionPlan(
+      domain: _deletionDomain as AuthInMemoryUserDeletionDomain,
+      userId: user.id,
+      namespace: userDataNamespace,
+      operation: AuthInMemoryStoreDeletionOperation(
+        store: target as AuthInMemoryUserDeletionStore,
+        userId: user.id,
+      ),
+    );
   }
 
   @override
@@ -156,25 +187,10 @@ final class AdminPlugin<TContext>
         .where((plugin) => !identical(plugin, this))
         .toList(growable: false);
     final contributors = plugins
-        .whereType<AuthUserDataDeletionContributor>()
-        .where((plugin) => !identical(plugin, this))
+        .whereType<AuthUserDeletionPlanContributor>()
         .toList(growable: false);
-    if (target is InMemoryAuthAdminStore) {
-      final unsafe = contributors
-          .where((value) => value is! AuthReversibleUserDataDeletionContributor)
-          .map((value) => value.userDataNamespace)
-          .toList(growable: false);
-      if (unsafe.isNotEmpty) {
-        throw StateError(
-          'In-memory Admin deletion requires reversible contributors: '
-          '${unsafe.join(', ')}.',
-        );
-      }
-      target.composeUserDataContributors(contributors);
-    }
     final required = {
       'core',
-      'admin',
       ...contributors.map((value) => value.userDataNamespace),
     };
     if (!target.atomicUserDataNamespaces.containsAll(required)) {

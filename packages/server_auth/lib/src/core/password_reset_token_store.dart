@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
 import 'tokens.dart' show hashOpaqueToken, secureRandomToken;
 
 /// Persisted password-reset challenge metadata.
@@ -49,13 +50,24 @@ abstract interface class AuthPasswordResetTokenStore {
 
 /// In-memory password-reset token store for tests and local development.
 class InMemoryAuthPasswordResetTokenStore
-    implements AuthPasswordResetTokenStore {
+    implements AuthPasswordResetTokenStore, AuthInMemoryDeletionState {
   InMemoryAuthPasswordResetTokenStore({DateTime Function()? clock})
     : _clock = clock ?? DateTime.now;
 
   final Map<String, AuthPasswordResetToken> _tokens =
       <String, AuthPasswordResetToken>{};
   final DateTime Function() _clock;
+
+  @override
+  Object captureDeletionState() =>
+      Map<String, AuthPasswordResetToken>.of(_tokens);
+
+  @override
+  void restoreDeletionState(Object state) {
+    _tokens
+      ..clear()
+      ..addAll(state as Map<String, AuthPasswordResetToken>);
+  }
 
   @override
   Future<void> save(AuthPasswordResetToken token) async {

@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
+
 /// Persistence contract for per-user JWT session versions.
 ///
 /// A JWT carries the version returned by [current]. Rotating the version
@@ -14,8 +16,19 @@ abstract interface class AuthJwtVersionStore {
 }
 
 /// In-memory JWT version store for tests and local development.
-class InMemoryAuthJwtVersionStore implements AuthJwtVersionStore {
+class InMemoryAuthJwtVersionStore
+    implements AuthJwtVersionStore, AuthInMemoryDeletionState {
   final Map<String, int> _versions = <String, int>{};
+
+  @override
+  Object captureDeletionState() => Map<String, int>.of(_versions);
+
+  @override
+  void restoreDeletionState(Object state) {
+    _versions
+      ..clear()
+      ..addAll(state as Map<String, int>);
+  }
 
   @override
   Future<int> current(String userId) async {

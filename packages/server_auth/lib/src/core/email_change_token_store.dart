@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
 import 'models.dart';
 import 'store.dart';
 import 'tokens.dart' show hashOpaqueToken;
@@ -11,7 +12,8 @@ import 'tokens.dart' show hashOpaqueToken;
 final class InMemoryAuthEmailChangeTokenStore
     implements
         AuthEmailChangeTokenStore,
-        AuthEmailChangeTokenConditionalDeleteStore {
+        AuthEmailChangeTokenConditionalDeleteStore,
+        AuthInMemoryDeletionState {
   InMemoryAuthEmailChangeTokenStore({
     DateTime Function()? clock,
     this.maxTokens = 1024,
@@ -25,6 +27,16 @@ final class InMemoryAuthEmailChangeTokenStore
   final int maxTokens;
   final Map<String, _EmailChangeRecord> _records =
       <String, _EmailChangeRecord>{};
+
+  @override
+  Object captureDeletionState() => Map<String, _EmailChangeRecord>.of(_records);
+
+  @override
+  void restoreDeletionState(Object state) {
+    _records
+      ..clear()
+      ..addAll(state as Map<String, _EmailChangeRecord>);
+  }
 
   @override
   Future<void> save(AuthEmailChangeToken token) async {

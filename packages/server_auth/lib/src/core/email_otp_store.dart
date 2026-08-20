@@ -89,17 +89,17 @@ abstract interface class AuthEmailOtpStore {
 
 /// In-memory OTP store for tests and local development.
 final class InMemoryAuthEmailOtpStore
-    implements AuthEmailOtpStore, AuthInMemoryTransactionParticipant {
+    implements AuthEmailOtpStore, AuthInMemoryDeletionState {
   InMemoryAuthEmailOtpStore({this.maxEntries = 2048}) : assert(maxEntries > 0);
 
   final int maxEntries;
   final Map<String, AuthEmailOtp> _records = <String, AuthEmailOtp>{};
 
   @override
-  Object createInMemoryCheckpoint() => Map<String, AuthEmailOtp>.of(_records);
+  Object captureDeletionState() => Map<String, AuthEmailOtp>.of(_records);
 
   @override
-  void restoreInMemoryCheckpoint(Object checkpoint) {
+  void restoreDeletionState(Object checkpoint) {
     final records = checkpoint as Map<String, AuthEmailOtp>;
     _records
       ..clear()

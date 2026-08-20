@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../core/deletion_transaction.dart';
 import '../core/device_authorization_store.dart';
 import '../core/email_otp_store.dart';
 import '../core/models.dart';
@@ -275,7 +276,7 @@ final class AuthStoreConformanceSuite {
           id: 'account-deletion.transaction',
           description: 'rolls back and retries transactional account deletion',
           capability: AuthStoreConformanceCapability.accountDeletion,
-          supports: (store) => store is AuthAccountDeletionStore,
+          supports: (store) => store is AuthUserDeletionCoordinatorHost,
           verify: _verifyAccountDeletionTransaction,
         ),
       ]);
@@ -1101,7 +1102,8 @@ Future<void> _verifyEmailOtpContention(AuthStore store) async {
 }
 
 Future<void> _verifyAccountDeletionTransaction(AuthStore store) async {
-  final deletionStore = store as AuthAccountDeletionStore;
+  final host = store as AuthUserDeletionCoordinatorHost;
+  final coordinator = host.userDeletionCoordinator;
   final now = _conformanceNow();
   final user = _user('delete-user', 'delete@example.com');
   final credential = _credential(user, now: now);
@@ -1136,21 +1138,23 @@ Future<void> _verifyAccountDeletionTransaction(AuthStore store) async {
     ),
   );
 
-  final marker = StateError('contributor rollback marker');
-  Object? rollbackError;
-  try {
-    await Future.sync(
-      () => deletionStore.confirmAndDeleteUser(
-        userId: user.id,
-        token: deletionToken,
-        deleteContributedData: () => throw marker,
-        now: now,
-      ),
+  _FaultingDeletionContributor? faultingContributor;
+  if (coordinator.domain case AuthInMemoryUserDeletionDomain domain) {
+    faultingContributor = _FaultingDeletionContributor(
+      domain: domain,
+      error: StateError('contributor rollback marker'),
     );
-  } catch (error) {
-    rollbackError = error;
+    host.bindUserDeletionPlanContributors([faultingContributor]);
+  } else {
+    host.bindUserDeletionPlanContributors(const []);
   }
-  _check(identical(rollbackError, marker), 'contributor failure was swallowed');
+
+  final invalid = await coordinator.confirmAndDeleteUser(
+    userId: user.id,
+    token: 'invalid-deletion-token',
+    now: now,
+  );
+  _check(!invalid, 'an invalid deletion token was accepted');
   await _checkUserDataPresent(
     store,
     user: user,
@@ -1159,15 +1163,46 @@ Future<void> _verifyAccountDeletionTransaction(AuthStore store) async {
     session: session,
   );
 
-  final deleted = await Future.sync(
-    () => deletionStore.confirmAndDeleteUser(
+  if (faultingContributor != null) {
+    Object? rollbackError;
+    try {
+      await coordinator.confirmAndDeleteUser(
+        userId: user.id,
+        token: deletionToken,
+        now: now,
+      );
+    } catch (error) {
+      rollbackError = error;
+    }
+    _check(
+      identical(rollbackError, faultingContributor.error),
+      'plugin deletion failure was swallowed',
+    );
+    await _checkUserDataPresent(
+      store,
+      user: user,
+      credential: credential,
+      account: account,
+      session: session,
+    );
+  }
+
+  final results = await Future.wait([
+    coordinator.confirmAndDeleteUser(
       userId: user.id,
       token: deletionToken,
-      deleteContributedData: () {},
       now: now,
     ),
+    coordinator.confirmAndDeleteUser(
+      userId: user.id,
+      token: deletionToken,
+      now: now,
+    ),
+  ]);
+  _check(
+    results.where((deleted) => deleted).length == 1,
+    'deletion contention did not have exactly one winner',
   );
-  _check(deleted, 'rolled-back deletion token could not be retried');
   _check(
     await Future.sync(() => store.users.findById(user.id)) == null,
     'account deletion retained the user',
@@ -1198,6 +1233,47 @@ Future<void> _verifyAccountDeletionTransaction(AuthStore store) async {
     await Future.sync(() => store.jwtVersions.current(user.id)) == 1,
     'account deletion did not invalidate JWTs',
   );
+}
+
+final class _FaultingDeletionContributor
+    implements AuthUserDeletionPlanContributor {
+  _FaultingDeletionContributor({required this.domain, required this.error});
+
+  final AuthInMemoryUserDeletionDomain domain;
+  final Object error;
+  bool failedOnce = false;
+
+  @override
+  String get userDataNamespace => 'conformance_fault';
+
+  @override
+  AuthUserDeletionPlan createUserDeletionPlan(AuthUser user) =>
+      AuthInMemoryUserDeletionPlan(
+        domain: domain,
+        userId: user.id,
+        namespace: userDataNamespace,
+        operation: _FaultingDeletionOperation(this),
+      );
+}
+
+final class _FaultingDeletionOperation
+    implements AuthInMemoryUserDeletionOperation {
+  const _FaultingDeletionOperation(this.contributor);
+
+  final _FaultingDeletionContributor contributor;
+
+  @override
+  Object captureState() => const Object();
+
+  @override
+  void apply() {
+    if (contributor.failedOnce) return;
+    contributor.failedOnce = true;
+    throw contributor.error;
+  }
+
+  @override
+  void restoreState(Object state) {}
 }
 
 Future<void> _checkUserDataPresent(

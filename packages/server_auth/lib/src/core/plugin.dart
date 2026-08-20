@@ -206,20 +206,6 @@ abstract interface class AuthPasswordPolicyContributor<TContext> {
   );
 }
 
-/// Plugin-owned user data that participates in administrative hard deletion.
-abstract interface class AuthUserDataDeletionContributor {
-  String get userDataNamespace;
-  FutureOr<void> validateUserDeletion(String userId);
-  FutureOr<void> deleteUserData(String userId);
-}
-
-/// A plugin contributor whose local stores can be restored if hard deletion
-/// fails before the in-memory Admin transaction commits.
-abstract interface class AuthReversibleUserDataDeletionContributor
-    implements AuthUserDataDeletionContributor {
-  FutureOr<AuthUserDataDeletionCheckpoint> checkpointUserData(String userId);
-}
-
 /// Plugin-owned credentials or tokens that must be revoked when a user is
 /// made unavailable without deleting their data.
 abstract interface class AuthUserAccessRevocationContributor {
@@ -599,6 +585,7 @@ class AuthServerPluginRegistry<TContext> {
     final topology = List<AuthServerPlugin<TContext>>.unmodifiable(
       _plugins.values,
     );
+    _bindDeletionTopology(topology);
     for (final plugin
         in topology.whereType<AuthServerPluginTopologyAware<TContext>>()) {
       plugin.composePluginTopology(topology);
@@ -614,6 +601,21 @@ class AuthServerPluginRegistry<TContext> {
       }
     }
     _frozen = true;
+  }
+
+  void _bindDeletionTopology(List<AuthServerPlugin<TContext>> topology) {
+    final deletionContributors = topology
+        .whereType<AuthUserDeletionPlanContributor>()
+        .toList(growable: false);
+    final deletionHost = _store is AuthUserDeletionCoordinatorHost
+        ? _store as AuthUserDeletionCoordinatorHost
+        : null;
+    if (deletionHost == null && deletionContributors.isNotEmpty) {
+      throw StateError(
+        'The auth store cannot coordinate plugin-owned user deletion plans.',
+      );
+    }
+    deletionHost?.bindUserDeletionPlanContributors(deletionContributors);
   }
 
   AuthServerPlugin<TContext>? find(String id) => _plugins[id.trim()];
@@ -682,8 +684,9 @@ class AuthServerPluginRegistry<TContext> {
   Future<void> emitAuthenticationLifecycleEvent(
     AuthAuthenticationLifecycleEvent<TContext> event,
   ) async {
-    for (final plugin in _plugins.values
-        .whereType<AuthAuthenticationLifecycleContributor<TContext>>()) {
+    for (final plugin
+        in _plugins.values
+            .whereType<AuthAuthenticationLifecycleContributor<TContext>>()) {
       await plugin.onAuthenticationLifecycleEvent(event);
     }
   }

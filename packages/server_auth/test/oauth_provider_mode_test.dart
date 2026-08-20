@@ -428,7 +428,8 @@ void main() {
       );
     });
 
-    test('hard-deletion checkpoint restores both credential stores', () async {
+    test('coordinated hard deletion removes both credential stores', () async {
+      final core = InMemoryAuthStore();
       final codeStore = InMemoryOAuthAuthorizationCodeStore();
       final tokenStore = InMemoryOAuthAccessTokenStore();
       final plugin = OAuthProviderModePlugin<Object>(
@@ -437,6 +438,8 @@ void main() {
         accessTokenStore: tokenStore,
       );
       final now = DateTime.now().toUtc();
+      await core.users.create(AuthUser(id: 'user-1'));
+      plugin.configure(AuthServerPluginContext<Object>(store: core));
       await codeStore.create(
         OAuthAuthorizationCode(
           codeHash: hashOpaqueToken('pending-code'),
@@ -457,12 +460,10 @@ void main() {
           expiresAt: now.add(const Duration(hours: 1)),
         ),
       );
-      final checkpoint = plugin.checkpointUserData('user-1');
+      core.bindUserDeletionPlanContributors([plugin]);
+      expect(await core.userDeletionCoordinator.deleteUser('user-1'), isTrue);
 
-      await plugin.deleteUserData('user-1');
-      await checkpoint.restore();
-
-      expect(await tokenStore.findByToken('access-token'), isNotNull);
+      expect(await tokenStore.findByToken('access-token'), isNull);
       expect(
         await codeStore.consume(
           codeHash: hashOpaqueToken('pending-code'),
@@ -470,7 +471,7 @@ void main() {
           redirectUri: 'https://client.example.test/callback',
           codeVerifier: null,
         ),
-        isNotNull,
+        isNull,
       );
     });
   });
