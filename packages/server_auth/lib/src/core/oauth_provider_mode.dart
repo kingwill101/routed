@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart' show sha256;
+import 'package:jose/jose.dart' show JsonWebSignatureBuilder;
 
 import 'exceptions.dart';
 import 'account_policy.dart';
+import 'deletion_transaction.dart';
 import 'models.dart';
 import 'plugin.dart';
 import 'oauth_client_store.dart';
@@ -12,13 +14,11 @@ import 'oauth_provider_models.dart';
 import 'rate_limit.dart';
 import 'store.dart';
 import 'tokens.dart' show hashOpaqueToken, secureRandomToken;
+import 'users.dart' show authUserIsDisabled;
 
 const String authOAuthProviderModePluginId = 'oauth_provider_mode';
 
-@Deprecated('Use authOAuthProviderModePluginId.')
-const String authOAuthProviderModeFeatureId = authOAuthProviderModePluginId;
-
-/// Feature that enables the application to act as an OAuth/OIDC provider.
+/// Plugin that enables the application to act as an OAuth/OIDC provider.
 ///
 /// This feature allows Routed applications to:
 /// - Register OAuth clients
@@ -27,14 +27,14 @@ const String authOAuthProviderModeFeatureId = authOAuthProviderModePluginId;
 /// - Provide userinfo endpoints
 /// - Support token introspection
 /// - Serve JWKS for JWT verification
-class OAuthProviderModePlugin<TContext>
+final class OAuthProviderModePlugin<TContext>
     implements
         AuthServerPlugin<TContext>,
         AuthEndpointContributor<TContext>,
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
-        AuthUserDataDeletionContributor,
+        AuthReversibleUserDataDeletionContributor,
         AuthUserAccessRevocationContributor,
         AuthOAuthTokenEndpointHost<TContext> {
   OAuthProviderModePlugin({
@@ -42,7 +42,15 @@ class OAuthProviderModePlugin<TContext>
     required this.authorizationCodeStore,
     required this.accessTokenStore,
     this.options = const OAuthProviderModeOptions(),
-  });
+  }) {
+    if (options.oidc != null && !options.supportedScopes.contains('openid')) {
+      throw ArgumentError.value(
+        options.supportedScopes,
+        'options.supportedScopes',
+        'must include openid when OIDC is configured',
+      );
+    }
+  }
 
   /// Store for OAuth client registrations.
   final OAuthClientStore clientStore;
@@ -67,15 +75,28 @@ class OAuthProviderModePlugin<TContext>
   String get userAccessNamespace => authOAuthProviderModePluginId;
 
   @override
-  Future<void> validateUserDeletion(String userId) async {}
+  Future<void> validateUserDeletion(String userId) async {
+    if (userId.trim().isEmpty) {
+      throw ArgumentError.value(userId, 'userId', 'must not be empty');
+    }
+  }
 
   @override
   Future<void> deleteUserData(String userId) async {
+    await authorizationCodeStore.deleteForUser(userId);
     await accessTokenStore.revokeAllForUser(userId);
   }
 
   @override
+  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) =>
+      AuthUserDataDeletionCheckpoint.capture(<Object>[
+        authorizationCodeStore,
+        accessTokenStore,
+      ]);
+
+  @override
   Future<void> revokeUserAccess(String userId) async {
+    await authorizationCodeStore.deleteForUser(userId);
     await accessTokenStore.revokeAllForUser(userId);
   }
 
@@ -103,8 +124,11 @@ class OAuthProviderModePlugin<TContext>
     'oauth_provider.authorize': options.authorizationEndpoint,
     'oauth_provider.token': options.tokenEndpoint,
     'oauth_provider.userinfo': options.userInfoEndpoint,
-    'oauth_provider.jwks': options.jwksEndpoint,
     'oauth_provider.introspect': options.introspectionEndpoint,
+    if (options.oidc case final oidc?) ...<String, String>{
+      'oauth_provider.discovery': oidc.discoveryEndpoint,
+      'oauth_provider.jwks': oidc.jwksEndpoint,
+    },
     'oauth_provider.clients.list': '/oauth/clients/list',
     'oauth_provider.clients.create': '/oauth/clients/create',
     'oauth_provider.clients.delete': '/oauth/clients/delete',
@@ -116,6 +140,7 @@ class OAuthProviderModePlugin<TContext>
         final isRead =
             operationId.endsWith('.authorize') ||
             operationId.endsWith('.list') ||
+            operationId.endsWith('.discovery') ||
             operationId.endsWith('.jwks') ||
             operationId.endsWith('.userinfo');
         final method = isRead
@@ -125,6 +150,7 @@ class OAuthProviderModePlugin<TContext>
             operationId == 'oauth_provider.token' ||
             operationId == 'oauth_provider.introspect' ||
             operationId == 'oauth_provider.userinfo' ||
+            operationId == 'oauth_provider.discovery' ||
             operationId == 'oauth_provider.jwks';
         return TypedAuthEndpointDescriptor<
           TContext,
@@ -183,6 +209,7 @@ class OAuthProviderModePlugin<TContext>
   AuthOperationAuthentication _endpointAuthentication(String operationId) {
     switch (operationId) {
       case 'oauth_provider.jwks':
+      case 'oauth_provider.discovery':
       case 'oauth_provider.token':
       case 'oauth_provider.introspect':
         return AuthOperationAuthentication.none;
@@ -230,7 +257,7 @@ class OAuthProviderModePlugin<TContext>
         AuthEntityDescriptor(
           id: 'oauth_authorization_code',
           fields: [
-            AuthFieldDescriptor(name: 'code', kind: 'id'),
+            AuthFieldDescriptor(name: 'codeHash', kind: 'secret_digest'),
             AuthFieldDescriptor(name: 'clientId', kind: 'id'),
             AuthFieldDescriptor(name: 'userId', kind: 'id'),
             AuthFieldDescriptor(name: 'redirectUri', kind: 'string'),
@@ -297,6 +324,8 @@ class OAuthProviderModePlugin<TContext>
         return _handleToken(invocation, input);
       case 'oauth_provider.userinfo':
         return _handleUserInfo(invocation, input);
+      case 'oauth_provider.discovery':
+        return _handleDiscovery();
       case 'oauth_provider.jwks':
         return _handleJwks();
       case 'oauth_provider.introspect':
@@ -316,12 +345,14 @@ class OAuthProviderModePlugin<TContext>
     Map<String, dynamic> input,
   ) async {
     final user = invocation.user;
-    if (user == null) throw AuthFlowException('unauthorized');
+    if (user == null || authUserIsDisabled(user)) {
+      throw AuthFlowException('unauthorized');
+    }
 
     final clientId = input['client_id']?.toString();
     final redirectUri = input['redirect_uri']?.toString();
     final responseType = input['response_type']?.toString();
-    final scope = input['scope']?.toString() ?? 'openid';
+    final scope = input['scope']?.toString();
     final state = input['state']?.toString();
     final codeChallenge = input['code_challenge']?.toString();
     final codeChallengeMethod =
@@ -356,8 +387,14 @@ class OAuthProviderModePlugin<TContext>
     // Validate requested scopes against the provider and client allow-lists.
     final grantedScope = _resolveGrantedScope(scope, client);
 
-    // Validate PKCE if required
-    if (options.requirePkce && codeChallenge == null) {
+    // OAuth 2.1 authorization codes use S256 PKCE. Optional PKCE means the
+    // challenge may be omitted, not that weaker methods are accepted.
+    if (options.requirePkce &&
+        (codeChallenge == null || codeChallenge.trim().isEmpty)) {
+      throw AuthFlowException('invalid_request');
+    }
+    if (codeChallenge != null &&
+        (codeChallenge.trim().isEmpty || codeChallengeMethod != 'S256')) {
       throw AuthFlowException('invalid_request');
     }
 
@@ -365,7 +402,7 @@ class OAuthProviderModePlugin<TContext>
     final code = secureRandomToken();
     final now = DateTime.now().toUtc();
     final authCode = OAuthAuthorizationCode(
-      code: code,
+      codeHash: hashOpaqueToken(code),
       clientId: clientId,
       userId: user.id,
       redirectUri: redirectUri,
@@ -377,7 +414,7 @@ class OAuthProviderModePlugin<TContext>
       createdAt: now,
     );
 
-    await authorizationCodeStore.save(authCode);
+    await authorizationCodeStore.create(authCode);
 
     final target = Uri.parse(redirectUri);
     return AuthEndpointRedirect(
@@ -454,7 +491,7 @@ class OAuthProviderModePlugin<TContext>
     final redirectUri = input['redirect_uri']?.toString();
     final codeVerifier = input['code_verifier']?.toString();
 
-    if (code == null || clientId == null) {
+    if (code == null || clientId == null || redirectUri == null) {
       throw AuthFlowException('invalid_request');
     }
 
@@ -464,35 +501,21 @@ class OAuthProviderModePlugin<TContext>
       throw AuthFlowException('invalid_client');
     }
 
-    // Consume authorization code
-    final authCode = await authorizationCodeStore.consume(code);
+    // Atomically consume the authorization code and all of its bindings. A
+    // failed binding check still consumes a matching code to prevent retries
+    // with captured credentials.
+    final authCode = await authorizationCodeStore.consume(
+      codeHash: hashOpaqueToken(code),
+      clientId: clientId,
+      redirectUri: redirectUri,
+      codeVerifier: codeVerifier,
+    );
     if (authCode == null) {
       throw AuthFlowException('invalid_grant');
     }
 
-    // Validate code belongs to client
-    if (authCode.clientId != clientId) {
-      throw AuthFlowException('invalid_grant');
-    }
-
-    // Validate redirect URI
-    if (authCode.redirectUri != redirectUri) {
-      throw AuthFlowException('invalid_grant');
-    }
-
-    // Validate PKCE
-    if (authCode.codeChallenge != null) {
-      if (codeVerifier == null) {
-        throw AuthFlowException('invalid_grant');
-      }
-      if (!validatePkce(
-        authCode.codeChallenge!,
-        codeVerifier,
-        authCode.codeChallengeMethod ?? 'S256',
-      )) {
-        throw AuthFlowException('invalid_grant');
-      }
-    }
+    final user = await _activeUser(authCode.userId);
+    if (user == null) throw AuthFlowException('invalid_grant');
 
     // Issue tokens
     return _issueTokens(
@@ -500,6 +523,7 @@ class OAuthProviderModePlugin<TContext>
       userId: authCode.userId,
       scope: authCode.scope,
       nonce: authCode.nonce,
+      oidcUser: user,
       issueRefreshToken: client.grantTypes.contains('refresh_token'),
     );
   }
@@ -530,6 +554,9 @@ class OAuthProviderModePlugin<TContext>
 
     // Validate requested scopes against the provider and client allow-lists.
     final grantedScope = _resolveGrantedScope(scope, client);
+    if (_containsScope(grantedScope, 'openid')) {
+      throw AuthFlowException('invalid_scope');
+    }
 
     // Client credentials don't have a user context
     // Use a system user ID or the client ID itself
@@ -572,6 +599,12 @@ class OAuthProviderModePlugin<TContext>
     if (originalToken == null || !originalToken.isRefreshTokenValid()) {
       throw AuthFlowException('invalid_grant');
     }
+    final user = originalToken.userId.startsWith('system:')
+        ? null
+        : await _activeUser(originalToken.userId);
+    if (!originalToken.userId.startsWith('system:') && user == null) {
+      throw AuthFlowException('invalid_grant');
+    }
 
     final maxUses = options.maxRefreshTokenUses;
     if (maxUses != null &&
@@ -599,6 +632,13 @@ class OAuthProviderModePlugin<TContext>
       refreshTokenUses: originalToken.refreshTokenUses + 1,
       issuedAt: now,
     );
+    final idToken = _containsScope(replacement.scope, 'openid')
+        ? _issueIdToken(
+            clientId: clientId,
+            user: user!,
+            scope: replacement.scope,
+          )
+        : null;
     final consumed = await accessTokenStore.rotateRefreshToken(
       refreshToken: refreshToken,
       expectedTokenHash: originalToken.tokenHash,
@@ -607,12 +647,13 @@ class OAuthProviderModePlugin<TContext>
     );
     if (consumed == null) throw AuthFlowException('invalid_grant');
 
-    return {
+    return <String, dynamic>{
       'access_token': nextAccessToken,
       'token_type': 'Bearer',
       'expires_in': options.accessTokenLifetime.inSeconds,
       'refresh_token': nextRefreshToken,
       'scope': replacement.scope,
+      'id_token': ?idToken,
     };
   }
 
@@ -655,10 +696,56 @@ class OAuthProviderModePlugin<TContext>
     return null;
   }
 
+  Map<String, dynamic> _handleDiscovery() {
+    final oidc = options.oidc;
+    if (oidc == null) throw StateError('OIDC is not configured.');
+    return <String, dynamic>{
+      'issuer': oidc.issuer.toString(),
+      'authorization_endpoint': _absoluteEndpoint(
+        oidc.issuer,
+        options.authorizationEndpoint,
+      ),
+      'token_endpoint': _absoluteEndpoint(oidc.issuer, options.tokenEndpoint),
+      'userinfo_endpoint': _absoluteEndpoint(
+        oidc.issuer,
+        options.userInfoEndpoint,
+      ),
+      'jwks_uri': _absoluteEndpoint(oidc.issuer, oidc.jwksEndpoint),
+      'introspection_endpoint': _absoluteEndpoint(
+        oidc.issuer,
+        options.introspectionEndpoint,
+      ),
+      'response_types_supported': options.supportedResponseTypes,
+      'grant_types_supported': options.supportedGrantTypes,
+      'scopes_supported': _effectiveSupportedScopes,
+      'subject_types_supported': const <String>['public'],
+      'id_token_signing_alg_values_supported': <String>[oidc.signingAlgorithm],
+      'token_endpoint_auth_methods_supported': const <String>[
+        'client_secret_basic',
+        'client_secret_post',
+        'none',
+      ],
+      'code_challenge_methods_supported': const <String>['S256'],
+      'claims_supported': const <String>[
+        'iss',
+        'sub',
+        'aud',
+        'exp',
+        'iat',
+        'nonce',
+        'email',
+        'name',
+        'picture',
+      ],
+    };
+  }
+
   Map<String, dynamic> _handleJwks() {
-    // In a real implementation, this would return the public keys
-    // For now, return an empty key set
-    return {'keys': []};
+    final oidc = options.oidc;
+    if (oidc == null) throw StateError('OIDC is not configured.');
+    return <String, dynamic>{
+      'keys': <Map<String, dynamic>>[oidc.publicJwk],
+    };
   }
 
   Future<Map<String, dynamic>> _handleIntrospect(
@@ -738,6 +825,12 @@ class OAuthProviderModePlugin<TContext>
     final clientSecretHash = _hashClientSecret(clientSecret);
 
     final now = DateTime.now().toUtc();
+    final effectiveScopes =
+        scopes?.map((value) => value.toString()).toList(growable: false) ??
+        _effectiveSupportedScopes;
+    if (!effectiveScopes.every(_effectiveSupportedScopes.contains)) {
+      throw AuthFlowException('invalid_client_metadata');
+    }
     final client = OAuthClient(
       clientId: clientId,
       clientSecretHash: clientSecretHash,
@@ -745,9 +838,7 @@ class OAuthProviderModePlugin<TContext>
       description: input['description']?.toString(),
       redirectUris: redirectUris.map((e) => e.toString()).toList(),
       grantTypes: effectiveGrantTypes,
-      scopes:
-          scopes?.map((e) => e.toString()).toList() ??
-          ['openid', 'profile', 'email'],
+      scopes: effectiveScopes,
       createdAt: now,
       updatedAt: now,
     );
@@ -834,6 +925,7 @@ class OAuthProviderModePlugin<TContext>
     required String userId,
     required String scope,
     String? nonce,
+    AuthUser? oidcUser,
     bool issueRefreshToken = false,
     String? refreshToken,
     DateTime? refreshTokenExpiresAt,
@@ -862,27 +954,54 @@ class OAuthProviderModePlugin<TContext>
       issuedAt: now,
     );
 
+    final idToken = _containsScope(scope, 'openid')
+        ? _issueIdToken(
+            clientId: clientId,
+            user:
+                oidcUser ??
+                (throw StateError('OIDC token issuance requires a user.')),
+            scope: scope,
+            nonce: nonce,
+          )
+        : null;
+
     await accessTokenStore.save(accessToken);
 
-    return {
+    return <String, dynamic>{
       'access_token': accessTokenValue,
       'token_type': 'Bearer',
       'expires_in': options.accessTokenLifetime.inSeconds,
       if (hasRefreshToken) 'refresh_token': refreshTokenValue,
       'scope': scope,
+      'id_token': ?idToken,
     };
   }
 
-  /// Validates PKCE code challenge.
-  bool validatePkce(String codeChallenge, String codeVerifier, String method) {
-    if (method == 'S256') {
-      final hash = sha256.convert(utf8.encode(codeVerifier));
-      final encoded = base64Url.encode(hash.bytes).replaceAll('=', '');
-      return encoded == codeChallenge;
-    } else if (method == 'plain') {
-      return codeVerifier == codeChallenge;
+  String _issueIdToken({
+    required String clientId,
+    required AuthUser user,
+    required String scope,
+    String? nonce,
+  }) {
+    final oidc = options.oidc;
+    if (oidc == null) {
+      throw AuthFlowException('invalid_scope');
     }
-    return false;
+    final now = DateTime.now().toUtc();
+    final claims = <String, dynamic>{
+      ..._userInfoClaims(user, scope),
+      'iss': oidc.issuer.toString(),
+      'aud': clientId,
+      'iat': now.millisecondsSinceEpoch ~/ 1000,
+      'exp': now.add(oidc.idTokenLifetime).millisecondsSinceEpoch ~/ 1000,
+      if (nonce != null && nonce.isNotEmpty) 'nonce': nonce,
+    };
+    final builder = JsonWebSignatureBuilder()
+      ..jsonContent = claims
+      ..setProtectedHeader('typ', 'JWT')
+      ..setProtectedHeader('kid', oidc.signingKey.keyId)
+      ..addRecipient(oidc.signingKey, algorithm: oidc.signingAlgorithm);
+    return builder.build().toCompactSerialization();
   }
 
   /// Resolves and validates a requested scope string against the scopes
@@ -894,7 +1013,7 @@ class OAuthProviderModePlugin<TContext>
   /// asks for a scope that is not allowed for this client.
   String _resolveGrantedScope(String? rawScope, OAuthClient client) {
     final requested = rawScope?.split(' ').where((s) => s.isNotEmpty).toSet();
-    final allowed = options.supportedScopes.toSet().intersection(
+    final allowed = _effectiveSupportedScopes.toSet().intersection(
       client.scopes.toSet(),
     );
     if (requested == null || requested.isEmpty) {
@@ -907,6 +1026,10 @@ class OAuthProviderModePlugin<TContext>
     }
     return requested.join(' ');
   }
+
+  List<String> get _effectiveSupportedScopes => options.supportedScopes
+      .where((scope) => scope != 'openid' || options.oidc != null)
+      .toList(growable: false);
 
   String _hashClientSecret(String secret) {
     // In a real implementation, use a proper password hasher
@@ -953,13 +1076,17 @@ class OAuthProviderModePlugin<TContext>
   }
 }
 
-/// Backwards-compatible name retained for applications created before the
-/// client/plugin terminology migration.
-@Deprecated('Use OAuthProviderModePlugin.')
-typedef OAuthProviderModeFeature<TContext> = OAuthProviderModePlugin<TContext>;
-
 Map<String, dynamic> _identityMap(Map<String, dynamic> value) => value;
 Object? _identityObject(Object? value) => value;
+
+bool _containsScope(String value, String expected) => value
+    .split(' ')
+    .map((scope) => scope.trim())
+    .where((scope) => scope.isNotEmpty)
+    .contains(expected);
+
+String _absoluteEndpoint(Uri issuer, String path) =>
+    issuer.resolve(path).toString();
 
 const Set<String> _reservedUserInfoClaims = {
   'sub',

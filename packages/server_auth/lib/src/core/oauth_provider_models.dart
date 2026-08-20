@@ -1,3 +1,5 @@
+import 'package:jose/jose.dart' show JsonWebKey;
+
 /// Represents an OAuth client registered with this application.
 class OAuthClient {
   const OAuthClient({
@@ -127,9 +129,12 @@ class OAuthClient {
 }
 
 /// Represents an authorization code issued to a client.
+///
+/// Only [codeHash] is persisted. The raw code is returned to the client once
+/// and hashed before it reaches the store.
 class OAuthAuthorizationCode {
   const OAuthAuthorizationCode({
-    required this.code,
+    required this.codeHash,
     required this.clientId,
     required this.userId,
     required this.redirectUri,
@@ -141,8 +146,8 @@ class OAuthAuthorizationCode {
     this.createdAt,
   });
 
-  /// The authorization code.
-  final String code;
+  /// Digest of the raw authorization code.
+  final String codeHash;
 
   /// Client that requested the code.
   final String clientId;
@@ -176,6 +181,20 @@ class OAuthAuthorizationCode {
     final current = now ?? DateTime.now().toUtc();
     return current.isBefore(expiresAt.toUtc());
   }
+
+  /// Serializes persistence-safe data without the raw authorization code.
+  Map<String, dynamic> toStorageJson() => <String, dynamic>{
+    'codeHash': codeHash,
+    'clientId': clientId,
+    'userId': userId,
+    'redirectUri': redirectUri,
+    'scope': scope,
+    'expiresAt': expiresAt.toUtc().toIso8601String(),
+    if (codeChallenge != null) 'codeChallenge': codeChallenge,
+    if (codeChallengeMethod != null) 'codeChallengeMethod': codeChallengeMethod,
+    if (nonce != null) 'nonce': nonce,
+    if (createdAt != null) 'createdAt': createdAt!.toUtc().toIso8601String(),
+  };
 }
 
 /// Represents an issued access token.
@@ -269,13 +288,11 @@ class OAuthAccessToken {
 /// Options for the OAuth provider mode.
 class OAuthProviderModeOptions {
   const OAuthProviderModeOptions({
-    this.issuer,
     this.authorizationEndpoint = '/oauth/authorize',
     this.tokenEndpoint = '/oauth/token',
     this.userInfoEndpoint = '/oauth/userinfo',
-    this.jwksEndpoint = '/oauth/jwks',
     this.introspectionEndpoint = '/oauth/introspect',
-    this.registrationEndpoint,
+    this.oidc,
     this.codeLifetime = const Duration(minutes: 10),
     this.accessTokenLifetime = const Duration(hours: 1),
     this.refreshTokenLifetime = const Duration(days: 30),
@@ -292,9 +309,6 @@ class OAuthProviderModeOptions {
     this.maxRefreshTokenUses,
   });
 
-  /// Issuer URL for OIDC discovery.
-  final String? issuer;
-
   /// Authorization endpoint path.
   final String authorizationEndpoint;
 
@@ -304,14 +318,15 @@ class OAuthProviderModeOptions {
   /// UserInfo endpoint path.
   final String userInfoEndpoint;
 
-  /// JWKS endpoint path.
-  final String jwksEndpoint;
-
   /// Token introspection endpoint path.
   final String introspectionEndpoint;
 
-  /// Client registration endpoint path (optional).
-  final String? registrationEndpoint;
+  /// Explicit OpenID Connect signing and discovery configuration.
+  ///
+  /// When null, the plugin operates as an OAuth authorization server and does
+  /// not expose discovery or JWKS endpoints. Requests for the `openid` scope
+  /// are rejected.
+  final OAuthOidcConfiguration? oidc;
 
   /// Lifetime of authorization codes.
   final Duration codeLifetime;
@@ -345,4 +360,118 @@ class OAuthProviderModeOptions {
 
   /// Maximum number of refresh token uses (null = unlimited).
   final int? maxRefreshTokenUses;
+}
+
+/// OpenID Connect issuer and asymmetric signing configuration.
+///
+/// [signingKey] must contain private asymmetric key material and a non-empty
+/// key ID. The plugin derives a public-only JWK for the JWKS endpoint and never
+/// exposes private key parameters.
+class OAuthOidcConfiguration {
+  OAuthOidcConfiguration({
+    required this.issuer,
+    required this.signingKey,
+    this.signingAlgorithm = 'RS256',
+    this.discoveryEndpoint = '/.well-known/openid-configuration',
+    this.jwksEndpoint = '/oauth/jwks',
+    this.idTokenLifetime = const Duration(hours: 1),
+  }) {
+    if (!issuer.isAbsolute ||
+        issuer.hasFragment ||
+        issuer.hasQuery ||
+        issuer.host.isEmpty) {
+      throw ArgumentError.value(
+        issuer,
+        'issuer',
+        'must be an absolute URI without a query or fragment',
+      );
+    }
+    if (signingAlgorithm.trim().isEmpty) {
+      throw ArgumentError.value(
+        signingAlgorithm,
+        'signingAlgorithm',
+        'must not be empty',
+      );
+    }
+    if (signingKey.keyId?.trim().isEmpty ?? true) {
+      throw ArgumentError.value(
+        signingKey.keyId,
+        'signingKey',
+        'must have a non-empty key ID',
+      );
+    }
+    if (signingKey.keyType == 'oct') {
+      throw ArgumentError.value(
+        signingKey.keyType,
+        'signingKey',
+        'must be asymmetric so JWKS can expose only public material',
+      );
+    }
+    if (!signingKey.usableForAlgorithm(signingAlgorithm) ||
+        !signingKey.usableForOperation('sign')) {
+      throw ArgumentError.value(
+        signingKey,
+        'signingKey',
+        'cannot sign with $signingAlgorithm',
+      );
+    }
+    if (!_isEndpointPath(discoveryEndpoint) || !_isEndpointPath(jwksEndpoint)) {
+      throw ArgumentError(
+        'OIDC endpoint paths must be absolute paths without a query or fragment',
+      );
+    }
+    if (idTokenLifetime <= Duration.zero) {
+      throw ArgumentError.value(
+        idTokenLifetime,
+        'idTokenLifetime',
+        'must be positive',
+      );
+    }
+  }
+
+  /// Public issuer identifier embedded in ID tokens and discovery metadata.
+  final Uri issuer;
+
+  /// Private asymmetric JWK used to sign ID tokens.
+  final JsonWebKey signingKey;
+
+  /// JWS algorithm used to sign ID tokens.
+  final String signingAlgorithm;
+
+  /// Standard OpenID Provider configuration endpoint path.
+  final String discoveryEndpoint;
+
+  /// Public JSON Web Key Set endpoint path.
+  final String jwksEndpoint;
+
+  /// Lifetime of an issued ID token.
+  final Duration idTokenLifetime;
+
+  /// Public-only representation of [signingKey] for the JWKS endpoint.
+  Map<String, dynamic> get publicJwk {
+    final json = Map<String, dynamic>.from(signingKey.toJson())
+      ..remove('d')
+      ..remove('p')
+      ..remove('q')
+      ..remove('dp')
+      ..remove('dq')
+      ..remove('qi')
+      ..remove('oth')
+      ..remove('k');
+    json['alg'] = signingAlgorithm;
+    json['use'] = 'sig';
+    json['key_ops'] = const <String>['verify'];
+    return Map<String, dynamic>.unmodifiable(json);
+  }
+
+  static bool _isEndpointPath(String value) {
+    final uri = Uri.tryParse(value);
+    return uri != null &&
+        value.startsWith('/') &&
+        !value.startsWith('//') &&
+        !uri.hasScheme &&
+        !uri.hasAuthority &&
+        !uri.hasQuery &&
+        !uri.hasFragment;
+  }
 }

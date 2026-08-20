@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'deletion_transaction.dart';
 import 'oauth_provider_models.dart';
 import 'tokens.dart' show constantTimeStringEquals, hashOpaqueToken;
 
@@ -28,14 +29,26 @@ abstract interface class OAuthClientStore {
 
 /// Persistence contract for authorization codes.
 abstract interface class OAuthAuthorizationCodeStore {
-  /// Saves an authorization code.
-  FutureOr<void> save(OAuthAuthorizationCode code);
+  /// Creates an authorization code and rejects duplicate code hashes.
+  FutureOr<OAuthAuthorizationCode> create(OAuthAuthorizationCode code);
 
-  /// Consumes an authorization code (one-time use).
-  FutureOr<OAuthAuthorizationCode?> consume(String code);
+  /// Atomically consumes a code after validating all protocol bindings.
+  ///
+  /// A matching code is invalidated even when a binding is wrong, preventing
+  /// retries with a captured authorization code.
+  FutureOr<OAuthAuthorizationCode?> consume({
+    required String codeHash,
+    required String clientId,
+    required String redirectUri,
+    required String? codeVerifier,
+    DateTime? now,
+  });
 
   /// Deletes expired codes.
   FutureOr<int> deleteExpired({DateTime? now});
+
+  /// Deletes unconsumed codes owned by a user.
+  FutureOr<void> deleteForUser(String userId);
 }
 
 /// Persistence contract for access tokens.
@@ -120,19 +133,61 @@ class InMemoryOAuthClientStore implements OAuthClientStore {
 
 /// In-memory authorization code store for tests and development.
 class InMemoryOAuthAuthorizationCodeStore
-    implements OAuthAuthorizationCodeStore {
+    implements OAuthAuthorizationCodeStore, AuthInMemoryTransactionParticipant {
+  InMemoryOAuthAuthorizationCodeStore({this.maxEntries = 1024})
+      : assert(maxEntries > 0);
+
+  final int maxEntries;
   final Map<String, OAuthAuthorizationCode> _codes = {};
 
   @override
-  Future<void> save(OAuthAuthorizationCode code) async {
-    _codes[code.code] = code;
+  Object createInMemoryCheckpoint() =>
+      Map<String, OAuthAuthorizationCode>.of(_codes);
+
+  @override
+  void restoreInMemoryCheckpoint(Object checkpoint) {
+    final codes = checkpoint as Map<String, OAuthAuthorizationCode>;
+    _codes
+      ..clear()
+      ..addAll(codes);
   }
 
   @override
-  Future<OAuthAuthorizationCode?> consume(String code) async {
-    final consumed = _codes.remove(code);
-    if (consumed == null) return null;
-    if (!consumed.isValid()) return null;
+  Future<OAuthAuthorizationCode> create(OAuthAuthorizationCode code) async {
+    _validateAuthorizationCode(code);
+    final now = DateTime.now().toUtc();
+    _codes.removeWhere((_, value) => !value.isValid(now: now));
+    if (_codes.containsKey(code.codeHash)) {
+      throw StateError('OAuth authorization code already exists');
+    }
+    while (_codes.length >= maxEntries) {
+      _codes.remove(_codes.keys.first);
+    }
+    _codes[code.codeHash] = code;
+    return code;
+  }
+
+  @override
+  Future<OAuthAuthorizationCode?> consume({
+    required String codeHash,
+    required String clientId,
+    required String redirectUri,
+    required String? codeVerifier,
+    DateTime? now,
+  }) async {
+    final consumed = _codes.remove(codeHash.trim());
+    if (consumed == null || !consumed.isValid(now: now)) return null;
+    if (consumed.clientId != clientId || consumed.redirectUri != redirectUri) {
+      return null;
+    }
+    final challenge = consumed.codeChallenge;
+    if (challenge == null) return consumed;
+    if (consumed.codeChallengeMethod != 'S256' || codeVerifier == null) {
+      return null;
+    }
+    final digest = sha256.convert(utf8.encode(codeVerifier));
+    final expected = base64Url.encode(digest.bytes).replaceAll('=', '');
+    if (!constantTimeStringEquals(expected, challenge)) return null;
     return consumed;
   }
 
@@ -148,11 +203,29 @@ class InMemoryOAuthAuthorizationCodeStore
     }
     return expired.length;
   }
+
+  @override
+  Future<void> deleteForUser(String userId) async {
+    _codes.removeWhere((_, code) => code.userId == userId);
+  }
 }
 
 /// In-memory access token store for tests and development.
-class InMemoryOAuthAccessTokenStore implements OAuthAccessTokenStore {
+class InMemoryOAuthAccessTokenStore
+    implements OAuthAccessTokenStore, AuthInMemoryTransactionParticipant {
   final Map<String, OAuthAccessToken> _tokens = {};
+
+  @override
+  Object createInMemoryCheckpoint() =>
+      Map<String, OAuthAccessToken>.of(_tokens);
+
+  @override
+  void restoreInMemoryCheckpoint(Object checkpoint) {
+    final tokens = checkpoint as Map<String, OAuthAccessToken>;
+    _tokens
+      ..clear()
+      ..addAll(tokens);
+  }
 
   @override
   Future<void> save(OAuthAccessToken token) async {
@@ -253,5 +326,30 @@ class InMemoryOAuthAccessTokenStore implements OAuthAccessTokenStore {
       _tokens.remove(key);
     }
     return expired.length;
+  }
+}
+
+void _validateAuthorizationCode(OAuthAuthorizationCode code) {
+  if (code.codeHash.trim().isEmpty ||
+      code.clientId.trim().isEmpty ||
+      code.userId.trim().isEmpty ||
+      code.redirectUri.trim().isEmpty) {
+    throw ArgumentError('Invalid OAuth authorization code');
+  }
+  final redirectUri = Uri.tryParse(code.redirectUri);
+  if (redirectUri == null ||
+      !redirectUri.isAbsolute ||
+      redirectUri.hasFragment) {
+    throw ArgumentError(
+        'OAuth redirect URI must be absolute and fragment-free');
+  }
+  final challenge = code.codeChallenge;
+  if (challenge != null &&
+      (challenge.trim().isEmpty || code.codeChallengeMethod != 'S256')) {
+    throw ArgumentError('OAuth authorization codes support only S256 PKCE');
+  }
+  final createdAt = code.createdAt;
+  if (createdAt != null && !code.expiresAt.toUtc().isAfter(createdAt.toUtc())) {
+    throw ArgumentError('OAuth authorization code must not be expired');
   }
 }

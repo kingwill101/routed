@@ -154,21 +154,20 @@ void main() {
           expect(scopes, ['openid', 'profile']);
           return true;
         },
-        issueToken:
-            ({
-              required context,
-              required user,
-              required clientId,
-              required scopes,
-              required authorizationId,
-            }) {
-              issued.add(authorizationId);
-              return AuthDeviceAccessToken(
-                accessToken: 'access-token',
-                expiresIn: const Duration(minutes: 5),
-                scopes: scopes,
-              );
-            },
+        issueToken: ({
+          required context,
+          required user,
+          required clientId,
+          required scopes,
+          required authorizationId,
+        }) {
+          issued.add(authorizationId);
+          return AuthDeviceAccessToken(
+            accessToken: 'access-token',
+            expiresIn: const Duration(minutes: 5),
+            scopes: scopes,
+          );
+        },
       );
       final runtime = AuthRuntime<Object>(
         options: AuthOptions<Object>(
@@ -232,17 +231,17 @@ void main() {
       final feature = DeviceAuthorizationPlugin<Object>(
         verificationUri: 'https://example.test/device',
         validateClient: (context, clientId, scopes) => false,
-        issueToken:
-            ({
-              required context,
-              required user,
-              required clientId,
-              required scopes,
-              required authorizationId,
-            }) => AuthDeviceAccessToken(
-              accessToken: 'unused',
-              expiresIn: const Duration(minutes: 5),
-            ),
+        issueToken: ({
+          required context,
+          required user,
+          required clientId,
+          required scopes,
+          required authorizationId,
+        }) =>
+            AuthDeviceAccessToken(
+          accessToken: 'unused',
+          expiresIn: const Duration(minutes: 5),
+        ),
       );
       final runtime = AuthRuntime<Object>(
         options: AuthOptions<Object>(
@@ -281,20 +280,19 @@ void main() {
         final feature = DeviceAuthorizationPlugin<Object>(
           verificationUri: 'https://example.test/device',
           validateClient: (_, _, _) => true,
-          issueToken:
-              ({
-                required context,
-                required user,
-                required clientId,
-                required scopes,
-                required authorizationId,
-              }) {
-                issued = true;
-                return const AuthDeviceAccessToken(
-                  accessToken: 'must-not-be-issued',
-                  expiresIn: Duration(minutes: 5),
-                );
-              },
+          issueToken: ({
+            required context,
+            required user,
+            required clientId,
+            required scopes,
+            required authorizationId,
+          }) {
+            issued = true;
+            return const AuthDeviceAccessToken(
+              accessToken: 'must-not-be-issued',
+              expiresIn: Duration(minutes: 5),
+            );
+          },
         );
         AuthRuntime<Object>(
           options: AuthOptions<Object>(
@@ -333,17 +331,17 @@ void main() {
       final feature = DeviceAuthorizationPlugin<Object>(
         verificationUri: 'https://example.test/device',
         validateClient: (_, _, _) => true,
-        issueToken:
-            ({
-              required context,
-              required user,
-              required clientId,
-              required scopes,
-              required authorizationId,
-            }) => const AuthDeviceAccessToken(
-              accessToken: 'must-not-be-issued',
-              expiresIn: Duration(minutes: 5),
-            ),
+        issueToken: ({
+          required context,
+          required user,
+          required clientId,
+          required scopes,
+          required authorizationId,
+        }) =>
+            const AuthDeviceAccessToken(
+          accessToken: 'must-not-be-issued',
+          expiresIn: Duration(minutes: 5),
+        ),
       );
       AuthRuntime<Object>(
         options: AuthOptions<Object>(
@@ -378,18 +376,18 @@ void main() {
       final device = DeviceAuthorizationPlugin<Object>(
         verificationUri: 'https://example.test/device',
         validateClient: (_, _, _) => true,
-        issueToken:
-            ({
-              required context,
-              required user,
-              required clientId,
-              required scopes,
-              required authorizationId,
-            }) => AuthDeviceAccessToken(
-              accessToken: 'device-access-token',
-              expiresIn: const Duration(minutes: 5),
-              scopes: scopes,
-            ),
+        issueToken: ({
+          required context,
+          required user,
+          required clientId,
+          required scopes,
+          required authorizationId,
+        }) =>
+            AuthDeviceAccessToken(
+          accessToken: 'device-access-token',
+          expiresIn: const Duration(minutes: 5),
+          scopes: scopes,
+        ),
       );
       final provider = OAuthProviderModePlugin<Object>(
         clientStore: InMemoryOAuthClientStore(),
@@ -419,16 +417,14 @@ void main() {
       );
       await device.approveDevice(userId: 'user-1', userCode: request.userCode);
 
-      final response =
-          await tokenEndpoints.single.invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
-                <String, dynamic>{
-                  'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',
-                  'client_id': 'cli-1',
-                  'device_code': request.deviceCode,
-                },
-              )
-              as Map<String, dynamic>;
+      final response = await tokenEndpoints.single.invoke(
+        AuthOperationInvocation<Object>(context: Object(), user: null),
+        <String, dynamic>{
+          'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',
+          'client_id': 'cli-1',
+          'device_code': request.deviceCode,
+        },
+      ) as Map<String, dynamic>;
       expect(response['access_token'], 'device-access-token');
     });
 
@@ -437,25 +433,22 @@ void main() {
       final device = DeviceAuthorizationPlugin<Object>(
         verificationUri: 'https://example.test/device',
         validateClient: (_, _, _) => true,
-        issueToken:
-            ({
-              required context,
-              required user,
-              required clientId,
-              required scopes,
-              required authorizationId,
-            }) => const AuthDeviceAccessToken(
-              accessToken: 'unused',
-              expiresIn: Duration(minutes: 5),
-            ),
-      );
-      final authorization = OAuthAuthorizationServerPlugin<Object>(
-        authorizationCodes: InMemoryAuthOAuthAuthorizationCodeStore(),
-        resolveClient: (_, _) => null,
-        issueAccessToken: (_, _) => const AuthDeviceAccessToken(
+        issueToken: ({
+          required context,
+          required user,
+          required clientId,
+          required scopes,
+          required authorizationId,
+        }) =>
+            const AuthDeviceAccessToken(
           accessToken: 'unused',
           expiresIn: Duration(minutes: 5),
         ),
+      );
+      final authorization = OAuthProviderModePlugin<Object>(
+        clientStore: InMemoryOAuthClientStore(),
+        authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+        accessTokenStore: InMemoryOAuthAccessTokenStore(),
       );
       final runtime = AuthRuntime<Object>(
         options: AuthOptions<Object>(
@@ -479,5 +472,5 @@ void main() {
 }
 
 Matcher _flow(String code) => throwsA(
-  isA<AuthFlowException>().having((error) => error.code, 'code', code),
-);
+      isA<AuthFlowException>().having((error) => error.code, 'code', code),
+    );

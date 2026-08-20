@@ -47,8 +47,8 @@ void main() {
       final state = AuthAccountState(
         userId: 'u1',
         lockedUntil: DateTime.now().toUtc().subtract(
-          const Duration(minutes: 1),
-        ),
+              const Duration(minutes: 1),
+            ),
       );
       expect(state.isLocked(), isFalse);
     });
@@ -989,9 +989,9 @@ void main() {
 
     test('OAuthAuthorizationCodeStore consume is one-time', () async {
       final now = DateTime.now().toUtc();
-      await codeStore.save(
+      await codeStore.create(
         OAuthAuthorizationCode(
-          code: 'auth-code-1',
+          codeHash: hashOpaqueToken('auth-code-1'),
           clientId: 'c1',
           userId: 'u1',
           redirectUri: 'https://example.com/callback',
@@ -1001,29 +1001,44 @@ void main() {
         ),
       );
 
-      final consumed = await codeStore.consume('auth-code-1');
+      final consumed = await codeStore.consume(
+        codeHash: hashOpaqueToken('auth-code-1'),
+        clientId: 'c1',
+        redirectUri: 'https://example.com/callback',
+        codeVerifier: null,
+      );
       expect(consumed, isNotNull);
 
       // Second consume returns null
-      final second = await codeStore.consume('auth-code-1');
+      final second = await codeStore.consume(
+        codeHash: hashOpaqueToken('auth-code-1'),
+        clientId: 'c1',
+        redirectUri: 'https://example.com/callback',
+        codeVerifier: null,
+      );
       expect(second, isNull);
     });
 
     test('OAuthAuthorizationCodeStore rejects expired codes', () async {
       final now = DateTime.now().toUtc();
-      await codeStore.save(
+      await codeStore.create(
         OAuthAuthorizationCode(
-          code: 'expired-code',
+          codeHash: hashOpaqueToken('expired-code'),
           clientId: 'c1',
           userId: 'u1',
           redirectUri: 'https://example.com/callback',
           scope: 'openid',
           expiresAt: now.subtract(const Duration(minutes: 1)),
-          createdAt: now,
+          createdAt: now.subtract(const Duration(minutes: 2)),
         ),
       );
 
-      final consumed = await codeStore.consume('expired-code');
+      final consumed = await codeStore.consume(
+        codeHash: hashOpaqueToken('expired-code'),
+        clientId: 'c1',
+        redirectUri: 'https://example.com/callback',
+        codeVerifier: null,
+      );
       expect(consumed, isNull);
     });
 
