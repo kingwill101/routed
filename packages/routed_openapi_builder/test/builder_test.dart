@@ -12,5 +12,16 @@ void main() {
       final builder = openApiBuilder(BuilderOptions({}));
       expect(builder, isA<OpenApiBuilder>());
     });
+
+    test('builder exposes the OpenAPI generated artifact contract', () {
+      final builder = OpenApiBuilder();
+
+      expect(builder.buildExtensions, {
+        r'$package$': [
+          'lib/generated/openapi.json',
+          'lib/generated/openapi_controller.g.dart',
+        ],
+      });
+    });
   });
 }

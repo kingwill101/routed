@@ -10,7 +10,7 @@ import 'store.dart';
 
 enum AuthOperationMethod { get, post }
 
-enum AuthOperationAuthentication { none, session }
+enum AuthOperationAuthentication { none, session, apiKey }
 
 enum AuthOperationOriginPolicy { none, browser }
 
@@ -433,6 +433,16 @@ abstract interface class AuthEndpointContributor<TContext> {
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints;
 }
 
+/// Public endpoint contracts implemented by the framework host.
+///
+/// These descriptors are included in documentation and generated clients but
+/// are deliberately kept out of [AuthEndpointContributor.endpoints], because
+/// the host owns their transport behavior and must not mount them through the
+/// generic plugin invocation path.
+abstract interface class AuthHostEndpointContributor<TContext> {
+  Iterable<AuthEndpointDescriptor<TContext>> get hostEndpoints;
+}
+
 abstract interface class AuthPersistenceContributor {
   Iterable<AuthPersistenceSchema> get persistenceSchemas;
 }
@@ -555,6 +565,8 @@ class AuthServerPluginRegistry<TContext> {
       <String, AuthServerPlugin<TContext>>{};
   final Map<String, AuthEndpointDescriptor<TContext>> _endpoints =
       <String, AuthEndpointDescriptor<TContext>>{};
+  final Map<String, AuthEndpointDescriptor<TContext>> _hostEndpoints =
+      <String, AuthEndpointDescriptor<TContext>>{};
   final Map<String, String> _endpointPluginIds = <String, String>{};
   final Set<String> _endpointKeys = <String>{};
   bool _frozen = false;
@@ -591,29 +603,14 @@ class AuthServerPluginRegistry<TContext> {
         in topology.whereType<AuthServerPluginTopologyAware<TContext>>()) {
       plugin.composePluginTopology(topology);
     }
-    for (final plugin
-        in topology.whereType<AuthEndpointContributor<TContext>>()) {
-      final pluginId = (plugin as AuthServerPlugin<TContext>).id.trim();
-      for (final endpoint in plugin.endpoints) {
-        final endpointId = endpoint.id.trim();
-        final path = _normalizeEndpointPath(endpoint.path);
-        if (endpointId.isEmpty || path.isEmpty) {
-          throw ArgumentError(
-            'Plugin "${(plugin as AuthServerPlugin<TContext>).id}" '
-            'contributed an invalid endpoint.',
-          );
-        }
-        if (_endpoints.containsKey(endpointId)) {
-          throw StateError(
-            'Auth endpoint "$endpointId" is already registered.',
-          );
-        }
-        final key = '${endpoint.method.name}:$path';
-        if (!_endpointKeys.add(key)) {
-          throw StateError('Auth endpoint path "$key" is already registered.');
-        }
-        _endpoints[endpointId] = endpoint;
-        _endpointPluginIds[endpointId] = pluginId;
+    for (final plugin in topology) {
+      if (plugin case AuthEndpointContributor<TContext>(:final endpoints)) {
+        _registerEndpoints(plugin.id, endpoints, _endpoints);
+      }
+      if (plugin case AuthHostEndpointContributor<TContext>(
+        :final hostEndpoints,
+      )) {
+        _registerEndpoints(plugin.id, hostEndpoints, _hostEndpoints);
       }
     }
     _frozen = true;
@@ -629,9 +626,48 @@ class AuthServerPluginRegistry<TContext> {
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints =>
       List<AuthEndpointDescriptor<TContext>>.unmodifiable(_endpoints.values);
 
+  /// Public endpoint contracts for runtime plugin routes and host-owned routes.
+  ///
+  /// Framework adapters mount only [endpoints]. Documentation and client
+  /// generators use this complete view so host-owned opt-in routes remain
+  /// coupled to the plugin that enables them.
+  Iterable<AuthEndpointDescriptor<TContext>> get publicEndpoints =>
+      List<AuthEndpointDescriptor<TContext>>.unmodifiable(
+        <AuthEndpointDescriptor<TContext>>[
+          ..._endpoints.values,
+          ..._hostEndpoints.values,
+        ],
+      );
+
   /// Returns the plugin that contributed [endpointId], after [freeze].
   String? pluginIdForEndpoint(String endpointId) =>
       _endpointPluginIds[endpointId.trim()];
+
+  void _registerEndpoints(
+    String rawPluginId,
+    Iterable<AuthEndpointDescriptor<TContext>> endpoints,
+    Map<String, AuthEndpointDescriptor<TContext>> destination,
+  ) {
+    final pluginId = rawPluginId.trim();
+    for (final endpoint in endpoints) {
+      final endpointId = endpoint.id.trim();
+      final path = _normalizeEndpointPath(endpoint.path);
+      if (endpointId.isEmpty || path.isEmpty) {
+        throw ArgumentError(
+          'Plugin "$rawPluginId" contributed an invalid endpoint.',
+        );
+      }
+      if (_endpointPluginIds.containsKey(endpointId)) {
+        throw StateError('Auth endpoint "$endpointId" is already registered.');
+      }
+      final key = '${endpoint.method.name}:$path';
+      if (!_endpointKeys.add(key)) {
+        throw StateError('Auth endpoint path "$key" is already registered.');
+      }
+      destination[endpointId] = endpoint;
+      _endpointPluginIds[endpointId] = pluginId;
+    }
+  }
 
   Future<void> enforceAuthenticationPolicy(
     AuthAuthenticationPolicyRequest<TContext> request,

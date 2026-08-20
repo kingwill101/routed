@@ -373,6 +373,7 @@ final class AuthApiKeyPlugin<TContext>
     implements
         AuthServerPlugin<TContext>,
         AuthEndpointContributor<TContext>,
+        AuthHostEndpointContributor<TContext>,
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
@@ -426,6 +427,7 @@ final class AuthApiKeyPlugin<TContext>
   final AuthApiKeyTokenGenerator keyIdGenerator;
   final AuthApiKeyTokenGenerator secretGenerator;
   final DateTime Function() _clock;
+  AuthSessionStrategy _sessionStrategy = AuthSessionStrategy.session;
 
   @override
   String get id => authApiKeyPluginId;
@@ -470,7 +472,9 @@ final class AuthApiKeyPlugin<TContext>
   }
 
   @override
-  void configure(AuthServerPluginContext<TContext> context) {}
+  void configure(AuthServerPluginContext<TContext> context) {
+    _sessionStrategy = context.sessionStrategy;
+  }
 
   /// Issues a key and returns the raw secret exactly once.
   Future<AuthApiKeyIssued> issue({
@@ -580,8 +584,8 @@ final class AuthApiKeyPlugin<TContext>
       id: 'apiKey.create',
       method: AuthOperationMethod.post,
       path: '/api-keys/create',
-      requestCodec: _mapCodec,
-      responseCodec: _objectCodec,
+      requestCodec: _apiKeyCreateRequestCodec,
+      responseCodec: _apiKeyIssuedResponseCodec,
       originPolicy: AuthOperationOriginPolicy.browser,
       csrfPolicy: AuthOperationCsrfPolicy.required,
       rateLimitOperation: apiKeyCreateRateLimitOperation,
@@ -599,8 +603,8 @@ final class AuthApiKeyPlugin<TContext>
       id: 'apiKey.list',
       method: AuthOperationMethod.get,
       path: '/api-keys/list',
-      requestCodec: _mapCodec,
-      responseCodec: _objectCodec,
+      requestCodec: _emptyRequestCodec,
+      responseCodec: _apiKeyListResponseCodec,
       originPolicy: AuthOperationOriginPolicy.none,
       csrfPolicy: AuthOperationCsrfPolicy.none,
       rateLimitOperation: apiKeyListRateLimitOperation,
@@ -617,8 +621,8 @@ final class AuthApiKeyPlugin<TContext>
       id: 'apiKey.revoke',
       method: AuthOperationMethod.post,
       path: '/api-keys/revoke',
-      requestCodec: _mapCodec,
-      responseCodec: _objectCodec,
+      requestCodec: _apiKeyIdRequestCodec,
+      responseCodec: _apiKeyMetadataResponseCodec,
       originPolicy: AuthOperationOriginPolicy.browser,
       csrfPolicy: AuthOperationCsrfPolicy.required,
       rateLimitOperation: apiKeyRevokeRateLimitOperation,
@@ -633,8 +637,8 @@ final class AuthApiKeyPlugin<TContext>
       id: 'apiKey.rotate',
       method: AuthOperationMethod.post,
       path: '/api-keys/rotate',
-      requestCodec: _mapCodec,
-      responseCodec: _objectCodec,
+      requestCodec: _apiKeyRotateRequestCodec,
+      responseCodec: _apiKeyIssuedResponseCodec,
       originPolicy: AuthOperationOriginPolicy.browser,
       csrfPolicy: AuthOperationCsrfPolicy.required,
       rateLimitOperation: apiKeyRotateRateLimitOperation,
@@ -654,6 +658,27 @@ final class AuthApiKeyPlugin<TContext>
       },
     ),
   ];
+
+  @override
+  Iterable<AuthEndpointDescriptor<TContext>> get hostEndpoints =>
+      sessionExchangeEnabled && _sessionStrategy == AuthSessionStrategy.session
+      ? <AuthEndpointDescriptor<TContext>>[
+          TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
+            id: 'apiKey.exchange',
+            method: AuthOperationMethod.post,
+            path: '/api-keys/exchange',
+            requestCodec: _emptyRequestCodec,
+            responseCodec: _sessionResponseCodec,
+            authentication: AuthOperationAuthentication.apiKey,
+            originPolicy: AuthOperationOriginPolicy.none,
+            csrfPolicy: AuthOperationCsrfPolicy.none,
+            rateLimitOperation: apiKeyExchangeRateLimitOperation,
+            handler: (invocation, request) => throw UnsupportedError(
+              'This endpoint is implemented by the auth host.',
+            ),
+          ),
+        ]
+      : <AuthEndpointDescriptor<TContext>>[];
 
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => [
@@ -736,7 +761,8 @@ final class AuthApiKeyPlugin<TContext>
       method: AuthOperationMethod.post,
       path: '/api-keys/rotate',
     ),
-    if (sessionExchangeEnabled)
+    if (sessionExchangeEnabled &&
+        _sessionStrategy == AuthSessionStrategy.session)
       const AuthClientOperationDescriptor(
         id: 'apiKey.exchange',
         method: AuthOperationMethod.post,
@@ -750,7 +776,9 @@ final class AuthApiKeyPlugin<TContext>
     apiKeyListRateLimitOperation,
     apiKeyRevokeRateLimitOperation,
     apiKeyRotateRateLimitOperation,
-    if (sessionExchangeEnabled) apiKeyExchangeRateLimitOperation,
+    if (sessionExchangeEnabled &&
+        _sessionStrategy == AuthSessionStrategy.session)
+      apiKeyExchangeRateLimitOperation,
   ];
 
   Future<AuthApiKeyIssued> _buildIssued({
@@ -825,19 +853,201 @@ final class _ParsedApiKey {
   final String rawKey;
 }
 
-const _mapCodec = AuthOperationCodec<Map<String, dynamic>>(
+const _apiKeyCreateRequestCodec = AuthOperationCodec<Map<String, dynamic>>(
   decode: _decodeMap,
   encode: _encodeMap,
+  required: true,
+  schema: _apiKeyCreateRequestSchema,
 );
-const _objectCodec = AuthOperationCodec<Object?>(
+const _apiKeyIdRequestCodec = AuthOperationCodec<Map<String, dynamic>>(
+  decode: _decodeMap,
+  encode: _encodeMap,
+  required: true,
+  schema: _apiKeyIdRequestSchema,
+);
+const _apiKeyRotateRequestCodec = AuthOperationCodec<Map<String, dynamic>>(
+  decode: _decodeMap,
+  encode: _encodeMap,
+  required: true,
+  schema: _apiKeyRotateRequestSchema,
+);
+const _emptyRequestCodec = AuthOperationCodec<Map<String, dynamic>>(
+  decode: _decodeMap,
+  encode: _encodeMap,
+  schema: _emptyObjectSchema,
+);
+const _apiKeyIssuedResponseCodec = AuthOperationCodec<Object?>(
   decode: _decodeObject,
   encode: _encodeObject,
+  schema: _apiKeyIssuedResponseSchema,
+);
+const _apiKeyMetadataResponseCodec = AuthOperationCodec<Object?>(
+  decode: _decodeObject,
+  encode: _encodeObject,
+  schema: _apiKeyMetadataEnvelopeSchema,
+);
+const _apiKeyListResponseCodec = AuthOperationCodec<Object?>(
+  decode: _decodeObject,
+  encode: _encodeObject,
+  schema: _apiKeyListResponseSchema,
+);
+const _sessionResponseCodec = AuthOperationCodec<Object?>(
+  decode: _decodeObject,
+  encode: _encodeObject,
+  schema: _authSessionResponseSchema,
 );
 
 Map<String, dynamic> _decodeMap(Map<String, dynamic> value) => value;
 Object? _encodeMap(Map<String, dynamic> value) => value;
 Object? _decodeObject(Map<String, dynamic> value) => value;
 Object? _encodeObject(Object? value) => value;
+
+const Map<String, Object?> _emptyObjectSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+};
+
+const Map<String, Object?> _apiKeyCreateRequestSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['name'],
+  'properties': <String, Object?>{
+    'name': <String, Object?>{'type': 'string', 'minLength': 1},
+    'scopes': <String, Object?>{
+      'type': 'array',
+      'items': <String, Object?>{'type': 'string'},
+      'uniqueItems': true,
+    },
+    'expiresAt': <String, Object?>{
+      'type': <String>['string', 'null'],
+      'format': 'date-time',
+    },
+  },
+};
+
+const Map<String, Object?> _apiKeyIdRequestSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['id'],
+  'properties': <String, Object?>{
+    'id': <String, Object?>{'type': 'string', 'minLength': 1},
+  },
+};
+
+const Map<String, Object?> _apiKeyRotateRequestSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['id'],
+  'properties': <String, Object?>{
+    'id': <String, Object?>{'type': 'string', 'minLength': 1},
+    'name': <String, Object?>{'type': 'string', 'minLength': 1},
+    'scopes': <String, Object?>{
+      'type': 'array',
+      'items': <String, Object?>{'type': 'string'},
+      'uniqueItems': true,
+    },
+    'expiresAt': <String, Object?>{
+      'type': <String>['string', 'null'],
+      'format': 'date-time',
+    },
+  },
+};
+
+const Map<String, Object?> _apiKeyMetadataSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': _apiKeyMetadataRequired,
+  'properties': _apiKeyMetadataProperties,
+};
+
+const List<String> _apiKeyMetadataRequired = <String>[
+  'id',
+  'userId',
+  'name',
+  'keyPrefix',
+  'scopes',
+  'createdAt',
+  'updatedAt',
+  'active',
+];
+
+const Map<String, Object?> _apiKeyMetadataProperties = <String, Object?>{
+  'id': <String, Object?>{'type': 'string'},
+  'userId': <String, Object?>{'type': 'string'},
+  'name': <String, Object?>{'type': 'string'},
+  'keyPrefix': <String, Object?>{'type': 'string'},
+  'scopes': <String, Object?>{
+    'type': 'array',
+    'items': <String, Object?>{'type': 'string'},
+  },
+  'createdAt': <String, Object?>{'type': 'string', 'format': 'date-time'},
+  'updatedAt': <String, Object?>{'type': 'string', 'format': 'date-time'},
+  'expiresAt': <String, Object?>{
+    'type': <String>['string', 'null'],
+    'format': 'date-time',
+  },
+  'lastUsedAt': <String, Object?>{
+    'type': <String>['string', 'null'],
+    'format': 'date-time',
+  },
+  'revokedAt': <String, Object?>{
+    'type': <String>['string', 'null'],
+    'format': 'date-time',
+  },
+  'active': <String, Object?>{'type': 'boolean'},
+};
+
+const Map<String, Object?> _apiKeyIssuedResponseSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>[..._apiKeyMetadataRequired, 'apiKey'],
+  'properties': <String, Object?>{
+    ..._apiKeyMetadataProperties,
+    'apiKey': <String, Object?>{
+      'type': 'string',
+      'readOnly': true,
+      'description': 'Raw API key returned exactly once.',
+    },
+  },
+};
+
+const Map<String, Object?> _apiKeyMetadataEnvelopeSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['apiKey'],
+  'properties': <String, Object?>{'apiKey': _apiKeyMetadataSchema},
+};
+
+const Map<String, Object?> _apiKeyListResponseSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['apiKeys'],
+  'properties': <String, Object?>{
+    'apiKeys': <String, Object?>{
+      'type': 'array',
+      'items': _apiKeyMetadataSchema,
+    },
+  },
+};
+
+const Map<String, Object?> _authSessionResponseSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': true,
+  'required': <String>['user', 'strategy'],
+  'properties': <String, Object?>{
+    'user': <String, Object?>{'type': 'object'},
+    'expires': <String, Object?>{
+      'type': <String>['string', 'null'],
+      'format': 'date-time',
+    },
+    'strategy': <String, Object?>{'type': 'string'},
+    'token': <String, Object?>{
+      'type': 'string',
+      'readOnly': true,
+      'description': 'Present only when JWT response-body exposure is enabled.',
+    },
+  },
+};
 
 const apiKeyCreateRateLimitOperation = AuthRateLimitOperation(
   'api_key',

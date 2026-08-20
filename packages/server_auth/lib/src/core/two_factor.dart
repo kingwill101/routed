@@ -8,6 +8,7 @@ import 'deletion_transaction.dart';
 import 'exceptions.dart';
 import 'plugin.dart';
 import 'models.dart';
+import 'rate_limit.dart';
 import 'tokens.dart';
 
 /// Stable ID for the built-in two-factor plugin.
@@ -1151,6 +1152,7 @@ class AuthTwoFactorStatus {
 final class TwoFactorPlugin<TContext>
     implements
         AuthServerPlugin<TContext>,
+        AuthHostEndpointContributor<TContext>,
         AuthReversibleUserDataDeletionContributor {
   TwoFactorPlugin({
     required this.store,
@@ -1268,6 +1270,87 @@ final class TwoFactorPlugin<TContext>
     // The plugin owns its additional persistence contract. The shared store
     // remains available for user/session lookups in future composed hooks.
   }
+
+  @override
+  Iterable<AuthEndpointDescriptor<TContext>> get hostEndpoints =>
+      <AuthEndpointDescriptor<TContext>>[
+        _twoFactorHostEndpoint<TContext>(
+          id: 'twoFactor.status',
+          method: AuthOperationMethod.get,
+          path: '/2fa/status',
+          requestSchema: _emptyObjectSchema,
+          responseSchema: _twoFactorStatusSchema,
+          protectMutation: false,
+        ),
+        _twoFactorHostEndpoint<TContext>(
+          id: 'twoFactor.enroll',
+          path: '/2fa/enroll',
+          requestSchema: _twoFactorEnrollRequestSchema,
+          responseSchema: _twoFactorEnrollmentSchema,
+        ),
+        _twoFactorHostEndpoint<TContext>(
+          id: 'twoFactor.enrollVerify',
+          path: '/2fa/enroll/verify',
+          requestSchema: _twoFactorCodeRequestSchema,
+          responseSchema: _twoFactorRecoveryCodesSchema,
+        ),
+        _twoFactorHostEndpoint<TContext>(
+          id: 'twoFactor.verify',
+          path: '/2fa/verify',
+          requestSchema: _twoFactorCodeRequestSchema,
+          responseSchema: _twoFactorVerifiedSchema,
+        ),
+        _twoFactorHostEndpoint<TContext>(
+          id: 'twoFactor.recoveryCode',
+          path: '/2fa/recovery-code',
+          requestSchema: _twoFactorRecoveryCodeRequestSchema,
+          responseSchema: _twoFactorRecoveryVerifiedSchema,
+        ),
+        _twoFactorHostEndpoint<TContext>(
+          id: 'twoFactor.recoveryCodesRegenerate',
+          path: '/2fa/recovery-codes/regenerate',
+          requestSchema: _twoFactorCodeRequestSchema,
+          responseSchema: _twoFactorRecoveryCodesSchema,
+        ),
+        _twoFactorHostEndpoint<TContext>(
+          id: 'twoFactor.disable',
+          path: '/2fa/disable',
+          requestSchema: _twoFactorCodeRequestSchema,
+          responseSchema: _twoFactorDisabledSchema,
+        ),
+        _twoFactorHostEndpoint<TContext>(
+          id: 'twoFactor.challengeVerify',
+          path: '/2fa/challenge/verify',
+          requestSchema: _twoFactorChallengeCodeRequestSchema,
+          responseSchema: _authSessionResponseSchema,
+          authentication: AuthOperationAuthentication.none,
+        ),
+        _twoFactorHostEndpoint<TContext>(
+          id: 'twoFactor.challengeRecoveryCode',
+          path: '/2fa/challenge/recovery-code',
+          requestSchema: _twoFactorChallengeRecoveryRequestSchema,
+          responseSchema: _authSessionResponseSchema,
+          authentication: AuthOperationAuthentication.none,
+        ),
+        _twoFactorHostEndpoint<TContext>(
+          id: 'twoFactor.trustedDevicesRevoke',
+          path: '/2fa/trusted-devices/revoke',
+          requestSchema: _emptyObjectSchema,
+          responseSchema: _trustedDevicesRevokedSchema,
+        ),
+        _twoFactorHostEndpoint<TContext>(
+          id: 'twoFactor.stepUp',
+          path: '/2fa/step-up',
+          requestSchema: _twoFactorCodeRequestSchema,
+          responseSchema: _twoFactorStepUpSchema,
+        ),
+        _twoFactorHostEndpoint<TContext>(
+          id: 'twoFactor.stepUpRevoke',
+          path: '/2fa/step-up/revoke',
+          requestSchema: _emptyObjectSchema,
+          responseSchema: _twoFactorStepUpRevokedSchema,
+        ),
+      ];
 
   @override
   String get userDataNamespace => 'two_factor';
@@ -1934,3 +2017,227 @@ List<int> _secureBytes(int length) {
   final random = Random.secure();
   return List<int>.generate(length, (_) => random.nextInt(256));
 }
+
+AuthEndpointDescriptor<TContext> _twoFactorHostEndpoint<TContext>({
+  required String id,
+  AuthOperationMethod method = AuthOperationMethod.post,
+  required String path,
+  required Map<String, Object?> requestSchema,
+  required Map<String, Object?> responseSchema,
+  AuthOperationAuthentication authentication =
+      AuthOperationAuthentication.session,
+  bool protectMutation = true,
+}) => TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
+  id: id,
+  method: method,
+  path: path,
+  requestCodec: AuthOperationCodec<Map<String, dynamic>>(
+    decode: _decodeTwoFactorMap,
+    encode: _encodeTwoFactorMap,
+    schema: requestSchema,
+    required: requestSchema['required'] is List,
+  ),
+  responseCodec: AuthOperationCodec<Object?>(
+    decode: _decodeTwoFactorObject,
+    encode: _encodeTwoFactorObject,
+    schema: responseSchema,
+  ),
+  authentication: authentication,
+  originPolicy: protectMutation
+      ? AuthOperationOriginPolicy.browser
+      : AuthOperationOriginPolicy.none,
+  csrfPolicy: protectMutation
+      ? AuthOperationCsrfPolicy.required
+      : AuthOperationCsrfPolicy.none,
+  rateLimitOperation: protectMutation
+      ? const AuthRateLimitOperation('core', 'twoFactor')
+      : null,
+  handler: (invocation, request) =>
+      throw UnsupportedError('This endpoint is implemented by the auth host.'),
+);
+
+Map<String, dynamic> _decodeTwoFactorMap(Map<String, dynamic> value) => value;
+Object? _encodeTwoFactorMap(Map<String, dynamic> value) => value;
+Object? _decodeTwoFactorObject(Map<String, dynamic> value) => value;
+Object? _encodeTwoFactorObject(Object? value) => value;
+
+const Map<String, Object?> _emptyObjectSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+};
+
+const Map<String, Object?> _twoFactorStatusSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['enabled', 'recoveryCodesRemaining'],
+  'properties': <String, Object?>{
+    'enabled': <String, Object?>{'type': 'boolean'},
+    'recoveryCodesRemaining': <String, Object?>{
+      'type': 'integer',
+      'minimum': 0,
+    },
+    'enrollmentExpiresAt': <String, Object?>{
+      'type': <String>['string', 'null'],
+      'format': 'date-time',
+    },
+    'lockedUntil': <String, Object?>{
+      'type': <String>['string', 'null'],
+      'format': 'date-time',
+    },
+  },
+};
+
+const Map<String, Object?> _twoFactorEnrollRequestSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'properties': <String, Object?>{
+    'accountLabel': <String, Object?>{'type': 'string'},
+  },
+};
+
+const Map<String, Object?> _twoFactorEnrollmentSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['secret', 'otpauthUri', 'expiresAt'],
+  'properties': <String, Object?>{
+    'secret': <String, Object?>{'type': 'string', 'readOnly': true},
+    'otpauthUri': <String, Object?>{'type': 'string', 'format': 'uri'},
+    'expiresAt': <String, Object?>{'type': 'string', 'format': 'date-time'},
+  },
+};
+
+const Map<String, Object?> _twoFactorCodeRequestSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['code'],
+  'properties': <String, Object?>{
+    'code': <String, Object?>{'type': 'string', 'writeOnly': true},
+  },
+};
+
+const Map<String, Object?> _twoFactorRecoveryCodeRequestSchema =
+    <String, Object?>{
+      'type': 'object',
+      'additionalProperties': false,
+      'required': <String>['recoveryCode'],
+      'properties': <String, Object?>{
+        'recoveryCode': <String, Object?>{'type': 'string', 'writeOnly': true},
+      },
+    };
+
+const Map<String, Object?> _twoFactorRecoveryCodesSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['recoveryCodes'],
+  'properties': <String, Object?>{
+    'enabled': <String, Object?>{'type': 'boolean'},
+    'recoveryCodes': <String, Object?>{
+      'type': 'array',
+      'items': <String, Object?>{'type': 'string', 'readOnly': true},
+    },
+  },
+};
+
+const Map<String, Object?> _twoFactorVerifiedSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['verified'],
+  'properties': <String, Object?>{
+    'verified': <String, Object?>{'const': true},
+  },
+};
+
+const Map<String, Object?> _twoFactorRecoveryVerifiedSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['verified', 'method'],
+  'properties': <String, Object?>{
+    'verified': <String, Object?>{'const': true},
+    'method': <String, Object?>{'const': 'recovery_code'},
+  },
+};
+
+const Map<String, Object?> _twoFactorDisabledSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['disabled'],
+  'properties': <String, Object?>{
+    'disabled': <String, Object?>{'const': true},
+  },
+};
+
+const Map<String, Object?> _twoFactorChallengeCodeRequestSchema =
+    <String, Object?>{
+      'type': 'object',
+      'additionalProperties': false,
+      'required': <String>['challengeToken', 'code'],
+      'properties': <String, Object?>{
+        'challengeToken': <String, Object?>{
+          'type': 'string',
+          'writeOnly': true,
+        },
+        'code': <String, Object?>{'type': 'string', 'writeOnly': true},
+        'trustDevice': <String, Object?>{'type': 'boolean'},
+      },
+    };
+
+const Map<String, Object?> _twoFactorChallengeRecoveryRequestSchema =
+    <String, Object?>{
+      'type': 'object',
+      'additionalProperties': false,
+      'required': <String>['challengeToken', 'recoveryCode'],
+      'properties': <String, Object?>{
+        'challengeToken': <String, Object?>{
+          'type': 'string',
+          'writeOnly': true,
+        },
+        'recoveryCode': <String, Object?>{'type': 'string', 'writeOnly': true},
+      },
+    };
+
+const Map<String, Object?> _authSessionResponseSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': true,
+  'required': <String>['user', 'strategy'],
+  'properties': <String, Object?>{
+    'user': <String, Object?>{'type': 'object'},
+    'expires': <String, Object?>{
+      'type': <String>['string', 'null'],
+      'format': 'date-time',
+    },
+    'strategy': <String, Object?>{'type': 'string'},
+    'token': <String, Object?>{
+      'type': 'string',
+      'readOnly': true,
+      'description': 'Present only when JWT response-body exposure is enabled.',
+    },
+  },
+};
+
+const Map<String, Object?> _trustedDevicesRevokedSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['status'],
+  'properties': <String, Object?>{
+    'status': <String, Object?>{'const': 'trusted_devices_revoked'},
+  },
+};
+
+const Map<String, Object?> _twoFactorStepUpSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['verified', 'expiresAt'],
+  'properties': <String, Object?>{
+    'verified': <String, Object?>{'const': true},
+    'expiresAt': <String, Object?>{'type': 'string', 'format': 'date-time'},
+  },
+};
+
+const Map<String, Object?> _twoFactorStepUpRevokedSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['status'],
+  'properties': <String, Object?>{
+    'status': <String, Object?>{'const': 'step_up_revoked'},
+  },
+};

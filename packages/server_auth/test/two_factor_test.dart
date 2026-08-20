@@ -142,6 +142,29 @@ void main() {
   });
 
   group('TwoFactorPlugin', () {
+    test('publishes host-owned endpoint contracts only when selected', () {
+      final without = AuthServerPluginRegistry<Object>(
+        store: InMemoryAuthStore(),
+      )..freeze();
+      final withPlugin = AuthServerPluginRegistry<Object>(
+        store: InMemoryAuthStore(),
+      )..register(_feature());
+      withPlugin.freeze();
+
+      expect(without.publicEndpoints, isEmpty);
+      expect(withPlugin.endpoints, isEmpty);
+      expect(withPlugin.publicEndpoints, hasLength(12));
+      expect(
+        withPlugin.publicEndpoints.map((endpoint) => endpoint.path),
+        containsAll(<String>[
+          '/2fa/status',
+          '/2fa/enroll',
+          '/2fa/challenge/verify',
+          '/2fa/step-up/revoke',
+        ]),
+      );
+    });
+
     test(
       'atomically activates one enrollment under concurrent verification',
       () async {

@@ -354,6 +354,7 @@ void main() {
           '201': OpenApiResponse(description: 'Created'),
           '400': OpenApiResponse(description: 'Bad Request'),
         },
+        extensions: {'x-routed-auth-example': 'enabled'},
         deprecated: true,
       );
 
@@ -369,6 +370,7 @@ void main() {
       expect(restored.requestBody!.required, isTrue);
       expect(restored.responses, hasLength(2));
       expect(restored.deprecated, isTrue);
+      expect(restored.extensions, {'x-routed-auth-example': 'enabled'});
     });
   });
 

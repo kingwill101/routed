@@ -287,6 +287,7 @@ class OpenApiOperation {
     this.responses = const {},
     this.security,
     this.deprecated = false,
+    this.extensions = const {},
   });
 
   final String? summary;
@@ -303,6 +304,13 @@ class OpenApiOperation {
   /// an operation as public.
   final List<Map<String, List<String>>>? security;
   final bool deprecated;
+
+  /// Vendor extensions emitted alongside this operation.
+  ///
+  /// Extension names should use the OpenAPI `x-` prefix. The auth generator
+  /// uses this field for policies that OpenAPI has no first-class vocabulary
+  /// for, such as browser Origin validation and namespaced rate limits.
+  final Map<String, Object?> extensions;
 
   Map<String, Object?> toJson() {
     return {
@@ -324,6 +332,7 @@ class OpenApiOperation {
             )
             .toList(),
       if (deprecated) 'deprecated': true,
+      ...extensions,
     };
   }
 
@@ -368,6 +377,9 @@ class OpenApiOperation {
                 .toList()
           : null,
       deprecated: json['deprecated'] == true,
+      extensions: Map<String, Object?>.fromEntries(
+        json.entries.where((entry) => entry.key.startsWith('x-')),
+      ),
     );
   }
 }

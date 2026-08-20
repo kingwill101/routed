@@ -62,8 +62,8 @@ final class AnonymousPlugin<TContext>
       id: 'anonymous.signIn',
       method: AuthOperationMethod.post,
       path: '/sign-in/anonymous',
-      requestCodec: _mapCodec,
-      responseCodec: _objectCodec,
+      requestCodec: _emptyRequestCodec,
+      responseCodec: _authenticationResponseCodec,
       authentication: AuthOperationAuthentication.none,
       originPolicy: AuthOperationOriginPolicy.browser,
       csrfPolicy: AuthOperationCsrfPolicy.none,
@@ -74,8 +74,8 @@ final class AnonymousPlugin<TContext>
       id: 'anonymous.delete',
       method: AuthOperationMethod.post,
       path: '/delete-anonymous-user',
-      requestCodec: _mapCodec,
-      responseCodec: _objectCodec,
+      requestCodec: _emptyRequestCodec,
+      responseCodec: _deletedResponseCodec,
       authentication: AuthOperationAuthentication.session,
       originPolicy: AuthOperationOriginPolicy.browser,
       csrfPolicy: AuthOperationCsrfPolicy.required,
@@ -220,15 +220,53 @@ final class AnonymousPlugin<TContext>
     if (!_configured) throw StateError('AnonymousPlugin is not configured');
   }
 
-  static final AuthOperationCodec<Map<String, dynamic>> _mapCodec =
+  static final AuthOperationCodec<Map<String, dynamic>> _emptyRequestCodec =
       AuthOperationCodec<Map<String, dynamic>>(
         decode: (value) => Map<String, dynamic>.from(value),
         encode: (value) => value,
+        schema: const <String, Object?>{
+          'type': 'object',
+          'additionalProperties': false,
+        },
       );
 
-  static final AuthOperationCodec<Object?> _objectCodec =
+  static final AuthOperationCodec<Object?> _authenticationResponseCodec =
       AuthOperationCodec<Object?>(
         decode: (value) => value,
         encode: (value) => value,
+        schema: const <String, Object?>{
+          'type': 'object',
+          'additionalProperties': true,
+          'required': <String>['status', 'user', 'strategy'],
+          'properties': <String, Object?>{
+            'status': <String, Object?>{'const': 'authenticated'},
+            'user': <String, Object?>{'type': 'object'},
+            'expires': <String, Object?>{
+              'type': <String>['string', 'null'],
+              'format': 'date-time',
+            },
+            'strategy': <String, Object?>{'type': 'string'},
+            'token': <String, Object?>{
+              'type': 'string',
+              'readOnly': true,
+              'description':
+                  'Present only when JWT response-body exposure is enabled.',
+            },
+          },
+        },
+      );
+
+  static final AuthOperationCodec<Object?> _deletedResponseCodec =
+      AuthOperationCodec<Object?>(
+        decode: (value) => value,
+        encode: (value) => value,
+        schema: const <String, Object?>{
+          'type': 'object',
+          'additionalProperties': false,
+          'required': <String>['status'],
+          'properties': <String, Object?>{
+            'status': <String, Object?>{'const': 'anonymous_deleted'},
+          },
+        },
       );
 }

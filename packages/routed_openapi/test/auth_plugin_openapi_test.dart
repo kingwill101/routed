@@ -95,7 +95,10 @@ void main() {
       expect(operation.operationId, 'authMagicLinkSend');
       expect(operation.tags, <String>['magic_link']);
       expect(operation.requestBody!.required, isTrue);
-      expect(operation.parameters.single.name, 'x-csrf-token');
+      expect(
+        operation.parameters.map((parameter) => parameter.name),
+        containsAll(<String>['Origin', 'x-csrf-token']),
+      );
       expect(operation.responses.keys, containsAll(<String>['200', '403']));
       expect(
         withMagicLink.components!.schemas['AuthMagicLinkSendRequest'],
@@ -136,7 +139,7 @@ void main() {
         operation.parameters
             .map((parameter) => '${parameter.location}:${parameter.name}')
             .toList(),
-        <String>['path:id', 'query:expand'],
+        <String>['path:id', 'query:expand', 'header:Origin'],
       );
       expect(operation.parameters.first.isRequired, isTrue);
       expect(operation.parameters.last.isRequired, isFalse);
@@ -285,6 +288,174 @@ void main() {
             .paths,
         contains('/auth/internal/rotate'),
       );
+    });
+
+    test('emits public policy effects and a sign-in 2FA alternative', () {
+      final registry = _registry(<AuthServerPlugin<Object>>[
+        UsernamePlugin<Object>(),
+        CaptchaPlugin<Object>(
+          verifier: _AcceptingCaptchaVerifier(),
+          config: const AuthCaptchaPluginConfig(maxTokenLength: 8),
+        ),
+        BreachedPasswordPlugin<Object>(
+          lookup: _AllowedBreachedPasswordLookup(),
+          config: const AuthBreachedPasswordPluginConfig(maxPasswordLength: 20),
+        ),
+        TwoFactorPlugin<Object>(
+          store: InMemoryAuthTwoFactorStore(),
+          secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
+          challengeStore: InMemoryAuthTwoFactorChallengeStore(),
+          trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+        ),
+      ]);
+
+      final spec = registry.toOpenApi31(info: _info);
+      final schemas = spec.components!.schemas;
+      final registration = spec.paths['/auth/username/register']!.post!;
+      final signIn = spec.paths['/auth/username/sign-in']!.post!;
+      final registrationRequest = schemas['AuthUsernameRegisterRequest']!;
+      final registrationProperties =
+          registrationRequest['properties']! as Map<String, Object?>;
+      final registrationPassword =
+          registrationProperties['password']! as Map<String, Object?>;
+
+      expect(
+        registrationRequest['required'],
+        containsAll(<String>['username', 'password', 'captchaToken']),
+      );
+      expect(
+        registrationProperties['captchaToken'],
+        containsPair('maxLength', 8),
+      );
+      expect(registrationPassword['maxLength'], 20);
+      expect(
+        registration.extensions[AuthPluginOpenApiGenerator.captchaExtension],
+        containsPair('required', true),
+      );
+      expect(
+        registration.extensions[AuthPluginOpenApiGenerator
+            .breachedPasswordExtension],
+        containsPair('error', authBreachedPasswordRejectedErrorCode),
+      );
+      expect(
+        registration.responses.keys,
+        containsAll(<String>['400', '401', '403', '429']),
+      );
+      expect(signIn.responses, contains('202'));
+      expect(
+        schemas[AuthPluginOpenApiGenerator.twoFactorChallengeSchema],
+        containsPair('required', <String>[
+          'status',
+          'challengeToken',
+          'expiresAt',
+        ]),
+      );
+      expect(
+        (schemas['AuthUsernameRegisterResponse']!['properties']!
+            as Map<String, Object?>)['token'],
+        containsPair('type', 'string'),
+      );
+      expect(
+        (schemas['AuthUsernameRegisterResponse']!['required']!
+            as List<Object?>),
+        isNot(contains('token')),
+      );
+      expect(
+        (registration.responses['429']!.headers!['Retry-After']!
+            as Map<String, Object?>)['schema'],
+        containsPair('minimum', 1),
+      );
+      expect(
+        registration.extensions[AuthPluginOpenApiGenerator
+            .rateLimitOperationExtension],
+        <String, Object?>{
+          'id': 'username.registration',
+          'namespace': 'username',
+          'name': 'registration',
+        },
+      );
+      _expectGeneratedClientCompatible(spec);
+    });
+
+    test('advertises API-key security for enabled host exchange routes', () {
+      final registry = _registry(<AuthServerPlugin<Object>>[
+        AuthApiKeyPlugin<Object>(
+          store: InMemoryAuthApiKeyStore(),
+          sessionExchangeEnabled: true,
+        ),
+      ]);
+
+      final spec = registry.toOpenApi31(
+        info: _info,
+        config: const AuthPluginOpenApiConfig(
+          sessionSecurity: AuthOpenApiSessionSecurity.apiKey,
+        ),
+      );
+
+      expect(spec.paths, contains('/auth/api-keys/create'));
+      expect(spec.paths, contains('/auth/api-keys/exchange'));
+      expect(spec.components!.securitySchemes, contains('authApiKey'));
+      expect(
+        spec.components!.securitySchemes['authApiKey']!.toJson(),
+        containsPair('in', 'header'),
+      );
+      expect(
+        spec.paths['/auth/api-keys/exchange']!.post!.security!.any(
+          (alternative) => alternative.containsKey('authApiKey'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('omits host routes whose owning plugin capability is disabled', () {
+      final withoutTwoFactor = _registry(<AuthServerPlugin<Object>>[
+        AnonymousPlugin<Object>(),
+        AuthApiKeyPlugin<Object>(store: InMemoryAuthApiKeyStore()),
+      ]).toOpenApi31(info: _info);
+      final withTwoFactor = _registry(<AuthServerPlugin<Object>>[
+        AnonymousPlugin<Object>(),
+        AuthApiKeyPlugin<Object>(store: InMemoryAuthApiKeyStore()),
+        TwoFactorPlugin<Object>(
+          store: InMemoryAuthTwoFactorStore(),
+          secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
+          challengeStore: InMemoryAuthTwoFactorChallengeStore(),
+          trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+        ),
+      ]).toOpenApi31(info: _info);
+
+      expect(
+        withoutTwoFactor.paths,
+        isNot(contains('/auth/api-keys/exchange')),
+      );
+      expect(
+        withoutTwoFactor.paths.keys,
+        everyElement(isNot(contains('/2fa/'))),
+      );
+      expect(withTwoFactor.paths, contains('/auth/2fa/status'));
+      expect(withTwoFactor.paths, contains('/auth/2fa/challenge/verify'));
+      expect(
+        withoutTwoFactor.paths['/auth/sign-in/anonymous']!.post!.responses,
+        isNot(contains('202')),
+      );
+      expect(
+        withTwoFactor.paths['/auth/sign-in/anonymous']!.post!.responses,
+        contains('202'),
+      );
+    });
+
+    test('policy-only plugins do not create paths or catalogue entries', () {
+      final registry = _registry(<AuthServerPlugin<Object>>[
+        CaptchaPlugin<Object>(verifier: _AcceptingCaptchaVerifier()),
+        BreachedPasswordPlugin<Object>(
+          lookup: _AllowedBreachedPasswordLookup(),
+        ),
+      ]);
+
+      final spec = registry.toOpenApi31(info: _info);
+
+      expect(spec.paths, isEmpty);
+      expect(spec.tags, isEmpty);
+      expect(spec.toJson(), isNot(contains('paths')));
     });
 
     test('requires the registry topology to be frozen', () {
@@ -439,4 +610,19 @@ final class _EndpointContract {
         serverOnly: serverOnly,
         handler: (invocation, request) => <String, Object?>{},
       );
+}
+
+final class _AcceptingCaptchaVerifier implements AuthCaptchaVerifier<Object> {
+  @override
+  Future<AuthCaptchaVerificationResult> verify(
+    AuthCaptchaVerificationRequest<Object> request,
+  ) async => const AuthCaptchaVerificationResult.accepted();
+}
+
+final class _AllowedBreachedPasswordLookup
+    implements AuthBreachedPasswordLookup<Object> {
+  @override
+  Future<AuthBreachedPasswordCheckResult> check(
+    AuthBreachedPasswordCheckRequest<Object> request,
+  ) async => const AuthBreachedPasswordCheckResult.allowed();
 }

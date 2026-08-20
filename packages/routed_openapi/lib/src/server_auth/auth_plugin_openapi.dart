@@ -3,7 +3,20 @@ import 'package:server_auth/server_auth.dart';
 import '../openapi/openapi_spec.dart';
 
 /// Transport advertised for session-authenticated plugin operations.
-enum AuthOpenApiSessionSecurity { cookie, bearer, cookieOrBearer }
+///
+/// Combined values are OpenAPI security alternatives (logical OR), not a
+/// requirement to send every credential. API-key alternatives should only be
+/// selected when the host actually authenticates these operations with an API
+/// key or an API-key-to-session boundary.
+enum AuthOpenApiSessionSecurity {
+  cookie,
+  bearer,
+  cookieOrBearer,
+  apiKey,
+  cookieOrApiKey,
+  bearerOrApiKey,
+  cookieOrBearerOrApiKey,
+}
 
 /// OpenAPI generation settings for a composed auth plugin registry.
 final class AuthPluginOpenApiConfig {
@@ -13,6 +26,7 @@ final class AuthPluginOpenApiConfig {
     this.sessionSecurity = AuthOpenApiSessionSecurity.cookieOrBearer,
     this.sessionCookieName = 'routed_session',
     this.csrfHeaderName = 'x-csrf-token',
+    this.apiKeyHeaderName = 'x-api-key',
     this.operationIdPrefix = 'auth',
     this.absolutePathPrefixes = const <String>['/.well-known/'],
   });
@@ -31,6 +45,9 @@ final class AuthPluginOpenApiConfig {
 
   /// Header emitted for endpoints whose descriptor requires CSRF validation.
   final String csrfHeaderName;
+
+  /// Header used by the public Routed API-key authentication boundary.
+  final String apiKeyHeaderName;
 
   /// Prefix used for stable, generated-client-safe operation IDs.
   final String operationIdPrefix;
@@ -61,6 +78,20 @@ final class AuthPluginOpenApiGenerator<TContext> {
 
   static const String sessionCookieSecurityScheme = 'authSessionCookie';
   static const String bearerSecurityScheme = 'authBearer';
+  static const String apiKeySecurityScheme = 'authApiKey';
+
+  /// Standard OpenAPI operation extensions emitted by this generator.
+  static const String pluginExtension = 'x-routed-auth-plugin';
+  static const String originPolicyExtension = 'x-routed-auth-origin-policy';
+  static const String csrfPolicyExtension = 'x-routed-auth-csrf-policy';
+  static const String rateLimitOperationExtension =
+      'x-routed-auth-rate-limit-operation';
+  static const String captchaExtension = 'x-routed-auth-captcha';
+  static const String breachedPasswordExtension =
+      'x-routed-auth-breached-password';
+
+  static const String genericErrorSchema = 'AuthError';
+  static const String twoFactorChallengeSchema = 'AuthTwoFactorChallenge';
 
   final AuthPluginOpenApiConfig config;
 
@@ -86,8 +117,21 @@ final class AuthPluginOpenApiGenerator<TContext> {
     final routeKeys = <String>{};
     final pluginIds = <String>{};
     var requiresSession = false;
+    var hasTwoFactorChallenge = false;
 
-    for (final endpoint in registry.endpoints) {
+    final captchaPlugin = registry.find(authCaptchaPluginId);
+    final breachedPasswordPlugin = registry.find(authBreachedPasswordPluginId);
+    final twoFactorPlugin = registry.find(authTwoFactorPluginId);
+    final hasApiKeyPlugin = registry.find(authApiKeyPluginId) != null;
+    final captchaConfig = captchaPlugin is CaptchaPlugin<TContext>
+        ? captchaPlugin.config
+        : null;
+    final breachedPasswordConfig =
+        breachedPasswordPlugin is BreachedPasswordPlugin<TContext>
+        ? breachedPasswordPlugin.config
+        : null;
+
+    for (final endpoint in registry.publicEndpoints) {
       if (endpoint.serverOnly && !config.includeServerOnly) continue;
 
       final path = _resolvePath(endpoint.path);
@@ -114,18 +158,47 @@ final class AuthPluginOpenApiGenerator<TContext> {
       final contracts = _contracts(endpoint);
       final requestSchemaName = '${_upperFirst(operationId)}Request';
       final responseSchemaName = '${_upperFirst(operationId)}Response';
-      schemas[requestSchemaName] = Map<String, Object?>.from(
-        contracts.request.schema,
+      final request = _requestSchemaWithPolicyEffects(
+        endpoint: endpoint,
+        schema: contracts.request.schema,
+        captchaPlugin: captchaPlugin,
+        captchaConfig: captchaConfig,
+        breachedPasswordPlugin: breachedPasswordPlugin,
+        breachedPasswordConfig: breachedPasswordConfig,
       );
-      schemas[responseSchemaName] = Map<String, Object?>.from(
+      schemas[requestSchemaName] = Map<String, Object?>.from(request.schema);
+      schemas[responseSchemaName] = _publicResponseSchema(
         contracts.response.schema,
       );
+
+      final hasChallengeAlternative =
+          twoFactorPlugin is TwoFactorPlugin<TContext> &&
+          _isSignInEndpoint(endpoint.id) &&
+          _isAuthenticationResponse(contracts.response.schema) &&
+          !_containsSchemaConst(
+            contracts.response.schema,
+            'two_factor_required',
+          );
+      hasTwoFactorChallenge |= hasChallengeAlternative;
 
       final pathParameters = _pathParameters(path, contracts.request.schema);
       final parameters = <OpenApiParameter>[
         ...pathParameters,
         if (endpoint.method == AuthOperationMethod.get)
-          ..._queryParameters(contracts.request.schema, pathParameters),
+          ..._queryParameters(request.schema, pathParameters),
+        if (endpoint.originPolicy == AuthOperationOriginPolicy.browser)
+          const OpenApiParameter(
+            name: 'Origin',
+            location: 'header',
+            description:
+                'Browser origin checked by the auth adapter when present; '
+                'the deployment may require it.',
+            required: false,
+            schema: <String, Object?>{
+              'type': 'string',
+              'format': 'uri-reference',
+            },
+          ),
         if (endpoint.csrfPolicy == AuthOperationCsrfPolicy.required)
           OpenApiParameter(
             name: config.csrfHeaderName,
@@ -138,15 +211,80 @@ final class AuthPluginOpenApiGenerator<TContext> {
 
       final sessionRequired =
           endpoint.authentication == AuthOperationAuthentication.session;
+      final apiKeyRequired =
+          endpoint.authentication == AuthOperationAuthentication.apiKey;
       requiresSession |= sessionRequired;
+      final responses = <String, OpenApiResponse>{
+        '200': OpenApiResponse(
+          description: 'Successful response.',
+          content: <String, OpenApiMediaType>{
+            contracts.response.contentType: OpenApiMediaType(
+              schema: <String, Object?>{
+                r'$ref': '#/components/schemas/$responseSchemaName',
+              },
+            ),
+          },
+        ),
+        '400': _genericErrorResponse('Invalid auth request.'),
+        '401': _genericErrorResponse('Authentication failed or is required.'),
+        if (endpoint.originPolicy == AuthOperationOriginPolicy.browser ||
+            endpoint.csrfPolicy == AuthOperationCsrfPolicy.required)
+          '403': _genericErrorResponse(
+            endpoint.csrfPolicy == AuthOperationCsrfPolicy.required
+                ? 'Browser origin or CSRF validation failed.'
+                : 'Browser origin validation failed.',
+          ),
+        if (endpoint.rateLimitOperation != null)
+          '429': _genericErrorResponse(
+            'Auth rate limit exceeded.',
+            headers: const <String, Object?>{
+              'Retry-After': <String, Object?>{
+                'description': 'Seconds until another request may be made.',
+                'schema': <String, Object?>{'type': 'integer', 'minimum': 1},
+              },
+            },
+          ),
+        if (hasChallengeAlternative)
+          '202': const OpenApiResponse(
+            description: 'Additional two-factor verification is required.',
+            content: <String, OpenApiMediaType>{
+              'application/json': OpenApiMediaType(
+                schema: <String, Object?>{
+                  r'$ref': '#/components/schemas/$twoFactorChallengeSchema',
+                },
+              ),
+            },
+          ),
+      };
+
+      final extensions = <String, Object?>{
+        pluginExtension: pluginId,
+        originPolicyExtension: endpoint.originPolicy.name,
+        csrfPolicyExtension: endpoint.csrfPolicy.name,
+        if (endpoint.rateLimitOperation case final rateLimit?)
+          rateLimitOperationExtension: <String, Object?>{
+            'id': rateLimit.id,
+            'namespace': rateLimit.namespace,
+            'name': rateLimit.name,
+          },
+        ...request.policyExtensions,
+      };
       final operation = OpenApiOperation(
         summary: _summary(endpoint.id),
+        description: _operationDescription(
+          endpoint: endpoint,
+          policyExtensions: request.policyExtensions,
+        ),
         operationId: operationId,
         tags: <String>[pluginId],
         parameters: parameters,
         requestBody: endpoint.method == AuthOperationMethod.post
             ? OpenApiRequestBody(
                 required: contracts.request.required,
+                description: request.policyExtensions.isEmpty
+                    ? null
+                    : 'This request is subject to the auth policies '
+                          'advertised by the operation extensions.',
                 content: <String, OpenApiMediaType>{
                   contracts.request.contentType: OpenApiMediaType(
                     schema: <String, Object?>{
@@ -156,29 +294,15 @@ final class AuthPluginOpenApiGenerator<TContext> {
                 },
               )
             : null,
-        responses: <String, OpenApiResponse>{
-          '200': OpenApiResponse(
-            description: 'Successful response.',
-            content: <String, OpenApiMediaType>{
-              contracts.response.contentType: OpenApiMediaType(
-                schema: <String, Object?>{
-                  r'$ref': '#/components/schemas/$responseSchemaName',
-                },
-              ),
-            },
-          ),
-          if (sessionRequired)
-            '401': const OpenApiResponse(
-              description: 'Authentication required.',
-            ),
-          if (endpoint.csrfPolicy == AuthOperationCsrfPolicy.required)
-            '403': const OpenApiResponse(
-              description: 'CSRF validation failed.',
-            ),
-          if (endpoint.rateLimitOperation != null)
-            '429': const OpenApiResponse(description: 'Rate limit exceeded.'),
-        },
-        security: sessionRequired ? _sessionSecurity() : const [],
+        responses: responses,
+        security: sessionRequired
+            ? _sessionSecurity()
+            : apiKeyRequired
+            ? const <Map<String, List<String>>>[
+                <String, List<String>>{apiKeySecurityScheme: <String>[]},
+              ]
+            : const [],
+        extensions: extensions,
       );
 
       final existing = paths[path] ?? const OpenApiPathItem();
@@ -186,6 +310,13 @@ final class AuthPluginOpenApiGenerator<TContext> {
         throw AuthOpenApiContractException('Duplicate auth route "$routeKey".');
       }
       paths[path] = existing.withOperation(method, operation);
+    }
+
+    if (hasTwoFactorChallenge) {
+      schemas[twoFactorChallengeSchema] = _twoFactorChallengeSchema;
+    }
+    if (paths.isNotEmpty) {
+      schemas[genericErrorSchema] = _genericErrorSchema;
     }
 
     return OpenApiSpec(
@@ -202,7 +333,9 @@ final class AuthPluginOpenApiGenerator<TContext> {
           .toList(growable: false),
       components: OpenApiComponents(
         schemas: schemas,
-        securitySchemes: requiresSession ? _securitySchemes() : const {},
+        securitySchemes: requiresSession || hasApiKeyPlugin
+            ? _securitySchemes(hasApiKeyPlugin: hasApiKeyPlugin)
+            : const {},
       ),
     );
   }
@@ -244,12 +377,37 @@ final class AuthPluginOpenApiGenerator<TContext> {
           <String, List<String>>{sessionCookieSecurityScheme: <String>[]},
           <String, List<String>>{bearerSecurityScheme: <String>[]},
         ];
+      case AuthOpenApiSessionSecurity.apiKey:
+        return const <Map<String, List<String>>>[
+          <String, List<String>>{apiKeySecurityScheme: <String>[]},
+        ];
+      case AuthOpenApiSessionSecurity.cookieOrApiKey:
+        return const <Map<String, List<String>>>[
+          <String, List<String>>{sessionCookieSecurityScheme: <String>[]},
+          <String, List<String>>{apiKeySecurityScheme: <String>[]},
+        ];
+      case AuthOpenApiSessionSecurity.bearerOrApiKey:
+        return const <Map<String, List<String>>>[
+          <String, List<String>>{bearerSecurityScheme: <String>[]},
+          <String, List<String>>{apiKeySecurityScheme: <String>[]},
+        ];
+      case AuthOpenApiSessionSecurity.cookieOrBearerOrApiKey:
+        return const <Map<String, List<String>>>[
+          <String, List<String>>{sessionCookieSecurityScheme: <String>[]},
+          <String, List<String>>{bearerSecurityScheme: <String>[]},
+          <String, List<String>>{apiKeySecurityScheme: <String>[]},
+        ];
     }
   }
 
-  Map<String, OpenApiSecurityScheme> _securitySchemes() {
+  Map<String, OpenApiSecurityScheme> _securitySchemes({
+    required bool hasApiKeyPlugin,
+  }) {
     final schemes = <String, OpenApiSecurityScheme>{};
-    if (config.sessionSecurity != AuthOpenApiSessionSecurity.bearer) {
+    final sessionSecurity = config.sessionSecurity;
+    if (sessionSecurity != AuthOpenApiSessionSecurity.bearer &&
+        sessionSecurity != AuthOpenApiSessionSecurity.apiKey &&
+        sessionSecurity != AuthOpenApiSessionSecurity.bearerOrApiKey) {
       schemes[sessionCookieSecurityScheme] = OpenApiSecurityScheme(
         type: 'apiKey',
         name: config.sessionCookieName,
@@ -257,15 +415,245 @@ final class AuthPluginOpenApiGenerator<TContext> {
         description: 'Routed auth session cookie.',
       );
     }
-    if (config.sessionSecurity != AuthOpenApiSessionSecurity.cookie) {
+    if (sessionSecurity != AuthOpenApiSessionSecurity.cookie &&
+        sessionSecurity != AuthOpenApiSessionSecurity.apiKey &&
+        sessionSecurity != AuthOpenApiSessionSecurity.cookieOrApiKey) {
       schemes[bearerSecurityScheme] = const OpenApiSecurityScheme(
         type: 'http',
         scheme: 'bearer',
+        bearerFormat: 'JWT',
         description: 'Routed auth bearer token.',
+      );
+    }
+    final hasApiKeySecurity =
+        hasApiKeyPlugin ||
+        sessionSecurity == AuthOpenApiSessionSecurity.apiKey ||
+        sessionSecurity == AuthOpenApiSessionSecurity.cookieOrApiKey ||
+        sessionSecurity == AuthOpenApiSessionSecurity.bearerOrApiKey ||
+        sessionSecurity == AuthOpenApiSessionSecurity.cookieOrBearerOrApiKey;
+    if (hasApiKeySecurity) {
+      schemes[apiKeySecurityScheme] = OpenApiSecurityScheme(
+        type: 'apiKey',
+        name: config.apiKeyHeaderName,
+        location: 'header',
+        description:
+            'Routed API key for service-authenticated application '
+            'requests. Auth management endpoints use the alternatives '
+            'listed on the operation.',
       );
     }
     return schemes;
   }
+
+  ({Map<String, Object?> schema, Map<String, Object?> policyExtensions})
+  _requestSchemaWithPolicyEffects({
+    required AuthEndpointDescriptor<TContext> endpoint,
+    required Map<String, Object?> schema,
+    required AuthServerPlugin<TContext>? captchaPlugin,
+    required AuthCaptchaPluginConfig? captchaConfig,
+    required AuthServerPlugin<TContext>? breachedPasswordPlugin,
+    required AuthBreachedPasswordPluginConfig? breachedPasswordConfig,
+  }) {
+    final result = _cloneSchema(schema);
+    final properties = _mutableSchemaProperties(result);
+    final effects = <String, Object?>{};
+
+    if (captchaPlugin != null && properties.containsKey('captchaToken')) {
+      final tokenSchema = properties['captchaToken']!;
+      if (captchaConfig != null) {
+        _tightenMaximum(tokenSchema, 'maxLength', captchaConfig.maxTokenLength);
+      }
+      _requireProperty(result, 'captchaToken');
+      effects[captchaExtension] = <String, Object?>{
+        'required': true,
+        if (captchaConfig != null)
+          'maxTokenLength': captchaConfig.maxTokenLength,
+      };
+    }
+
+    final registration = _isRegistrationEndpoint(endpoint.id);
+    if (breachedPasswordPlugin != null &&
+        registration &&
+        properties.containsKey('password')) {
+      if (breachedPasswordConfig != null) {
+        _tightenMaximum(
+          properties['password']!,
+          'maxLength',
+          breachedPasswordConfig.maxPasswordLength,
+        );
+      }
+      effects[breachedPasswordExtension] = <String, Object?>{
+        'operation': 'registration',
+        if (breachedPasswordConfig != null)
+          'maxPasswordLength': breachedPasswordConfig.maxPasswordLength,
+        'error': authBreachedPasswordRejectedErrorCode,
+      };
+    }
+
+    return (schema: result, policyExtensions: effects);
+  }
+
+  String? _operationDescription({
+    required AuthEndpointDescriptor<TContext> endpoint,
+    required Map<String, Object?> policyExtensions,
+  }) {
+    final descriptions = <String>[];
+    if (endpoint.originPolicy == AuthOperationOriginPolicy.browser) {
+      descriptions.add(
+        'The auth adapter applies browser Origin and Fetch Metadata '
+        'validation for this operation.',
+      );
+    }
+    if (endpoint.csrfPolicy == AuthOperationCsrfPolicy.required) {
+      descriptions.add(
+        'The auth adapter requires the documented CSRF header before '
+        'invoking this operation.',
+      );
+    }
+    if (policyExtensions.containsKey(captchaExtension)) {
+      descriptions.add(
+        'A registered captcha policy must accept the request token before '
+        'credential processing.',
+      );
+    }
+    if (policyExtensions.containsKey(breachedPasswordExtension)) {
+      descriptions.add(
+        'A registered breached-password policy may reject the password '
+        'with the generic password_rejected error.',
+      );
+    }
+    return descriptions.isEmpty ? null : descriptions.join(' ');
+  }
+}
+
+const Map<String, Object?> _genericErrorSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['error'],
+  'properties': <String, Object?>{
+    'error': <String, Object?>{
+      'type': 'string',
+      'pattern': r'^[a-z][a-z0-9_]{0,63}$',
+      'description': 'Sanitized, stable auth error code.',
+    },
+  },
+};
+
+const Map<String, Object?> _twoFactorChallengeSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['status', 'challengeToken', 'expiresAt'],
+  'properties': <String, Object?>{
+    'status': <String, Object?>{'const': 'two_factor_required'},
+    'challengeToken': <String, Object?>{
+      'type': 'string',
+      'readOnly': true,
+      'description': 'Short-lived token submitted to complete the challenge.',
+    },
+    'expiresAt': <String, Object?>{'type': 'string', 'format': 'date-time'},
+  },
+};
+
+OpenApiResponse _genericErrorResponse(
+  String description, {
+  Map<String, Object?>? headers,
+}) => OpenApiResponse(
+  description: description,
+  content: const <String, OpenApiMediaType>{
+    'application/json': OpenApiMediaType(
+      schema: <String, Object?>{r'$ref': '#/components/schemas/AuthError'},
+    ),
+  },
+  headers: headers,
+);
+
+Map<String, Object?> _cloneSchema(Map<String, Object?> schema) {
+  final cloned = _cloneJsonValue(schema);
+  return Map<String, Object?>.from(cloned as Map);
+}
+
+Map<String, Object?> _publicResponseSchema(Map<String, Object?> schema) =>
+    schema.isEmpty
+    ? <String, Object?>{
+        'type': 'object',
+        'description':
+            'Public JSON response. The selected plugin owns its additional '
+            'fields.',
+        'additionalProperties': true,
+      }
+    : Map<String, Object?>.from(schema);
+
+Object? _cloneJsonValue(Object? value) {
+  if (value is Map) {
+    return value.map(
+      (key, child) => MapEntry(key.toString(), _cloneJsonValue(child)),
+    );
+  }
+  if (value is List) {
+    return value.map(_cloneJsonValue).toList(growable: false);
+  }
+  return value;
+}
+
+Map<String, Map<String, Object?>> _mutableSchemaProperties(
+  Map<String, Object?> schema,
+) {
+  final raw = schema['properties'];
+  if (raw is! Map) return <String, Map<String, Object?>>{};
+  final properties = <String, Map<String, Object?>>{};
+  for (final entry in raw.entries) {
+    properties[entry.key.toString()] = entry.value is Map
+        ? Map<String, Object?>.from(entry.value as Map)
+        : <String, Object?>{};
+  }
+  schema['properties'] = properties;
+  return properties;
+}
+
+void _requireProperty(Map<String, Object?> schema, String name) {
+  final required = <String>{
+    if (schema['required'] is List)
+      ...(schema['required'] as List).whereType<String>(),
+  };
+  required.add(name);
+  schema['required'] = required.toList(growable: false);
+}
+
+void _tightenMaximum(Map<String, Object?> schema, String keyword, int maximum) {
+  final existing = schema[keyword];
+  if (existing is num && existing < maximum) return;
+  schema[keyword] = maximum;
+}
+
+bool _isRegistrationEndpoint(String endpointId) {
+  final normalized = endpointId.toLowerCase();
+  return normalized.contains('register') || normalized.contains('registration');
+}
+
+bool _isSignInEndpoint(String endpointId) {
+  final normalized = endpointId.toLowerCase();
+  return normalized.contains('signin') ||
+      normalized.contains('sign_in') ||
+      normalized.contains('sign-in');
+}
+
+bool _isAuthenticationResponse(Map<String, Object?> schema) {
+  final properties = _schemaProperties(schema);
+  final status = properties['status'];
+  return status?['const'] == 'authenticated';
+}
+
+bool _containsSchemaConst(Map<String, Object?> schema, Object expected) {
+  bool visit(Object? value) {
+    if (value is Map) {
+      if (value['const'] == expected) return true;
+      return value.values.any(visit);
+    }
+    if (value is Iterable) return value.any(visit);
+    return false;
+  }
+
+  return visit(schema);
 }
 
 /// Generates an OpenAPI 3.1 document for this composed plugin registry.
@@ -280,9 +668,8 @@ extension AuthServerPluginRegistryOpenApi<TContext>
   ).generate(registry: this, info: info, servers: servers);
 }
 
-({AuthOperationContract request, AuthOperationContract response}) _contracts(
-  AuthEndpointDescriptor<Object?> endpoint,
-) {
+({AuthOperationContract request, AuthOperationContract response})
+_contracts<TContext>(AuthEndpointDescriptor<TContext> endpoint) {
   if (endpoint case AuthEndpointContractDescriptor(
     requestCodec: final request,
     responseCodec: final response,

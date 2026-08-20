@@ -547,7 +547,13 @@ void main() {
       final contract = endpoint as AuthEndpointContractDescriptor;
 
       expect(runtime.registry.pluginIdForEndpoint(endpoint.id), 'anonymous');
-      expect(contract.requestCodec.schema, isEmpty);
+      expect(
+        contract.requestCodec.schema,
+        <String, Object?>{
+          'type': 'object',
+          'additionalProperties': false,
+        },
+      );
       expect(contract.requestCodec.contentType, 'application/json');
       expect(contract.requestCodec.required, isFalse);
 

@@ -10,9 +10,9 @@ import 'package:routed_openapi/routed_openapi.dart' as routed_openapi;
 /// build-time integration package.
 class OpenApiBuilder implements Builder {
   OpenApiBuilder([Map<String, dynamic>? config])
-      : _delegate = routed_openapi.openApiBuilder(
-          BuilderOptions(config ?? const <String, dynamic>{}),
-        );
+    : _delegate = routed_openapi.openApiBuilder(
+        BuilderOptions(config ?? const <String, dynamic>{}),
+      );
 
   final Builder _delegate;
 
@@ -23,4 +23,5 @@ class OpenApiBuilder implements Builder {
   FutureOr<void> build(BuildStep buildStep) => _delegate.build(buildStep);
 }
 
-Builder openApiBuilder(BuilderOptions options) => OpenApiBuilder(options.config);
+Builder openApiBuilder(BuilderOptions options) =>
+    OpenApiBuilder(options.config);

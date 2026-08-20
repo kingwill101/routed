@@ -1,0 +1,2980 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Auth API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/auth/sign-in/anonymous": {
+      "post": {
+        "summary": "Anonymous SignIn",
+        "description": "The auth adapter applies browser Origin and Fetch Metadata validation for this operation.",
+        "operationId": "authAnonymousSignIn",
+        "tags": [
+          "anonymous"
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Browser origin checked by the auth adapter when present; the deployment may require it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uri-reference"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthAnonymousSignInRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthAnonymousSignInResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser origin validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Additional two-factor verification is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTwoFactorChallenge"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "x-routed-auth-plugin": "anonymous",
+        "x-routed-auth-origin-policy": "browser",
+        "x-routed-auth-csrf-policy": "none",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "anonymous.sign_in",
+          "namespace": "anonymous",
+          "name": "sign_in"
+        }
+      }
+    },
+    "/auth/delete-anonymous-user": {
+      "post": {
+        "summary": "Anonymous Delete",
+        "description": "The auth adapter applies browser Origin and Fetch Metadata validation for this operation. The auth adapter requires the documented CSRF header before invoking this operation.",
+        "operationId": "authAnonymousDelete",
+        "tags": [
+          "anonymous"
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Browser origin checked by the auth adapter when present; the deployment may require it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uri-reference"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "description": "CSRF token required by this auth operation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthAnonymousDeleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthAnonymousDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser origin or CSRF validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "authSessionCookie": []
+          },
+          {
+            "authBearer": []
+          }
+        ],
+        "x-routed-auth-plugin": "anonymous",
+        "x-routed-auth-origin-policy": "browser",
+        "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "anonymous.delete",
+          "namespace": "anonymous",
+          "name": "delete"
+        }
+      }
+    },
+    "/auth/api-keys/create": {
+      "post": {
+        "summary": "ApiKey Create",
+        "description": "The auth adapter applies browser Origin and Fetch Metadata validation for this operation. The auth adapter requires the documented CSRF header before invoking this operation.",
+        "operationId": "authApiKeyCreate",
+        "tags": [
+          "api_key"
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Browser origin checked by the auth adapter when present; the deployment may require it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uri-reference"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "description": "CSRF token required by this auth operation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthApiKeyCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthApiKeyCreateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser origin or CSRF validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "authSessionCookie": []
+          },
+          {
+            "authBearer": []
+          }
+        ],
+        "x-routed-auth-plugin": "api_key",
+        "x-routed-auth-origin-policy": "browser",
+        "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "api_key.create",
+          "namespace": "api_key",
+          "name": "create"
+        }
+      }
+    },
+    "/auth/api-keys/list": {
+      "get": {
+        "summary": "ApiKey List",
+        "operationId": "authApiKeyList",
+        "tags": [
+          "api_key"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthApiKeyListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "authSessionCookie": []
+          },
+          {
+            "authBearer": []
+          }
+        ],
+        "x-routed-auth-plugin": "api_key",
+        "x-routed-auth-origin-policy": "none",
+        "x-routed-auth-csrf-policy": "none",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "api_key.list",
+          "namespace": "api_key",
+          "name": "list"
+        }
+      }
+    },
+    "/auth/api-keys/revoke": {
+      "post": {
+        "summary": "ApiKey Revoke",
+        "description": "The auth adapter applies browser Origin and Fetch Metadata validation for this operation. The auth adapter requires the documented CSRF header before invoking this operation.",
+        "operationId": "authApiKeyRevoke",
+        "tags": [
+          "api_key"
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Browser origin checked by the auth adapter when present; the deployment may require it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uri-reference"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "description": "CSRF token required by this auth operation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthApiKeyRevokeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthApiKeyRevokeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser origin or CSRF validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "authSessionCookie": []
+          },
+          {
+            "authBearer": []
+          }
+        ],
+        "x-routed-auth-plugin": "api_key",
+        "x-routed-auth-origin-policy": "browser",
+        "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "api_key.revoke",
+          "namespace": "api_key",
+          "name": "revoke"
+        }
+      }
+    },
+    "/auth/api-keys/rotate": {
+      "post": {
+        "summary": "ApiKey Rotate",
+        "description": "The auth adapter applies browser Origin and Fetch Metadata validation for this operation. The auth adapter requires the documented CSRF header before invoking this operation.",
+        "operationId": "authApiKeyRotate",
+        "tags": [
+          "api_key"
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Browser origin checked by the auth adapter when present; the deployment may require it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uri-reference"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "description": "CSRF token required by this auth operation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthApiKeyRotateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthApiKeyRotateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser origin or CSRF validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "authSessionCookie": []
+          },
+          {
+            "authBearer": []
+          }
+        ],
+        "x-routed-auth-plugin": "api_key",
+        "x-routed-auth-origin-policy": "browser",
+        "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "api_key.rotate",
+          "namespace": "api_key",
+          "name": "rotate"
+        }
+      }
+    },
+    "/auth/api-keys/exchange": {
+      "post": {
+        "summary": "ApiKey Exchange",
+        "operationId": "authApiKeyExchange",
+        "tags": [
+          "api_key"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthApiKeyExchangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthApiKeyExchangeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "authApiKey": []
+          }
+        ],
+        "x-routed-auth-plugin": "api_key",
+        "x-routed-auth-origin-policy": "none",
+        "x-routed-auth-csrf-policy": "none",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "api_key.exchange",
+          "namespace": "api_key",
+          "name": "exchange"
+        }
+      }
+    },
+    "/auth/2fa/status": {
+      "get": {
+        "summary": "TwoFactor Status",
+        "operationId": "authTwoFactorStatus",
+        "tags": [
+          "two_factor"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTwoFactorStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "authSessionCookie": []
+          },
+          {
+            "authBearer": []
+          }
+        ],
+        "x-routed-auth-plugin": "two_factor",
+        "x-routed-auth-origin-policy": "none",
+        "x-routed-auth-csrf-policy": "none"
+      }
+    },
+    "/auth/2fa/enroll": {
+      "post": {
+        "summary": "TwoFactor Enroll",
+        "description": "The auth adapter applies browser Origin and Fetch Metadata validation for this operation. The auth adapter requires the documented CSRF header before invoking this operation.",
+        "operationId": "authTwoFactorEnroll",
+        "tags": [
+          "two_factor"
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Browser origin checked by the auth adapter when present; the deployment may require it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uri-reference"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "description": "CSRF token required by this auth operation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthTwoFactorEnrollRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTwoFactorEnrollResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser origin or CSRF validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "authSessionCookie": []
+          },
+          {
+            "authBearer": []
+          }
+        ],
+        "x-routed-auth-plugin": "two_factor",
+        "x-routed-auth-origin-policy": "browser",
+        "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "core.twoFactor",
+          "namespace": "core",
+          "name": "twoFactor"
+        }
+      }
+    },
+    "/auth/2fa/enroll/verify": {
+      "post": {
+        "summary": "TwoFactor EnrollVerify",
+        "description": "The auth adapter applies browser Origin and Fetch Metadata validation for this operation. The auth adapter requires the documented CSRF header before invoking this operation.",
+        "operationId": "authTwoFactorEnrollVerify",
+        "tags": [
+          "two_factor"
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Browser origin checked by the auth adapter when present; the deployment may require it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uri-reference"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "description": "CSRF token required by this auth operation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthTwoFactorEnrollVerifyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTwoFactorEnrollVerifyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser origin or CSRF validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "authSessionCookie": []
+          },
+          {
+            "authBearer": []
+          }
+        ],
+        "x-routed-auth-plugin": "two_factor",
+        "x-routed-auth-origin-policy": "browser",
+        "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "core.twoFactor",
+          "namespace": "core",
+          "name": "twoFactor"
+        }
+      }
+    },
+    "/auth/2fa/verify": {
+      "post": {
+        "summary": "TwoFactor Verify",
+        "description": "The auth adapter applies browser Origin and Fetch Metadata validation for this operation. The auth adapter requires the documented CSRF header before invoking this operation.",
+        "operationId": "authTwoFactorVerify",
+        "tags": [
+          "two_factor"
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Browser origin checked by the auth adapter when present; the deployment may require it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uri-reference"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "description": "CSRF token required by this auth operation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthTwoFactorVerifyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTwoFactorVerifyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser origin or CSRF validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "authSessionCookie": []
+          },
+          {
+            "authBearer": []
+          }
+        ],
+        "x-routed-auth-plugin": "two_factor",
+        "x-routed-auth-origin-policy": "browser",
+        "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "core.twoFactor",
+          "namespace": "core",
+          "name": "twoFactor"
+        }
+      }
+    },
+    "/auth/2fa/recovery-code": {
+      "post": {
+        "summary": "TwoFactor RecoveryCode",
+        "description": "The auth adapter applies browser Origin and Fetch Metadata validation for this operation. The auth adapter requires the documented CSRF header before invoking this operation.",
+        "operationId": "authTwoFactorRecoveryCode",
+        "tags": [
+          "two_factor"
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Browser origin checked by the auth adapter when present; the deployment may require it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uri-reference"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "description": "CSRF token required by this auth operation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthTwoFactorRecoveryCodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTwoFactorRecoveryCodeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser origin or CSRF validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "authSessionCookie": []
+          },
+          {
+            "authBearer": []
+          }
+        ],
+        "x-routed-auth-plugin": "two_factor",
+        "x-routed-auth-origin-policy": "browser",
+        "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "core.twoFactor",
+          "namespace": "core",
+          "name": "twoFactor"
+        }
+      }
+    },
+    "/auth/2fa/recovery-codes/regenerate": {
+      "post": {
+        "summary": "TwoFactor RecoveryCodesRegenerate",
+        "description": "The auth adapter applies browser Origin and Fetch Metadata validation for this operation. The auth adapter requires the documented CSRF header before invoking this operation.",
+        "operationId": "authTwoFactorRecoveryCodesRegenerate",
+        "tags": [
+          "two_factor"
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Browser origin checked by the auth adapter when present; the deployment may require it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uri-reference"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "description": "CSRF token required by this auth operation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthTwoFactorRecoveryCodesRegenerateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTwoFactorRecoveryCodesRegenerateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser origin or CSRF validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "authSessionCookie": []
+          },
+          {
+            "authBearer": []
+          }
+        ],
+        "x-routed-auth-plugin": "two_factor",
+        "x-routed-auth-origin-policy": "browser",
+        "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "core.twoFactor",
+          "namespace": "core",
+          "name": "twoFactor"
+        }
+      }
+    },
+    "/auth/2fa/disable": {
+      "post": {
+        "summary": "TwoFactor Disable",
+        "description": "The auth adapter applies browser Origin and Fetch Metadata validation for this operation. The auth adapter requires the documented CSRF header before invoking this operation.",
+        "operationId": "authTwoFactorDisable",
+        "tags": [
+          "two_factor"
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Browser origin checked by the auth adapter when present; the deployment may require it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uri-reference"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "description": "CSRF token required by this auth operation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthTwoFactorDisableRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTwoFactorDisableResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser origin or CSRF validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "authSessionCookie": []
+          },
+          {
+            "authBearer": []
+          }
+        ],
+        "x-routed-auth-plugin": "two_factor",
+        "x-routed-auth-origin-policy": "browser",
+        "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "core.twoFactor",
+          "namespace": "core",
+          "name": "twoFactor"
+        }
+      }
+    },
+    "/auth/2fa/challenge/verify": {
+      "post": {
+        "summary": "TwoFactor ChallengeVerify",
+        "description": "The auth adapter applies browser Origin and Fetch Metadata validation for this operation. The auth adapter requires the documented CSRF header before invoking this operation.",
+        "operationId": "authTwoFactorChallengeVerify",
+        "tags": [
+          "two_factor"
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Browser origin checked by the auth adapter when present; the deployment may require it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uri-reference"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "description": "CSRF token required by this auth operation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthTwoFactorChallengeVerifyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTwoFactorChallengeVerifyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser origin or CSRF validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "x-routed-auth-plugin": "two_factor",
+        "x-routed-auth-origin-policy": "browser",
+        "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "core.twoFactor",
+          "namespace": "core",
+          "name": "twoFactor"
+        }
+      }
+    },
+    "/auth/2fa/challenge/recovery-code": {
+      "post": {
+        "summary": "TwoFactor ChallengeRecoveryCode",
+        "description": "The auth adapter applies browser Origin and Fetch Metadata validation for this operation. The auth adapter requires the documented CSRF header before invoking this operation.",
+        "operationId": "authTwoFactorChallengeRecoveryCode",
+        "tags": [
+          "two_factor"
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Browser origin checked by the auth adapter when present; the deployment may require it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uri-reference"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "description": "CSRF token required by this auth operation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthTwoFactorChallengeRecoveryCodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTwoFactorChallengeRecoveryCodeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser origin or CSRF validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "x-routed-auth-plugin": "two_factor",
+        "x-routed-auth-origin-policy": "browser",
+        "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "core.twoFactor",
+          "namespace": "core",
+          "name": "twoFactor"
+        }
+      }
+    },
+    "/auth/2fa/trusted-devices/revoke": {
+      "post": {
+        "summary": "TwoFactor TrustedDevicesRevoke",
+        "description": "The auth adapter applies browser Origin and Fetch Metadata validation for this operation. The auth adapter requires the documented CSRF header before invoking this operation.",
+        "operationId": "authTwoFactorTrustedDevicesRevoke",
+        "tags": [
+          "two_factor"
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Browser origin checked by the auth adapter when present; the deployment may require it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uri-reference"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "description": "CSRF token required by this auth operation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthTwoFactorTrustedDevicesRevokeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTwoFactorTrustedDevicesRevokeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser origin or CSRF validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "authSessionCookie": []
+          },
+          {
+            "authBearer": []
+          }
+        ],
+        "x-routed-auth-plugin": "two_factor",
+        "x-routed-auth-origin-policy": "browser",
+        "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "core.twoFactor",
+          "namespace": "core",
+          "name": "twoFactor"
+        }
+      }
+    },
+    "/auth/2fa/step-up": {
+      "post": {
+        "summary": "TwoFactor StepUp",
+        "description": "The auth adapter applies browser Origin and Fetch Metadata validation for this operation. The auth adapter requires the documented CSRF header before invoking this operation.",
+        "operationId": "authTwoFactorStepUp",
+        "tags": [
+          "two_factor"
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Browser origin checked by the auth adapter when present; the deployment may require it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uri-reference"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "description": "CSRF token required by this auth operation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthTwoFactorStepUpRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTwoFactorStepUpResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser origin or CSRF validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "authSessionCookie": []
+          },
+          {
+            "authBearer": []
+          }
+        ],
+        "x-routed-auth-plugin": "two_factor",
+        "x-routed-auth-origin-policy": "browser",
+        "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "core.twoFactor",
+          "namespace": "core",
+          "name": "twoFactor"
+        }
+      }
+    },
+    "/auth/2fa/step-up/revoke": {
+      "post": {
+        "summary": "TwoFactor StepUpRevoke",
+        "description": "The auth adapter applies browser Origin and Fetch Metadata validation for this operation. The auth adapter requires the documented CSRF header before invoking this operation.",
+        "operationId": "authTwoFactorStepUpRevoke",
+        "tags": [
+          "two_factor"
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Browser origin checked by the auth adapter when present; the deployment may require it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uri-reference"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "description": "CSRF token required by this auth operation.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthTwoFactorStepUpRevokeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTwoFactorStepUpRevokeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser origin or CSRF validation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Auth rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another request may be made.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "authSessionCookie": []
+          },
+          {
+            "authBearer": []
+          }
+        ],
+        "x-routed-auth-plugin": "two_factor",
+        "x-routed-auth-origin-policy": "browser",
+        "x-routed-auth-csrf-policy": "required",
+        "x-routed-auth-rate-limit-operation": {
+          "id": "core.twoFactor",
+          "namespace": "core",
+          "name": "twoFactor"
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "anonymous",
+      "description": "Authentication endpoints from anonymous."
+    },
+    {
+      "name": "api_key",
+      "description": "Authentication endpoints from api_key."
+    },
+    {
+      "name": "two_factor",
+      "description": "Authentication endpoints from two_factor."
+    }
+  ],
+  "components": {
+    "schemas": {
+      "AuthAnonymousSignInRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "AuthAnonymousSignInResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "status",
+          "user",
+          "strategy"
+        ],
+        "properties": {
+          "status": {
+            "const": "authenticated"
+          },
+          "user": {
+            "type": "object"
+          },
+          "expires": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "strategy": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Present only when JWT response-body exposure is enabled."
+          }
+        }
+      },
+      "AuthAnonymousDeleteRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "AuthAnonymousDeleteResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "const": "anonymous_deleted"
+          }
+        }
+      },
+      "AuthApiKeyCreateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "AuthApiKeyCreateResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "userId",
+          "name",
+          "keyPrefix",
+          "scopes",
+          "createdAt",
+          "updatedAt",
+          "active",
+          "apiKey"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "keyPrefix": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "apiKey": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Raw API key returned exactly once."
+          }
+        }
+      },
+      "AuthApiKeyListRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "AuthApiKeyListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "apiKeys"
+        ],
+        "properties": {
+          "apiKeys": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "userId",
+                "name",
+                "keyPrefix",
+                "scopes",
+                "createdAt",
+                "updatedAt",
+                "active"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "keyPrefix": {
+                  "type": "string"
+                },
+                "scopes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "expiresAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "lastUsedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "revokedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "active": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      },
+      "AuthApiKeyRevokeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "AuthApiKeyRevokeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "apiKey"
+        ],
+        "properties": {
+          "apiKey": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "userId",
+              "name",
+              "keyPrefix",
+              "scopes",
+              "createdAt",
+              "updatedAt",
+              "active"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "keyPrefix": {
+                "type": "string"
+              },
+              "scopes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "expiresAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "lastUsedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "revokedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "active": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "AuthApiKeyRotateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "AuthApiKeyRotateResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "userId",
+          "name",
+          "keyPrefix",
+          "scopes",
+          "createdAt",
+          "updatedAt",
+          "active",
+          "apiKey"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "keyPrefix": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "apiKey": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Raw API key returned exactly once."
+          }
+        }
+      },
+      "AuthApiKeyExchangeRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "AuthApiKeyExchangeResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "user",
+          "strategy"
+        ],
+        "properties": {
+          "user": {
+            "type": "object"
+          },
+          "expires": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "strategy": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Present only when JWT response-body exposure is enabled."
+          }
+        }
+      },
+      "AuthTwoFactorStatusRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "AuthTwoFactorStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "enabled",
+          "recoveryCodesRemaining"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "recoveryCodesRemaining": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "enrollmentExpiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lockedUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "AuthTwoFactorEnrollRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accountLabel": {
+            "type": "string"
+          }
+        }
+      },
+      "AuthTwoFactorEnrollResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "secret",
+          "otpauthUri",
+          "expiresAt"
+        ],
+        "properties": {
+          "secret": {
+            "type": "string",
+            "readOnly": true
+          },
+          "otpauthUri": {
+            "type": "string",
+            "format": "uri"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AuthTwoFactorEnrollVerifyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "writeOnly": true
+          }
+        }
+      },
+      "AuthTwoFactorEnrollVerifyResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recoveryCodes"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "recoveryCodes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "readOnly": true
+            }
+          }
+        }
+      },
+      "AuthTwoFactorVerifyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "writeOnly": true
+          }
+        }
+      },
+      "AuthTwoFactorVerifyResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "verified"
+        ],
+        "properties": {
+          "verified": {
+            "const": true
+          }
+        }
+      },
+      "AuthTwoFactorRecoveryCodeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recoveryCode"
+        ],
+        "properties": {
+          "recoveryCode": {
+            "type": "string",
+            "writeOnly": true
+          }
+        }
+      },
+      "AuthTwoFactorRecoveryCodeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "verified",
+          "method"
+        ],
+        "properties": {
+          "verified": {
+            "const": true
+          },
+          "method": {
+            "const": "recovery_code"
+          }
+        }
+      },
+      "AuthTwoFactorRecoveryCodesRegenerateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "writeOnly": true
+          }
+        }
+      },
+      "AuthTwoFactorRecoveryCodesRegenerateResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recoveryCodes"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "recoveryCodes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "readOnly": true
+            }
+          }
+        }
+      },
+      "AuthTwoFactorDisableRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "writeOnly": true
+          }
+        }
+      },
+      "AuthTwoFactorDisableResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "disabled"
+        ],
+        "properties": {
+          "disabled": {
+            "const": true
+          }
+        }
+      },
+      "AuthTwoFactorChallengeVerifyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "challengeToken",
+          "code"
+        ],
+        "properties": {
+          "challengeToken": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "code": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "trustDevice": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AuthTwoFactorChallengeVerifyResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "user",
+          "strategy"
+        ],
+        "properties": {
+          "user": {
+            "type": "object"
+          },
+          "expires": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "strategy": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Present only when JWT response-body exposure is enabled."
+          }
+        }
+      },
+      "AuthTwoFactorChallengeRecoveryCodeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "challengeToken",
+          "recoveryCode"
+        ],
+        "properties": {
+          "challengeToken": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "recoveryCode": {
+            "type": "string",
+            "writeOnly": true
+          }
+        }
+      },
+      "AuthTwoFactorChallengeRecoveryCodeResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "user",
+          "strategy"
+        ],
+        "properties": {
+          "user": {
+            "type": "object"
+          },
+          "expires": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "strategy": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Present only when JWT response-body exposure is enabled."
+          }
+        }
+      },
+      "AuthTwoFactorTrustedDevicesRevokeRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "AuthTwoFactorTrustedDevicesRevokeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "const": "trusted_devices_revoked"
+          }
+        }
+      },
+      "AuthTwoFactorStepUpRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "writeOnly": true
+          }
+        }
+      },
+      "AuthTwoFactorStepUpResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "verified",
+          "expiresAt"
+        ],
+        "properties": {
+          "verified": {
+            "const": true
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AuthTwoFactorStepUpRevokeRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "AuthTwoFactorStepUpRevokeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "const": "step_up_revoked"
+          }
+        }
+      },
+      "AuthTwoFactorChallenge": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "challengeToken",
+          "expiresAt"
+        ],
+        "properties": {
+          "status": {
+            "const": "two_factor_required"
+          },
+          "challengeToken": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Short-lived token submitted to complete the challenge."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AuthError": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "description": "Sanitized, stable auth error code."
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "authSessionCookie": {
+        "type": "apiKey",
+        "description": "Routed auth session cookie.",
+        "name": "routed_session",
+        "in": "cookie"
+      },
+      "authBearer": {
+        "type": "http",
+        "description": "Routed auth bearer token.",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "authApiKey": {
+        "type": "apiKey",
+        "description": "Routed API key for service-authenticated application requests. Auth management endpoints use the alternatives listed on the operation.",
+        "name": "x-api-key",
+        "in": "header"
+      }
+    }
+  }
+}

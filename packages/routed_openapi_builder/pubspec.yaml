@@ -22,4 +22,5 @@ dependencies:
   meta: ^1.18.0
 dev_dependencies:
   lints: ^6.0.0
+  server_auth: ">=0.2.0 <1.0.0"
   test: ^1.29.0

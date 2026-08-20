@@ -166,6 +166,53 @@ void main() {
       );
     });
 
+    test('advertises host exchange only for an enabled session topology', () {
+      AuthServerPluginRegistry<Object> registry({
+        required bool exchange,
+        required AuthSessionStrategy strategy,
+      }) {
+        final result = AuthServerPluginRegistry<Object>(
+          store: InMemoryAuthStore(),
+          sessionStrategy: strategy,
+        );
+        result.register(
+          AuthApiKeyPlugin<Object>(
+            store: InMemoryAuthApiKeyStore(),
+            sessionExchangeEnabled: exchange,
+          ),
+        );
+        result.freeze();
+        return result;
+      }
+
+      final enabled = registry(
+        exchange: true,
+        strategy: AuthSessionStrategy.session,
+      );
+      final disabled = registry(
+        exchange: false,
+        strategy: AuthSessionStrategy.session,
+      );
+      final jwt = registry(exchange: true, strategy: AuthSessionStrategy.jwt);
+
+      expect(enabled.endpoints, hasLength(4));
+      final exchange = enabled.publicEndpoints.singleWhere(
+        (endpoint) => endpoint.id == 'apiKey.exchange',
+      );
+      expect(exchange.authentication, AuthOperationAuthentication.apiKey);
+      expect(exchange.path, '/api-keys/exchange');
+      expect(
+        enabled.clientOperations.map((operation) => operation.id),
+        contains('apiKey.exchange'),
+      );
+      expect(disabled.publicEndpoints, hasLength(4));
+      expect(jwt.publicEndpoints, hasLength(4));
+      expect(
+        jwt.clientOperations.map((operation) => operation.id),
+        isNot(contains('apiKey.exchange')),
+      );
+    });
+
     test('deletes every key owned by an account', () async {
       final store = InMemoryAuthApiKeyStore();
       final feature = AuthApiKeyPlugin<Never>(
