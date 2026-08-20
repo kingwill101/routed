@@ -7,6 +7,7 @@ export 'package:server_auth/server_auth.dart';
 export 'src/auth/manager/auth_manager.dart';
 export 'src/auth/api_key.dart';
 export 'src/auth/browser_protection.dart';
+export 'src/auth/deployment.dart';
 export 'src/auth/hooks.dart';
 export 'src/auth/routes.dart';
 export 'src/auth/haigate.dart'
