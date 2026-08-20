@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../core/anonymous_store.dart';
+import '../core/deletion_transaction.dart';
 import '../core/models.dart';
 import '../core/store.dart';
 
@@ -90,6 +91,11 @@ final class AuthAnonymousStoreConformanceSuite {
       'delete_rollback',
       'Deletion restores the anonymous identity after a transaction fault.',
       _deleteRollback,
+    ),
+    _case(
+      'hard_delete_scrubs_create_replay',
+      'Generic hard deletion scrubs anonymous creation replay data.',
+      _hardDeleteScrubsCreateReplay,
     ),
     _case(
       'upgrade_replay',
@@ -299,6 +305,32 @@ final class AuthAnonymousStoreConformanceSuite {
     _require(
       retry.status == AuthAnonymousMutationStatus.applied,
       'retry failed',
+    );
+  }
+
+  Future<void> _hardDeleteScrubsCreateReplay(
+    AuthAnonymousStoreConformanceFixture fixture,
+  ) async {
+    final command = _createCommand('hard-delete-replay');
+    final user = (await fixture.mutations.createAnonymousAccount(
+      command,
+    )).user!;
+    final store = fixture.store;
+    _require(
+      store is AuthUserDeletionCoordinatorHost,
+      'store does not expose coordinated hard deletion',
+    );
+    final deleted = await (store as AuthUserDeletionCoordinatorHost)
+        .userDeletionCoordinator
+        .deleteUser(user.id);
+    _require(deleted, 'generic hard deletion did not commit');
+    _require(
+      await store.users.findById(user.id) == null,
+      'hard-deleted anonymous user survived',
+    );
+    await _requireThrows(
+      () => fixture.mutations.createAnonymousAccount(command),
+      'hard deletion replayed a receipt containing the deleted user',
     );
   }
 

@@ -376,6 +376,7 @@ typedef _InMemoryAuthCoreDeletionState = ({
   Object webAuthnAuthenticators,
   Object deviceAuthorizations,
   Object emailOtps,
+  Map<String, _AuthAnonymousMutationReceipt> anonymousReceipts,
 });
 
 final class _AuthAnonymousMutationReceipt {
@@ -1037,6 +1038,7 @@ class InMemoryAuthStore
       await verificationTokens.delete(user.email!);
     }
     await jwtVersions.rotate(id);
+    _anonymousReceipts.removeWhere((_, receipt) => receipt.subjectUserId == id);
     _users.recordHardDeletion(id);
     _users.delete(id);
     return true;
@@ -1072,6 +1074,9 @@ class InMemoryAuthStore
     deviceAuthorizations: (deviceAuthorizations as AuthInMemoryDeletionState)
         .captureDeletionState(),
     emailOtps: (emailOtps as AuthInMemoryDeletionState).captureDeletionState(),
+    anonymousReceipts: Map<String, _AuthAnonymousMutationReceipt>.of(
+      _anonymousReceipts,
+    ),
   );
 
   @override
@@ -1123,6 +1128,9 @@ class InMemoryAuthStore
     (emailOtps as AuthInMemoryDeletionState).restoreDeletionState(
       value.emailOtps,
     );
+    _anonymousReceipts
+      ..clear()
+      ..addAll(value.anonymousReceipts);
   }
 
   @override

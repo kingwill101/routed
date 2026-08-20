@@ -46,6 +46,7 @@ void main() {
         'create_rollback',
         'delete_contention',
         'delete_rollback',
+        'hard_delete_scrubs_create_replay',
         'upgrade_replay',
         'upgrade_rollback',
         'upgrade_target_binding',
