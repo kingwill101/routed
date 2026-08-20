@@ -73,6 +73,8 @@ export 'route_decisions.dart';
 export 'route_errors.dart';
 export 'runtime_posture.dart';
 export 'scim.dart';
+export 'scim_application_projection.dart';
+export 'scim_application_projection_store.dart';
 export 'scim_connection.dart';
 export 'scim_connection_client.dart';
 export 'scim_connection_models.dart';

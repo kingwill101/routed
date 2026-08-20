@@ -138,134 +138,6 @@ abstract interface class AuthScimProvisioningStore {
   );
 }
 
-/// Stable application identity selected without an email lookup.
-final class AuthScimApplicationIdentity {
-  AuthScimApplicationIdentity({required String id})
-    : id = _boundedIdentifier(id, 'id');
-
-  final String id;
-}
-
-/// Safe lookup input for an explicit application-owned identity resolver.
-///
-/// Deliberately omits username and email so the integration cannot accidentally
-/// use an unverified mutable address as its linking key.
-final class AuthScimApplicationIdentityLookup {
-  AuthScimApplicationIdentityLookup({
-    required this.context,
-    required String resourceId,
-    String? externalId,
-  }) : resourceId = _boundedIdentifier(resourceId, 'resourceId'),
-       externalId = externalId == null
-           ? null
-           : _boundedIdentifier(externalId, 'externalId');
-
-  final AuthScimProvisioningContext context;
-  final String resourceId;
-  final String? externalId;
-}
-
-/// Optional application-owned mapping from directory identity to app identity.
-abstract interface class AuthScimApplicationIdentityResolver {
-  FutureOr<AuthScimApplicationIdentity?> resolve(
-    AuthScimApplicationIdentityLookup lookup,
-  );
-}
-
-/// Directory lifecycle transition available to an application projection.
-enum AuthScimLifecycleTransition { created, replaced, patched, tombstoned }
-
-/// Typed application-owned lifecycle projection input.
-final class AuthScimLifecycleChange {
-  AuthScimLifecycleChange({
-    required this.transition,
-    required this.context,
-    required this.before,
-    required this.after,
-    this.applicationIdentity,
-  }) {
-    final previous = before;
-    if ((transition == AuthScimLifecycleTransition.created) !=
-        (previous == null)) {
-      throw ArgumentError('Only a create transition may omit before.');
-    }
-    if (transition == AuthScimLifecycleTransition.tombstoned) {
-      if (after.state != AuthScimDirectoryUserState.tombstoned) {
-        throw ArgumentError('A tombstone transition requires a tombstone.');
-      }
-    } else if (after.state == AuthScimDirectoryUserState.tombstoned) {
-      throw ArgumentError(
-        'Only a tombstone transition may contain a tombstone.',
-      );
-    }
-    if (!_matchesContext(context, after) ||
-        previous != null &&
-            (!_matchesContext(context, previous) || previous.id != after.id)) {
-      throw ArgumentError('SCIM lifecycle resources must share one binding.');
-    }
-  }
-
-  final AuthScimLifecycleTransition transition;
-  final AuthScimProvisioningContext context;
-  final AuthScimUser? before;
-  final AuthScimUser after;
-  final AuthScimApplicationIdentity? applicationIdentity;
-}
-
-/// Optional application-owned projection and access-lifecycle capability.
-///
-/// Session revocation, authorization changes, and profile projection belong
-/// here, never in the protocol plugin. When rollback across those effects is
-/// required, the application store must invoke this capability inside the same
-/// real backend transaction as its directory mutation. Implementations must be
-/// idempotent. Routed does not claim that unrelated backends can be made atomic.
-abstract interface class AuthScimLifecycleCapability {
-  FutureOr<void> apply(AuthScimLifecycleChange change);
-}
-
-/// Stable SCIM identity supplied to application-owned membership projection.
-final class AuthScimStableResourceIdentity {
-  AuthScimStableResourceIdentity({
-    required String resourceId,
-    required this.type,
-  }) : resourceId = _boundedIdentifier(resourceId, 'resourceId');
-
-  final String resourceId;
-  final AuthScimGroupMemberType type;
-}
-
-/// Exact, connection-bound direct-membership projection input.
-final class AuthScimRoleMembershipProjectionChange {
-  AuthScimRoleMembershipProjectionChange({
-    required this.context,
-    required String groupResourceId,
-    required Iterable<AuthScimStableResourceIdentity> before,
-    required Iterable<AuthScimStableResourceIdentity> after,
-  }) : groupResourceId = _boundedIdentifier(groupResourceId, 'groupResourceId'),
-       before = List<AuthScimStableResourceIdentity>.unmodifiable(before),
-       after = List<AuthScimStableResourceIdentity>.unmodifiable(after) {
-    _requireUniqueStableResources(this.before);
-    _requireUniqueStableResources(this.after);
-  }
-
-  final AuthScimProvisioningContext context;
-  final String groupResourceId;
-  final List<AuthScimStableResourceIdentity> before;
-  final List<AuthScimStableResourceIdentity> after;
-}
-
-/// Optional application-owned role and membership projection boundary.
-///
-/// Routed supplies only stable SCIM resource identities and the exact
-/// connection, tenant, organization, and provisioning-domain binding. The
-/// application decides whether a Group maps to any role or access policy. The
-/// provisioning store must invoke this capability inside the same real backend
-/// transaction as the Group mutation when rollback across both is required.
-/// Routed does not claim atomicity across unrelated stores or external systems.
-abstract interface class AuthScimRoleMembershipProjectionCapability {
-  FutureOr<void> apply(AuthScimRoleMembershipProjectionChange change);
-}
-
 /// Signals a persistence uniqueness conflict without exposing store details.
 final class AuthScimConflictException implements Exception {
   const AuthScimConflictException();
@@ -293,8 +165,9 @@ final class AuthScimInternalFailure {
   final String? subjectId;
 }
 
-typedef AuthScimFailureReporter =
-    FutureOr<void> Function(AuthScimInternalFailure failure);
+typedef AuthScimFailureReporter = FutureOr<void> Function(
+  AuthScimInternalFailure failure,
+);
 
 /// Bounded SCIM server settings.
 final class AuthScimOptions {
@@ -1272,34 +1145,6 @@ void _requireOnlyKeys(Map<String, dynamic> request, Set<String> allowed) {
 
 bool _containsControl(String value) =>
     value.codeUnits.any((unit) => unit < 0x20 || unit == 0x7f);
-
-String _boundedIdentifier(String value, String name) {
-  final result = value.trim();
-  if (result.isEmpty || result.length > 256 || _containsControl(result)) {
-    throw ArgumentError.value(value, name);
-  }
-  return result;
-}
-
-bool _matchesContext(
-  AuthScimProvisioningContext context,
-  AuthScimUser resource,
-) =>
-    resource.connectionId == context.connectionId &&
-    resource.tenantId == context.tenantId &&
-    resource.organizationId == context.organizationId &&
-    resource.provisioningDomainId == context.provisioningDomainId;
-
-void _requireUniqueStableResources(
-  List<AuthScimStableResourceIdentity> resources,
-) {
-  final ids = <String>{};
-  for (final resource in resources) {
-    if (!ids.add(resource.resourceId)) {
-      throw ArgumentError('SCIM projection identities must be unique.');
-    }
-  }
-}
 
 String _errorDescription(int status) => switch (status) {
   400 => 'Invalid SCIM request.',
