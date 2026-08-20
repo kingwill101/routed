@@ -81,7 +81,7 @@ final class AuthEmailOtpFixture<TContext> {
     bool disableSignUp = false,
   }) => EmailOtpPlugin<TContext>(
     sendCode: deliveries.capture,
-    rateLimitHashKey: _testOnlyHashKey,
+    secret: _testOnlyHashKey,
     generateOtp: _nextCode,
     expiresIn: expiresIn,
     allowedAttempts: allowedAttempts,

@@ -103,14 +103,14 @@ void main() {
     test('email provider requires non-empty email', () {
       final missingEmail = resolveAuthSignInRouteDecision(
         providerId: 'email',
-        provider: EmailProvider(sendVerificationRequest: (_, _, _) async {}),
+        provider: MagicLinkPlugin<Object>(sendMagicLink: (_) async {}),
         method: 'POST',
         payload: const <String, dynamic>{},
         csrfValid: true,
       );
       final withEmail = resolveAuthSignInRouteDecision(
         providerId: 'email',
-        provider: EmailProvider(sendVerificationRequest: (_, _, _) async {}),
+        provider: MagicLinkPlugin<Object>(sendMagicLink: (_) async {}),
         method: 'POST',
         payload: const <String, dynamic>{'email': 'person@example.com'},
         csrfValid: true,
@@ -201,7 +201,7 @@ void main() {
     test('unsupported provider returns unsupported_provider', () {
       final decision = resolveAuthRegisterRouteDecision(
         providerId: 'email',
-        provider: EmailProvider(sendVerificationRequest: (_, _, _) async {}),
+        provider: MagicLinkPlugin<Object>(sendMagicLink: (_) async {}),
         csrfValid: true,
       );
 
@@ -252,17 +252,17 @@ void main() {
     test('email callback requires token and email or identifier', () {
       final missingToken = resolveAuthCallbackRouteDecision(
         providerId: 'email',
-        provider: EmailProvider(sendVerificationRequest: (_, _, _) async {}),
+        provider: MagicLinkPlugin<Object>(sendMagicLink: (_) async {}),
         query: const <String, dynamic>{'email': 'mail@example.com'},
       );
       final missingEmail = resolveAuthCallbackRouteDecision(
         providerId: 'email',
-        provider: EmailProvider(sendVerificationRequest: (_, _, _) async {}),
+        provider: MagicLinkPlugin<Object>(sendMagicLink: (_) async {}),
         query: const <String, dynamic>{'token': 'tok-1'},
       );
       final success = resolveAuthCallbackRouteDecision(
         providerId: 'email',
-        provider: EmailProvider(sendVerificationRequest: (_, _, _) async {}),
+        provider: MagicLinkPlugin<Object>(sendMagicLink: (_) async {}),
         query: const <String, dynamic>{
           'token': 'tok-1',
           'identifier': 'mail@example.com',

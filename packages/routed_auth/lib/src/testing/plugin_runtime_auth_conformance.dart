@@ -47,7 +47,7 @@ Engine createAuthPluginRuntimeConformanceEngine({
   );
   final plugins = <AuthServerPlugin<EngineContext>>[
     EmailOtpPlugin<EngineContext>(
-      rateLimitHashKey: 'runtime-email-otp-rate-limit-key',
+      secret: 'runtime-email-otp-rate-limit-key',
       generateOtp: (_) => authPluginRuntimeConformanceOtpCode,
       sendCode: (_) {},
     ),

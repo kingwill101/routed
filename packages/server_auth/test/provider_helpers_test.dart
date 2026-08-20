@@ -43,9 +43,9 @@ Map<String, dynamic> _oidcJwk() => <String, dynamic>{
 void main() {
   test('provider request and verification lifetimes must be positive', () {
     expect(
-      () => EmailProvider(
+      () => MagicLinkPlugin<Object>(
         tokenExpiry: Duration.zero,
-        sendVerificationRequest: (_, _, _) {},
+        sendMagicLink: (_) {},
       ),
       throwsArgumentError,
     );
@@ -710,14 +710,12 @@ void main() {
         equals(registered?.id),
       );
 
-      final provider = EmailProvider(
+      final provider = MagicLinkPlugin<Object>(
         tokenGenerator: () => 'case-token',
-        sendVerificationRequest: (_, _, _) async {},
+        sendMagicLink: (_) async {},
       );
-      final tokenStore = InMemoryAuthVerificationTokenStore();
       await startAuthEmailSignIn<Object>(
-        store: store,
-        tokenStore: tokenStore,
+        backend: store,
         provider: provider,
         context: Object(),
         email: ' NEW@Example.COM ',
@@ -725,8 +723,8 @@ void main() {
         sessionStrategy: AuthSessionStrategy.session,
       );
       final resolved = await resolveAuthEmailVerificationSignIn(
-        store: store,
-        tokenStore: tokenStore,
+        backend: store,
+        providerId: provider.id,
         email: 'new@example.com',
         token: 'case-token',
       );
@@ -777,10 +775,10 @@ void main() {
     'prepareAuthEmailVerificationPayload builds request and pending result',
     () {
       final now = DateTime.utc(2026, 2, 24, 12);
-      final provider = EmailProvider(
+      final provider = MagicLinkPlugin<Object>(
         tokenGenerator: () => 'generated-token',
         tokenExpiry: const Duration(minutes: 15),
-        sendVerificationRequest: (context, provider, request) async {},
+        sendMagicLink: (_) async {},
       );
 
       final payload = prepareAuthEmailVerificationPayload(
@@ -793,7 +791,8 @@ void main() {
 
       expect(payload.token, equals('generated-token'));
       expect(payload.expiresAt, equals(now.add(const Duration(minutes: 15))));
-      expect(payload.verification.identifier, equals('user@example.com'));
+      expect(payload.record.email, equals('user@example.com'));
+      expect(payload.record.tokenHash, isNot(equals(payload.token)));
       expect(payload.request.callbackUrl, equals('/dashboard'));
       expect(payload.pendingResult.user.email, equals('user@example.com'));
       expect(
@@ -806,9 +805,9 @@ void main() {
   test(
     'prepareAuthEmailVerificationPayload rejects empty generated tokens',
     () {
-      final provider = EmailProvider(
+      final provider = MagicLinkPlugin<Object>(
         tokenGenerator: () => '  ',
-        sendVerificationRequest: (_, _, _) async {},
+        sendMagicLink: (_) async {},
       );
 
       expect(
@@ -824,22 +823,20 @@ void main() {
   );
 
   test(
-    'startAuthEmailSignIn clears tokens, persists verification, sends email, and writes callback session',
+    'startAuthEmailSignIn commits a digest, then delivers and writes callback session',
     () async {
-      final sentRequests = <AuthEmailRequest>[];
-      final provider = EmailProvider(
+      final sentRequests = <AuthMagicLinkDelivery<Object>>[];
+      final provider = MagicLinkPlugin<Object>(
         tokenGenerator: () => 'generated-token',
-        sendVerificationRequest: (_, _, request) async {
-          sentRequests.add(request);
+        sendMagicLink: (delivery) async {
+          sentRequests.add(delivery);
         },
       );
-      final tokenStore = InMemoryAuthVerificationTokenStore();
-      final store = CallbackAuthStore();
+      final store = InMemoryAuthStore();
       final session = <String, String>{};
 
       final payload = await startAuthEmailSignIn<Object>(
-        store: store,
-        tokenStore: tokenStore,
+        backend: store,
         provider: provider,
         context: Object(),
         email: 'user@example.com',
@@ -857,36 +854,44 @@ void main() {
         session[authEmailCallbackSessionKey('_auth.callback')],
         equals('/after'),
       );
-      final consumed = await tokenStore.consume(
-        'user@example.com',
-        'generated-token',
+      final consumed = await store.consumeMagicLink(
+        AuthMagicLinkConsumeCommand(
+          providerId: provider.id,
+          email: 'user@example.com',
+          tokenHash: hashOpaqueToken('generated-token'),
+          now: DateTime.now(),
+          candidate: AuthUser(id: 'generated-user', email: 'user@example.com'),
+        ),
       );
-      expect(consumed, isNotNull);
+      expect(consumed.status, AuthMagicLinkConsumeStatus.consumed);
     },
   );
 
   test(
     'resolveAuthEmailVerificationSignIn resolves user/new flag and callback url',
     () async {
-      final tokenStore = InMemoryAuthVerificationTokenStore();
-      await tokenStore.save(
-        AuthVerificationToken(
-          identifier: 'user@example.com',
-          token: 'token-1',
-          expiresAt: DateTime.now().add(const Duration(minutes: 10)),
-        ),
+      final store = InMemoryAuthStore();
+      await store.users.create(
+        AuthUser(id: 'user-1', email: 'user@example.com'),
       );
-      final store = CallbackAuthStore(
-        onFindUserByEmail: (email) async =>
-            AuthUser(id: 'user-1', email: email),
+      await store.issueMagicLink(
+        AuthMagicLinkIssueCommand(
+          AuthMagicLinkRecord(
+            providerId: 'email',
+            email: 'user@example.com',
+            tokenHash: hashOpaqueToken('token-1'),
+            issuedAt: DateTime.now(),
+            expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+          ),
+        ),
       );
       final session = <String, String>{
         authEmailCallbackSessionKey('_auth.callback'): '/dashboard',
       };
 
       final resolved = await resolveAuthEmailVerificationSignIn(
-        store: store,
-        tokenStore: tokenStore,
+        backend: store,
+        providerId: 'email',
         email: 'user@example.com',
         token: 'token-1',
         callbackKey: '_auth.callback',
@@ -905,8 +910,8 @@ void main() {
     'resolveAuthEmailVerificationSignIn returns null for invalid token',
     () async {
       final resolved = await resolveAuthEmailVerificationSignIn(
-        store: CallbackAuthStore(),
-        tokenStore: InMemoryAuthVerificationTokenStore(),
+        backend: InMemoryAuthStore(),
+        providerId: 'email',
         email: 'missing@example.com',
         token: 'missing-token',
       );

@@ -11,6 +11,7 @@ export 'src/testing/auth_plugin_conformance.dart';
 export 'src/testing/auth_store_conformance.dart';
 export 'src/testing/admin_store_conformance.dart';
 export 'src/testing/anonymous_store_conformance.dart';
+export 'src/testing/email_auth_backend_conformance.dart';
 export 'src/testing/oauth_authorization_code_exchange_conformance.dart';
 export 'src/testing/organization_store_conformance.dart';
 export 'src/testing/saml_verifier_conformance.dart';

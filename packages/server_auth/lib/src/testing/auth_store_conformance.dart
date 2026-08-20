@@ -3,6 +3,7 @@ import 'dart:async';
 import '../core/authentication_methods.dart';
 import '../core/deletion_transaction.dart';
 import '../core/device_authorization_store.dart';
+import '../core/email_auth_backend.dart';
 import '../core/email_otp_store.dart';
 import '../core/models.dart';
 import '../core/oauth_challenge_store.dart';
@@ -1107,10 +1108,11 @@ Future<void> _verifyEmailOtpContention(AuthStore store) async {
   const email = 'otp-contention@example.com';
   const staleCode = '111111';
   const activeCode = '222222';
+  const secret = 'auth-store-conformance-email-otp-key';
   AuthEmailOtp otp(String id, String code) => AuthEmailOtp(
     id: id,
     email: email,
-    codeHash: hashAuthEmailOtpCode(code),
+    codeHash: digestAuthEmailOtpCode(code: code, secret: secret),
     type: AuthEmailOtpType.signIn,
     createdAt: now,
     expiresAt: now.add(const Duration(minutes: 5)),
@@ -1120,10 +1122,10 @@ Future<void> _verifyEmailOtpContention(AuthStore store) async {
   await Future.sync(() => store.emailOtps.save(otp('otp-stale', staleCode)));
   await Future.sync(() => store.emailOtps.save(otp('otp-active', activeCode)));
   final stale = await Future.sync(
-    () => store.emailOtps.verify(
+    () => store.emailOtps.verifyDigest(
       email,
       AuthEmailOtpType.signIn,
-      staleCode,
+      digestAuthEmailOtpCode(code: staleCode, secret: secret),
       now: now,
     ),
   );
@@ -1134,10 +1136,10 @@ Future<void> _verifyEmailOtpContention(AuthStore store) async {
   final results = await Future.wait([
     for (var index = 0; index < 16; index++)
       Future.sync(
-        () => store.emailOtps.verify(
+        () => store.emailOtps.verifyDigest(
           email,
           AuthEmailOtpType.signIn,
-          activeCode,
+          digestAuthEmailOtpCode(code: activeCode, secret: secret),
           now: now,
         ),
       ),
@@ -1153,10 +1155,10 @@ Future<void> _verifyEmailOtpContention(AuthStore store) async {
     'email OTP contention did not have exactly one winner',
   );
   final replay = await Future.sync(
-    () => store.emailOtps.verify(
+    () => store.emailOtps.verifyDigest(
       email,
       AuthEmailOtpType.signIn,
-      activeCode,
+      digestAuthEmailOtpCode(code: activeCode, secret: secret),
       now: now,
     ),
   );

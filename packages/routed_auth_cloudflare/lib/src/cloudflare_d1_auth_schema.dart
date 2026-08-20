@@ -22,7 +22,7 @@ final class CloudflareD1AuthSchema {
   /// underscores are accepted because SQLite cannot bind identifiers.
   final String tablePrefix;
 
-  static const int currentVersion = 7;
+  static const int currentVersion = 8;
 
   String table(String suffix) {
     final prefix = tablePrefix.trim();
@@ -52,6 +52,7 @@ final class CloudflareD1AuthSchema {
     CloudflareD1AuthMigration(version: 5, statements: _versionFive),
     CloudflareD1AuthMigration(version: 6, statements: _versionSix),
     CloudflareD1AuthMigration(version: 7, statements: _versionSeven),
+    CloudflareD1AuthMigration(version: 8, statements: _versionEight),
   ];
 
   List<String> get _versionSeven {
@@ -232,6 +233,24 @@ final class CloudflareD1AuthSchema {
         target_username TEXT,
         created_at TEXT NOT NULL
       )''',
+    ];
+  }
+
+  List<String> get _versionEight {
+    final magicLinks = table('magic_links');
+    final emailOtps = table('email_otps');
+    return [
+      '''CREATE TABLE IF NOT EXISTS $magicLinks (
+        provider_id TEXT NOT NULL,
+        email TEXT COLLATE NOCASE NOT NULL,
+        token_hash TEXT NOT NULL,
+        issued_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        consumption_marker TEXT,
+        PRIMARY KEY(provider_id, email)
+      )''',
+      'CREATE INDEX IF NOT EXISTS ${magicLinks}_expiry ON $magicLinks(expires_at)',
+      'ALTER TABLE $emailOtps ADD COLUMN verification_marker TEXT',
     ];
   }
 
@@ -417,6 +436,7 @@ final class CloudflareD1AuthSchema {
       'oauth_clients',
       'username_mutation_guards',
       'deletion_receipts',
+      'magic_links',
       'email_otps',
       'device_authorizations',
       'email_change_tokens',

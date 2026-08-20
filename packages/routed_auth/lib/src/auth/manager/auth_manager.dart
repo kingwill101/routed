@@ -79,7 +79,9 @@ import 'package:server_auth/server_auth.dart'
         validateCsrfToken,
         CallbackProvider,
         CredentialsProvider,
-        EmailProvider,
+        AuthMagicLinkBackend,
+        AuthMagicLinkProvider,
+        normalizeAuthOneTimeEmail,
         OAuthProvider,
         authSessionIssuedAtKey,
         AuthOptions,
@@ -110,6 +112,14 @@ import 'package:routed_core/src/context/context.dart';
 import 'package:routed_sessions/routed_sessions.dart';
 import 'package:routed_core/src/events/event.dart';
 import 'package:routed_core/src/events/event_manager.dart';
+
+String _normalizeOneTimeEmail(String email) {
+  try {
+    return normalizeAuthOneTimeEmail(email);
+  } on ArgumentError {
+    throw AuthFlowException('invalid_email');
+  }
+}
 
 /// High-level auth coordinator for routed.
 class AuthManager {
@@ -310,11 +320,11 @@ class AuthManager {
       throw AuthFlowException('user_resolution_failed');
     }
     final provider = completion.providerId == null
-        ? options.providers.whereType<CredentialsProvider>().firstWhere(
+        ? runtime.providers.whereType<CredentialsProvider>().firstWhere(
             (_) => true,
             orElse: CredentialsProvider.new,
           )
-        : options.providers.firstWhere(
+        : runtime.providers.firstWhere(
             (candidate) => candidate.id == completion.providerId,
             orElse: () => throw AuthFlowException('provider_resolution_failed'),
           );
@@ -359,11 +369,11 @@ class AuthManager {
       throw AuthFlowException('user_resolution_failed');
     }
     final provider = completion.providerId == null
-        ? options.providers.whereType<CredentialsProvider>().firstWhere(
+        ? runtime.providers.whereType<CredentialsProvider>().firstWhere(
             (_) => true,
             orElse: CredentialsProvider.new,
           )
-        : options.providers.firstWhere(
+        : runtime.providers.firstWhere(
             (candidate) => candidate.id == completion.providerId,
             orElse: () => throw AuthFlowException('provider_resolution_failed'),
           );
@@ -512,19 +522,23 @@ class AuthManager {
 
   Future<AuthResult> signInWithEmail(
     EngineContext ctx,
-    EmailProvider provider,
+    AuthMagicLinkProvider provider,
     String email,
     String callbackUrl,
   ) async {
-    final normalizedEmail = normalizeAuthEmail(email);
+    final normalizedEmail = _normalizeOneTimeEmail(email);
     await enforceRateLimit(
       ctx,
       provider,
       action: AuthRateLimitAction.emailVerification,
       identifier: normalizedEmail,
     );
+    final backend = store;
+    if (backend is! AuthMagicLinkBackend) {
+      throw AuthFlowException('magic_link_unavailable');
+    }
     final payload = await startAuthEmailSignIn<EngineContext>(
-      store: store,
+      backend: backend as AuthMagicLinkBackend,
       provider: provider,
       context: ctx,
       email: normalizedEmail,
@@ -870,7 +884,7 @@ class AuthManager {
       action: AuthRateLimitAction.accountLink,
       identifier: session.user.id,
     );
-    final provider = options.providers.firstWhere(
+    final provider = runtime.providers.firstWhere(
       (candidate) => candidate.id == providerId,
       orElse: () => throw AuthFlowException('invalid_provider'),
     );
@@ -1038,11 +1052,11 @@ class AuthManager {
 
   Future<AuthResult> verifyEmail(
     EngineContext ctx,
-    EmailProvider provider,
+    AuthMagicLinkProvider provider,
     String email,
     String token,
   ) async {
-    final normalizedEmail = normalizeAuthEmail(email);
+    final normalizedEmail = _normalizeOneTimeEmail(email);
     await enforceRateLimit(
       ctx,
       provider,
@@ -1051,8 +1065,13 @@ class AuthManager {
     );
     final stateCookieName = _emailStateCookieName(provider);
     final browserToken = _requestCookie(ctx, stateCookieName)?.value;
+    final backend = store;
+    if (backend is! AuthMagicLinkBackend) {
+      throw AuthFlowException('magic_link_unavailable');
+    }
     final resolved = await resolveAuthEmailVerificationSignIn(
-      store: store,
+      backend: backend as AuthMagicLinkBackend,
+      providerId: provider.id,
       email: normalizedEmail,
       token: token,
       callbackKey: options.callbackKey,
@@ -1402,7 +1421,7 @@ class AuthManager {
     final profileVerified =
         profile?['verified'] == true || profile?['email_verified'] == true;
     final emailVerified =
-        provider is EmailProvider ||
+        provider is AuthMagicLinkProvider ||
         profileVerified ||
         authUserEmailIsVerified(user);
     final state = await accountStates.find(user.id);
@@ -1887,13 +1906,13 @@ class AuthManager {
     return 'routed_oauth_state_${hashOpaqueToken(provider.id).substring(0, 16)}';
   }
 
-  String _emailStateCookieName(EmailProvider provider) {
+  String _emailStateCookieName(AuthMagicLinkProvider provider) {
     return 'routed_email_state_${hashOpaqueToken(provider.id).substring(0, 16)}';
   }
 
   Cookie _buildEmailStateCookie(
     EngineContext ctx,
-    EmailProvider provider,
+    AuthMagicLinkProvider provider,
     String token, {
     required DateTime expiresAt,
   }) {
@@ -1910,7 +1929,7 @@ class AuthManager {
 
   Cookie _buildExpiredEmailStateCookie(
     EngineContext ctx,
-    EmailProvider provider,
+    AuthMagicLinkProvider provider,
   ) {
     final cookie = _buildEmailStateCookie(
       ctx,

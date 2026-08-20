@@ -15,10 +15,8 @@ void main() {
       sendCode: (_) {},
       codeHashKey: _hashKey,
     );
-    final emailOtp = EmailOtpPlugin<Object>(
-      sendCode: (_) {},
-      rateLimitHashKey: _hashKey,
-    );
+    final emailOtp = EmailOtpPlugin<Object>(sendCode: (_) {}, secret: _hashKey);
+    final magicLink = MagicLinkPlugin<Object>(sendMagicLink: (_) {});
     final username = UsernamePlugin<Object>();
     final apiKeys = AuthApiKeyPlugin<Object>(
       store: apiKeyStore,
@@ -37,7 +35,6 @@ void main() {
         providers: <AuthProvider>[
           CredentialsProvider(),
           _oauthProvider('github'),
-          EmailProvider(sendVerificationRequest: (_, _, _) {}),
         ],
         store: store,
         storeMode: AuthStoreMode.ephemeral,
@@ -45,6 +42,7 @@ void main() {
           webAuthn,
           phone,
           emailOtp,
+          magicLink,
           username,
           apiKeys,
           futureMethod,

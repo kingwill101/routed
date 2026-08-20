@@ -43,7 +43,7 @@ void main() {
     () async {
       final limiter = _EmailOtpLimiter();
       final plugin = EmailOtpPlugin<EngineContext>(
-        rateLimitHashKey: _rateLimitHashKey,
+        secret: _rateLimitHashKey,
         generateOtp: (_) => '123456',
         sendCode: (_) {},
       );
@@ -123,7 +123,7 @@ void main() {
           providers: const [],
           plugins: [
             EmailOtpPlugin<EngineContext>(
-              rateLimitHashKey: _rateLimitHashKey,
+              secret: _rateLimitHashKey,
               generateOtp: (_) => '123456',
               sendCode: (delivery) => sentCode = delivery.code,
             ),
@@ -201,7 +201,7 @@ void main() {
     () async {
       String? sentCode;
       final feature = EmailOtpPlugin<EngineContext>(
-        rateLimitHashKey: _rateLimitHashKey,
+        secret: _rateLimitHashKey,
         generateOtp: (_) => '123456',
         sendCode: (delivery) {
           sentCode = delivery.code;
@@ -281,7 +281,7 @@ void main() {
 
   test('invalid email OTP stays a bounded auth error', () async {
     final feature = EmailOtpPlugin<EngineContext>(
-      rateLimitHashKey: _rateLimitHashKey,
+      secret: _rateLimitHashKey,
       sendCode: (delivery) async {},
     );
     final manager = AuthManager(

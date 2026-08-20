@@ -46,7 +46,7 @@ void main() {
             ),
             EmailOtpPlugin<Object>(
               sendCode: (_) {},
-              rateLimitHashKey: 'conformance-email-key-not-for-production-use',
+              secret: 'conformance-email-key-not-for-production-use',
             ),
             WebAuthnPlugin<Object>(provider: webAuthnProvider),
           ],

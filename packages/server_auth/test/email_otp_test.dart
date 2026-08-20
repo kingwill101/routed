@@ -11,50 +11,59 @@ void main() {
     AuthEmailOtp record({int maxAttempts = 3}) => AuthEmailOtp(
       id: 'otp-1',
       email: 'ada@example.com',
-      codeHash: hashAuthEmailOtpCode('123456'),
+      codeHash: digestAuthEmailOtpCode(
+        code: '123456',
+        secret: _rateLimitHashKey,
+      ),
       type: AuthEmailOtpType.signIn,
       createdAt: createdAt,
       expiresAt: createdAt.add(const Duration(minutes: 5)),
       maxAttempts: maxAttempts,
     );
 
-    test('rotates by email and purpose and stores only a digest', () async {
-      final store = InMemoryAuthEmailOtpStore();
-      await store.save(record());
-      await store.save(
-        AuthEmailOtp(
-          id: 'otp-2',
-          email: 'ADA@EXAMPLE.COM',
-          codeHash: hashAuthEmailOtpCode('654321'),
-          type: AuthEmailOtpType.signIn,
-          createdAt: createdAt,
-          expiresAt: createdAt.add(const Duration(minutes: 5)),
-          maxAttempts: 3,
-        ),
-      );
+    test(
+      'rotates by canonical email and purpose and stores only a digest',
+      () async {
+        final store = InMemoryAuthEmailOtpStore();
+        await store.save(record());
+        await store.save(
+          AuthEmailOtp(
+            id: 'otp-2',
+            email: 'ada@example.com',
+            codeHash: digestAuthEmailOtpCode(
+              code: '654321',
+              secret: _rateLimitHashKey,
+            ),
+            type: AuthEmailOtpType.signIn,
+            createdAt: createdAt,
+            expiresAt: createdAt.add(const Duration(minutes: 5)),
+            maxAttempts: 3,
+          ),
+        );
 
-      expect(
-        (await store.verify(
-          'ada@example.com',
-          AuthEmailOtpType.signIn,
-          '123456',
-          now: createdAt,
-        )).status,
-        AuthEmailOtpVerificationStatus.invalid,
-      );
-      expect(
-        (await store.verify(
-          'ada@example.com',
-          AuthEmailOtpType.signIn,
-          '654321',
-          now: createdAt,
-        )).status,
-        AuthEmailOtpVerificationStatus.verified,
-      );
-      final storage = record().toStorageJson();
-      expect(storage.values, isNot(contains('123456')));
-      expect(storage.keys, isNot(contains('code')));
-    });
+        expect(
+          (await store.verifyDigest(
+            'ada@example.com',
+            AuthEmailOtpType.signIn,
+            digestAuthEmailOtpCode(code: '123456', secret: _rateLimitHashKey),
+            now: createdAt,
+          )).status,
+          AuthEmailOtpVerificationStatus.invalid,
+        );
+        expect(
+          (await store.verifyDigest(
+            'ada@example.com',
+            AuthEmailOtpType.signIn,
+            digestAuthEmailOtpCode(code: '654321', secret: _rateLimitHashKey),
+            now: createdAt,
+          )).status,
+          AuthEmailOtpVerificationStatus.verified,
+        );
+        final storage = record().toStorageJson();
+        expect(storage.values, isNot(contains('123456')));
+        expect(storage.keys, isNot(contains('code')));
+      },
+    );
 
     test(
       'invalid attempts eventually lock the OTP and valid codes are one-time',
@@ -63,28 +72,28 @@ void main() {
         await store.save(record(maxAttempts: 2));
 
         expect(
-          (await store.verify(
+          (await store.verifyDigest(
             'ada@example.com',
             AuthEmailOtpType.signIn,
-            '000000',
+            digestAuthEmailOtpCode(code: '000000', secret: _rateLimitHashKey),
             now: createdAt,
           )).status,
           AuthEmailOtpVerificationStatus.invalid,
         );
         expect(
-          (await store.verify(
+          (await store.verifyDigest(
             'ada@example.com',
             AuthEmailOtpType.signIn,
-            '000000',
+            digestAuthEmailOtpCode(code: '000000', secret: _rateLimitHashKey),
             now: createdAt,
           )).status,
           AuthEmailOtpVerificationStatus.tooManyAttempts,
         );
         expect(
-          (await store.verify(
+          (await store.verifyDigest(
             'ada@example.com',
             AuthEmailOtpType.signIn,
-            '123456',
+            digestAuthEmailOtpCode(code: '123456', secret: _rateLimitHashKey),
             now: createdAt,
           )).status,
           AuthEmailOtpVerificationStatus.tooManyAttempts,
@@ -97,10 +106,10 @@ void main() {
       await store.save(record());
 
       expect(
-        (await store.verify(
+        (await store.verifyDigest(
           'ada@example.com',
           AuthEmailOtpType.signIn,
-          '123456',
+          digestAuthEmailOtpCode(code: '123456', secret: _rateLimitHashKey),
           now: createdAt.add(const Duration(minutes: 5)),
         )).status,
         AuthEmailOtpVerificationStatus.expired,
@@ -111,8 +120,7 @@ void main() {
   group('EmailOtpPlugin', () {
     test('requires a production-strength limiter digest key', () {
       expect(
-        () =>
-            EmailOtpPlugin<Object>(sendCode: (_) {}, rateLimitHashKey: 'short'),
+        () => EmailOtpPlugin<Object>(sendCode: (_) {}, secret: 'short'),
         throwsArgumentError,
       );
     });
@@ -122,7 +130,7 @@ void main() {
       () async {
         final plugin = EmailOtpPlugin<Object>(
           sendCode: (_) {},
-          rateLimitHashKey: _rateLimitHashKey,
+          secret: _rateLimitHashKey,
         );
         final send =
             plugin.endpoints.singleWhere(
@@ -212,7 +220,7 @@ void main() {
       final store = InMemoryAuthStore();
       String? sentCode;
       final feature = EmailOtpPlugin<Object>(
-        rateLimitHashKey: _rateLimitHashKey,
+        secret: _rateLimitHashKey,
         generateOtp: (_) => '123456',
         sendCode: (delivery) {
           sentCode = delivery.code;
@@ -269,7 +277,7 @@ void main() {
           ),
         );
         final feature = EmailOtpPlugin<Object>(
-          rateLimitHashKey: _rateLimitHashKey,
+          secret: _rateLimitHashKey,
           disableSignUp: true,
           generateOtp: (_) => '123456',
           sendCode: (delivery) async {},

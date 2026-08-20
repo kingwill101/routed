@@ -214,7 +214,7 @@ Future<_PreparedPlugin> _prepareEmailOtp({
   final counter = _Counter();
   String? deliveredCode;
   final plugin = EmailOtpPlugin<EngineContext>(
-    rateLimitHashKey: 'plugin-contract-email-key-not-for-production-use',
+    secret: 'plugin-contract-email-key-not-for-production-use',
     generateOtp: (_) => '123456',
     sendCode: (delivery) => deliveredCode = delivery.code,
   );

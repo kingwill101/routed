@@ -38,6 +38,9 @@ final class FakeCloudflareD1Database implements CloudflareD1Database {
   /// completes for its caller.
   FutureOr<void> Function()? afterBatchCommit;
 
+  /// Fails one batch before executing the zero-based statement index.
+  int? failNextBatchAt;
+
   void close() => _database.close();
 
   List<Map<String, Object?>> select(
@@ -66,6 +69,10 @@ final class FakeCloudflareD1Database implements CloudflareD1Database {
       final results = <CloudflareD1Result<T>>[];
       var statementIndex = 0;
       for (final statement in prepared.cast<_FakePreparedStatement>()) {
+        if (failNextBatchAt == statementIndex) {
+          failNextBatchAt = null;
+          throw StateError('Injected fake D1 batch failure at $statementIndex');
+        }
         results.add(statement.runSync<T>(decode: decode));
         batchFaultInjector?.call(statementIndex, statement);
         statementIndex++;

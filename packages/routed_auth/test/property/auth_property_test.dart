@@ -522,11 +522,12 @@ void main() {
           AuthOptions(
             store: InMemoryAuthStore(),
             storeMode: AuthStoreMode.ephemeral,
-            providers: [
-              EmailProvider(
-                sendVerificationRequest: (ctx, provider, request) async {
-                  capturedToken = request.token;
-                  capturedEmail = request.email;
+            providers: const [],
+            plugins: [
+              MagicLinkPlugin<EngineContext>(
+                sendMagicLink: (delivery) async {
+                  capturedToken = delivery.token;
+                  capturedEmail = delivery.email;
                 },
                 tokenExpiry: const Duration(minutes: 10),
               ),

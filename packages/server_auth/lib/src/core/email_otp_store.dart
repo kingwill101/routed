@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'deletion_transaction.dart';
-import 'tokens.dart' show hashOpaqueToken;
+import 'tokens.dart' show constantTimeStringEquals;
 
 /// Supported one-time-password purposes.
 enum AuthEmailOtpType { signIn, emailVerification, forgetPassword, changeEmail }
@@ -77,10 +77,13 @@ final class AuthEmailOtpVerificationResult {
 abstract interface class AuthEmailOtpStore {
   FutureOr<void> save(AuthEmailOtp otp);
 
-  FutureOr<AuthEmailOtpVerificationResult> verify(
+  /// Compares an application-keyed digest and atomically records the attempt.
+  ///
+  /// Raw OTP values must be digested before this persistence boundary.
+  FutureOr<AuthEmailOtpVerificationResult> verifyDigest(
     String email,
     AuthEmailOtpType type,
-    String code, {
+    String codeHash, {
     DateTime? now,
   });
 
@@ -118,10 +121,10 @@ final class InMemoryAuthEmailOtpStore
   }
 
   @override
-  Future<AuthEmailOtpVerificationResult> verify(
+  Future<AuthEmailOtpVerificationResult> verifyDigest(
     String email,
     AuthEmailOtpType type,
-    String code, {
+    String codeHash, {
     DateTime? now,
   }) async {
     final key = _key(email, type);
@@ -144,8 +147,7 @@ final class InMemoryAuthEmailOtpStore
         existing,
       );
     }
-    final candidate = hashAuthEmailOtpCode(code);
-    if (candidate != existing.codeHash) {
+    if (!constantTimeStringEquals(codeHash, existing.codeHash)) {
       final attempts = existing.attempts + 1;
       final updated = existing.copyWith(attempts: attempts);
       _records[key] = updated;
@@ -182,8 +184,6 @@ final class InMemoryAuthEmailOtpStore
   }
 }
 
-String hashAuthEmailOtpCode(String code) => hashOpaqueToken(code.trim());
-
 String normalizeAuthEmailOtpEmail(String email) => _normalizeEmail(email);
 
 String _normalizeEmail(String email) => email.trim().toLowerCase();
@@ -191,7 +191,9 @@ String _normalizeEmail(String email) => email.trim().toLowerCase();
 void _validate(AuthEmailOtp otp) {
   if (otp.id.trim().isEmpty ||
       _normalizeEmail(otp.email).isEmpty ||
-      otp.codeHash.trim().isEmpty ||
+      otp.email != _normalizeEmail(otp.email) ||
+      otp.codeHash.length != 64 ||
+      !RegExp(r'^[0-9a-f]{64}$').hasMatch(otp.codeHash) ||
       otp.maxAttempts <= 0 ||
       otp.attempts < 0 ||
       otp.attempts > otp.maxAttempts ||

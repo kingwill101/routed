@@ -555,10 +555,16 @@ void main() {
         AuthOptions<EngineContext>(
           store: InMemoryAuthStore(),
           storeMode: AuthStoreMode.ephemeral,
-          providers: [
-            EmailProvider(
-              sendVerificationRequest: (_, _, sent) async {
-                request = sent;
+          providers: const [],
+          plugins: [
+            MagicLinkPlugin<EngineContext>(
+              sendMagicLink: (sent) async {
+                request = AuthEmailRequest(
+                  email: sent.email,
+                  token: sent.token,
+                  callbackUrl: sent.callbackUrl,
+                  expiresAt: sent.expiresAt,
+                );
               },
             ),
           ],
@@ -589,6 +595,73 @@ void main() {
       expect(callback.json()['error'], equals('invalid_token'));
     },
   );
+
+  test('hostile magic-link email is rejected without a server error', () async {
+    final manager = AuthManager(
+      AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
+        providers: const [],
+        plugins: [MagicLinkPlugin<EngineContext>(sendMagicLink: (_) async {})],
+        enforceCsrf: false,
+      ),
+    );
+    final engine = _authEngine(manager);
+    await engine.initialize();
+    final client = TestClient(RoutedRequestHandler(engine));
+    addTearDown(client.close);
+
+    final response = await client.postJson('/auth/signin/email', {
+      'email': 'user\u0008@example.com',
+    });
+
+    expect(response.statusCode, lessThan(HttpStatus.internalServerError));
+    expect(response.json()['error'], 'invalid_email');
+  });
+
+  test('session issuance failure cannot replay a consumed magic link', () async {
+    late AuthMagicLinkDelivery<EngineContext> delivery;
+    final manager = AuthManager(
+      AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
+        providers: const [],
+        plugins: [
+          MagicLinkPlugin<EngineContext>(
+            tokenGenerator: () => 'postcommit-token',
+            sendMagicLink: (value) => delivery = value,
+          ),
+        ],
+        enforceCsrf: false,
+      ),
+      sessionAuth: _FailingSessionAuthService(),
+    );
+    final engine = _authEngine(manager);
+    await engine.initialize();
+    final client = TestClient(RoutedRequestHandler(engine));
+    addTearDown(client.close);
+
+    final start = await client.postJson('/auth/signin/email', {
+      'email': 'postcommit@example.com',
+    });
+    start.assertStatus(HttpStatus.ok);
+    final stateCookie = (start.headers[HttpHeaders.setCookieHeader] ?? [])
+        .map(Cookie.fromSetCookieValue)
+        .firstWhere((cookie) => cookie.name.startsWith('routed_email_state_'));
+    final callbackPath =
+        '/auth/callback/email?token=${delivery.token}&email=${delivery.email}';
+    final headers = {
+      HttpHeaders.cookieHeader: [_cookieHeader(stateCookie)],
+    };
+
+    final failedIssue = await client.get(callbackPath, headers: headers);
+    expect(failedIssue.statusCode, HttpStatus.unauthorized);
+    expect(failedIssue.json()['error'], 'session_issue_failed');
+
+    final replay = await client.get(callbackPath, headers: headers);
+    expect(replay.statusCode, HttpStatus.unauthorized);
+    expect(replay.json()['error'], 'invalid_token');
+  });
 
   test('unknown providers return not found responses', () async {
     final manager = AuthManager(
@@ -661,7 +734,8 @@ void main() {
       AuthOptions<EngineContext>(
         store: InMemoryAuthStore(),
         storeMode: AuthStoreMode.ephemeral,
-        providers: [EmailProvider(sendVerificationRequest: (_, _, _) async {})],
+        providers: const [],
+        plugins: [MagicLinkPlugin<EngineContext>(sendMagicLink: (_) async {})],
         enforceCsrf: false,
       ),
     );
@@ -682,7 +756,8 @@ void main() {
       AuthOptions<EngineContext>(
         store: InMemoryAuthStore(),
         storeMode: AuthStoreMode.ephemeral,
-        providers: [EmailProvider(sendVerificationRequest: (_, _, _) async {})],
+        providers: const [],
+        plugins: [MagicLinkPlugin<EngineContext>(sendMagicLink: (_) async {})],
         enforceCsrf: false,
       ),
     );
@@ -755,4 +830,14 @@ void main() {
     expect(cookie, isNotNull);
     expect(cookie!.maxAge, equals(0));
   });
+}
+
+final class _FailingSessionAuthService extends SessionAuthService {
+  @override
+  Future<void> login(
+    EngineContext ctx,
+    AuthPrincipal principal, {
+    bool rememberMe = false,
+    Duration? rememberDuration,
+  }) => throw AuthFlowException('session_issue_failed');
 }

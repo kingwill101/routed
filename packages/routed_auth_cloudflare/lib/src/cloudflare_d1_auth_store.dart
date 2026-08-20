@@ -16,6 +16,8 @@ final class CloudflareD1AuthStore
         AuthStore,
         AuthUsernameStore,
         AuthAnonymousAccountMutationStore,
+        AuthMagicLinkBackend,
+        AuthEmailOtpBackend,
         AuthUserDeletionCoordinatorHost,
         AuthOAuthAccountMutationStore,
         AuthAuthenticationMethodTopologyStore {
@@ -1054,6 +1056,277 @@ final class CloudflareD1AuthStore
 
   /// Digest-only managed-SCIM connection persistence in this D1 domain.
   late final CloudflareD1ScimConnectionStore scimConnectionStore;
+  @override
+  AuthEmailOtpStore get emailOtpStore => emailOtps;
+
+  @override
+  Future<void> issueMagicLink(AuthMagicLinkIssueCommand command) async {
+    final record = command.record;
+    await _sql.run(
+      '''INSERT INTO ${schema.table('magic_links')}
+         (provider_id, email, token_hash, issued_at, expires_at,
+          consumption_marker)
+         VALUES (?, ?, ?, ?, ?, NULL)
+         ON CONFLICT(provider_id, email) DO UPDATE SET
+           token_hash = excluded.token_hash,
+           issued_at = excluded.issued_at,
+           expires_at = excluded.expires_at,
+           consumption_marker = NULL''',
+      [
+        record.providerId,
+        record.email,
+        record.tokenHash,
+        _date(record.issuedAt),
+        _date(record.expiresAt),
+      ],
+    );
+  }
+
+  @override
+  Future<AuthMagicLinkConsumeResult> consumeMagicLink(
+    AuthMagicLinkConsumeCommand command,
+  ) async {
+    final links = schema.table('magic_links');
+    final userTable = schema.table('users');
+    final receipts = schema.table('deletion_receipts');
+    final marker = secureRandomToken(length: 24);
+    final candidate = _verifiedEmailUser(command.candidate);
+    final timestamp = _date(command.now);
+    final results = await _sql.batchRows([
+      _sql.database
+          .prepare('''SELECT token_hash, expires_at FROM $links
+               WHERE provider_id = ? AND email = ?''')
+          .bind([command.providerId, command.email]),
+      _sql.database
+          .prepare('''UPDATE $links SET consumption_marker = ?
+               WHERE provider_id = ? AND email = ? AND token_hash = ?
+                 AND expires_at > ? AND consumption_marker IS NULL''')
+          .bind([
+            marker,
+            command.providerId,
+            command.email,
+            command.tokenHash,
+            timestamp,
+          ]),
+      _sql.database
+          .prepare('''INSERT INTO $userTable (id, email, payload)
+               SELECT ?, ?, ? FROM $links
+               WHERE provider_id = ? AND email = ?
+                 AND consumption_marker = ?
+                 AND NOT EXISTS (SELECT 1 FROM $userTable WHERE email = ?)
+                 AND NOT EXISTS (SELECT 1 FROM $userTable WHERE id = ?)
+                 AND NOT EXISTS (
+                   SELECT 1 FROM $receipts WHERE user_id_hash = ?
+                 )''')
+          .bind([
+            candidate.id,
+            command.email,
+            _encodeUser(candidate),
+            command.providerId,
+            command.email,
+            marker,
+            command.email,
+            candidate.id,
+            hashOpaqueToken(candidate.id),
+          ]),
+      _sql.database
+          .prepare('''UPDATE $userTable
+               SET payload = json_set(
+                 payload, '\$.attributes.emailVerified', json('true')
+               )
+               WHERE email = ? AND ${_usableUserSql('payload')}
+                 AND EXISTS (
+                   SELECT 1 FROM $links WHERE provider_id = ? AND email = ?
+                     AND consumption_marker = ?
+                 )''')
+          .bind([command.email, command.providerId, command.email, marker]),
+      _sql.database
+          .prepare('SELECT payload FROM $userTable WHERE email = ?')
+          .bind([command.email]),
+      _sql.database
+          .prepare('''DELETE FROM $links WHERE provider_id = ? AND email = ?
+               AND consumption_marker = ?''')
+          .bind([command.providerId, command.email, marker]),
+    ]);
+    final before = results[0].results.firstOrNull;
+    final claimed = (results[1].meta?.changes ?? 0) == 1;
+    if (!claimed) {
+      final expiresAt = before == null
+          ? null
+          : DateTime.tryParse(before['expires_at']?.toString() ?? '');
+      return AuthMagicLinkConsumeResult(
+        expiresAt != null && !command.now.isBefore(expiresAt.toUtc())
+            ? AuthMagicLinkConsumeStatus.expired
+            : AuthMagicLinkConsumeStatus.invalid,
+      );
+    }
+    final row = results[4].results.firstOrNull;
+    final user = row == null ? null : _decodeUser(row);
+    if (user == null || authUserIsDisabled(user)) {
+      return const AuthMagicLinkConsumeResult(
+        AuthMagicLinkConsumeStatus.userUnavailable,
+      );
+    }
+    return AuthMagicLinkConsumeResult(
+      AuthMagicLinkConsumeStatus.consumed,
+      user: user,
+      created: (results[2].meta?.changes ?? 0) == 1,
+    );
+  }
+
+  @override
+  Future<void> issueEmailOtp(AuthEmailOtpIssueCommand command) =>
+      Future.sync(() => emailOtps.save(command.otp));
+
+  @override
+  Future<AuthEmailOtpVerificationResult> verifyEmailOtp(
+    AuthEmailOtpVerifyCommand command,
+  ) => Future.sync(
+    () => emailOtps.verifyDigest(
+      command.email,
+      command.type,
+      command.codeHash,
+      now: command.now,
+    ),
+  );
+
+  @override
+  Future<AuthEmailOtpUserTransitionResult> signInWithEmailOtp(
+    AuthEmailOtpSignInCommand command,
+  ) => _consumeEmailOtpForUser(
+    email: command.email,
+    type: AuthEmailOtpType.signIn,
+    codeHash: command.codeHash,
+    now: command.now,
+    candidate: command.disableSignUp ? null : command.candidate,
+  );
+
+  @override
+  Future<AuthEmailOtpUserTransitionResult> verifyUserEmailWithOtp(
+    AuthEmailOtpVerifyUserCommand command,
+  ) => _consumeEmailOtpForUser(
+    email: command.email,
+    type: AuthEmailOtpType.emailVerification,
+    codeHash: command.codeHash,
+    now: command.now,
+    requiredUserId: command.userId,
+  );
+
+  Future<AuthEmailOtpUserTransitionResult> _consumeEmailOtpForUser({
+    required String email,
+    required AuthEmailOtpType type,
+    required String codeHash,
+    required DateTime now,
+    AuthUser? candidate,
+    String? requiredUserId,
+  }) async {
+    final otpTable = schema.table('email_otps');
+    final userTable = schema.table('users');
+    final receipts = schema.table('deletion_receipts');
+    final marker = secureRandomToken(length: 24);
+    final timestamp = _date(now);
+    final verifiedCandidate = candidate == null
+        ? null
+        : _verifiedEmailUser(candidate);
+    final batch = <CloudflareD1PreparedStatement>[
+      _sql.database
+          .prepare(
+            'SELECT payload, verification_marker FROM $otpTable '
+            'WHERE email = ? AND type = ?',
+          )
+          .bind([email, type.name]),
+      _sql.database
+          .prepare('''UPDATE $otpTable SET
+                 payload = json_set(
+                   payload,
+                   '\$.attempts', json_extract(payload, '\$.attempts') + 1,
+                   '\$.consumed', CASE WHEN code_hash = ?
+                     THEN json('true')
+                     ELSE json_extract(payload, '\$.consumed') END
+                 ),
+                 verification_marker = CASE WHEN code_hash = ? THEN ? ELSE NULL END
+               WHERE email = ? AND type = ? AND expires_at > ?
+                 AND json_extract(payload, '\$.consumed') = 0
+                 AND json_extract(payload, '\$.attempts')
+                   < json_extract(payload, '\$.max_attempts')''')
+          .bind([codeHash, codeHash, marker, email, type.name, timestamp]),
+      if (verifiedCandidate != null)
+        _sql.database
+            .prepare('''INSERT INTO $userTable (id, email, payload)
+                 SELECT ?, ?, ? FROM $otpTable
+                 WHERE email = ? AND type = ? AND verification_marker = ?
+                   AND NOT EXISTS (SELECT 1 FROM $userTable WHERE email = ?)
+                   AND NOT EXISTS (SELECT 1 FROM $userTable WHERE id = ?)
+                   AND NOT EXISTS (
+                     SELECT 1 FROM $receipts WHERE user_id_hash = ?
+                   )''')
+            .bind([
+              verifiedCandidate.id,
+              email,
+              _encodeUser(verifiedCandidate),
+              email,
+              type.name,
+              marker,
+              email,
+              verifiedCandidate.id,
+              hashOpaqueToken(verifiedCandidate.id),
+            ]),
+      _sql.database
+          .prepare('''UPDATE $userTable
+               SET payload = json_set(
+                 payload, '\$.attributes.emailVerified', json('true')
+               )
+               WHERE email = ?
+                 ${requiredUserId == null ? '' : 'AND id = ?'}
+                 AND ${_usableUserSql('payload')}
+                 AND EXISTS (
+                   SELECT 1 FROM $otpTable WHERE email = ? AND type = ?
+                     AND verification_marker = ?
+                 )''')
+          .bind([email, ?requiredUserId, email, type.name, marker]),
+      _sql.database
+          .prepare(
+            'SELECT payload, verification_marker FROM $otpTable '
+            'WHERE email = ? AND type = ?',
+          )
+          .bind([email, type.name]),
+      _sql.database
+          .prepare('SELECT payload FROM $userTable WHERE email = ?')
+          .bind([email]),
+    ];
+    final results = await _sql.batchRows(batch);
+    final afterIndex = batch.length - 2;
+    final userIndex = batch.length - 1;
+    final afterRow = results[afterIndex].results.firstOrNull;
+    final otp = afterRow == null ? null : _decodeEmailOtp(afterRow);
+    final matched = afterRow?['verification_marker'] == marker;
+    if (!matched) {
+      return AuthEmailOtpUserTransitionResult(
+        _emailOtpTransitionStatus(otp, now),
+      );
+    }
+    final userRow = results[userIndex].results.firstOrNull;
+    final user = userRow == null ? null : _decodeUser(userRow);
+    if (user == null) {
+      return const AuthEmailOtpUserTransitionResult(
+        AuthEmailOtpUserTransitionStatus.userNotFound,
+      );
+    }
+    if (authUserIsDisabled(user) ||
+        (requiredUserId != null && user.id != requiredUserId)) {
+      return const AuthEmailOtpUserTransitionResult(
+        AuthEmailOtpUserTransitionStatus.userUnavailable,
+      );
+    }
+    final inserted = verifiedCandidate != null
+        ? (results[2].meta?.changes ?? 0) == 1
+        : false;
+    return AuthEmailOtpUserTransitionResult(
+      AuthEmailOtpUserTransitionStatus.applied,
+      user: user,
+      created: inserted,
+    );
+  }
 
   /// Applies all pending schema migrations.
   Future<void> migrate() => schema.migrate(_database);
@@ -1331,6 +1604,12 @@ final class CloudflareD1UserDeletionCoordinator
       yield _sql.database
           .prepare(
             'DELETE FROM ${schema.table('email_otps')} '
+            'WHERE email = ? AND $guard',
+          )
+          .bind([email, ...guardValues]);
+      yield _sql.database
+          .prepare(
+            'DELETE FROM ${schema.table('magic_links')} '
             'WHERE email = ? AND $guard',
           )
           .bind([email, ...guardValues]);
@@ -3808,7 +4087,8 @@ final class _D1EmailOtps
       '''INSERT INTO $table (email, type, code_hash, expires_at, payload)
          VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(email, type) DO UPDATE SET code_hash = excluded.code_hash,
-           expires_at = excluded.expires_at, payload = excluded.payload''',
+           expires_at = excluded.expires_at, payload = excluded.payload,
+           verification_marker = NULL''',
       [
         _email(otp.email),
         otp.type.name,
@@ -3820,16 +4100,15 @@ final class _D1EmailOtps
   }
 
   @override
-  Future<AuthEmailOtpVerificationResult> verify(
+  Future<AuthEmailOtpVerificationResult> verifyDigest(
     String email,
     AuthEmailOtpType type,
-    String code, {
+    String codeHash, {
     DateTime? now,
   }) async {
     final normalizedEmail = _email(email);
     final current = (now ?? clock()).toUtc();
     final timestamp = _date(current);
-    final candidate = hashAuthEmailOtpCode(code);
     final results = await sql.batchRows([
       sql.database
           .prepare('''UPDATE $table SET payload = json_set(
@@ -3843,7 +4122,7 @@ final class _D1EmailOtps
                  AND json_extract(payload, '\$.consumed') = 0
                  AND json_extract(payload, '\$.attempts')
                    < json_extract(payload, '\$.max_attempts')''')
-          .bind([candidate, normalizedEmail, type.name, timestamp]),
+          .bind([codeHash, normalizedEmail, type.name, timestamp]),
       sql.database
           .prepare('SELECT payload FROM $table WHERE email = ? AND type = ?')
           .bind([normalizedEmail, type.name]),
@@ -4300,6 +4579,37 @@ String _required(String value, String name) {
 String _email(String value) => _required(value, 'email').toLowerCase();
 String? _nullableEmail(String? value) => value == null ? null : _email(value);
 String _date(DateTime value) => value.toUtc().toIso8601String();
+
+String _usableUserSql(String payloadColumn) =>
+    "COALESCE(json_extract($payloadColumn, '\$.attributes.disabled'), 0) != 1 "
+    "AND COALESCE(json_extract($payloadColumn, "
+    "'\$.attributes.accountDisabled'), 0) != 1 "
+    "AND json_extract($payloadColumn, '\$.attributes.deletedAt') IS NULL";
+
+AuthUser _verifiedEmailUser(AuthUser user) => AuthUser(
+  id: user.id,
+  email: user.email,
+  name: user.name,
+  image: user.image,
+  roles: user.roles,
+  attributes: <String, dynamic>{...user.attributes, 'emailVerified': true},
+);
+
+AuthEmailOtpUserTransitionStatus _emailOtpTransitionStatus(
+  AuthEmailOtp? otp,
+  DateTime now,
+) {
+  if (otp == null || otp.consumed) {
+    return AuthEmailOtpUserTransitionStatus.invalid;
+  }
+  if (otp.isExpired(now: now)) {
+    return AuthEmailOtpUserTransitionStatus.expired;
+  }
+  if (otp.attempts >= otp.maxAttempts) {
+    return AuthEmailOtpUserTransitionStatus.tooManyAttempts;
+  }
+  return AuthEmailOtpUserTransitionStatus.invalid;
+}
 
 String _encodeUser(AuthUser user) => jsonEncode({
   'id': user.id,

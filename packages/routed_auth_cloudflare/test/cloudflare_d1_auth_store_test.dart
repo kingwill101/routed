@@ -446,7 +446,7 @@ void main() {
       database
           .select('SELECT version FROM $migrationsTable ORDER BY version')
           .map((row) => row['version']),
-      [1, 2, 3, 4, 5, 6, 7],
+      [1, 2, 3, 4, 5, 6, 7, 8],
     );
   });
 
@@ -592,7 +592,7 @@ void main() {
     );
     final emailOtp = EmailOtpPlugin<Object>(
       sendCode: (_) {},
-      rateLimitHashKey: '0123456789abcdef0123456789abcdef',
+      secret: '0123456789abcdef0123456789abcdef',
     );
     device.configure(AuthServerPluginContext<Object>(store: store));
     emailOtp.configure(AuthServerPluginContext<Object>(store: store));
@@ -616,7 +616,10 @@ void main() {
       AuthEmailOtp(
         id: 'otp-1',
         email: user.email!,
-        codeHash: hashAuthEmailOtpCode('123456'),
+        codeHash: digestAuthEmailOtpCode(
+          code: '123456',
+          secret: 'cloudflare-d1-email-otp-test-key',
+        ),
         type: AuthEmailOtpType.signIn,
         createdAt: now,
         expiresAt: now.add(const Duration(minutes: 5)),
@@ -666,7 +669,10 @@ void main() {
       AuthEmailOtp(
         id: 'otp-removed',
         email: user.email!,
-        codeHash: hashAuthEmailOtpCode('123456'),
+        codeHash: digestAuthEmailOtpCode(
+          code: '123456',
+          secret: 'cloudflare-d1-email-otp-test-key',
+        ),
         type: AuthEmailOtpType.signIn,
         createdAt: now,
         expiresAt: now.add(const Duration(minutes: 5)),
@@ -881,7 +887,10 @@ void main() {
       AuthEmailOtp(
         id: 'otp-1',
         email: 'otp@example.com',
-        codeHash: hashAuthEmailOtpCode(code),
+        codeHash: digestAuthEmailOtpCode(
+          code: code,
+          secret: 'cloudflare-d1-email-otp-test-key',
+        ),
         type: AuthEmailOtpType.signIn,
         createdAt: now,
         expiresAt: now.add(const Duration(minutes: 5)),
@@ -892,10 +901,13 @@ void main() {
     final results = await Future.wait([
       for (var i = 0; i < 8; i++)
         Future.sync(
-          () => store.emailOtps.verify(
+          () => store.emailOtps.verifyDigest(
             'otp@example.com',
             AuthEmailOtpType.signIn,
-            code,
+            digestAuthEmailOtpCode(
+              code: code,
+              secret: 'cloudflare-d1-email-otp-test-key',
+            ),
             now: now,
           ),
         ),

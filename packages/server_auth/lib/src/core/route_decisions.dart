@@ -131,7 +131,7 @@ AuthSignInRouteDecision resolveAuthSignInRouteDecision({
     );
   }
 
-  if (provider is EmailProvider) {
+  if (provider is AuthMagicLinkProvider) {
     final email = _stringValue(payload['email']);
     if (email == null || email.isEmpty) {
       return const AuthSignInRouteDecision.error(
@@ -208,7 +208,7 @@ AuthCallbackRouteDecision resolveAuthCallbackRouteDecision({
     );
   }
 
-  if (provider is EmailProvider) {
+  if (provider is AuthMagicLinkProvider) {
     final token = _stringValue(query['token']);
     final email =
         _stringValue(query['email']) ?? _stringValue(query['identifier']);

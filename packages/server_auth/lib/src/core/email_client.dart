@@ -4,11 +4,11 @@ import 'client.dart';
 import 'plugin.dart';
 import 'email_otp_store.dart';
 import 'models.dart';
-import 'providers.dart' show EmailProvider;
+import 'magic_link.dart' show MagicLinkPlugin;
 
 /// Installs the email magic-link API on an [AuthClient].
 ///
-/// The server must configure an [EmailProvider] with the matching provider
+/// The server must configure a [MagicLinkPlugin] with the matching provider
 /// ID. This client plugin does not enable email authentication by itself.
 final class AuthMagicLinkClientPlugin
     implements AuthClientPlugin<AuthMagicLinkClient> {

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 
 import 'authentication_methods.dart';
+import 'email_auth_backend.dart';
 import 'exceptions.dart' show AuthFlowException;
 import 'jwt.dart' show JwtOptions, JwtVerifier;
 import 'models.dart';
@@ -12,11 +13,14 @@ import 'password_hasher.dart';
 import 'password_policy.dart';
 import 'store.dart';
 import 'tokens.dart'
-    show constantTimeStringEquals, pkceS256CodeChallenge, secureRandomToken;
+    show
+        constantTimeStringEquals,
+        hashOpaqueToken,
+        pkceS256CodeChallenge,
+        secureRandomToken;
 import 'users.dart'
     show
         authUsersDiffer,
-        authUserIsDisabled,
         mergeAuthUser,
         normalizeAuthEmail,
         resolveAuthAccountId;
@@ -49,13 +53,6 @@ typedef AuthContext = dynamic;
 /// - `onStateGenerated` lets you persist extra state tied to the OAuth flow.
 /// - `onProfile` lets you override the mapped user.
 /// - `profileRequest` can enrich the profile (for example, extra API calls).
-/// {@endtemplate}
-///
-/// {@template server_auth_email_provider}
-/// Email (magic link) provider configuration.
-///
-/// Provide `sendVerificationRequest` to send the token to the user. The
-/// provider uses `tokenExpiry` and `tokenGenerator` to manage verification.
 /// {@endtemplate}
 ///
 /// {@template server_auth_credentials_provider}
@@ -143,13 +140,19 @@ typedef OAuthUserInfoRequest =
       Uri endpoint,
     );
 
-/// Sends a verification token for email flows.
-typedef EmailSendCallback =
-    FutureOr<void> Function(
-      AuthContext context,
-      EmailProvider provider,
-      AuthEmailRequest request,
-    );
+/// Portable provider surface used by magic-link route decisions and helpers.
+///
+/// Concrete implementations are server plugins. The interface exists only so
+/// framework-neutral helpers do not depend on one host's context type.
+abstract interface class AuthMagicLinkProvider implements AuthProvider {
+  Duration get tokenExpiry;
+  String Function()? get tokenGenerator;
+
+  FutureOr<void> sendVerification(
+    AuthContext context,
+    AuthEmailRequest request,
+  );
+}
 
 /// Authorizes credential-based sign-in.
 typedef CredentialsAuthorize =
@@ -816,28 +819,28 @@ class AuthEmailVerificationPayload {
   const AuthEmailVerificationPayload({
     required this.token,
     required this.expiresAt,
-    required this.verification,
+    required this.record,
     required this.request,
     required this.pendingResult,
   });
 
   final String token;
   final DateTime expiresAt;
-  final AuthVerificationToken verification;
+  final AuthMagicLinkRecord record;
   final AuthEmailRequest request;
   final AuthResult pendingResult;
 }
 
 /// Prepares token, request, and pending session payloads for email sign-in.
 AuthEmailVerificationPayload prepareAuthEmailVerificationPayload({
-  required EmailProvider provider,
+  required AuthMagicLinkProvider provider,
   required String email,
   required String callbackUrl,
   required AuthSessionStrategy sessionStrategy,
   String Function()? generateToken,
   DateTime? now,
 }) {
-  final normalizedEmail = normalizeAuthEmail(email);
+  final normalizedEmail = normalizeAuthOneTimeEmail(email);
   final tokenGenerator = provider.tokenGenerator ?? generateToken;
   final token = tokenGenerator?.call() ?? secureRandomToken();
   if (token.trim().isEmpty) {
@@ -849,11 +852,6 @@ AuthEmailVerificationPayload prepareAuthEmailVerificationPayload({
   }
   final current = now ?? DateTime.now();
   final expiresAt = current.add(provider.tokenExpiry);
-  final verification = AuthVerificationToken(
-    identifier: normalizedEmail,
-    token: token,
-    expiresAt: expiresAt,
-  );
   final request = AuthEmailRequest(
     email: normalizedEmail,
     token: token,
@@ -868,7 +866,13 @@ AuthEmailVerificationPayload prepareAuthEmailVerificationPayload({
   return AuthEmailVerificationPayload(
     token: token,
     expiresAt: expiresAt,
-    verification: verification,
+    record: AuthMagicLinkRecord(
+      providerId: provider.id,
+      email: normalizedEmail,
+      tokenHash: hashOpaqueToken(token),
+      issuedAt: current,
+      expiresAt: expiresAt,
+    ),
     request: request,
     pendingResult: AuthResult(user: session.user, session: session),
   );
@@ -887,7 +891,7 @@ Future<AuthEmailUserResolution> resolveAuthUserByEmailOrCreate({
   required AuthStore store,
   required String email,
 }) async {
-  final normalizedEmail = normalizeAuthEmail(email);
+  final normalizedEmail = normalizeAuthOneTimeEmail(email);
   final result = await Future.sync(
     () => store.users.createOrFindByEmail(
       AuthUser(id: normalizedEmail, email: normalizedEmail),
@@ -902,9 +906,8 @@ Future<AuthEmailUserResolution> resolveAuthUserByEmailOrCreate({
 /// Starts an email verification sign-in flow and dispatches the provider
 /// verification request.
 Future<AuthEmailVerificationPayload> startAuthEmailSignIn<TContext>({
-  required AuthStore store,
-  AuthVerificationTokenStore? tokenStore,
-  required EmailProvider provider,
+  required AuthMagicLinkBackend backend,
+  required AuthMagicLinkProvider provider,
   required TContext context,
   required String email,
   required String callbackUrl,
@@ -914,13 +917,7 @@ Future<AuthEmailVerificationPayload> startAuthEmailSignIn<TContext>({
   String? callbackKey,
   DateTime? now,
 }) async {
-  final normalizedEmail = normalizeAuthEmail(email);
-  await clearAuthVerificationTokens(
-    store: store,
-    tokenStore: tokenStore,
-    identifier: normalizedEmail,
-  );
-
+  final normalizedEmail = normalizeAuthOneTimeEmail(email);
   final payload = prepareAuthEmailVerificationPayload(
     provider: provider,
     email: normalizedEmail,
@@ -934,14 +931,10 @@ Future<AuthEmailVerificationPayload> startAuthEmailSignIn<TContext>({
     writeSession(authEmailCallbackSessionKey(callbackKey), callbackUrl);
   }
 
-  await persistAuthVerificationToken(
-    store: store,
-    tokenStore: tokenStore,
-    verification: payload.verification,
-  );
   await Future.sync(
-    () => provider.sendVerificationRequest(context, provider, payload.request),
+    () => backend.issueMagicLink(AuthMagicLinkIssueCommand(payload.record)),
   );
+  await Future.sync(() => provider.sendVerification(context, payload.request));
 
   return payload;
 }
@@ -964,10 +957,12 @@ class AuthEmailVerificationSignInResolution {
 /// Returns `null` when the token cannot be consumed.
 Future<AuthEmailVerificationSignInResolution?>
 resolveAuthEmailVerificationSignIn({
-  required AuthStore store,
-  AuthVerificationTokenStore? tokenStore,
+  required AuthMagicLinkBackend backend,
+  required String providerId,
   required String email,
   required String token,
+  String Function()? generateUserId,
+  DateTime? now,
   String? callbackKey,
   String? Function(String key)? readSession,
 
@@ -979,48 +974,38 @@ resolveAuthEmailVerificationSignIn({
   /// the one-time verification token.
   bool requireBrowserToken = false,
 }) async {
-  final normalizedEmail = normalizeAuthEmail(email);
+  final normalizedEmail = normalizeAuthOneTimeEmail(email);
+  if (token.trim().isEmpty || token.length > 4096) return null;
   if (requireBrowserToken &&
       (expectedBrowserToken == null ||
           !constantTimeStringEquals(expectedBrowserToken, token))) {
     return null;
   }
-  final consumed = await consumeAuthVerificationToken(
-    store: store,
-    tokenStore: tokenStore,
-    identifier: normalizedEmail,
-    token: token,
+  final consumed = await Future.sync(
+    () => backend.consumeMagicLink(
+      AuthMagicLinkConsumeCommand(
+        providerId: providerId,
+        email: normalizedEmail,
+        tokenHash: hashOpaqueToken(token),
+        now: now ?? DateTime.now(),
+        candidate: AuthUser(
+          id: generateUserId?.call() ?? secureRandomToken(length: 24),
+          email: normalizedEmail,
+        ),
+      ),
+    ),
   );
-  if (consumed == null) {
+  if (consumed.status != AuthMagicLinkConsumeStatus.consumed ||
+      consumed.user == null) {
     return null;
   }
-
-  final userResolution = await resolveAuthUserByEmailOrCreate(
-    store: store,
-    email: normalizedEmail,
-  );
-  final resolvedUser = userResolution.user;
-  final verifiedUser = AuthUser(
-    id: resolvedUser.id,
-    email: resolvedUser.email,
-    name: resolvedUser.name,
-    image: resolvedUser.image,
-    roles: resolvedUser.roles,
-    attributes: <String, dynamic>{
-      ...resolvedUser.attributes,
-      'emailVerified': true,
-    },
-  );
-  final persistedUser = await Future.sync(
-    () => store.users.update(verifiedUser),
-  );
   final callbackUrl = callbackKey == null || readSession == null
       ? null
       : readSession(authEmailCallbackSessionKey(callbackKey));
 
   return AuthEmailVerificationSignInResolution(
-    user: persistedUser ?? verifiedUser,
-    isNewUser: userResolution.isNewUser,
+    user: consumed.user!,
+    isNewUser: consumed.created,
     callbackUrl: callbackUrl,
   );
 }
@@ -1628,39 +1613,6 @@ class OAuthProvider<TProfile extends Object> extends AuthProvider {
   }
 }
 
-/// {@macro server_auth_email_provider}
-class EmailProvider extends AuthProvider {
-  EmailProvider({
-    super.id = 'email',
-    super.name = 'Email',
-    required this.sendVerificationRequest,
-    this.tokenExpiry = const Duration(minutes: 15),
-    this.tokenGenerator,
-  }) : super(type: AuthProviderType.email) {
-    if (tokenExpiry <= Duration.zero) {
-      throw ArgumentError.value(
-        tokenExpiry,
-        'tokenExpiry',
-        'must be greater than zero',
-      );
-    }
-  }
-
-  /// Sends the verification email (or other delivery mechanism).
-  final EmailSendCallback sendVerificationRequest;
-
-  /// Expiration window for the verification token.
-  final Duration tokenExpiry;
-
-  /// Custom token generator. Defaults to a secure random token.
-  final String Function()? tokenGenerator;
-
-  @override
-  AuthAuthenticationMethodInventoryContributor authenticationMethodInventory(
-    AuthStore store,
-  ) => _EmailAuthenticationMethodInventory(store.users, id);
-}
-
 /// {@macro server_auth_credentials_provider}
 class CredentialsProvider extends AuthProvider {
   CredentialsProvider({
@@ -1712,41 +1664,6 @@ final class _PasswordAuthenticationMethodInventory
         AuthAuthenticationMethod.password(
           credential!.id,
           providerId: providerId,
-        ),
-    ]);
-  }
-}
-
-final class _EmailAuthenticationMethodInventory
-    implements
-        AuthAuthenticationMethodInventoryContributor,
-        AuthAuthenticationMethodInventoryBinding {
-  const _EmailAuthenticationMethodInventory(this.store, this.providerId);
-
-  final AuthUserStore store;
-  final String providerId;
-
-  @override
-  String get authenticationMethodNamespace => 'email:$providerId';
-
-  @override
-  Object get authenticationMethodStore => store;
-
-  @override
-  Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
-    AuthAuthenticationMethodKind.emailLink,
-  };
-
-  @override
-  Future<AuthAuthenticationMethodSnapshot> authenticationMethodsForUser(
-    String userId,
-  ) async {
-    final user = await store.findById(userId);
-    return AuthAuthenticationMethodSnapshot.complete([
-      if (user?.email?.isNotEmpty == true && !authUserIsDisabled(user!))
-        AuthAuthenticationMethod.emailLink(
-          providerId: providerId,
-          userId: userId,
         ),
     ]);
   }

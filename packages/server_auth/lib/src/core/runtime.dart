@@ -1,7 +1,8 @@
 import 'authentication_methods.dart';
 import 'plugin.dart';
 import 'options.dart';
-import 'providers.dart' show AuthProviderType;
+import 'providers.dart'
+    show AuthProvider, AuthProviderType, validateAuthProviderConfiguration;
 import 'runtime_posture.dart';
 import 'store.dart';
 
@@ -29,13 +30,18 @@ class AuthRuntime<TContext> {
       options.requireProductionBoot();
       requireDurableStoreOrThrow();
     }
+    providers = List<AuthProvider>.unmodifiable(<AuthProvider>[
+      ...options.providers,
+      ...this.plugins.whereType<AuthProvider>(),
+    ]);
+    validateAuthProviderConfiguration(providers);
     authenticationMethods = AuthAuthenticationMethodService(
       store: this.store,
       contributors: <AuthAuthenticationMethodInventoryContributor>[
         _AuthAccountAuthenticationMethodInventory(
           this.store.accounts,
           activeProviderIds: {
-            for (final provider in options.providers)
+            for (final provider in providers)
               if (provider.type == AuthProviderType.oauth ||
                   provider.type == AuthProviderType.oidc)
                 provider.id,
@@ -68,6 +74,9 @@ class AuthRuntime<TContext> {
 
   /// The plugins configured for this runtime.
   final List<AuthServerPlugin<TContext>> plugins;
+
+  /// Providers contributed by core options and provider plugins.
+  late final List<AuthProvider> providers;
 
   /// Atomic inventory and mutation boundary shared by all auth methods.
   late final AuthAuthenticationMethodService authenticationMethods;

@@ -37,7 +37,7 @@ void main() {
               (
                 EmailOtpPlugin<Object>(
                   sendCode: (_) {},
-                  rateLimitHashKey: 'client-conformance-email-key-32-bytes',
+                  secret: 'client-conformance-email-key-32-bytes',
                 ),
                 AuthInstalledClientOperationContract(
                   endpointId: 'emailOtp.signIn',

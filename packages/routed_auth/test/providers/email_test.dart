@@ -1,338 +1,115 @@
 import 'dart:async';
-import 'package:server_auth/server_auth.dart';
 
 import 'package:routed_core/routed_core.dart';
+import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('EmailProvider', () {
-    test('creates provider with default id and name', () {
-      final provider = EmailProvider(sendVerificationRequest: (_, _, _) {});
-
-      expect(provider.id, equals('email'));
-      expect(provider.name, equals('Email'));
-      expect(provider.type, equals(AuthProviderType.email));
-    });
-
-    test('creates provider with custom id and name', () {
-      final provider = EmailProvider(
+  group('MagicLinkPlugin', () {
+    test('is opt-in provider metadata contributed by the plugin', () {
+      final store = InMemoryAuthStore();
+      final plugin = MagicLinkPlugin<EngineContext>(
         id: 'magic-link',
         name: 'Magic Link',
-        sendVerificationRequest: (_, _, _) {},
+        sendMagicLink: (_) {},
+      );
+      final runtime = AuthRuntime<EngineContext>(
+        options: AuthOptions<EngineContext>(
+          store: store,
+          storeMode: AuthStoreMode.ephemeral,
+          providers: const [],
+          plugins: [plugin],
+        ),
       );
 
-      expect(provider.id, equals('magic-link'));
-      expect(provider.name, equals('Magic Link'));
-    });
-
-    test('sends verification request with email and token', () async {
-      AuthEmailRequest? sentRequest;
-      final provider = EmailProvider(
-        sendVerificationRequest: (context, provider, request) {
-          sentRequest = request;
-        },
-      );
-
-      final request = AuthEmailRequest(
-        email: 'user@example.com',
-        token: 'verify-token-123',
-        callbackUrl:
-            'https://example.com/auth/callback/email?token=verify-token-123',
-        expiresAt: DateTime.now().add(const Duration(minutes: 15)),
-      );
-
-      await provider.sendVerificationRequest(
-        _MockEngineContext(),
-        provider,
-        request,
-      );
-
-      expect(sentRequest, isNotNull);
-      expect(sentRequest?.email, equals('user@example.com'));
-      expect(sentRequest?.token, equals('verify-token-123'));
-      expect(sentRequest?.callbackUrl, contains('callback/email'));
-    });
-
-    test('default token expiry is 15 minutes', () {
-      final provider = EmailProvider(sendVerificationRequest: (_, _, _) {});
-
-      expect(provider.tokenExpiry, equals(const Duration(minutes: 15)));
-    });
-
-    test('custom token expiry is respected', () {
-      final provider = EmailProvider(
-        sendVerificationRequest: (_, _, _) {},
-        tokenExpiry: const Duration(hours: 1),
-      );
-
-      expect(provider.tokenExpiry, equals(const Duration(hours: 1)));
-    });
-
-    test('custom token generator is used when provided', () {
-      var callCount = 0;
-      final provider = EmailProvider(
-        sendVerificationRequest: (_, _, _) {},
-        tokenGenerator: () {
-          callCount++;
-          return 'custom-token-$callCount';
-        },
-      );
-
-      final token1 = provider.tokenGenerator!();
-      final token2 = provider.tokenGenerator!();
-
-      expect(token1, equals('custom-token-1'));
-      expect(token2, equals('custom-token-2'));
-      expect(callCount, equals(2));
-    });
-
-    test('tokenGenerator is null by default', () {
-      final provider = EmailProvider(sendVerificationRequest: (_, _, _) {});
-
-      expect(provider.tokenGenerator, isNull);
-    });
-
-    test('toJson returns provider metadata', () {
-      final provider = EmailProvider(
-        id: 'magic',
-        name: 'Magic Link Login',
-        sendVerificationRequest: (_, _, _) {},
-      );
-
-      final json = provider.toJson();
-
-      expect(json['id'], equals('magic'));
-      expect(json['name'], equals('Magic Link Login'));
-      expect(json['type'], equals('email'));
-    });
-
-    test('sendVerificationRequest can be async', () async {
-      final completer = Completer<void>();
-      var completed = false;
-
-      final provider = EmailProvider(
-        sendVerificationRequest: (context, provider, request) async {
-          await Future.delayed(const Duration(milliseconds: 10));
-          completed = true;
-          completer.complete();
-        },
-      );
-
-      final request = AuthEmailRequest(
-        email: 'async@example.com',
-        token: 'async-token',
-        callbackUrl: 'https://example.com/callback',
-        expiresAt: DateTime.now().add(const Duration(minutes: 15)),
-      );
-
-      provider.sendVerificationRequest(_MockEngineContext(), provider, request);
-
-      await completer.future;
-      expect(completed, isTrue);
-    });
-  });
-
-  group('AuthEmailRequest', () {
-    test('stores all required fields', () {
-      final expiresAt = DateTime.now().add(const Duration(minutes: 15));
-      final request = AuthEmailRequest(
-        email: 'test@example.com',
-        token: 'abc123',
-        callbackUrl: 'https://example.com/verify',
-        expiresAt: expiresAt,
-      );
-
-      expect(request.email, equals('test@example.com'));
-      expect(request.token, equals('abc123'));
-      expect(request.callbackUrl, equals('https://example.com/verify'));
-      expect(request.expiresAt, equals(expiresAt));
-    });
-  });
-
-  group('Email verification flow integration', () {
-    test('full flow with InMemoryAuthStore', () async {
-      final store = InMemoryAuthStore();
-      final sentTokens = <AuthEmailRequest>[];
-
-      final provider = EmailProvider(
-        sendVerificationRequest: (context, provider, request) {
-          sentTokens.add(request);
-        },
-      );
-
-      // Step 1: User requests sign-in, system generates token
-      const email = 'flow@example.com';
-      const token = 'flow-token-123';
-      final expiresAt = DateTime.now().add(provider.tokenExpiry);
-
-      final verificationToken = AuthVerificationToken(
-        identifier: email,
-        token: token,
-        expiresAt: expiresAt,
-      );
-
-      // Step 2: Save token to store
-      await store.verificationTokens.save(verificationToken);
-
-      // Step 3: Send email with magic link
-      final emailRequest = AuthEmailRequest(
-        email: email,
-        token: token,
-        callbackUrl:
-            'https://example.com/auth/callback/email?token=$token&email=$email',
-        expiresAt: expiresAt,
-      );
-      await provider.sendVerificationRequest(
-        _MockEngineContext(),
-        provider,
-        emailRequest,
-      );
-
-      expect(sentTokens.length, equals(1));
-      expect(sentTokens.first.email, equals(email));
-
-      // Step 4: User clicks link, system verifies token
-      final verified = await store.verificationTokens.consume(email, token);
-      expect(verified, isNotNull);
-      expect(verified?.identifier, equals(email));
-
-      // Step 5: Token is consumed (cannot be reused)
-      final reused = await store.verificationTokens.consume(email, token);
-      expect(reused, isNull);
-    });
-
-    test('expired tokens are rejected', () async {
-      final store = InMemoryAuthStore();
-
-      final expiredToken = AuthVerificationToken(
-        identifier: 'expired@example.com',
-        token: 'expired-token',
-        expiresAt: DateTime.now().subtract(const Duration(minutes: 1)),
-      );
-
-      await store.verificationTokens.save(expiredToken);
-
-      final result = await store.verificationTokens.consume(
-        'expired@example.com',
-        'expired-token',
-      );
-
-      expect(result, isNull);
-    });
-
-    test('wrong token is rejected', () async {
-      final store = InMemoryAuthStore();
-
-      final token = AuthVerificationToken(
-        identifier: 'user@example.com',
-        token: 'correct-token',
-        expiresAt: DateTime.now().add(const Duration(minutes: 15)),
-      );
-
-      await store.verificationTokens.save(token);
-
-      final result = await store.verificationTokens.consume(
-        'user@example.com',
-        'wrong-token',
-      );
-
-      expect(result, isNull);
-    });
-
-    test('wrong email is rejected', () async {
-      final store = InMemoryAuthStore();
-
-      final token = AuthVerificationToken(
-        identifier: 'user@example.com',
-        token: 'the-token',
-        expiresAt: DateTime.now().add(const Duration(minutes: 15)),
-      );
-
-      await store.verificationTokens.save(token);
-
-      final result = await store.verificationTokens.consume(
-        'other@example.com',
-        'the-token',
-      );
-
-      expect(result, isNull);
+      expect(runtime.providers, contains(same(plugin)));
+      expect(plugin.id, 'magic-link');
+      expect(plugin.name, 'Magic Link');
+      expect(plugin.type, AuthProviderType.email);
+      expect(plugin.toJson(), {
+        'id': 'magic-link',
+        'name': 'Magic Link',
+        'type': 'email',
+      });
     });
 
     test(
-      'deleteVerificationTokens removes all tokens for identifier',
+      'delivers raw material only after digest-only issue commits',
       () async {
         final store = InMemoryAuthStore();
-
-        await store.verificationTokens.save(
-          AuthVerificationToken(
-            identifier: 'user@example.com',
-            token: 'token-1',
-            expiresAt: DateTime.now().add(const Duration(minutes: 15)),
+        AuthMagicLinkDelivery<EngineContext>? delivery;
+        final plugin = MagicLinkPlugin<EngineContext>(
+          sendMagicLink: (value) async {
+            await Future<void>.delayed(Duration.zero);
+            delivery = value;
+          },
+          tokenGenerator: () => 'one-time-raw-token',
+        );
+        AuthRuntime<EngineContext>(
+          options: AuthOptions<EngineContext>(
+            store: store,
+            storeMode: AuthStoreMode.ephemeral,
+            providers: const [],
+            plugins: [plugin],
           ),
         );
 
-        await store.verificationTokens.save(
-          AuthVerificationToken(
-            identifier: 'user@example.com',
-            token: 'token-2',
-            expiresAt: DateTime.now().add(const Duration(minutes: 15)),
-          ),
+        final payload = await startAuthEmailSignIn<EngineContext>(
+          backend: store,
+          provider: plugin,
+          context: _MockEngineContext(),
+          email: ' User@Example.com ',
+          callbackUrl: 'https://example.test/auth/callback/email',
+          sessionStrategy: AuthSessionStrategy.session,
+          now: DateTime.utc(2026),
         );
 
-        await store.verificationTokens.delete('user@example.com');
+        expect(delivery?.email, 'user@example.com');
+        expect(delivery?.token, 'one-time-raw-token');
+        expect(payload.record.tokenHash, isNot('one-time-raw-token'));
 
-        final result1 = await store.verificationTokens.consume(
-          'user@example.com',
-          'token-1',
+        final first = await resolveAuthEmailVerificationSignIn(
+          backend: store,
+          providerId: plugin.id,
+          email: delivery!.email,
+          token: delivery!.token,
+          now: DateTime.utc(2026),
+          generateUserId: () => 'user-1',
         );
-        final result2 = await store.verificationTokens.consume(
-          'user@example.com',
-          'token-2',
+        final replay = await resolveAuthEmailVerificationSignIn(
+          backend: store,
+          providerId: plugin.id,
+          email: delivery!.email,
+          token: delivery!.token,
+          now: DateTime.utc(2026),
+          generateUserId: () => 'user-2',
         );
 
-        expect(result1, isNull);
-        expect(result2, isNull);
+        expect(first?.user.id, 'user-1');
+        expect(replay, isNull);
       },
     );
 
-    test('createUser on first email sign-in', () async {
-      final store = InMemoryAuthStore();
-
-      // Simulate successful token verification
-      final token = AuthVerificationToken(
-        identifier: 'newuser@example.com',
-        token: 'verify-token',
-        expiresAt: DateTime.now().add(const Duration(minutes: 15)),
+    test('rejects unsafe provider IDs and non-positive expiry', () {
+      expect(
+        () => MagicLinkPlugin<EngineContext>(
+          id: '../email',
+          sendMagicLink: (_) {},
+        ),
+        throwsArgumentError,
       );
-      await store.verificationTokens.save(token);
-
-      final verified = await store.verificationTokens.consume(
-        'newuser@example.com',
-        'verify-token',
+      expect(
+        () => MagicLinkPlugin<EngineContext>(
+          tokenExpiry: Duration.zero,
+          sendMagicLink: (_) {},
+        ),
+        throwsArgumentError,
       );
-      expect(verified, isNotNull);
-
-      // Check if user exists
-      var user = await store.users.findByEmail('newuser@example.com');
-      expect(user, isNull);
-
-      // Create user on first sign-in (like NextAuth does)
-      user = await store.users.create(
-        AuthUser(id: 'auto-generated-id', email: 'newuser@example.com'),
-      );
-
-      expect(user.email, equals('newuser@example.com'));
-
-      // Subsequent sign-in finds existing user
-      final existingUser = await store.users.findByEmail('newuser@example.com');
-      expect(existingUser, isNotNull);
-      expect(existingUser?.id, equals('auto-generated-id'));
     });
   });
 }
 
-/// Minimal mock for EngineContext - tests don't need full context.
-class _MockEngineContext implements EngineContext {
+final class _MockEngineContext implements EngineContext {
   @override
-  dynamic noSuchMethod(Invocation invocation) => null;
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

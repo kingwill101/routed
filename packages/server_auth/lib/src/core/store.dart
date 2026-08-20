@@ -5,11 +5,12 @@ import 'account_policy.dart';
 import 'anonymous_store.dart';
 import 'authentication_methods.dart';
 import 'deletion_transaction.dart';
+import 'email_auth_backend.dart';
 import 'email_change_token_store.dart';
 import 'models.dart';
 import 'oauth_challenge_store.dart';
 import 'password_reset_token_store.dart';
-import 'tokens.dart' show hashOpaqueToken;
+import 'tokens.dart' show constantTimeStringEquals, hashOpaqueToken;
 import 'verification_token_store.dart';
 import 'jwt_version_store.dart';
 import 'webauthn_store.dart';
@@ -377,6 +378,7 @@ typedef _InMemoryAuthCoreDeletionState = ({
   Object deviceAuthorizations,
   Object emailOtps,
   Map<String, _AuthAnonymousMutationReceipt> anonymousReceipts,
+  Map<String, AuthMagicLinkRecord> magicLinks,
 });
 
 final class _AuthAnonymousMutationReceipt {
@@ -394,6 +396,38 @@ final class _AuthAnonymousMutationReceipt {
 String _anonymousCreateFingerprint(AuthAnonymousCreateAccountCommand command) =>
     'create:${hashOpaqueToken(jsonEncode(command.user.toJson()))}';
 
+typedef _InMemoryEmailMutationState = ({
+  Map<String, AuthUser> usersById,
+  Map<String, AuthUser> usersByEmail,
+  Map<String, AuthMagicLinkRecord> magicLinks,
+  Object emailOtps,
+});
+
+final class _EmailUserResolution {
+  const _EmailUserResolution(this.user, {required this.created});
+
+  final AuthUser user;
+  final bool created;
+}
+
+AuthEmailOtpUserTransitionResult? _emailOtpRejectedTransition(
+  AuthEmailOtpVerificationStatus status,
+) => switch (status) {
+  AuthEmailOtpVerificationStatus.verified => null,
+  AuthEmailOtpVerificationStatus.invalid =>
+    const AuthEmailOtpUserTransitionResult(
+      AuthEmailOtpUserTransitionStatus.invalid,
+    ),
+  AuthEmailOtpVerificationStatus.expired =>
+    const AuthEmailOtpUserTransitionResult(
+      AuthEmailOtpUserTransitionStatus.expired,
+    ),
+  AuthEmailOtpVerificationStatus.tooManyAttempts =>
+    const AuthEmailOtpUserTransitionResult(
+      AuthEmailOtpUserTransitionStatus.tooManyAttempts,
+    ),
+};
+
 /// In-memory store for tests, examples, and local development.
 ///
 /// This implementation deliberately keeps password hashes outside [AuthUser]
@@ -405,6 +439,8 @@ class InMemoryAuthStore
         AuthStore,
         AuthUsernameStore,
         AuthAnonymousAccountMutationStore,
+        AuthMagicLinkBackend,
+        AuthEmailOtpBackend,
         AuthAdminStoreCapabilities,
         AuthWebAuthnStoreCapabilities,
         AuthAccountStateStore,
@@ -414,6 +450,7 @@ class InMemoryAuthStore
         AuthInMemoryUserDeletionBackend {
   InMemoryAuthStore({
     this.anonymousFaultInjector,
+    this.emailBackendFaultInjector,
     AuthUsernameFaultInjector? usernameFaultInjector,
     AuthUserDeletionFaultInjector? userDeletionFaultInjector,
   }) : users = _InMemoryUserStore(),
@@ -478,6 +515,9 @@ class InMemoryAuthStore
 
   @override
   final AuthEmailOtpStore emailOtps;
+
+  /// Optional deterministic failures for email backend rollback tests.
+  final AuthEmailBackendFaultInjector? emailBackendFaultInjector;
 
   final InMemoryAuthAccountStateStore _accountStates;
   final AuthUsernameFaultInjector? _usernameFaultInjector;
@@ -683,10 +723,263 @@ class InMemoryAuthStore
     return completer.future;
   }
 
+  final Map<String, Future<void>> _emailMutationTails =
+      <String, Future<void>>{};
+  final Map<String, AuthMagicLinkRecord> _magicLinks =
+      <String, AuthMagicLinkRecord>{};
+
+  @override
+  AuthEmailOtpStore get emailOtpStore => emailOtps;
+
+  @override
+  Future<void> issueMagicLink(AuthMagicLinkIssueCommand command) =>
+      _atomicEmailMutation(command.record.email, () async {
+        _magicLinks[_magicLinkKey(
+              command.record.providerId,
+              command.record.email,
+            )] =
+            command.record;
+        _emailFault(AuthEmailBackendFaultPoint.afterMagicLinkWrite);
+      });
+
+  @override
+  Future<AuthMagicLinkConsumeResult> consumeMagicLink(
+    AuthMagicLinkConsumeCommand command,
+  ) => _atomicEmailMutation(command.email, () async {
+    final key = _magicLinkKey(command.providerId, command.email);
+    final record = _magicLinks[key];
+    if (record == null) {
+      return const AuthMagicLinkConsumeResult(
+        AuthMagicLinkConsumeStatus.invalid,
+      );
+    }
+    if (record.isExpired(command.now)) {
+      _magicLinks.remove(key);
+      return const AuthMagicLinkConsumeResult(
+        AuthMagicLinkConsumeStatus.expired,
+      );
+    }
+    if (!constantTimeStringEquals(record.tokenHash, command.tokenHash)) {
+      return const AuthMagicLinkConsumeResult(
+        AuthMagicLinkConsumeStatus.invalid,
+      );
+    }
+
+    _magicLinks.remove(key);
+    _emailFault(AuthEmailBackendFaultPoint.afterMagicLinkConsume);
+    final resolution = await _resolveEmailUser(
+      command.email,
+      command.candidate,
+      disableSignUp: false,
+    );
+    if (resolution == null || authUserIsDisabled(resolution.user)) {
+      return const AuthMagicLinkConsumeResult(
+        AuthMagicLinkConsumeStatus.userUnavailable,
+      );
+    }
+    final verified = await _persistVerifiedEmail(resolution.user);
+    _emailFault(AuthEmailBackendFaultPoint.afterUserWrite);
+    return AuthMagicLinkConsumeResult(
+      AuthMagicLinkConsumeStatus.consumed,
+      user: verified,
+      created: resolution.created,
+    );
+  });
+
+  @override
+  Future<void> issueEmailOtp(AuthEmailOtpIssueCommand command) =>
+      _atomicEmailMutation(command.otp.email, () async {
+        await emailOtps.save(command.otp);
+        _emailFault(AuthEmailBackendFaultPoint.afterEmailOtpWrite);
+      });
+
+  @override
+  Future<AuthEmailOtpVerificationResult> verifyEmailOtp(
+    AuthEmailOtpVerifyCommand command,
+  ) =>
+      _atomicEmailMutation(command.email, () => _verifyEmailOtpDigest(command));
+
+  @override
+  Future<AuthEmailOtpUserTransitionResult> signInWithEmailOtp(
+    AuthEmailOtpSignInCommand command,
+  ) => _atomicEmailMutation(command.email, () async {
+    final verification = await _verifyEmailOtpDigest(
+      AuthEmailOtpVerifyCommand(
+        email: command.email,
+        type: AuthEmailOtpType.signIn,
+        codeHash: command.codeHash,
+        now: command.now,
+      ),
+    );
+    final rejected = _emailOtpRejectedTransition(verification.status);
+    if (rejected != null) return rejected;
+    _emailFault(AuthEmailBackendFaultPoint.afterEmailOtpConsume);
+
+    final resolution = await _resolveEmailUser(
+      command.email,
+      command.candidate,
+      disableSignUp: command.disableSignUp,
+    );
+    if (resolution == null) {
+      return const AuthEmailOtpUserTransitionResult(
+        AuthEmailOtpUserTransitionStatus.userNotFound,
+      );
+    }
+    if (authUserIsDisabled(resolution.user)) {
+      return const AuthEmailOtpUserTransitionResult(
+        AuthEmailOtpUserTransitionStatus.userUnavailable,
+      );
+    }
+    final verified = await _persistVerifiedEmail(resolution.user);
+    _emailFault(AuthEmailBackendFaultPoint.afterUserWrite);
+    return AuthEmailOtpUserTransitionResult(
+      AuthEmailOtpUserTransitionStatus.applied,
+      user: verified,
+      created: resolution.created,
+    );
+  });
+
+  @override
+  Future<AuthEmailOtpUserTransitionResult> verifyUserEmailWithOtp(
+    AuthEmailOtpVerifyUserCommand command,
+  ) => _atomicEmailMutation(command.email, () async {
+    final user = await _users.findById(command.userId);
+    if (user == null ||
+        user.email == null ||
+        normalizeAuthOneTimeEmail(user.email!) != command.email) {
+      return const AuthEmailOtpUserTransitionResult(
+        AuthEmailOtpUserTransitionStatus.userNotFound,
+      );
+    }
+    if (authUserIsDisabled(user)) {
+      return const AuthEmailOtpUserTransitionResult(
+        AuthEmailOtpUserTransitionStatus.userUnavailable,
+      );
+    }
+    final verification = await _verifyEmailOtpDigest(
+      AuthEmailOtpVerifyCommand(
+        email: command.email,
+        type: AuthEmailOtpType.emailVerification,
+        codeHash: command.codeHash,
+        now: command.now,
+      ),
+    );
+    final rejected = _emailOtpRejectedTransition(verification.status);
+    if (rejected != null) return rejected;
+    _emailFault(AuthEmailBackendFaultPoint.afterEmailOtpConsume);
+    final verified = await _persistVerifiedEmail(user);
+    _emailFault(AuthEmailBackendFaultPoint.afterUserWrite);
+    return AuthEmailOtpUserTransitionResult(
+      AuthEmailOtpUserTransitionStatus.applied,
+      user: verified,
+    );
+  });
+
+  Future<AuthEmailOtpVerificationResult> _verifyEmailOtpDigest(
+    AuthEmailOtpVerifyCommand command,
+  ) => Future.sync(
+    () => emailOtps.verifyDigest(
+      command.email,
+      command.type,
+      command.codeHash,
+      now: command.now,
+    ),
+  );
+
+  Future<_EmailUserResolution?> _resolveEmailUser(
+    String email,
+    AuthUser candidate, {
+    required bool disableSignUp,
+  }) async {
+    final existing = await _users.findByEmail(email);
+    if (existing != null) {
+      return _EmailUserResolution(existing, created: false);
+    }
+    if (disableSignUp) return null;
+    final created = await _users.createOrFindByEmail(candidate);
+    final resolvedEmail = created.user.email;
+    if (resolvedEmail == null ||
+        normalizeAuthOneTimeEmail(resolvedEmail) != email) {
+      return null;
+    }
+    return _EmailUserResolution(created.user, created: created.created);
+  }
+
+  static String _magicLinkKey(String providerId, String email) =>
+      '$providerId\u0000${normalizeAuthOneTimeEmail(email)}';
+
+  Future<AuthUser> _persistVerifiedEmail(AuthUser user) async {
+    if (user.attributes['emailVerified'] == true) return user;
+    final verified = AuthUser(
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      image: user.image,
+      roles: user.roles,
+      attributes: <String, dynamic>{...user.attributes, 'emailVerified': true},
+    );
+    final persisted = await _users.update(verified);
+    if (persisted == null) {
+      throw StateError('Email backend lost its user during verification.');
+    }
+    return persisted;
+  }
+
+  Future<T> _atomicEmailMutation<T>(
+    String email,
+    FutureOr<T> Function() operation,
+  ) {
+    final key = normalizeAuthOneTimeEmail(email);
+    final completer = Completer<T>();
+    final previous = _emailMutationTails[key] ?? Future<void>.value();
+    late final Future<void> current;
+    current = previous.then((_) async {
+      final checkpoint = _captureEmailMutationState();
+      try {
+        completer.complete(await operation());
+      } catch (error, stackTrace) {
+        _restoreEmailMutationState(checkpoint);
+        completer.completeError(error, stackTrace);
+      }
+    });
+    _emailMutationTails[key] = current;
+    current.whenComplete(() {
+      if (identical(_emailMutationTails[key], current)) {
+        _emailMutationTails.remove(key);
+      }
+    });
+    return completer.future;
+  }
+
   Future<void> _injectUsernameFault(AuthUsernameFaultPoint point) async {
     final injector = _usernameFaultInjector;
     if (injector != null) await injector(point);
   }
+
+  _InMemoryEmailMutationState _captureEmailMutationState() => (
+    usersById: Map<String, AuthUser>.of(_users._usersById),
+    usersByEmail: Map<String, AuthUser>.of(_users._usersByEmail),
+    magicLinks: Map<String, AuthMagicLinkRecord>.of(_magicLinks),
+    emailOtps: (emailOtps as AuthInMemoryDeletionState).captureDeletionState(),
+  );
+
+  void _restoreEmailMutationState(_InMemoryEmailMutationState state) {
+    _users._usersById
+      ..clear()
+      ..addAll(state.usersById);
+    _users._usersByEmail
+      ..clear()
+      ..addAll(state.usersByEmail);
+    _magicLinks
+      ..clear()
+      ..addAll(state.magicLinks);
+    (emailOtps as AuthInMemoryDeletionState).restoreDeletionState(
+      state.emailOtps,
+    );
+  }
+
+  void _emailFault(AuthEmailBackendFaultPoint point) =>
+      emailBackendFaultInjector?.throwIfScheduled(point);
 
   @override
   Future<AuthAuthenticationMethodMutationResult>
@@ -1046,6 +1339,8 @@ class InMemoryAuthStore
     if (user.email != null) {
       await emailOtps.deleteForEmail(user.email!);
       await verificationTokens.delete(user.email!);
+      final email = normalizeAuthEmail(user.email!);
+      _magicLinks.removeWhere((_, record) => record.email == email);
     }
     await jwtVersions.rotate(id);
     _anonymousReceipts.removeWhere((_, receipt) => receipt.subjectUserId == id);
@@ -1087,6 +1382,7 @@ class InMemoryAuthStore
     anonymousReceipts: Map<String, _AuthAnonymousMutationReceipt>.of(
       _anonymousReceipts,
     ),
+    magicLinks: Map<String, AuthMagicLinkRecord>.of(_magicLinks),
   );
 
   @override
@@ -1141,6 +1437,9 @@ class InMemoryAuthStore
     _anonymousReceipts
       ..clear()
       ..addAll(value.anonymousReceipts);
+    _magicLinks
+      ..clear()
+      ..addAll(value.magicLinks);
   }
 
   @override
@@ -1160,7 +1459,11 @@ class InMemoryAuthStore
     await emailChangeTokens.deleteForUser(id);
     await deviceAuthorizations.deleteForUser(id);
     if (user.email != null) await emailOtps.deleteForEmail(user.email!);
-    if (user.email != null) await verificationTokens.delete(user.email!);
+    if (user.email != null) {
+      await verificationTokens.delete(user.email!);
+      final email = normalizeAuthEmail(user.email!);
+      _magicLinks.removeWhere((_, record) => record.email == email);
+    }
     _users.replaceWithTombstone(id, timestamp);
     return true;
   }

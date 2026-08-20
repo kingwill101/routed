@@ -61,7 +61,10 @@ void main() {
           AuthEmailOtp(
             id: 'otp-1',
             email: user.email!,
-            codeHash: hashAuthEmailOtpCode('123456'),
+            codeHash: digestAuthEmailOtpCode(
+              code: '123456',
+              secret: 'deletion-coordinator-email-otp-test-key',
+            ),
             type: AuthEmailOtpType.signIn,
             createdAt: now,
             expiresAt: now.add(const Duration(minutes: 5)),
@@ -95,10 +98,13 @@ void main() {
           AuthDeviceAuthorizationPollStatus.invalid,
         );
         expect(
-          (await store.emailOtps.verify(
+          (await store.emailOtps.verifyDigest(
             user.email!,
             AuthEmailOtpType.signIn,
-            '123456',
+            digestAuthEmailOtpCode(
+              code: '123456',
+              secret: 'deletion-coordinator-email-otp-test-key',
+            ),
             now: now,
           )).status,
           AuthEmailOtpVerificationStatus.invalid,

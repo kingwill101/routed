@@ -41,7 +41,7 @@ import 'package:server_auth/server_auth.dart'
         TwoFactorPlugin,
         CallbackProvider,
         CredentialsProvider,
-        EmailProvider,
+        AuthMagicLinkProvider,
         normalizeAuthCallbackProviderResult,
         OAuthProvider,
         respondWithSanitizedAuthRedirectOrSession,
@@ -545,7 +545,7 @@ class AuthRoutes {
 
   Future<Response> _providers(EngineContext ctx) async {
     return ctx.json({
-      'providers': authProviderSummaries(manager.options.providers),
+      'providers': authProviderSummaries(manager.runtime.providers),
     });
   }
 
@@ -569,7 +569,7 @@ class AuthRoutes {
   Future<Response> _signIn(EngineContext ctx) async {
     final providerId = ctx.params['provider']?.toString();
     final provider = resolveAuthProviderByOptionalId(
-      manager.options.providers,
+      manager.runtime.providers,
       providerId,
     );
     if (ctx.request.method != 'GET' && provider is! OAuthProvider) {
@@ -610,7 +610,7 @@ class AuthRoutes {
           payload,
           provider: provider,
         );
-        final emailProvider = provider as EmailProvider;
+        final emailProvider = provider as AuthMagicLinkProvider;
         try {
           await manager.signInWithEmail(
             ctx,
@@ -653,7 +653,7 @@ class AuthRoutes {
   Future<Response> _register(EngineContext ctx) async {
     final providerId = ctx.params['provider']?.toString();
     final provider = resolveAuthProviderByOptionalId(
-      manager.options.providers,
+      manager.runtime.providers,
       providerId,
     );
     final browserError = manager.validateBrowserRequest(ctx);
@@ -690,7 +690,7 @@ class AuthRoutes {
   Future<Response> _callback(EngineContext ctx) async {
     final providerId = ctx.param('provider');
     final provider = resolveAuthProviderByOptionalId(
-      manager.options.providers,
+      manager.runtime.providers,
       providerId,
     );
     // OAuth providers such as Apple use `response_mode=form_post`, delivering
@@ -723,7 +723,7 @@ class AuthRoutes {
           return _flowErrorResponse(ctx, error);
         }
       case AuthCallbackRouteKind.email:
-        final emailProvider = provider as EmailProvider;
+        final emailProvider = provider as AuthMagicLinkProvider;
         try {
           final result = await manager.verifyEmail(
             ctx,

@@ -629,10 +629,16 @@ void main() {
         AuthOptions<EngineContext>(
           store: InMemoryAuthStore(),
           storeMode: AuthStoreMode.ephemeral,
-          providers: [
-            EmailProvider(
-              sendVerificationRequest: (ctx, provider, request) async {
-                capturedRequest = request;
+          providers: const [],
+          plugins: [
+            MagicLinkPlugin<EngineContext>(
+              sendMagicLink: (delivery) async {
+                capturedRequest = AuthEmailRequest(
+                  email: delivery.email,
+                  token: delivery.token,
+                  callbackUrl: delivery.callbackUrl,
+                  expiresAt: delivery.expiresAt,
+                );
               },
             ),
           ],
@@ -690,10 +696,18 @@ void main() {
         AuthOptions<EngineContext>(
           store: InMemoryAuthStore(),
           storeMode: AuthStoreMode.ephemeral,
-          providers: [
-            EmailProvider(
-              sendVerificationRequest: (ctx, provider, request) async {
-                requests.add(request);
+          providers: const [],
+          plugins: [
+            MagicLinkPlugin<EngineContext>(
+              sendMagicLink: (delivery) async {
+                requests.add(
+                  AuthEmailRequest(
+                    email: delivery.email,
+                    token: delivery.token,
+                    callbackUrl: delivery.callbackUrl,
+                    expiresAt: delivery.expiresAt,
+                  ),
+                );
               },
             ),
           ],

@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart' show Hmac, sha256;
 
 import 'authentication_methods.dart';
 import 'deletion_transaction.dart';
+import 'email_auth_backend.dart';
 import 'email_otp_store.dart';
 import 'exceptions.dart';
 import 'plugin.dart';
@@ -55,21 +56,22 @@ final class EmailOtpPlugin<TContext>
         AuthUserDeletionPlanContributor {
   EmailOtpPlugin({
     required this.sendCode,
-    required String rateLimitHashKey,
+    required String secret,
     this.otpLength = 6,
     this.expiresIn = const Duration(minutes: 5),
     this.allowedAttempts = 3,
     this.disableSignUp = false,
     String Function(int length)? generateOtp,
-  }) : _rateLimitHashKey = utf8.encode(rateLimitHashKey),
+  }) : _secret = secret,
+       _rateLimitHashKey = utf8.encode(secret),
        _generateOtp = generateOtp ?? _defaultOtp,
        assert(otpLength >= 4 && otpLength <= 12),
        assert(expiresIn > Duration.zero),
        assert(allowedAttempts > 0) {
     if (_rateLimitHashKey.length < 32) {
       throw ArgumentError(
-        'rateLimitHashKey must contain at least 32 UTF-8 bytes',
-        'rateLimitHashKey',
+        'secret must contain at least 32 UTF-8 bytes',
+        'secret',
       );
     }
   }
@@ -79,10 +81,12 @@ final class EmailOtpPlugin<TContext>
   final Duration expiresIn;
   final int allowedAttempts;
   final bool disableSignUp;
+  final String _secret;
   final List<int> _rateLimitHashKey;
   final String Function(int length) _generateOtp;
 
   late AuthEmailOtpStore _store;
+  late AuthEmailOtpBackend _backend;
   late AuthUserStore _users;
   late AuthUserDeletionDomain _deletionDomain;
   bool _configured = false;
@@ -118,7 +122,15 @@ final class EmailOtpPlugin<TContext>
 
   @override
   void configure(AuthServerPluginContext<TContext> context) {
-    _store = context.store.emailOtps;
+    final store = context.store;
+    if (store is! AuthEmailOtpBackend) {
+      throw StateError(
+        'EmailOtpPlugin requires an AuthEmailOtpBackend. Durable adapters '
+        'must implement the typed command boundary transactionally.',
+      );
+    }
+    _backend = store as AuthEmailOtpBackend;
+    _store = _backend.emailOtpStore;
     _users = context.store.users;
     final host = context.store;
     if (host is! AuthUserDeletionCoordinatorHost) {
@@ -327,15 +339,19 @@ final class EmailOtpPlugin<TContext>
       throw StateError('Email OTP generator returned an invalid code');
     }
     final expiresAt = current.add(expiresIn);
-    await _store.save(
-      AuthEmailOtp(
-        id: secureRandomToken(length: 16),
-        email: normalizedEmail,
-        codeHash: hashAuthEmailOtpCode(code),
-        type: type,
-        createdAt: current,
-        expiresAt: expiresAt,
-        maxAttempts: allowedAttempts,
+    await Future.sync(
+      () => _backend.issueEmailOtp(
+        AuthEmailOtpIssueCommand(
+          AuthEmailOtp(
+            id: secureRandomToken(length: 16),
+            email: normalizedEmail,
+            codeHash: digestAuthEmailOtpCode(code: code, secret: _secret),
+            type: type,
+            createdAt: current,
+            expiresAt: expiresAt,
+            maxAttempts: allowedAttempts,
+          ),
+        ),
       ),
     );
     await sendCode(
@@ -366,46 +382,25 @@ final class EmailOtpPlugin<TContext>
     String? image,
     DateTime? now,
   }) async {
-    await _verify(
-      email: email,
-      type: AuthEmailOtpType.signIn,
-      code: code,
-      now: now,
-    );
+    _ensureConfigured();
     final normalizedEmail = _email(email);
-    var user = await _users.findByEmail(normalizedEmail);
-    if (user == null) {
-      if (disableSignUp) throw AuthFlowException('user_not_found');
-      final candidate = AuthUser(
-        id: secureRandomToken(length: 24),
-        email: normalizedEmail,
-        name: name?.trim().isEmpty == true ? null : name?.trim(),
-        image: image?.trim().isEmpty == true ? null : image?.trim(),
-        attributes: const <String, dynamic>{'emailVerified': true},
-      );
-      try {
-        user = (await _users.createOrFindByEmail(candidate)).user;
-      } catch (_) {
-        user = await _users.findByEmail(normalizedEmail);
-      }
-    }
-    if (user == null || authUserIsDisabled(user)) {
-      throw AuthFlowException('user_not_found');
-    }
-    if (user.attributes['emailVerified'] != true) {
-      user = AuthUser(
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        image: user.image,
-        roles: user.roles,
-        attributes: <String, dynamic>{
-          ...user.attributes,
-          'emailVerified': true,
-        },
-      );
-      user = await _users.update(user) ?? user;
-    }
+    final result = await Future.sync(
+      () => _backend.signInWithEmailOtp(
+        AuthEmailOtpSignInCommand(
+          email: normalizedEmail,
+          codeHash: _digestCode(code),
+          now: now ?? DateTime.now(),
+          candidate: AuthUser(
+            id: secureRandomToken(length: 24),
+            email: normalizedEmail,
+            name: name?.trim().isEmpty == true ? null : name?.trim(),
+            image: image?.trim().isEmpty == true ? null : image?.trim(),
+          ),
+          disableSignUp: disableSignUp,
+        ),
+      ),
+    );
+    final user = _requireAppliedTransition(result);
     return AuthEmailOtpSignInResult(user: user);
   }
 
@@ -418,21 +413,17 @@ final class EmailOtpPlugin<TContext>
     final user = await _users.findById(userId);
     final email = user?.email;
     if (user == null || email == null) throw AuthFlowException('invalid_otp');
-    await _verify(
-      email: email,
-      type: AuthEmailOtpType.emailVerification,
-      code: code,
-      now: now,
+    final result = await Future.sync(
+      () => _backend.verifyUserEmailWithOtp(
+        AuthEmailOtpVerifyUserCommand(
+          userId: user.id,
+          email: email,
+          codeHash: _digestCode(code),
+          now: now ?? DateTime.now(),
+        ),
+      ),
     );
-    final updated = AuthUser(
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      image: user.image,
-      roles: user.roles,
-      attributes: <String, dynamic>{...user.attributes, 'emailVerified': true},
-    );
-    return await _users.update(updated) ?? updated;
+    return _requireAppliedTransition(result);
   }
 
   Future<AuthEmailOtp> _verify({
@@ -444,7 +435,16 @@ final class EmailOtpPlugin<TContext>
     _ensureConfigured();
     final normalizedEmail = _email(email);
     if (code.trim().isEmpty) throw AuthFlowException('invalid_otp');
-    final result = await _store.verify(normalizedEmail, type, code, now: now);
+    final result = await Future.sync(
+      () => _backend.verifyEmailOtp(
+        AuthEmailOtpVerifyCommand(
+          email: normalizedEmail,
+          type: type,
+          codeHash: _digestCode(code),
+          now: now ?? DateTime.now(),
+        ),
+      ),
+    );
     switch (result.status) {
       case AuthEmailOtpVerificationStatus.verified:
         return result.otp!;
@@ -454,6 +454,36 @@ final class EmailOtpPlugin<TContext>
         throw AuthFlowException('otp_too_many_attempts');
       case AuthEmailOtpVerificationStatus.invalid:
         throw AuthFlowException('invalid_otp');
+    }
+  }
+
+  String _digestCode(String code) {
+    try {
+      return digestAuthEmailOtpCode(code: code, secret: _secret);
+    } on ArgumentError {
+      throw AuthFlowException('invalid_otp');
+    }
+  }
+
+  static AuthUser _requireAppliedTransition(
+    AuthEmailOtpUserTransitionResult result,
+  ) {
+    switch (result.status) {
+      case AuthEmailOtpUserTransitionStatus.applied:
+        final user = result.user;
+        if (user == null || authUserIsDisabled(user)) {
+          throw AuthFlowException('user_not_found');
+        }
+        return user;
+      case AuthEmailOtpUserTransitionStatus.expired:
+        throw AuthFlowException('otp_expired');
+      case AuthEmailOtpUserTransitionStatus.tooManyAttempts:
+        throw AuthFlowException('otp_too_many_attempts');
+      case AuthEmailOtpUserTransitionStatus.invalid:
+        throw AuthFlowException('invalid_otp');
+      case AuthEmailOtpUserTransitionStatus.userNotFound:
+      case AuthEmailOtpUserTransitionStatus.userUnavailable:
+        throw AuthFlowException('user_not_found');
     }
   }
 
@@ -523,13 +553,11 @@ final class EmailOtpPlugin<TContext>
       );
 
   static String _email(String value) {
-    final normalized = normalizeAuthEmailOtpEmail(value);
-    if (normalized.isEmpty ||
-        normalized.length > 320 ||
-        !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(normalized)) {
+    try {
+      return normalizeAuthOneTimeEmail(value);
+    } on ArgumentError {
       throw AuthFlowException('invalid_email');
     }
-    return normalized;
   }
 
   static String _string(Map<String, dynamic> input, String key) {
