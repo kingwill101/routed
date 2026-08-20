@@ -18,5 +18,6 @@ export 'src/testing/organization_store_conformance.dart';
 export 'src/testing/phone_number_backend_conformance.dart';
 export 'src/testing/saml_verifier_conformance.dart';
 export 'src/testing/scim_connection_store_conformance.dart';
+export 'src/testing/scim_application_projection_store_conformance.dart';
 export 'src/testing/two_factor_backend_conformance.dart';
 export 'src/testing/username_store_conformance.dart';
