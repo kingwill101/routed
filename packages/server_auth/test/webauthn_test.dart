@@ -264,6 +264,287 @@ void main() {
       },
     );
 
+    test(
+      'registers and authenticates a browser-shaped FIDO U2F attestation',
+      () async {
+        final fixture = _Fixture();
+        await fixture.store.users.create(fixture.user);
+        final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        final saved = await fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _u2fRegistrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            attestationKey: attestationKey,
+          ),
+        );
+
+        expect(saved.publicKey, isNotEmpty);
+        expect(saved.counter, 0);
+
+        final authentication = await fixture.feature.beginAuthentication(
+          context: fixture.context,
+          userId: fixture.user.id,
+        );
+        final result = await fixture.feature.finishAuthentication(
+          context: fixture.context,
+          credential: _assertionCredential(
+            challenge: authentication.challenge,
+            credentialId: saved.credentialId,
+            keyPair: fixture.keyPair,
+            counter: 1,
+          ),
+          userId: fixture.user.id,
+        );
+        expect(result.user.id, fixture.user.id);
+        expect(result.authenticator.counter, 1);
+      },
+    );
+
+    test(
+      'rejects a FIDO U2F signature with non-exact verification data',
+      () async {
+        final fixture = _Fixture();
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: _u2fRegistrationCredential(
+              challenge: registration.challenge,
+              keyPair: fixture.keyPair,
+              wrongVerificationData: true,
+            ),
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'webauthn_attestation_invalid',
+            ),
+          ),
+        );
+      },
+    );
+
+    test(
+      'rejects a FIDO U2F credential ID that is not bound to authData',
+      () async {
+        final fixture = _Fixture();
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        final credential = _u2fRegistrationCredential(
+          challenge: registration.challenge,
+          keyPair: fixture.keyPair,
+        );
+        final mismatchedId = base64UrlNoPadding(
+          Uint8List.fromList(List<int>.filled(16, 0xff)),
+        );
+        credential['id'] = mismatchedId;
+        credential['rawId'] = mismatchedId;
+
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: credential,
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'webauthn_credential_invalid',
+            ),
+          ),
+        );
+      },
+    );
+
+    test('rejects malformed FIDO U2F COSE EC2 coordinates', () async {
+      final fixture = _Fixture();
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+      final malformedCoseKey = cbor.cbor.encode(<Object?, Object?>{
+        1: 2,
+        3: -7,
+        -1: 1,
+        -2: List<int>.filled(31, 0),
+        -3: List<int>.filled(32, 0),
+      });
+
+      await expectLater(
+        () => fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _u2fRegistrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            cosePublicKey: malformedCoseKey,
+          ),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'webauthn_public_key_invalid',
+          ),
+        ),
+      );
+    });
+
+    test(
+      'rejects FIDO U2F statements without exactly one bounded x5c leaf',
+      () async {
+        Future<void> expectInvalidCertificateChain(List<Object?> chain) async {
+          final fixture = _Fixture();
+          final registration = await fixture.feature.beginRegistration(
+            context: fixture.context,
+            user: fixture.user,
+          );
+          await expectLater(
+            () => fixture.feature.finishRegistration(
+              context: fixture.context,
+              user: fixture.user,
+              credential: _u2fRegistrationCredential(
+                challenge: registration.challenge,
+                keyPair: fixture.keyPair,
+                certificateChain: chain,
+              ),
+            ),
+            throwsA(
+              isA<AuthFlowException>().having(
+                (error) => error.code,
+                'code',
+                'webauthn_attestation_invalid',
+              ),
+            ),
+          );
+        }
+
+        final validCertificate = _packedAttestationCertificate(
+          _KeyPair.create(privateValue: BigInt.two),
+        );
+        await expectInvalidCertificateChain(const <Object?>[]);
+        await expectInvalidCertificateChain(<Object?>[
+          validCertificate,
+          validCertificate,
+        ]);
+        await expectInvalidCertificateChain(<Object?>[
+          List<int>.filled(16385, 0),
+        ]);
+        final rsaKeyPair = _RsaKeyPair.create();
+        await expectInvalidCertificateChain(<Object?>[
+          _packedRsaAttestationCertificate(rsaKeyPair),
+        ]);
+      },
+    );
+
+    test(
+      'rejects malformed FIDO U2F attestation CBOR with a stable error',
+      () async {
+        final fixture = _Fixture();
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        final credential = _u2fRegistrationCredential(
+          challenge: registration.challenge,
+          keyPair: fixture.keyPair,
+        );
+        final response =
+            Map<String, dynamic>.from(credential['response']! as Map)
+              ..['attestationObject'] = base64UrlNoPadding(
+                Uint8List.fromList(<int>[0xa1, 0x01]),
+              );
+        credential['response'] = response;
+
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: credential,
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'webauthn_attestation_invalid',
+            ),
+          ),
+        );
+      },
+    );
+
+    test('rejects malformed DER and raw FIDO U2F signatures', () async {
+      final fixture = _Fixture();
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+      final certificate = _packedAttestationCertificate(
+        _KeyPair.create(privateValue: BigInt.two),
+      );
+      final malformedCertificate = <Object?>[
+        <int>[...certificate, 0x00],
+      ];
+
+      await expectLater(
+        () => fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _u2fRegistrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            certificateChain: malformedCertificate,
+          ),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'webauthn_attestation_invalid',
+          ),
+        ),
+      );
+
+      final secondFixture = _Fixture();
+      final secondRegistration = await secondFixture.feature.beginRegistration(
+        context: secondFixture.context,
+        user: secondFixture.user,
+      );
+      await expectLater(
+        () => secondFixture.feature.finishRegistration(
+          context: secondFixture.context,
+          user: secondFixture.user,
+          credential: _u2fRegistrationCredential(
+            challenge: secondRegistration.challenge,
+            keyPair: secondFixture.keyPair,
+            rawSignature: true,
+          ),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'webauthn_attestation_invalid',
+          ),
+        ),
+      );
+    });
+
     test('registers a browser-shaped packed ES256 self-attestation', () async {
       final fixture = _Fixture(
         registrationOptions: const WebAuthnRegistrationOptions(
@@ -990,6 +1271,90 @@ Map<String, dynamic> _registrationCredential({
   };
 }
 
+Map<String, dynamic> _u2fRegistrationCredential({
+  required String challenge,
+  required _KeyPair keyPair,
+  String origin = 'https://example.com',
+  _KeyPair? attestationKey,
+  List<Object?>? certificateChain,
+  List<int>? cosePublicKey,
+  bool corruptSignature = false,
+  bool rawSignature = false,
+  bool wrongVerificationData = false,
+}) {
+  final credentialId = Uint8List.fromList(
+    List<int>.generate(16, (index) => index + 1),
+  );
+  final coseKey =
+      cosePublicKey ??
+      cbor.cbor.encode(<Object?, Object?>{
+        1: 2,
+        3: -7,
+        -1: 1,
+        -2: keyPair.x.toList(growable: false),
+        -3: keyPair.y.toList(growable: false),
+      });
+  final rpIdHash = crypto.sha256.convert(utf8.encode('example.com')).bytes;
+  final authData = <int>[
+    ...rpIdHash,
+    0x41,
+    0,
+    0,
+    0,
+    0,
+    ...List<int>.filled(16, 0),
+    credentialId.length >> 8,
+    credentialId.length & 0xff,
+    ...credentialId,
+    ...coseKey,
+  ];
+  final clientDataJson = _clientData(
+    type: 'webauthn.create',
+    challenge: challenge,
+    origin: origin,
+  );
+  final clientDataHash = crypto.sha256.convert(clientDataJson).bytes;
+  final publicKeyU2F = <int>[0x04, ...keyPair.x, ...keyPair.y];
+  final verificationData = <int>[
+    0x00,
+    ...rpIdHash,
+    ...clientDataHash,
+    ...credentialId,
+    ...publicKeyU2F,
+  ];
+  final signingKey =
+      attestationKey ?? _KeyPair.create(privateValue: BigInt.two);
+  final derSignature = _signEs256(
+    signingKey,
+    wrongVerificationData ? verificationData.sublist(1) : verificationData,
+  );
+  final signature = rawSignature
+      ? _rawEs256Signature(derSignature)
+      : derSignature;
+  if (corruptSignature) signature[signature.length - 1] ^= 0x01;
+  final attestationObject = cbor.cbor.encode(<String, Object?>{
+    'fmt': 'fido-u2f',
+    'authData': authData,
+    'attStmt': <String, Object?>{
+      'x5c':
+          certificateChain ??
+          <Object?>[_packedAttestationCertificate(signingKey)],
+      'sig': signature,
+    },
+  });
+  final encodedId = base64UrlNoPadding(credentialId);
+  return <String, dynamic>{
+    'id': encodedId,
+    'rawId': encodedId,
+    'type': 'public-key',
+    'response': <String, dynamic>{
+      'clientDataJSON': base64UrlNoPadding(clientDataJson),
+      'attestationObject': base64UrlNoPadding(attestationObject),
+      'transports': <String>['usb'],
+    },
+  };
+}
+
 Map<String, dynamic> _assertionCredential({
   required String challenge,
   required String credentialId,
@@ -1113,6 +1478,27 @@ Uint8List _signEs256(_KeyPair keyPair, List<int> message) {
   final r = _derInteger(signature.r);
   final s = _derInteger(signature.s);
   return Uint8List.fromList(<int>[0x30, r.length + s.length, ...r, ...s]);
+}
+
+Uint8List _rawEs256Signature(Uint8List derSignature) {
+  final parser = ASN1Parser(derSignature);
+  final sequence = parser.nextObject();
+  if (parser.hasNext() ||
+      sequence is! ASN1Sequence ||
+      sequence.elements?.length != 2 ||
+      sequence.elements![0] is! ASN1Integer ||
+      sequence.elements![1] is! ASN1Integer) {
+    throw StateError('Expected a DER ECDSA signature');
+  }
+  final r = (sequence.elements![0] as ASN1Integer).integer;
+  final s = (sequence.elements![1] as ASN1Integer).integer;
+  if (r == null || s == null) {
+    throw StateError('Expected ECDSA signature integers');
+  }
+  return Uint8List.fromList(<int>[
+    ..._bigIntBytes(r, 32),
+    ..._bigIntBytes(s, 32),
+  ]);
 }
 
 List<int> _derInteger(BigInt value) {

@@ -121,9 +121,12 @@ final class AuthWebAuthnAuthenticationResult {
 ///
 /// This plugin supports `none` attestation plus cryptographically verified
 /// packed self- and X.509 certificate-backed attestation with ES256
-/// (`alg: -7`) and RS256 (`alg: -257`) passkeys.
+/// (`alg: -7`) and RS256 (`alg: -257`) passkeys, and FIDO U2F attestation.
 /// It deliberately rejects unsupported attestation formats and COSE
 /// algorithms instead of accepting an assertion that has not been verified.
+/// FIDO U2F verification does not establish trusted hardware provenance;
+/// applications must apply an explicit attestation trust policy if they need
+/// one.
 /// Applications that need other WebAuthn algorithms can add them after the
 /// same parsing and replay guarantees are implemented.
 final class WebAuthnPlugin<TContext>
@@ -532,6 +535,12 @@ final class WebAuthnPlugin<TContext>
               ?.userVerification ==
           'required',
     );
+    if (!_constantTimeBytesEqual(
+      parsed.credentialId,
+      attestation.credentialId,
+    )) {
+      throw AuthFlowException('webauthn_credential_invalid');
+    }
     await _consumeChallenge(
       clientData.challenge,
       ceremony: AuthWebAuthnCeremony.registration,
@@ -914,6 +923,14 @@ final class WebAuthnPlugin<TContext>
         credentialPublicKey: parsed.publicKeyCose!,
         aaguid: parsed.aaguid!,
       );
+    } else if (format == 'fido-u2f') {
+      _verifyFidoU2fAttestation(
+        statement: statement,
+        authenticatorData: authDataBytes,
+        clientDataHash: clientDataHash,
+        credentialId: parsed.credentialId!,
+        credentialPublicKey: parsed.publicKeyCose!,
+      );
     } else {
       throw AuthFlowException('webauthn_attestation_unsupported');
     }
@@ -986,6 +1003,139 @@ final class WebAuthnPlugin<TContext>
       message: signedData,
       signature: Uint8List.fromList(signatureValue.cast<int>()),
     )) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+  }
+
+  void _verifyFidoU2fAttestation({
+    required Map statement,
+    required Uint8List authenticatorData,
+    required Uint8List clientDataHash,
+    required Uint8List credentialId,
+    required Uint8List credentialPublicKey,
+  }) {
+    if (statement.length != 2 ||
+        !statement.containsKey('x5c') ||
+        !statement.containsKey('sig')) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    final certificateChain = statement['x5c'];
+    final signatureValue = statement['sig'];
+    if (certificateChain is! List ||
+        certificateChain.length != 1 ||
+        signatureValue is! List ||
+        signatureValue.any(
+          (value) => value is! int || value < 0 || value > 255,
+        )) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    final certificateBytes = certificateChain.single;
+    if (certificateBytes is! List ||
+        certificateBytes.isEmpty ||
+        certificateBytes.length > 16384 ||
+        certificateBytes.any(
+          (value) => value is! int || value < 0 || value > 255,
+        )) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+
+    final credentialKey = _decodeCosePublicKey(credentialPublicKey);
+    if (credentialKey.algorithm != -7 ||
+        credentialKey.x == null ||
+        credentialKey.y == null) {
+      throw AuthFlowException('webauthn_attestation_unsupported');
+    }
+    final publicKeyU2F = Uint8List.fromList(<int>[
+      0x04,
+      ...credentialKey.x!,
+      ...credentialKey.y!,
+    ]);
+    final certificateKey = _parseFidoU2fAttestationCertificate(
+      Uint8List.fromList(certificateBytes.cast<int>()),
+    );
+    if (certificateKey.algorithm != -7 ||
+        certificateKey.x == null ||
+        certificateKey.y == null) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    final verificationData = Uint8List.fromList(<int>[
+      0x00,
+      ...authenticatorData.sublist(0, 32),
+      ...clientDataHash,
+      ...credentialId,
+      ...publicKeyU2F,
+    ]);
+    if (!_verifySignatureWithKey(
+      key: certificateKey,
+      algorithm: -7,
+      message: verificationData,
+      signature: Uint8List.fromList(signatureValue.cast<int>()),
+      derOnly: true,
+    )) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+  }
+
+  _CosePublicKey _parseFidoU2fAttestationCertificate(Uint8List bytes) {
+    try {
+      final parser = ASN1Parser(bytes);
+      final certificate = parser.nextObject();
+      if (parser.hasNext() || certificate is! ASN1Sequence) {
+        throw const FormatException();
+      }
+      final certificateElements = certificate.elements;
+      if (certificateElements == null || certificateElements.length != 3) {
+        throw const FormatException();
+      }
+      final tbsCertificate = certificateElements[0];
+      final signatureAlgorithm = certificateElements[1];
+      final signatureValue = certificateElements[2];
+      if (tbsCertificate is! ASN1Sequence ||
+          signatureAlgorithm is! ASN1Sequence ||
+          signatureValue is! ASN1BitString ||
+          signatureValue.unusedbits != 0 ||
+          signatureValue.stringValues == null ||
+          signatureValue.stringValues!.isEmpty) {
+        throw const FormatException();
+      }
+      final elements = tbsCertificate.elements;
+      if (elements == null) throw const FormatException();
+      var offset = 0;
+      if (elements.isNotEmpty && elements.first.tag == 0xa0) {
+        final versionParser = ASN1Parser(elements.first.valueBytes);
+        final version = versionParser.nextObject();
+        if (versionParser.hasNext() || version is! ASN1Integer) {
+          throw const FormatException();
+        }
+        offset = 1;
+      }
+      if (elements.length < offset + 6 ||
+          elements[offset] is! ASN1Integer ||
+          elements[offset + 1] is! ASN1Sequence ||
+          elements[offset + 2] is! ASN1Sequence ||
+          elements[offset + 3] is! ASN1Sequence ||
+          elements[offset + 4] is! ASN1Sequence ||
+          elements[offset + 5] is! ASN1Sequence) {
+        throw const FormatException();
+      }
+      final tbsSignatureAlgorithm = elements[offset + 1];
+      if (!_constantTimeBytesEqual(
+        tbsSignatureAlgorithm.encodedBytes!,
+        signatureAlgorithm.encodedBytes!,
+      )) {
+        throw const FormatException();
+      }
+      final validity = elements[offset + 3] as ASN1Sequence;
+      final validityElements = validity.elements;
+      if (validityElements == null ||
+          validityElements.length != 2 ||
+          validityElements.any(
+            (value) => value is! ASN1UtcTime && value is! ASN1GeneralizedTime,
+          )) {
+        throw const FormatException();
+      }
+      return _certificatePublicKey(elements[offset + 5] as ASN1Sequence);
+    } catch (_) {
       throw AuthFlowException('webauthn_attestation_invalid');
     }
   }
@@ -1398,6 +1548,7 @@ final class WebAuthnPlugin<TContext>
     required int algorithm,
     required Uint8List message,
     required Uint8List signature,
+    bool derOnly = false,
   }) {
     try {
       switch (algorithm) {
@@ -1411,7 +1562,11 @@ final class WebAuthnPlugin<TContext>
             _bytesToBigInt(key.y!),
           );
           if (point.isInfinity) return false;
-          final parsedSignature = _decodeEs256Signature(signature, parameters);
+          final parsedSignature = _decodeEs256Signature(
+            signature,
+            parameters,
+            derOnly: derOnly,
+          );
           if (parsedSignature == null) return false;
           final verifier = ECDSASigner(SHA256Digest())
             ..init(
@@ -1446,11 +1601,12 @@ final class WebAuthnPlugin<TContext>
 
   ECSignature? _decodeEs256Signature(
     Uint8List bytes,
-    ECDomainParameters parameters,
-  ) {
+    ECDomainParameters parameters, {
+    bool derOnly = false,
+  }) {
     BigInt? r;
     BigInt? s;
-    if (bytes.length == 64) {
+    if (!derOnly && bytes.length == 64) {
       r = _bytesToBigInt(bytes.sublist(0, 32));
       s = _bytesToBigInt(bytes.sublist(32));
     } else {
