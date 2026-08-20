@@ -162,7 +162,12 @@ void main() {
       limiter.operations.clear();
       final created = await client.postJson(
         '/auth/organization/create',
-        {'name': 'Acme', 'slug': 'acme', '_csrf': csrf},
+        {
+          'name': 'Acme',
+          'slug': 'acme',
+          'idempotencyKey': 'create-acme-0001',
+          '_csrf': csrf,
+        },
         headers: {
           HttpHeaders.cookieHeader: [_cookie(cookie)],
         },

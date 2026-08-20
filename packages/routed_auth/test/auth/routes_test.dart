@@ -305,7 +305,12 @@ void main() {
 
         final created = await client.postJson(
           '/auth/organization/create',
-          <String, dynamic>{'name': 'Acme', 'slug': 'acme', '_csrf': csrf},
+          <String, dynamic>{
+            'name': 'Acme',
+            'slug': 'acme',
+            'idempotencyKey': 'create-acme-0001',
+            '_csrf': csrf,
+          },
           headers: {
             HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
           },

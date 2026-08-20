@@ -325,6 +325,15 @@ mutations use `POST` and inherit Routed's authentication, origin, Fetch
 Metadata, CSRF, rate-limit, generic-error, and retry-header handling from the
 operation descriptor.
 
+Create, invite, role/team create, and team-member add requests require a
+bounded, non-secret `idempotencyKey`. Retrying the same key and exact request
+returns the original durable result; reusing it across an actor, organization,
+operation, or changed payload fails closed. Organization stores recheck scoped
+membership snapshots inside atomic capacity, uniqueness, creator-preservation,
+and cascade commands. Store-confirmed replays skip delivery and post-commit
+lifecycle/event callbacks. Pre-commit transformation hooks remain a host
+boundary and may run again before the store identifies a retry.
+
 Server-session deployments may persist active organization/team convenience
 state. Membership is still revalidated on every scoped request, and stale
 selection is cleared. JWT clients keep selection locally and send explicit

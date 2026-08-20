@@ -6,6 +6,9 @@
 - Mount the opt-in SCIM Groups collection and resource operations across
   GET, POST, PUT, PATCH, and DELETE while preserving Group scopes, SCIM media
   types/status codes, and host-owned session isolation.
+- Require bounded idempotency keys on Routed organization create/invite/add
+  routes and preserve the server plugin's atomic snapshot, capacity, cascade,
+  and deterministic replay contract through portable endpoint metadata.
 - Derive Routed auth runtime durability from typed `AuthOptions` posture,
   removing the independently configurable provider durability flag, and
   require production options to boot through one typed deployment so proxy,

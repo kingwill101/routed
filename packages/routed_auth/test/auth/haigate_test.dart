@@ -168,12 +168,14 @@ void main() {
             user: owner,
             name: 'First',
             slug: 'first',
+            idempotencyKey: 'create-first-0001',
           )).data;
           final second = (await feature.createOrganization(
             context: ctx,
             user: owner,
             name: 'Second',
             slug: 'second',
+            idempotencyKey: 'create-second-0001',
           )).data;
           final firstTeam = (await store.listTeams(first.id)).single;
           ctx.request.setAttribute(

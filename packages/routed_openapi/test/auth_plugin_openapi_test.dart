@@ -63,6 +63,40 @@ void main() {
       _expectGeneratedClientCompatible(spec);
     });
 
+    test('preserves atomic organization replay semantics', () {
+      final spec = _registry(<AuthServerPlugin<Object>>[
+        OrganizationPlugin<Object>(store: InMemoryAuthOrganizationStore()),
+      ]).toOpenApi31(info: _info);
+
+      final invite = spec.paths['/auth/organization/invite-member']!.post!;
+      expect(
+        invite.extensions[AuthPluginOpenApiGenerator
+            .operationSemanticsExtension],
+        <String, Object?>{
+          'effect': 'mutation',
+          'persistence': 'durable',
+          'atomicity': 'atomic',
+          'replaySafety': 'idempotent',
+          'persistenceReference': <String, Object?>{
+            'schemaId': 'organization',
+            'atomicOperationId': 'createInvitation',
+          },
+        },
+      );
+      final update = spec.paths['/auth/organization/update']!.post!;
+      expect(
+        update.extensions[AuthPluginOpenApiGenerator
+            .operationSemanticsExtension],
+        <String, Object?>{
+          'effect': 'mutation',
+          'persistence': 'durable',
+          'atomicity': 'nonAtomic',
+          'replaySafety': 'idempotent',
+          'persistenceReference': <String, Object?>{'schemaId': 'organization'},
+        },
+      );
+    });
+
     test('composed plugin additions appear without a route catalogue', () {
       final withoutMagicLink = _registry(<AuthServerPlugin<Object>>[
         AnonymousPlugin<Object>(),
