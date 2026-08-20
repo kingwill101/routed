@@ -266,9 +266,11 @@ account, session, client, and plugin contracts above:
   atomic store mutation boundaries, tombstones, generic errors, Routed/OpenAPI
   transport, and a stable-resource-ID-only application role/membership
   projection capability. Keep the real projection transaction application-owned.
-- [ ] Add explicit application identity projection/reconciliation around stable
-  directory subjects; never infer links from email or grant sign-in access from
-  provisioning alone.
+- [x] Add explicit application-owned identity projection and complete-snapshot
+  reconciliation around exact connection-bound SCIM resource IDs, with
+  optimistic/idempotent commands, drift detection, final tombstones, validated
+  Group references, rollback conformance, and permanent scope-deletion fences.
+  Never infer links from email or grant sign-in access from provisioning alone.
 - [x] Add a managed connection and digest-only credential catalog with scoped,
   expiry/revocation-aware one-time issuance and rotation APIs, required
   idempotency payload binding, exact tenant/organization authorization,

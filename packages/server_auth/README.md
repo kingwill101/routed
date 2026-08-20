@@ -465,15 +465,10 @@ when its backend cannot provide those semantics; in particular, this package
 does not claim interactive multi-step transaction support for Cloudflare D1.
 
 SCIM Users and Groups are directory resources, not authentication users,
-application roles, or organization memberships. The plugin never
-creates a sign-in method, grants application access, or links an existing auth
-user by email. Directory lifecycle is explicit (`active`, `inactive`, or
-`tombstoned`). Applications that need a stable link can implement
-`AuthScimApplicationIdentityResolver`, whose lookup intentionally exposes only
-the connection-bound resource ID and optional immutable `externalId`. Profile
-projection, access changes, or session revocation belong in an application-owned
-`AuthScimLifecycleCapability`, composed by the provisioning store within the
-same backend transaction when rollback is required.
+application roles, or organization memberships. The plugin never creates a
+sign-in method, grants application access, or links an existing auth user by
+email. Directory lifecycle is explicit (`active`, `inactive`, or
+`tombstoned`).
 
 Groups contain only bounded direct references to stable SCIM User or Group
 resource IDs. The provisioning store atomically owns group create, replace,
@@ -483,12 +478,87 @@ domain, reject duplicate or conflicting members, and remove live memberships
 when tombstoning. No role or access grant is inferred from a display name,
 email, or Group membership.
 
-Applications may implement `AuthScimRoleMembershipProjectionCapability` to
-translate stable directory Group/member resource IDs into their own roles or
-memberships. The provisioning store invokes that capability inside the same
-real backend transaction when rollback across directory state and application
-projection is required. Routed cannot make unrelated stores or external
-systems atomic.
+Applications that need a local directory projection use the separate
+`AuthScimApplicationProjectionStore`. Its key contains only the exact
+connection, tenant, organization, provisioning domain, SCIM resource ID, and
+resource kind. Email, `userName`, `externalId`, auth-user IDs, roles, sessions,
+and credentials are deliberately absent from the identity key.
+
+```dart
+import 'package:server_auth/server_auth.dart';
+
+final projectionStore = MyDurableScimApplicationProjectionStore(database);
+final scope = AuthScimApplicationProjectionScope(
+  connectionId: connection.id,
+  tenantId: connection.tenantId,
+  organizationId: connection.organizationId,
+  provisioningDomainId: connection.provisioningDomainId,
+);
+
+final subject = AuthScimApplicationProjectionSubject(
+  scope: scope,
+  resourceId: directoryUser.id,
+  kind: AuthScimApplicationSubjectKind.user,
+);
+final desired = AuthScimApplicationProjectionSnapshot(
+  subject: subject,
+  sourceVersion: directoryUser.meta.version ??
+      directoryUser.meta.lastModified.toIso8601String(),
+  // Application-defined SHA-256 over the canonical fields it projects.
+  sourceDigest: await digestCanonicalDirectoryProfile(directoryUser),
+  state: directoryUser.data.active
+      ? AuthScimApplicationProjectionState.active
+      : AuthScimApplicationProjectionState.disabled,
+);
+
+final current = await projectionStore.list(
+  AuthScimApplicationProjectionQuery(scope: scope),
+);
+final result = await projectionStore.reconcile(
+  AuthScimApplicationReconciliationCommand(
+    operationId: reconciliationJobId,
+    scope: scope,
+    expectedProjectionSnapshotId: current.projectionSnapshotId,
+    // This must be the complete authoritative snapshot for the scope.
+    authoritative: [desired, ...otherDirectorySubjects],
+  ),
+);
+```
+
+The store derives idempotency payload digests from the typed command. It
+rejects stale projection snapshots, cross-scope members, missing members,
+operation rebinding, and attempts to reactivate tombstoned resources. Group
+members are stable SCIM User or Group resource IDs only. A projection record
+still does not authorize the subject and cannot be exchanged for a session;
+the application must make any access decision through a separate explicit
+policy.
+
+`ScimPlugin` does not invoke the projection store automatically. Coordinate a
+directory commit and projection through a durable outbox, or implement both in
+one application-owned backend transaction. Routed does not claim atomicity
+across unrelated databases or external systems. Durable adapters should run
+`AuthScimApplicationProjectionStoreConformanceSuite` from
+`package:server_auth/testing.dart`.
+
+When permanently retiring a managed connection, delete its projection with
+the last observed snapshot ID:
+
+```dart
+await projectionStore.deleteScope(
+  AuthScimApplicationProjectionScopeDeletionCommand(
+    operationId: connectionDeletionJobId,
+    scope: scope,
+    expectedProjectionSnapshotId: current.projectionSnapshotId,
+  ),
+);
+```
+
+That operation atomically removes the scope and installs a permanent deletion
+fence, so delayed events cannot recreate it. This is intentionally separate
+from auth-user hard deletion: projection records contain no auth-user key and
+the projection store contributes no authentication inventory or user-deletion
+plan. `AuthScimConnectionPlugin` continues to own deletion of managed
+connection credentials through its existing coordinated deletion contract.
 
 The selected framework adapter mounts Bearer-authenticated
 `ServiceProviderConfig`, `ResourceTypes`, `Schemas`, and bounded User and Group

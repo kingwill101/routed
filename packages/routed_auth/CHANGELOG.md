@@ -6,6 +6,10 @@
   binding semantics. Routed session/cookie issuance remains postcommit, and
   durable stores without the commands fail closed instead of using a side
   in-memory store.
+- Re-export the server-neutral typed SCIM application projection and
+  reconciliation API. It intentionally contributes no Routed route, session,
+  authentication method, or client plugin; application code coordinates it
+  through its own transaction or durable outbox.
 - Finalize anonymous-account upgrades through the plugin's typed backend
   transaction only after Routed has issued the authenticated target session.
   Remove callback-based migration orchestration and keep failed session

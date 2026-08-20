@@ -1,5 +1,17 @@
 ## 0.2.0 - 2026-08-20
 
+- Breaking: replace callback-style SCIM identity, lifecycle, and role
+  projection seams with `AuthScimApplicationProjectionStore`. Projection keys
+  now contain only the exact connection/tenant/organization/provisioning-domain
+  binding, SCIM resource ID, and resource kind; email and auth-user lookup are
+  not representable in the contract.
+- Add typed optimistic/idempotent projection commands, complete-snapshot drift
+  detection and reconciliation, final resource tombstones, validated stable-ID
+  group membership, and snapshot-checked connection-scope deletion fences.
+- Add a transactional in-memory reference store plus reusable durable-adapter
+  conformance and generated property coverage for rollback, contention,
+  operation rebinding, scope isolation, hostile identifiers, deletion races,
+  and the invariant that projection cannot create a sign-in identity.
 - Add the exact `AuthApiKeyPrimaryMutationStore` command for durable safe
   primary-key revocation. Adapters recheck supported fallbacks inside their own
   transaction; unsupported and mixed stores fail closed without invoking the

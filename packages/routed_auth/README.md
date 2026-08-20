@@ -525,6 +525,50 @@ final bearerSecret = created.issuance.secret;
 Production deployments need a durable `AuthScimConnectionStore`; the bundled
 in-memory store is bounded and intended for tests and local development.
 
+### Application-owned SCIM projections
+
+`package:routed_auth/routed_auth.dart` also exports the server-neutral
+`AuthScimApplicationProjectionStore` API. It adds no Routed endpoint and no
+client plugin. Use it from an application outbox consumer or a transaction the
+application owns:
+
+```dart
+final scope = AuthScimApplicationProjectionScope(
+  connectionId: connection.id,
+  tenantId: connection.tenantId,
+  organizationId: connection.organizationId,
+  provisioningDomainId: connection.provisioningDomainId,
+);
+final subject = AuthScimApplicationProjectionSubject(
+  scope: scope,
+  resourceId: scimUser.id,
+  kind: AuthScimApplicationSubjectKind.user,
+);
+
+await projectionStore.apply(
+  AuthScimApplicationProjectionCommand(
+    operationId: projectionEventId,
+    mutation: AuthScimApplicationProjectionMutation.create,
+    desired: AuthScimApplicationProjectionSnapshot(
+      subject: subject,
+      sourceVersion: scimUser.meta.version ??
+          scimUser.meta.lastModified.toIso8601String(),
+      sourceDigest: await digestCanonicalDirectoryProfile(scimUser),
+      state: scimUser.data.active
+          ? AuthScimApplicationProjectionState.active
+          : AuthScimApplicationProjectionState.disabled,
+    ),
+  ),
+);
+```
+
+The identity key is the exact connection binding plus SCIM resource ID and
+kind. Never search by email, `userName`, display name, or `externalId`, and
+never create a Routed session merely because the projection exists. Retire a
+connection with the snapshot-checked `deleteScope` command; its deletion fence
+rejects delayed projection events. Durable adapters should run the projection
+store conformance suite exported by `package:server_auth/testing.dart`.
+
 ## Organizations
 
 Compose `OrganizationPlugin<EngineContext>` to opt in. `AuthRoutes` discovers
