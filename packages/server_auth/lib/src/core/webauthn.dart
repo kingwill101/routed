@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:cbor/simple.dart' as cbor;
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:cryptography/cryptography.dart' as cryptography;
 import 'package:pointycastle/asn1.dart';
 import 'package:pointycastle/export.dart';
 
@@ -53,6 +54,7 @@ final class AuthWebAuthnRegistrationOptions {
       'displayName': displayName,
     },
     'pubKeyCredParams': const <Map<String, dynamic>>[
+      <String, dynamic>{'type': 'public-key', 'alg': -8},
       <String, dynamic>{'type': 'public-key', 'alg': -7},
       <String, dynamic>{'type': 'public-key', 'alg': -257},
     ],
@@ -272,8 +274,9 @@ final class WebAuthnAttestationTrustPolicy {
 /// Typed WebAuthn/passkey plugin for `server_auth` runtimes.
 ///
 /// This plugin supports `none` attestation plus cryptographically verified
-/// packed self- and X.509 certificate-backed attestation with ES256
-/// (`alg: -7`) and RS256 (`alg: -257`) passkeys, and FIDO U2F attestation.
+/// packed self-attestation with EdDSA/Ed25519 (`alg: -8`), ES256 (`alg: -7`),
+/// and RS256 (`alg: -257`) passkeys, X.509 certificate-backed ES256 and RS256
+/// attestation, and FIDO U2F attestation.
 /// It deliberately rejects unsupported attestation formats and COSE
 /// algorithms instead of accepting an assertion that has not been verified.
 /// Certificate verification alone does not establish trusted hardware
@@ -678,7 +681,7 @@ final class WebAuthnPlugin<TContext>
       expectedType: 'webauthn.create',
       expectedOrigin: _canonicalOrigin(relyingParty.origin),
     );
-    final attestation = _parseAttestationObject(
+    final attestation = await _parseAttestationObject(
       parsed.attestationObject!,
       relyingPartyId: relyingParty.id,
       clientDataHash: Uint8List.fromList(
@@ -837,7 +840,7 @@ final class WebAuthnPlugin<TContext>
       ...authenticatorData,
       ...clientDataHash,
     ]);
-    if (!_verifySignature(
+    if (!await _verifySignature(
       coseKey: _decodeBase64Url(authenticator.publicKey),
       message: signedData,
       signature: signature,
@@ -1065,12 +1068,12 @@ final class WebAuthnPlugin<TContext>
     return _ClientData(challenge: challenge);
   }
 
-  _ParsedAttestation _parseAttestationObject(
+  Future<_ParsedAttestation> _parseAttestationObject(
     Uint8List bytes, {
     required String relyingPartyId,
     required Uint8List clientDataHash,
     required bool requireUserVerification,
-  }) {
+  }) async {
     dynamic decoded;
     try {
       decoded = cbor.cbor.decode(bytes, decodeBase64: false);
@@ -1106,7 +1109,7 @@ final class WebAuthnPlugin<TContext>
         kind: WebAuthnAttestationKind.none,
       );
     } else if (format == 'packed') {
-      verifiedStatement = _verifyPackedAttestation(
+      verifiedStatement = await _verifyPackedAttestation(
         statement: statement,
         authenticatorData: authDataBytes,
         clientDataHash: clientDataHash,
@@ -1114,7 +1117,7 @@ final class WebAuthnPlugin<TContext>
         aaguid: parsed.aaguid!,
       );
     } else if (format == 'fido-u2f') {
-      verifiedStatement = _verifyFidoU2fAttestation(
+      verifiedStatement = await _verifyFidoU2fAttestation(
         statement: statement,
         authenticatorData: authDataBytes,
         clientDataHash: clientDataHash,
@@ -1139,13 +1142,13 @@ final class WebAuthnPlugin<TContext>
     );
   }
 
-  _VerifiedAttestationStatement _verifyPackedAttestation({
+  Future<_VerifiedAttestationStatement> _verifyPackedAttestation({
     required Map statement,
     required Uint8List authenticatorData,
     required Uint8List clientDataHash,
     required Uint8List credentialPublicKey,
     required Uint8List aaguid,
-  }) {
+  }) async {
     if (statement.containsKey('ecdaaKeyId')) {
       throw AuthFlowException('webauthn_attestation_unsupported');
     }
@@ -1159,7 +1162,7 @@ final class WebAuthnPlugin<TContext>
     )) {
       throw AuthFlowException('webauthn_attestation_invalid');
     }
-    if (algorithm != -7 && algorithm != -257) {
+    if (algorithm != -8 && algorithm != -7 && algorithm != -257) {
       throw AuthFlowException('webauthn_attestation_unsupported');
     }
     final certificateChain = statement['x5c'];
@@ -1191,12 +1194,12 @@ final class WebAuthnPlugin<TContext>
         final issuer = certificates[index + 1];
         if (!_constantTimeBytesEqual(certificate.issuer, issuer.subject) ||
             !issuer.isCertificateAuthority ||
-            !_verifyCertificateSignature(certificate, issuer.publicKey)) {
+            !await _verifyCertificateSignature(certificate, issuer.publicKey)) {
           throw AuthFlowException('webauthn_attestation_invalid');
         }
       }
     }
-    if (!_verifySignatureWithKey(
+    if (!await _verifySignatureWithKey(
       key: key,
       algorithm: algorithm,
       message: signedData,
@@ -1216,13 +1219,13 @@ final class WebAuthnPlugin<TContext>
     );
   }
 
-  _VerifiedAttestationStatement _verifyFidoU2fAttestation({
+  Future<_VerifiedAttestationStatement> _verifyFidoU2fAttestation({
     required Map statement,
     required Uint8List authenticatorData,
     required Uint8List clientDataHash,
     required Uint8List credentialId,
     required Uint8List credentialPublicKey,
-  }) {
+  }) async {
     if (statement.length != 2 ||
         !statement.containsKey('x5c') ||
         !statement.containsKey('sig')) {
@@ -1274,7 +1277,7 @@ final class WebAuthnPlugin<TContext>
       ...credentialId,
       ...publicKeyU2F,
     ]);
-    if (!_verifySignatureWithKey(
+    if (!await _verifySignatureWithKey(
       key: certificateKey,
       algorithm: -7,
       message: verificationData,
@@ -1666,7 +1669,7 @@ final class WebAuthnPlugin<TContext>
     throw const FormatException();
   }
 
-  bool _verifyCertificateSignature(
+  Future<bool> _verifyCertificateSignature(
     _PackedAttestationCertificate certificate,
     _CosePublicKey issuerKey,
   ) => _verifySignatureWithKey(
@@ -1741,14 +1744,14 @@ final class WebAuthnPlugin<TContext>
     );
   }
 
-  bool _verifySignature({
+  Future<bool> _verifySignature({
     required Uint8List coseKey,
     required Uint8List message,
     required Uint8List signature,
-  }) {
+  }) async {
     try {
       final key = _decodeCosePublicKey(coseKey);
-      return _verifySignatureWithKey(
+      return await _verifySignatureWithKey(
         key: key,
         algorithm: key.algorithm,
         message: message,
@@ -1759,15 +1762,32 @@ final class WebAuthnPlugin<TContext>
     }
   }
 
-  bool _verifySignatureWithKey({
+  Future<bool> _verifySignatureWithKey({
     required _CosePublicKey key,
     required int algorithm,
     required Uint8List message,
     required Uint8List signature,
     bool derOnly = false,
-  }) {
+  }) async {
     try {
       switch (algorithm) {
+        case -8:
+          final publicKey = key.ed25519PublicKey;
+          if (publicKey == null ||
+              publicKey.length != 32 ||
+              signature.length != 64) {
+            return false;
+          }
+          return await cryptography.Ed25519().verify(
+            message,
+            signature: cryptography.Signature(
+              signature,
+              publicKey: cryptography.SimplePublicKey(
+                publicKey,
+                type: cryptography.KeyPairType.ed25519,
+              ),
+            ),
+          );
         case -7:
           if (key.x == null || key.y == null) {
             return false;
@@ -1877,6 +1897,19 @@ final class WebAuthnPlugin<TContext>
       throw AuthFlowException('webauthn_public_key_unsupported');
     }
     final algorithm = decoded[3];
+    if (algorithm is! int) {
+      throw AuthFlowException('webauthn_public_key_unsupported');
+    }
+    if (algorithm == -8) {
+      if (decoded[1] is! int ||
+          decoded[1] != 1 ||
+          decoded[-1] is! int ||
+          decoded[-1] != 6) {
+        throw AuthFlowException('webauthn_public_key_unsupported');
+      }
+      final publicKey = _coseBytes(decoded[-2], expectedLength: 32);
+      return _CosePublicKey(algorithm: algorithm, ed25519PublicKey: publicKey);
+    }
     if (algorithm == -7) {
       if (decoded[1] != 2 || decoded[-1] != 1) {
         throw AuthFlowException('webauthn_public_key_unsupported');
@@ -2146,6 +2179,7 @@ final class _CosePublicKey {
     this.y,
     this.modulus,
     this.exponent,
+    this.ed25519PublicKey,
   });
 
   final int algorithm;
@@ -2153,6 +2187,7 @@ final class _CosePublicKey {
   final Uint8List? y;
   final Uint8List? modulus;
   final Uint8List? exponent;
+  final Uint8List? ed25519PublicKey;
 }
 
 BigInt _bytesToBigInt(List<int> bytes) {

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:cbor/simple.dart' as cbor;
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:cryptography/cryptography.dart' as cryptography;
 import 'package:pointycastle/asn1.dart';
 import 'package:pointycastle/export.dart';
 import 'package:property_testing/property_testing.dart';
@@ -268,6 +269,197 @@ void main() {
         );
         expect(result.user.id, fixture.user.id);
         expect(result.authenticator.counter, 1);
+      },
+    );
+
+    test('registers and authenticates an Ed25519 passkey', () async {
+      final fixture = _Fixture();
+      final keyPair = await _Ed25519KeyPair.create();
+      await fixture.store.users.create(fixture.user);
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+      final credentialParameters =
+          registration.toJson()['pubKeyCredParams']! as List<dynamic>;
+      expect(
+        credentialParameters.first,
+        equals(<String, dynamic>{'type': 'public-key', 'alg': -8}),
+      );
+
+      final saved = await fixture.feature.finishRegistration(
+        context: fixture.context,
+        user: fixture.user,
+        credential: await _ed25519RegistrationCredential(
+          challenge: registration.challenge,
+          keyPair: keyPair,
+        ),
+      );
+
+      final authentication = await fixture.feature.beginAuthentication(
+        context: fixture.context,
+        userId: fixture.user.id,
+      );
+      final result = await fixture.feature.finishAuthentication(
+        context: fixture.context,
+        credential: await _ed25519AssertionCredential(
+          challenge: authentication.challenge,
+          credentialId: saved.credentialId,
+          keyPair: keyPair,
+          counter: 1,
+        ),
+        userId: fixture.user.id,
+      );
+
+      expect(result.user.id, fixture.user.id);
+      expect(result.authenticator.counter, 1);
+    });
+
+    test('registers packed Ed25519 self-attestation', () async {
+      final fixture = _Fixture();
+      final keyPair = await _Ed25519KeyPair.create();
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+
+      final saved = await fixture.feature.finishRegistration(
+        context: fixture.context,
+        user: fixture.user,
+        credential: await _ed25519RegistrationCredential(
+          challenge: registration.challenge,
+          keyPair: keyPair,
+          attestationFormat: 'packed',
+        ),
+      );
+
+      expect(saved.publicKey, isNotEmpty);
+    });
+
+    test('rejects malformed Ed25519 COSE keys', () async {
+      final keyPair = await _Ed25519KeyPair.create();
+      final malformedKeys = <List<int>>[
+        cbor.cbor.encode(<Object?, Object?>{
+          1: 2,
+          3: -8,
+          -1: 6,
+          -2: keyPair.publicKey,
+        }),
+        cbor.cbor.encode(<Object?, Object?>{
+          1: 1,
+          3: -8,
+          -1: 7,
+          -2: keyPair.publicKey,
+        }),
+        cbor.cbor.encode(<Object?, Object?>{
+          1: 1.0,
+          3: -8,
+          -1: 6,
+          -2: keyPair.publicKey,
+        }),
+        cbor.cbor.encode(<Object?, Object?>{
+          1: 1,
+          3: -8.0,
+          -1: 6,
+          -2: keyPair.publicKey,
+        }),
+        cbor.cbor.encode(<Object?, Object?>{
+          1: 1,
+          3: -8,
+          -1: 6,
+          -2: keyPair.publicKey.sublist(1),
+        }),
+        cbor.cbor.encode(<Object?, Object?>{
+          1: 1,
+          3: -8,
+          -1: 6,
+          -2: 'not-key-bytes',
+        }),
+      ];
+
+      for (final coseKey in malformedKeys) {
+        final fixture = _Fixture();
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        final credential = await _ed25519RegistrationCredential(
+          challenge: registration.challenge,
+          keyPair: keyPair,
+          cosePublicKey: coseKey,
+        );
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: credential,
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              anyOf(
+                'webauthn_public_key_invalid',
+                'webauthn_public_key_unsupported',
+              ),
+            ),
+          ),
+        );
+      }
+    });
+
+    test(
+      'rejects malformed and forged Ed25519 assertions generically',
+      () async {
+        final fixture = _Fixture();
+        final keyPair = await _Ed25519KeyPair.create();
+        await fixture.store.users.create(fixture.user);
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        final saved = await fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: await _ed25519RegistrationCredential(
+            challenge: registration.challenge,
+            keyPair: keyPair,
+          ),
+        );
+
+        for (final signature in <List<int>>[
+          List<int>.filled(63, 0),
+          List<int>.filled(65, 0),
+          List<int>.filled(64, 0),
+        ]) {
+          final authentication = await fixture.feature.beginAuthentication(
+            context: fixture.context,
+            userId: fixture.user.id,
+          );
+          final assertion = await _ed25519AssertionCredential(
+            challenge: authentication.challenge,
+            credentialId: saved.credentialId,
+            keyPair: keyPair,
+            counter: 1,
+          );
+          (assertion['response']! as Map<String, dynamic>)['signature'] =
+              base64UrlNoPadding(signature);
+
+          await expectLater(
+            () => fixture.feature.finishAuthentication(
+              context: fixture.context,
+              credential: assertion,
+              userId: fixture.user.id,
+            ),
+            throwsA(
+              isA<AuthFlowException>().having(
+                (error) => error.code,
+                'code',
+                'webauthn_signature_invalid',
+              ),
+            ),
+          );
+        }
       },
     );
 
@@ -1485,6 +1677,105 @@ void main() {
   );
 }
 
+Future<Map<String, dynamic>> _ed25519RegistrationCredential({
+  required String challenge,
+  required _Ed25519KeyPair keyPair,
+  String origin = 'https://example.com',
+  String attestationFormat = 'none',
+  List<int>? cosePublicKey,
+}) async {
+  final credentialId = Uint8List.fromList(
+    List<int>.generate(16, (index) => 0x40 + index),
+  );
+  final coseKey =
+      cosePublicKey ??
+      cbor.cbor.encode(<Object?, Object?>{
+        1: 1,
+        3: -8,
+        -1: 6,
+        -2: keyPair.publicKey,
+      });
+  final authData = <int>[
+    ...crypto.sha256.convert(utf8.encode('example.com')).bytes,
+    0x41,
+    0,
+    0,
+    0,
+    0,
+    ...List<int>.filled(16, 0),
+    credentialId.length >> 8,
+    credentialId.length & 0xff,
+    ...credentialId,
+    ...coseKey,
+  ];
+  final clientDataJson = _clientData(
+    type: 'webauthn.create',
+    challenge: challenge,
+    origin: origin,
+  );
+  final attestationStatement = <String, Object?>{};
+  if (attestationFormat == 'packed') {
+    attestationStatement
+      ..['alg'] = -8
+      ..['sig'] = await keyPair.sign(<int>[
+        ...authData,
+        ...crypto.sha256.convert(clientDataJson).bytes,
+      ]);
+  }
+  final attestationObject = cbor.cbor.encode(<String, Object?>{
+    'fmt': attestationFormat,
+    'authData': authData,
+    'attStmt': attestationStatement,
+  });
+  final encodedId = base64UrlNoPadding(credentialId);
+  return <String, dynamic>{
+    'id': encodedId,
+    'rawId': encodedId,
+    'type': 'public-key',
+    'response': <String, dynamic>{
+      'clientDataJSON': base64UrlNoPadding(clientDataJson),
+      'attestationObject': base64UrlNoPadding(attestationObject),
+      'transports': <String>['internal'],
+    },
+  };
+}
+
+Future<Map<String, dynamic>> _ed25519AssertionCredential({
+  required String challenge,
+  required String credentialId,
+  required _Ed25519KeyPair keyPair,
+  required int counter,
+  String origin = 'https://example.com',
+}) async {
+  final authenticatorData = <int>[
+    ...crypto.sha256.convert(utf8.encode('example.com')).bytes,
+    0x05,
+    (counter >> 24) & 0xff,
+    (counter >> 16) & 0xff,
+    (counter >> 8) & 0xff,
+    counter & 0xff,
+  ];
+  final clientDataJson = _clientData(
+    type: 'webauthn.get',
+    challenge: challenge,
+    origin: origin,
+  );
+  final signature = await keyPair.sign(<int>[
+    ...authenticatorData,
+    ...crypto.sha256.convert(clientDataJson).bytes,
+  ]);
+  return <String, dynamic>{
+    'id': credentialId,
+    'rawId': credentialId,
+    'type': 'public-key',
+    'response': <String, dynamic>{
+      'clientDataJSON': base64UrlNoPadding(clientDataJson),
+      'authenticatorData': base64UrlNoPadding(authenticatorData),
+      'signature': base64UrlNoPadding(signature),
+    },
+  };
+}
+
 Map<String, dynamic> _registrationCredential({
   required String challenge,
   required _KeyPair keyPair,
@@ -2011,6 +2302,33 @@ final class _KeyPair {
   final ECPrivateKey privateKey;
   final Uint8List x;
   final Uint8List y;
+}
+
+final class _Ed25519KeyPair {
+  _Ed25519KeyPair._({required this.keyPair, required this.publicKey});
+
+  static Future<_Ed25519KeyPair> create() async {
+    final algorithm = cryptography.Ed25519();
+    final keyPair = await algorithm.newKeyPairFromSeed(
+      List<int>.generate(32, (index) => index + 1),
+    );
+    final publicKey = await keyPair.extractPublicKey();
+    return _Ed25519KeyPair._(
+      keyPair: keyPair,
+      publicKey: Uint8List.fromList(publicKey.bytes),
+    );
+  }
+
+  final cryptography.SimpleKeyPair keyPair;
+  final Uint8List publicKey;
+
+  Future<Uint8List> sign(List<int> message) async {
+    final signature = await cryptography.Ed25519().sign(
+      message,
+      keyPair: keyPair,
+    );
+    return Uint8List.fromList(signature.bytes);
+  }
 }
 
 final class _RsaKeyPair {
