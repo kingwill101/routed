@@ -12,6 +12,7 @@ pubspec.lock
 openspec
 AGENTS.md
 storage/
+.freebuff/
 !packages/routed/lib/src/storage/
 !packages/routed/lib/src/storage/**
 !packages/routed/test/storage/
