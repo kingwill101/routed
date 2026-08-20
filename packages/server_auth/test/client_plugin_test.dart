@@ -57,6 +57,7 @@ void main() {
       const AuthAnonymousClientPlugin(),
       const AuthDeviceAuthorizationClientPlugin(),
       const AuthEmailOtpClientPlugin(),
+      const AuthPhoneNumberClientPlugin(),
       const AuthMagicLinkClientPlugin(),
       const AuthApiKeyClientPlugin(),
       const AuthWebAuthnClientPlugin(),

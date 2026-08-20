@@ -1248,10 +1248,19 @@ class AuthRoutes {
       'expired_token',
       'invalid_grant',
     }.contains(error.code);
+    final isAttemptLockout = const <String>{
+      'otp_too_many_attempts',
+      'phone_code_too_many_attempts',
+    }.contains(error.code);
+    final isMalformedPhoneNumber = error.code == 'invalid_phone_number';
     return ctx.json(
       {'error': sanitizeAuthErrorCode(error.code)},
       statusCode: error is AuthRateLimitException
           ? HttpStatus.tooManyRequests
+          : isAttemptLockout
+          ? HttpStatus.forbidden
+          : isMalformedPhoneNumber
+          ? HttpStatus.badRequest
           : isDeviceAuthorizationError
           ? HttpStatus.badRequest
           : HttpStatus.unauthorized,

@@ -34,6 +34,7 @@ import 'package:server_auth/server_auth.dart'
         AuthSessionStrategy,
         TwoFactorPlugin,
         OrganizationPlugin,
+        PhoneNumberPlugin,
         WebAuthnPlugin,
         AuthTwoFactorRequiredException,
         AuthTwoFactorStepUpToken,
@@ -166,6 +167,10 @@ class AuthManager {
   /// The configured WebAuthn/passkey plugin, if enabled for this runtime.
   WebAuthnPlugin<EngineContext>? get webAuthn =>
       runtime.plugin('webauthn') as WebAuthnPlugin<EngineContext>?;
+
+  /// The configured phone-number authentication plugin, if enabled.
+  PhoneNumberPlugin<EngineContext>? get phoneNumbers =>
+      runtime.plugin('phone_number') as PhoneNumberPlugin<EngineContext>?;
 
   SessionAuthService get sessionAuth => _sessionAuth ?? SessionAuth.instance;
 
