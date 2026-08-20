@@ -26,6 +26,9 @@
 - Preserve an organization owner through atomic, snapshot-checked membership
   removal, leave, demotion, role replacement, role mutation, and user-deletion
   operations, with a public durable-store ownership conformance helper.
+- Publish deterministic testing fixtures for credentials, email and phone OTP,
+  OAuth/OIDC, WebAuthn payloads, API keys, and two-factor flows, plus portable
+  endpoint-codec, HTTP, clock, delivery, gate, and concurrency helpers.
 - Extend the public durable-store conformance suite with contention cases for
   users, credentials, accounts, sessions, tokens, OAuth challenges, JWT
   versions, device authorization, and email OTP.
