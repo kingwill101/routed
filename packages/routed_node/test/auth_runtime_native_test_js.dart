@@ -27,10 +27,6 @@ void runNativeAuthRuntimeTests() {
       await verifyRuntimeAuthContract(
         origin: origin,
         send: (request) => _sendWithFetch(origin, request),
-        // bindNodeHttp currently resolves requests against the configured
-        // port (0), not the assigned ephemeral port. No-Origin requests are
-        // supported; hostile Origin and Fetch Metadata checks still run.
-        sendValidOriginHeader: false,
       );
     } finally {
       await handle.close(force: true);
@@ -53,9 +49,6 @@ void runNativeAuthRuntimeTests() {
         await engine.close();
       }
     },
-    skip:
-        'WebFetchRequest.rawHeaders does not yet forward Cookie, Origin, '
-        'X-CSRF-Token, or Sec-Fetch-Site from native Fetch requests.',
   );
 
   test('native Cloudflare Fetch startup errors are generic', () async {
