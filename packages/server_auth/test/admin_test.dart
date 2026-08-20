@@ -598,6 +598,7 @@ void main() {
           user: member,
           name: 'Acme',
           slug: 'acme',
+          idempotencyKey: 'create-acme-0001',
         )).data;
         await expectLater(
           _invoke(feature, 'admin.removeUser', admin, {'userId': member.id}),

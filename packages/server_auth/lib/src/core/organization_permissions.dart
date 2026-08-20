@@ -50,27 +50,62 @@ final class AuthOrganizationAccessControl {
     required AuthOrganizationMember member,
     required String resource,
     required String action,
+  }) async => (await authorize(
+    store: store,
+    member: member,
+    resource: resource,
+    action: action,
+  )).allowed;
+
+  Future<AuthOrganizationPermissionDecision> authorize({
+    required AuthOrganizationStore store,
+    required AuthOrganizationMember member,
+    required String resource,
+    required String action,
   }) async {
     final normalizedResource = resource.trim().toLowerCase();
     final normalizedAction = action.trim().toLowerCase();
-    if (normalizedResource.isEmpty || normalizedAction.isEmpty) return false;
+    if (normalizedResource.isEmpty || normalizedAction.isEmpty) {
+      return const AuthOrganizationPermissionDecision(allowed: false);
+    }
+    final snapshots = <AuthOrganizationRole>[];
     for (final roleName in member.roles) {
       final staticPermissions = staticRoles[roleName];
       if (_allows(staticPermissions, normalizedResource, normalizedAction)) {
-        return true;
+        return AuthOrganizationPermissionDecision(
+          allowed: true,
+          dynamicRoleSnapshots: snapshots,
+        );
       }
       if (dynamicRoles) {
         final role = await store.findRole(member.organizationId, roleName);
+        if (role != null) snapshots.add(role);
         if (_allows(role?.permissions, normalizedResource, normalizedAction)) {
-          return true;
+          return AuthOrganizationPermissionDecision(
+            allowed: true,
+            dynamicRoleSnapshots: snapshots,
+          );
         }
       }
     }
-    return false;
+    return AuthOrganizationPermissionDecision(
+      allowed: false,
+      dynamicRoleSnapshots: snapshots,
+    );
   }
 
   bool isKnownStaticRole(String role) =>
       staticRoles.containsKey(role.trim().toLowerCase());
+}
+
+final class AuthOrganizationPermissionDecision {
+  const AuthOrganizationPermissionDecision({
+    required this.allowed,
+    this.dynamicRoleSnapshots = const <AuthOrganizationRole>[],
+  });
+
+  final bool allowed;
+  final List<AuthOrganizationRole> dynamicRoleSnapshots;
 }
 
 bool _allows(
@@ -96,6 +131,7 @@ final class AuthOrganizationAuthorizationContext<TContext> {
     required this.organization,
     required this.membership,
     this.team,
+    this.authorizationRoleSnapshots = const <AuthOrganizationRole>[],
   });
 
   final TContext context;
@@ -103,6 +139,7 @@ final class AuthOrganizationAuthorizationContext<TContext> {
   final AuthOrganization organization;
   final AuthOrganizationMember membership;
   final AuthOrganizationTeam? team;
+  final List<AuthOrganizationRole> authorizationRoleSnapshots;
 
   bool ownsUser(String resourceUserId) => userId == resourceUserId.trim();
 }

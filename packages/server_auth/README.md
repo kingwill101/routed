@@ -605,13 +605,23 @@ organization-scoped permissions, dynamic roles, teams, typed lifecycle hooks,
 redacted audit events, and post-commit warnings. Organization roles remain
 separate from global `AuthPrincipal.roles`.
 
-`AuthOrganizationStore` is a logical, atomic persistence contract. It contains
-no SQL, D1 bindings, table names, migrations, or query builders. Production
-adapters must implement its create/accept/capacity/last-owner/role-rename and
-cascade operations transactionally. `InMemoryAuthOrganizationStore` is only
-for tests and local development. The plugin also advertises logical entity,
-relationship, uniqueness, index, and atomic-operation descriptors so adapters
-can build physical schemas without coupling `server_auth` to a database.
+`AuthOrganizationStore` is a logical persistence contract. High-risk writes
+also require `AuthOrganizationAtomicMutationStore`: the store rechecks actor,
+target, invitation, role, and team snapshots inside the same transaction that
+enforces capacity, uniqueness, last-creator, and cascade invariants. Production
+adapters should run `verifyAuthOrganizationStoreOwnershipConformance` to prove
+contention, deterministic replay, and rollback behavior. The contract contains
+no SQL, D1 bindings, table names, migrations, or query builders.
+
+Organization, invitation, role, team, and team-member creation requires a
+caller-generated `idempotencyKey` (8-128 ASCII letters, digits, `.`, `_`, `:`,
+or `-`). It is a non-secret retry/correlation value. The store binds it exactly
+to the organization, actor, operation, and request fingerprint and returns the
+original immutable result on a matching retry; conflicting reuse fails closed.
+Pre-commit transformation hooks run outside the durable transaction and may be
+called again when a client retries. A store-confirmed replay skips delivery,
+post-commit hooks, and audit/event sinks; failures from those callbacks on the
+first commit surface warnings rather than rolling back durable state.
 
 Teams and dynamic roles are separately disabled by default. Default limits
 match the Better Auth benchmark: 100 members, 100 pending invitations, and a
@@ -633,6 +643,11 @@ final auth = AuthClient(
   plugins: const [AuthOrganizationClientPlugin()],
 );
 final organization = auth.plugins.use(const AuthOrganizationClientPlugin());
+final created = await organization.create(
+  name: 'Acme',
+  slug: 'acme',
+  idempotencyKey: requestId,
+);
 ```
 
 `AuthOrganizationClient` keeps active organization/team selection locally and

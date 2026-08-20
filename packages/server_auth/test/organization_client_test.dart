@@ -54,7 +54,11 @@ void main() {
       );
       final organizations = auth.plugins.use(plugin);
 
-      final created = await organizations.create(name: 'Acme', slug: 'acme');
+      final created = await organizations.create(
+        name: 'Acme',
+        slug: 'acme',
+        idempotencyKey: 'create-acme-0001',
+      );
       expect(created.data.id, 'org-1');
       expect(created.warnings.single.code, 'invitation_delivery_failed');
       expect(organizations.activeOrganizationId, 'org-1');

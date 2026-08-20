@@ -38,6 +38,137 @@ void main() {
       expect(() => runtime.registry.register(_EmptyPlugin()), throwsStateError);
     });
 
+    test('publishes only implemented atomic and replay guarantees', () {
+      final plugin = OrganizationPlugin<Object>(
+        store: InMemoryAuthOrganizationStore(),
+      );
+      final endpoints = {
+        for (final endpoint in plugin.endpoints) endpoint.id: endpoint,
+      };
+      for (final entry in <String, String>{
+        'organization.removeMember': 'mutateMembership',
+        'organization.updateMemberRole': 'mutateMembership',
+        'organization.leave': 'mutateMembership',
+        'organization.inviteMember': 'createInvitation',
+        'organization.rejectInvitation': 'transitionInvitation',
+        'organization.cancelInvitation': 'transitionInvitation',
+        'organization.createRole': 'mutateRole',
+        'organization.updateRole': 'mutateRole',
+        'organization.deleteRole': 'mutateRole',
+        'organization.createTeam': 'mutateTeam',
+        'organization.updateTeam': 'mutateTeam',
+        'organization.removeTeam': 'mutateTeam',
+        'organization.addTeamMember': 'mutateTeamMember',
+        'organization.removeTeamMember': 'mutateTeamMember',
+      }.entries) {
+        final semantics = endpoints[entry.key]!.semantics;
+        expect(semantics, isA<AuthMutationOperationSemantics>());
+        final mutation = semantics as AuthMutationOperationSemantics;
+        expect(mutation.persistence.atomicity, AuthMutationAtomicity.atomic);
+        expect(
+          mutation.persistence.reference?.atomicOperationId,
+          entry.value,
+          reason: entry.key,
+        );
+      }
+      for (final id in <String>[
+        'organization.create',
+        'organization.inviteMember',
+        'organization.createRole',
+        'organization.createTeam',
+        'organization.addTeamMember',
+      ]) {
+        expect(
+          (endpoints[id]!.semantics as AuthMutationOperationSemantics)
+              .replaySafety,
+          AuthMutationReplaySafety.idempotent,
+          reason: id,
+        );
+      }
+      expect(
+        (endpoints['organization.update']!.semantics
+                as AuthMutationOperationSemantics)
+            .persistence
+            .atomicity,
+        AuthMutationAtomicity.nonAtomic,
+      );
+    });
+
+    test(
+      'dynamic permission revocation wins before the atomic write',
+      () async {
+        final store = InMemoryAuthOrganizationStore();
+        AuthOrganizationRole? grantedRole;
+        final feature = OrganizationPlugin<Object>(
+          store: store,
+          options: AuthOrganizationOptions(
+            dynamicRoles: true,
+            teams: const AuthOrganizationTeamsOptions(
+              enabled: true,
+              createDefaultTeam: false,
+            ),
+            hooks: AuthOrganizationHooks(
+              beforeTeam: (event) async {
+                final role = grantedRole;
+                if (role != null) {
+                  await store.updateRole(
+                    role.copyWith(
+                      permissions: const {
+                        'team': ['read'],
+                      },
+                      updatedAt: role.updatedAt.add(const Duration(seconds: 1)),
+                    ),
+                    previousName: role.name,
+                    creatorRole: 'owner',
+                  );
+                }
+                return event.data;
+              },
+            ),
+          ),
+        );
+        final owner = AuthUser(id: 'owner', email: 'owner@example.com');
+        final actor = AuthUser(id: 'manager', email: 'manager@example.com');
+        final organization = (await feature.createOrganization(
+          context: Object(),
+          user: owner,
+          name: 'Acme',
+          slug: 'acme',
+          idempotencyKey: 'create-acme-0001',
+        )).data;
+        final now = DateTime.utc(2030);
+        grantedRole = await store.createRole(
+          AuthOrganizationRole(
+            id: 'team-manager-role',
+            organizationId: organization.id,
+            name: 'team-manager',
+            permissions: const {
+              'team': ['create'],
+            },
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+        await feature.trustedAddMember(
+          context: Object(),
+          actor: owner,
+          organizationId: organization.id,
+          userId: actor.id,
+          roles: const ['team-manager'],
+        );
+
+        await expectLater(
+          _invoke(feature, 'organization.createTeam', actor, {
+            'organizationId': organization.id,
+            'name': 'Privileged',
+            'idempotencyKey': 'create-team-privileged-0001',
+          }),
+          _flow('organization_forbidden'),
+        );
+        expect(await store.listTeams(organization.id), isEmpty);
+      },
+    );
+
     test('concurrent slug creation has one winner', () async {
       final feature = OrganizationPlugin<Object>(
         store: InMemoryAuthOrganizationStore(),
@@ -54,6 +185,7 @@ void main() {
               user: user,
               name: 'Acme',
               slug: 'acme',
+              idempotencyKey: 'create-${user.id}',
             );
             return 'ok';
           } on AuthFlowException catch (error) {
@@ -79,6 +211,7 @@ void main() {
         user: owner,
         name: 'Acme',
         slug: 'acme',
+        idempotencyKey: 'create-acme-0001',
       )).data;
       await feature.trustedAddMember(
         context: Object(),
@@ -122,6 +255,7 @@ void main() {
         user: owner,
         name: 'Acme',
         slug: 'acme',
+        idempotencyKey: 'create-acme-0001',
       )).data;
       await feature.trustedAddMember(
         context: Object(),
@@ -156,6 +290,7 @@ void main() {
       );
       await expectLater(
         _invoke(feature, 'organization.inviteMember', admin, {
+          'idempotencyKey': 'invite-admin-0001',
           'organizationId': organization.id,
           'email': 'new-owner@example.com',
           'roles': ['owner'],
@@ -182,6 +317,7 @@ void main() {
         user: owner,
         name: 'Acme',
         slug: 'acme',
+        idempotencyKey: 'create-acme-0001',
       )).data;
 
       await expectLater(
@@ -253,6 +389,7 @@ void main() {
           user: owner,
           name: 'Acme',
           slug: 'acme',
+          idempotencyKey: 'create-acme-0001',
         )).data;
         final now = DateTime.utc(2030);
         final role = AuthOrganizationRole(
@@ -294,9 +431,11 @@ void main() {
         user: owner,
         name: 'Acme',
         slug: 'acme',
+        idempotencyKey: 'create-acme-0001',
       )).data;
       final invite = _map(
         await _invoke(feature, 'organization.inviteMember', owner, {
+          'idempotencyKey': 'invite-ada-0001',
           'organizationId': organization.id,
           'email': 'ada@example.com',
           'roles': ['member'],
@@ -333,9 +472,11 @@ void main() {
         user: owner,
         name: 'Disabled',
         slug: 'disabled',
+        idempotencyKey: 'create-disabled-0001',
       )).data;
       await expectLater(
         _invoke(disabled, 'organization.inviteMember', owner, {
+          'idempotencyKey': 'invite-disabled-0001',
           'organizationId': disabledOrganization.id,
           'email': 'invitee@example.com',
           'teamId': 'missing',
@@ -359,16 +500,19 @@ void main() {
         user: owner,
         name: 'First',
         slug: 'first',
+        idempotencyKey: 'create-first-0001',
       )).data;
       final second = (await enabled.createOrganization(
         context: Object(),
         user: owner,
         name: 'Second',
         slug: 'second',
+        idempotencyKey: 'create-second-0001',
       )).data;
       final otherTeam = (await enabledStore.listTeams(second.id)).single;
       await expectLater(
         _invoke(enabled, 'organization.inviteMember', owner, {
+          'idempotencyKey': 'invite-other-team-0001',
           'organizationId': first.id,
           'email': 'invitee@example.com',
           'teamId': otherTeam.id,
@@ -394,6 +538,7 @@ void main() {
         user: owner,
         name: 'Acme',
         slug: 'acme',
+        idempotencyKey: 'create-acme-0001',
       )).data;
       await feature.trustedAddMember(
         context: Object(),
@@ -404,6 +549,7 @@ void main() {
 
       await expectLater(
         _invoke(feature, 'organization.inviteMember', owner, {
+          'idempotencyKey': 'invite-member-0001',
           'organizationId': organization.id,
           'email': ' MEMBER@example.com ',
         }),
@@ -427,8 +573,10 @@ void main() {
           user: owner,
           name: 'Acme',
           slug: 'acme',
+          idempotencyKey: 'create-acme-0001',
         )).data;
         await _invoke(feature, 'organization.createRole', owner, {
+          'idempotencyKey': 'create-role-billing-0001',
           'organizationId': organization.id,
           'name': 'billing',
           'permissions': {
@@ -486,8 +634,10 @@ void main() {
           user: owner,
           name: 'Acme',
           slug: 'acme',
+          idempotencyKey: 'create-acme-0001',
         )).data;
         await _invoke(feature, 'organization.createRole', owner, {
+          'idempotencyKey': 'create-role-billing-0001',
           'organizationId': organization.id,
           'name': 'billing',
           'permissions': {
@@ -496,6 +646,7 @@ void main() {
         });
         final result = _map(
           await _invoke(feature, 'organization.inviteMember', owner, {
+            'idempotencyKey': 'invite-role-user-0001',
             'organizationId': organization.id,
             'email': invited.email,
             'roles': ['billing'],
@@ -668,6 +819,7 @@ void main() {
         user: owner,
         name: 'Acme',
         slug: 'acme',
+        idempotencyKey: 'create-acme-0001',
       )).data;
       final team = (await store.listTeams(organization.id)).single;
       for (var index = 0; index < 8; index++) {
@@ -686,6 +838,7 @@ void main() {
               actor: owner,
               teamId: team.id,
               userId: 'member-$index',
+              idempotencyKey: 'add-team-member-$index',
             );
             return 'ok';
           } on AuthFlowException catch (error) {
@@ -728,6 +881,7 @@ void main() {
         user: AuthUser(id: 'owner', email: 'owner@example.com'),
         name: 'Acme',
         slug: 'acme',
+        idempotencyKey: 'create-acme-0001',
       );
       expect(result.data.name, 'ACME');
       expect(
@@ -763,22 +917,34 @@ void main() {
           user: owner,
           name: 'Acme',
           slug: 'acme',
+          idempotencyKey: 'create-acme-0001',
         )).data;
         events.clear();
 
         final first = _map(
           await _invoke(feature, 'organization.inviteMember', owner, {
+            'idempotencyKey': 'reinvite-user-0001',
             'organizationId': organization.id,
             'email': 'invitee@example.com',
           }),
         );
         final second = _map(
           await _invoke(feature, 'organization.inviteMember', owner, {
+            'idempotencyKey': 'reinvite-user-0002',
             'organizationId': organization.id,
             'email': 'INVITEE@example.com',
           }),
         );
+        final replay = _map(
+          await _invoke(feature, 'organization.inviteMember', owner, {
+            'idempotencyKey': 'reinvite-user-0001',
+            'organizationId': organization.id,
+            'email': 'invitee@example.com',
+          }),
+        );
         expect(_map(first['data'])['id'], _map(second['data'])['id']);
+        expect(_map(replay['data'])['id'], _map(first['data'])['id']);
+        expect(replay['warnings'], isEmpty);
         expect(deliveries, 2);
         expect(
           (first['warnings'] as List).map((value) => _map(value)['code']),
@@ -808,10 +974,12 @@ void main() {
         user: owner,
         name: 'Acme',
         slug: 'acme',
+        idempotencyKey: 'create-acme-0001',
       )).data;
       final invited = AuthUser(id: 'invited', email: 'invited@example.com');
       final result = _map(
         await _invoke(feature, 'organization.inviteMember', owner, {
+          'idempotencyKey': 'invite-custom-id-0001',
           'organizationId': organization.id,
           'email': invited.email,
         }),
@@ -847,6 +1015,7 @@ void main() {
           user: owner,
           name: 'Acme',
           slug: 'acme',
+          idempotencyKey: 'create-acme-0001',
         )).data;
         await feature.trustedAddMember(
           context: Object(),

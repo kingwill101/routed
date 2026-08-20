@@ -31,7 +31,14 @@ Future<void> verifyAuthOrganizationStoreOwnershipConformance(
       'AuthOrganizationMembershipMutationStore is required',
     );
   }
+  if (store is! AuthOrganizationAtomicMutationStore) {
+    throw const AuthOrganizationStoreConformanceFailure(
+      'mutation.capability',
+      'AuthOrganizationAtomicMutationStore is required',
+    );
+  }
   final mutationStore = store as AuthOrganizationMembershipMutationStore;
+  final atomicStore = store as AuthOrganizationAtomicMutationStore;
   await _case('membership.concurrent-last-owner', () async {
     final fixture = await _twoOwners(store, 'concurrent');
     final results = await Future.wait([
@@ -96,6 +103,198 @@ Future<void> verifyAuthOrganizationStoreOwnershipConformance(
     _check(member?.roles.contains('owner') == true, 'owner rollback');
   });
 
+  await _case('invitation.idempotent-retry-and-binding', () async {
+    final fixture = await _oneOwner(store, 'invite-replay');
+    final now = DateTime.utc(2030);
+    final invitation = _invitation(
+      fixture.organization.id,
+      id: 'invite-replay-first',
+      email: 'invitee@example.com',
+      inviterId: fixture.owner.userId,
+      now: now,
+    );
+    final idempotency = AuthOrganizationIdempotency(
+      key: 'invite-replay-key',
+      organizationId: fixture.organization.id,
+      actorId: fixture.owner.userId,
+      operationId: 'organization.inviteMember',
+      fingerprint: 'fingerprint-a',
+    );
+    final first = await atomicStore.executeOrganizationMutation(
+      AuthOrganizationCreateInvitationCommand(
+        actorMembership: fixture.owner,
+        invitation: invitation,
+        invitationLimit: 1,
+        replacePending: false,
+        idempotency: idempotency,
+      ),
+    );
+    final replay = await atomicStore.executeOrganizationMutation(
+      AuthOrganizationCreateInvitationCommand(
+        actorMembership: fixture.owner,
+        invitation: _invitation(
+          fixture.organization.id,
+          id: 'invite-replay-second',
+          email: 'invitee@example.com',
+          inviterId: fixture.owner.userId,
+          now: now,
+        ),
+        invitationLimit: 1,
+        replacePending: false,
+        idempotency: idempotency,
+      ),
+    );
+    _check(replay.value.id == first.value.id, 'deterministic replay');
+    final conflict = await _capture(
+      () => atomicStore.executeOrganizationMutation(
+        AuthOrganizationCreateInvitationCommand(
+          actorMembership: fixture.owner,
+          invitation: invitation,
+          invitationLimit: 1,
+          replacePending: false,
+          idempotency: AuthOrganizationIdempotency(
+            key: idempotency.key,
+            organizationId: fixture.organization.id,
+            actorId: fixture.owner.userId,
+            operationId: 'organization.inviteMember',
+            fingerprint: 'fingerprint-b',
+          ),
+        ),
+      ),
+    );
+    _check(conflict == 'idempotency_key_conflict', 'binding conflict');
+  });
+
+  await _case('invitation.replace-failure-rollback', () async {
+    final fixture = await _oneOwner(store, 'invite-rollback');
+    final now = DateTime.utc(2030);
+    final first = _invitation(
+      fixture.organization.id,
+      id: 'invite-rollback-first',
+      email: 'first@example.com',
+      inviterId: fixture.owner.userId,
+      now: now,
+    );
+    final collision = _invitation(
+      fixture.organization.id,
+      id: 'invite-rollback-collision',
+      email: 'second@example.com',
+      inviterId: fixture.owner.userId,
+      now: now,
+    );
+    await store.createInvitation(first);
+    await store.createInvitation(collision);
+    await store.transitionInvitation(
+      collision.id,
+      AuthOrganizationInvitationStatus.canceled,
+      now: now,
+    );
+    final error = await _capture(
+      () => atomicStore.executeOrganizationMutation(
+        AuthOrganizationCreateInvitationCommand(
+          actorMembership: fixture.owner,
+          invitation: _invitation(
+            fixture.organization.id,
+            id: collision.id,
+            email: first.email,
+            inviterId: fixture.owner.userId,
+            now: now,
+          ),
+          invitationLimit: null,
+          replacePending: true,
+          idempotency: AuthOrganizationIdempotency(
+            key: 'invite-rollback-key',
+            organizationId: fixture.organization.id,
+            actorId: fixture.owner.userId,
+            operationId: 'organization.inviteMember',
+            fingerprint: 'rollback-fingerprint',
+          ),
+        ),
+      ),
+    );
+    _check(error == 'invitation_exists', 'failure code');
+    _check(
+      (await store.findInvitation(first.id))?.status ==
+          AuthOrganizationInvitationStatus.pending,
+      'pending invitation rollback',
+    );
+  });
+
+  await _case('team-member.concurrent-capacity', () async {
+    final fixture = await _oneOwner(store, 'team-capacity');
+    final now = DateTime.utc(2030);
+    final first = AuthOrganizationMember(
+      id: 'team-capacity-member-1',
+      organizationId: fixture.organization.id,
+      userId: 'team-capacity-user-2',
+      roles: const ['member'],
+      createdAt: now,
+    );
+    final second = AuthOrganizationMember(
+      id: 'team-capacity-member-2',
+      organizationId: fixture.organization.id,
+      userId: 'team-capacity-user-3',
+      roles: const ['member'],
+      createdAt: now,
+    );
+    await store.addMember(first);
+    await store.addMember(second);
+    final team = AuthOrganizationTeam(
+      id: 'team-capacity-team',
+      organizationId: fixture.organization.id,
+      name: 'Capacity',
+      createdAt: now,
+      updatedAt: now,
+    );
+    await store.createTeam(team);
+    final outcomes = await Future.wait([
+      _capture(
+        () => atomicStore.executeOrganizationMutation(
+          AuthOrganizationTeamMemberMutationCommand(
+            kind: AuthOrganizationTeamMemberMutationKind.add,
+            actorMembership: fixture.owner,
+            team: team,
+            teamMember: AuthOrganizationTeamMember(
+              id: 'team-capacity-link-1',
+              teamId: team.id,
+              userId: first.userId,
+              createdAt: now,
+            ),
+            memberLimit: 1,
+            idempotency: _idempotency(
+              'team-capacity-add-1',
+              fixture,
+              'organization.addTeamMember',
+            ),
+          ),
+        ),
+      ),
+      _capture(
+        () => atomicStore.executeOrganizationMutation(
+          AuthOrganizationTeamMemberMutationCommand(
+            kind: AuthOrganizationTeamMemberMutationKind.add,
+            actorMembership: fixture.owner,
+            team: team,
+            teamMember: AuthOrganizationTeamMember(
+              id: 'team-capacity-link-2',
+              teamId: team.id,
+              userId: second.userId,
+              createdAt: now,
+            ),
+            memberLimit: 1,
+            idempotency: _idempotency(
+              'team-capacity-add-2',
+              fixture,
+              'organization.addTeamMember',
+            ),
+          ),
+        ),
+      ),
+    ]);
+    _check(outcomes.where((value) => value == null).length == 1, 'winner');
+    _check((await store.listTeamMembers(team.id)).length == 1, 'capacity');
+  });
+
   if (store case final AuthOrganizationUserDeletionStore deletionStore) {
     await _case('user-deletion.concurrent-last-owner', () async {
       final fixture = await _twoOwners(store, 'user-deletion');
@@ -131,6 +330,35 @@ AuthOrganizationMembershipMutation _demote(
   targetMembership: target,
   creatorRole: 'owner',
   replacementRoles: const ['member'],
+);
+
+AuthOrganizationInvitation _invitation(
+  String organizationId, {
+  required String id,
+  required String email,
+  required String inviterId,
+  required DateTime now,
+}) => AuthOrganizationInvitation(
+  id: id,
+  organizationId: organizationId,
+  email: email,
+  roles: const ['member'],
+  inviterId: inviterId,
+  status: AuthOrganizationInvitationStatus.pending,
+  expiresAt: now.add(const Duration(days: 1)),
+  createdAt: now,
+);
+
+AuthOrganizationIdempotency _idempotency(
+  String key,
+  ({AuthOrganization organization, AuthOrganizationMember owner}) fixture,
+  String operationId,
+) => AuthOrganizationIdempotency(
+  key: key,
+  organizationId: fixture.organization.id,
+  actorId: fixture.owner.userId,
+  operationId: operationId,
+  fingerprint: key,
 );
 
 Future<String?> _capture(FutureOr<Object?> Function() operation) async {

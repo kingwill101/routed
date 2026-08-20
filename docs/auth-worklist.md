@@ -275,6 +275,14 @@ account, session, client, and plugin contracts above:
 - [x] Make organization last-owner checks transactional across removal,
   demotion, role replacement, leave, and user-deletion paths, with reusable
   durable-store conformance and contention coverage.
+- [x] Move invitation, role, team, and team-member writes behind typed atomic
+  store commands that recheck scoped actor/target snapshots; enforce capacity,
+  uniqueness, cascades, and creator preservation under contention; and persist
+  exact-bound idempotency results for retried create/invite/add operations.
+  Adapter conformance covers deterministic replay, conflicts, rollback, and
+  concurrent capacity. Store-confirmed retries skip delivery and post-commit
+  callbacks; pre-commit transformation hooks remain an honest repeatable host
+  boundary outside the store transaction.
 - [x] Retain a one-way user-ID digest receipt so explicit user-ID reuse cannot
   reactivate credentials or JWTs after hard deletion. In-memory and D1 receipt
   writes participate in the same rollback boundary as core deletion.
@@ -360,8 +368,9 @@ account, session, client, and plugin contracts above:
   claiming, and application token delivery are separate steps; WebAuthn
   verification consumes a challenge separately from authenticator creation or
   counter updates; username registration does not yet publish a persistence
-  descriptor; and several organization and two-factor mutations span store or
-  host boundaries without one declared transaction. These operations remain
+  descriptor; organization update plus its host callbacks and several
+  two-factor mutations span store or host boundaries without one declared
+  transaction. These operations remain
   `nonAtomic` or `unguarded` until their adapters expose a stronger bounded
   operation.
 - [x] Every advertised auth endpoint has documented authentication,

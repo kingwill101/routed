@@ -49,6 +49,62 @@ void main() {
       );
     },
   );
+
+  test(
+    'generated invitation retries persist one deterministic result',
+    () async {
+      final runner = PropertyTestRunner<int>(Gen.integer(min: 0, max: 4096), (
+        shape,
+      ) async {
+        final store = InMemoryAuthOrganizationStore();
+        final fixture = await _twoOwners(store, 'retry-$shape');
+        final now = DateTime.utc(2030);
+        final idempotency = AuthOrganizationIdempotency(
+          key: 'invite-retry-$shape',
+          organizationId: fixture.organization.id,
+          actorId: fixture.first.userId,
+          operationId: 'organization.inviteMember',
+          fingerprint: 'same-request-$shape',
+        );
+        AuthOrganizationCreateInvitationCommand command(String suffix) =>
+            AuthOrganizationCreateInvitationCommand(
+              actorMembership: fixture.first,
+              invitation: AuthOrganizationInvitation(
+                id: 'invitation-$shape-$suffix',
+                organizationId: fixture.organization.id,
+                email: 'invitee-$shape@example.com',
+                roles: const ['member'],
+                inviterId: fixture.first.userId,
+                status: AuthOrganizationInvitationStatus.pending,
+                expiresAt: now.add(const Duration(days: 1)),
+                createdAt: now,
+              ),
+              invitationLimit: 1,
+              replacePending: false,
+              idempotency: idempotency,
+            );
+
+        final results = await Future.wait([
+          store.executeOrganizationMutation(command('a')),
+          store.executeOrganizationMutation(command('b')),
+        ]);
+      expect(results[1].value.id, results[0].value.id);
+        expect(
+          await store.listInvitations(fixture.organization.id),
+          hasLength(1),
+        );
+      }, PropertyConfig(numTests: 128, seed: 20260821));
+
+      final result = await runner.run();
+      expect(
+        result.success,
+        isTrue,
+        reason:
+            'Property failed after ${result.numTests} cases: ${result.error}; '
+            'input=${result.failingInput}; seed=${result.seed}',
+      );
+    },
+  );
 }
 
 AuthOrganizationMembershipMutation _mutation({

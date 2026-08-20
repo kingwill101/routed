@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart' show sha256;
 
 import 'deletion_transaction.dart';
 import 'exceptions.dart';
@@ -411,8 +414,21 @@ final class OrganizationPlugin<TContext>
     final atomicOperation = switch (operationId) {
       'organization.create' => 'createOrganization',
       'organization.acceptInvitation' => 'acceptInvitation',
-      'organization.updateRole' => 'renameRole',
       'organization.delete' => 'cascadeOrganization',
+      'organization.removeMember' ||
+      'organization.updateMemberRole' ||
+      'organization.leave' => 'mutateMembership',
+      'organization.inviteMember' => 'createInvitation',
+      'organization.rejectInvitation' ||
+      'organization.cancelInvitation' => 'transitionInvitation',
+      'organization.createRole' ||
+      'organization.updateRole' ||
+      'organization.deleteRole' => 'mutateRole',
+      'organization.createTeam' ||
+      'organization.updateTeam' ||
+      'organization.removeTeam' => 'mutateTeam',
+      'organization.addTeamMember' ||
+      'organization.removeTeamMember' => 'mutateTeamMember',
       _ => null,
     };
     final replaySafety = switch (operationId) {
@@ -433,7 +449,7 @@ final class OrganizationPlugin<TContext>
       'organization.inviteMember' ||
       'organization.createRole' ||
       'organization.createTeam' ||
-      'organization.addTeamMember' => AuthMutationReplaySafety.repeatable,
+      'organization.addTeamMember' => AuthMutationReplaySafety.idempotent,
       _ => AuthMutationReplaySafety.unguarded,
     };
     return AuthOperationSemantics.mutation(
@@ -606,6 +622,23 @@ final class OrganizationPlugin<TContext>
             ['teamId', 'userId'],
           ],
         ),
+        AuthEntityDescriptor(
+          id: 'organization_idempotency',
+          fields: [
+            AuthFieldDescriptor(name: 'key', kind: 'bounded_non_secret_key'),
+            AuthFieldDescriptor(name: 'organizationId', kind: 'string'),
+            AuthFieldDescriptor(name: 'actorId', kind: 'id'),
+            AuthFieldDescriptor(name: 'operationId', kind: 'string'),
+            AuthFieldDescriptor(name: 'fingerprint', kind: 'sha256'),
+            AuthFieldDescriptor(name: 'result', kind: 'immutable_snapshot'),
+          ],
+          uniqueConstraints: [
+            ['key'],
+          ],
+          indexes: [
+            ['organizationId', 'actorId', 'operationId'],
+          ],
+        ),
       ],
       atomicOperations: [
         AuthAtomicOperationDescriptor(
@@ -623,10 +656,40 @@ final class OrganizationPlugin<TContext>
           description: 'Preserve at least one creator-role member.',
         ),
         AuthAtomicOperationDescriptor(
-          id: 'renameRole',
+          id: 'mutateMembership',
           description:
-              'Rename a dynamic role and all member and pending-invitation '
-              'assignments together.',
+              'Verify actor and target snapshots, preserve a creator, and '
+              'cascade membership removal to teams.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'createInvitation',
+          description:
+              'Verify the actor snapshot, reserve invitation capacity, '
+              'replace pending state, and persist deterministic replay.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'transitionInvitation',
+          description:
+              'Verify invitation and actor binding before a single-use '
+              'state transition.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'mutateRole',
+          description:
+              'Create, update, rename, or delete a dynamic role with all '
+              'assignment and replay invariants.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'mutateTeam',
+          description:
+              'Create, update, or delete a team with capacity, uniqueness, '
+              'invitation cleanup, and member cascade invariants.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'mutateTeamMember',
+          description:
+              'Verify actor and team snapshots before capacity-bounded, '
+              'unique team membership writes.',
         ),
         AuthAtomicOperationDescriptor(
           id: 'cascadeOrganization',
@@ -641,6 +704,7 @@ final class OrganizationPlugin<TContext>
     required AuthUser user,
     required String name,
     required String slug,
+    required String idempotencyKey,
     String? logo,
     Map<String, dynamic>? metadata,
   }) async {
@@ -654,6 +718,7 @@ final class OrganizationPlugin<TContext>
       user: user,
       name: name,
       slug: slug,
+      idempotencyKey: idempotencyKey,
       logo: logo,
       metadata: metadata,
     );
@@ -666,6 +731,7 @@ final class OrganizationPlugin<TContext>
     required AuthUser user,
     required String name,
     required String slug,
+    required String idempotencyKey,
     String? logo,
     Map<String, dynamic>? metadata,
   }) async {
@@ -729,8 +795,29 @@ final class OrganizationPlugin<TContext>
         organizationLimit: options.organizationLimit,
         defaultTeam: team,
         creatorTeamMembership: teamMember,
+        idempotency: AuthOrganizationIdempotency(
+          key: idempotencyKey,
+          organizationId: organization.slug,
+          actorId: user.id,
+          operationId: 'organization.create',
+          fingerprint: _fingerprint(
+            {
+              'organization': organization.toJson(),
+              'member': member.toJson(),
+              'team': team?.toJson(),
+              'teamMember': teamMember?.toJson(),
+            },
+            volatileKeys: const {'id', 'createdAt', 'updatedAt'},
+          ),
+        ),
       ),
     );
+    if (stored.replayed) {
+      return AuthOrganizationMutationResult(
+        data: stored.organization,
+        warnings: const <AuthOrganizationWarning>[],
+      );
+    }
     final warnings = <AuthOrganizationWarning>[];
     warnings.addAll(
       await _afterOrganization(context, 'create', user, stored.organization),
@@ -844,15 +931,23 @@ final class OrganizationPlugin<TContext>
       userId: userId,
       organizationId: organizationId,
     );
-    if (!await accessControl.allows(
+    final decision = await accessControl.authorize(
       store: store,
       member: auth.membership,
       resource: resource,
       action: action,
-    )) {
+    );
+    if (!decision.allowed) {
       throw AuthFlowException('organization_forbidden');
     }
-    return auth;
+    return AuthOrganizationAuthorizationContext<TContext>(
+      context: auth.context,
+      userId: auth.userId,
+      organization: auth.organization,
+      membership: auth.membership,
+      team: auth.team,
+      authorizationRoleSnapshots: decision.dynamicRoleSnapshots,
+    );
   }
 
   Future<Object?> _invokeEndpoint(
@@ -878,6 +973,7 @@ final class OrganizationPlugin<TContext>
           user: user,
           name: _string(input, 'name'),
           slug: _string(input, 'slug'),
+          idempotencyKey: _idempotencyKey(input),
           logo: _optionalString(input, 'logo'),
           metadata: _jsonMap(input['metadata']),
         )).toJson((value) => value.toJson());
@@ -1150,6 +1246,7 @@ final class OrganizationPlugin<TContext>
           actor: user,
           teamId: _string(input, 'teamId'),
           userId: _string(input, 'userId'),
+          idempotencyKey: _idempotencyKey(input),
         )).toJson((value) => value.toJson());
       case 'organization.removeTeamMember':
         return (await _removeTeamMember(
@@ -1375,6 +1472,7 @@ final class OrganizationPlugin<TContext>
         actorMembership: auth.membership,
         targetMembership: transformedMember,
         creatorRole: _creatorRole,
+        actorRoleSnapshots: auth.authorizationRoleSnapshots,
       ),
     );
     final warnings = await _afterMember(
@@ -1439,6 +1537,7 @@ final class OrganizationPlugin<TContext>
         targetMembership: existing,
         creatorRole: _creatorRole,
         replacementRoles: draft.roles,
+        actorRoleSnapshots: auth.authorizationRoleSnapshots,
       ),
     );
     final warnings = await _afterMember(
@@ -1498,11 +1597,33 @@ final class OrganizationPlugin<TContext>
     _requireCreatorAuthorityForRoles(auth.membership, invitation.roles);
     await _validateInvitationTeam(invitation, auth.organization.id);
     await _rejectExistingMemberInvitation(invitation);
-    invitation = await store.createInvitation(
-      invitation,
-      invitationLimit: options.invitationLimit,
-      replacePending: options.replacePendingInvitations,
-    );
+    final storedInvitation = await _atomicMutationStore()
+        .executeOrganizationMutation(
+          AuthOrganizationCreateInvitationCommand(
+            actorMembership: auth.membership,
+            invitation: invitation,
+            invitationLimit: options.invitationLimit,
+            replacePending: options.replacePendingInvitations,
+            actorRoleSnapshots: auth.authorizationRoleSnapshots,
+            idempotency: AuthOrganizationIdempotency(
+              key: _idempotencyKey(input),
+              organizationId: auth.organization.id,
+              actorId: actor.id,
+              operationId: 'organization.inviteMember',
+              fingerprint: _fingerprint(
+                invitation.toJson(),
+                volatileKeys: const {'id', 'createdAt', 'expiresAt'},
+              ),
+            ),
+          ),
+        );
+    invitation = storedInvitation.value;
+    if (storedInvitation.replayed) {
+      return AuthOrganizationMutationResult(
+        data: invitation,
+        warnings: const <AuthOrganizationWarning>[],
+      );
+    }
     final warnings = await _afterInvitation(
       context,
       'create',
@@ -1668,18 +1789,24 @@ final class OrganizationPlugin<TContext>
       invitation.organizationId,
     );
     if (organization == null) throw AuthFlowException('organization_not_found');
-    final transformed = await _beforeInvitation(
+    await _beforeInvitation(
       context,
       status.name,
       user,
       invitation,
       organization,
     );
-    final updated = await store.transitionInvitation(
-      transformed.id,
-      status,
-      now: DateTime.now().toUtc(),
-    );
+    final storedUpdate = await _atomicMutationStore()
+        .executeOrganizationMutation(
+          AuthOrganizationTransitionInvitationCommand(
+            expectedInvitation: invitation,
+            status: status,
+            now: DateTime.now().toUtc(),
+            actorId: user.id,
+            actorEmail: _requiredEmail(user),
+          ),
+        );
+    final updated = storedUpdate.value;
     final warnings = await _afterInvitation(
       context,
       status.name,
@@ -1713,18 +1840,25 @@ final class OrganizationPlugin<TContext>
       resource: 'invitation',
       action: 'cancel',
     );
-    final transformed = await _beforeInvitation(
+    await _beforeInvitation(
       context,
       'cancel',
       user,
       invitation,
       auth.organization,
     );
-    final canceled = await store.transitionInvitation(
-      transformed.id,
-      AuthOrganizationInvitationStatus.canceled,
-      now: DateTime.now().toUtc(),
-    );
+    final storedCancellation = await _atomicMutationStore()
+        .executeOrganizationMutation(
+          AuthOrganizationTransitionInvitationCommand(
+            expectedInvitation: invitation,
+            status: AuthOrganizationInvitationStatus.canceled,
+            now: DateTime.now().toUtc(),
+            actorId: user.id,
+            actorMembership: auth.membership,
+            actorRoleSnapshots: auth.authorizationRoleSnapshots,
+          ),
+        );
+    final canceled = storedCancellation.value;
     final warnings = await _afterInvitation(
       context,
       'cancel',
@@ -1792,7 +1926,33 @@ final class OrganizationPlugin<TContext>
       updatedAt: now,
     );
     role = await _beforeRole(context, 'create', user, role, auth.organization);
-    role = await store.createRole(role, roleLimit: options.dynamicRoleLimit);
+    final storedRole = await _atomicMutationStore().executeOrganizationMutation(
+      AuthOrganizationRoleMutationCommand(
+        kind: AuthOrganizationRoleMutationKind.create,
+        actorMembership: auth.membership,
+        role: role,
+        creatorRole: _creatorRole,
+        roleLimit: options.dynamicRoleLimit,
+        actorRoleSnapshots: auth.authorizationRoleSnapshots,
+        idempotency: AuthOrganizationIdempotency(
+          key: _idempotencyKey(input),
+          organizationId: auth.organization.id,
+          actorId: user.id,
+          operationId: 'organization.createRole',
+          fingerprint: _fingerprint(
+            role.toJson(),
+            volatileKeys: const {'id', 'createdAt', 'updatedAt'},
+          ),
+        ),
+      ),
+    );
+    role = storedRole.value;
+    if (storedRole.replayed) {
+      return AuthOrganizationMutationResult(
+        data: role,
+        warnings: const <AuthOrganizationWarning>[],
+      );
+    }
     final warnings = await _afterRole(
       context,
       'create',
@@ -1842,11 +2002,17 @@ final class OrganizationPlugin<TContext>
       updatedAt: DateTime.now().toUtc(),
     );
     role = await _beforeRole(context, 'update', user, role, auth.organization);
-    role = await store.updateRole(
-      role,
-      previousName: previousName,
-      creatorRole: _creatorRole,
-    );
+    role = (await _atomicMutationStore().executeOrganizationMutation(
+      AuthOrganizationRoleMutationCommand(
+        kind: AuthOrganizationRoleMutationKind.update,
+        actorMembership: auth.membership,
+        role: role,
+        expectedRole: existing,
+        previousName: previousName,
+        creatorRole: _creatorRole,
+        actorRoleSnapshots: auth.authorizationRoleSnapshots,
+      ),
+    )).value;
     final warnings = await _afterRole(
       context,
       'update',
@@ -1881,18 +2047,16 @@ final class OrganizationPlugin<TContext>
     );
     final role = await store.findRole(auth.organization.id, _roleName(name));
     if (role == null) throw AuthFlowException('role_not_found');
-    final transformed = await _beforeRole(
-      context,
-      'delete',
-      user,
-      role,
-      auth.organization,
-    );
-    final deleted = await store.deleteRole(
-      auth.organization.id,
-      transformed.name,
-      creatorRole: _creatorRole,
-    );
+    await _beforeRole(context, 'delete', user, role, auth.organization);
+    final deleted = (await _atomicMutationStore().executeOrganizationMutation(
+      AuthOrganizationRoleMutationCommand(
+        kind: AuthOrganizationRoleMutationKind.delete,
+        actorMembership: auth.membership,
+        role: role,
+        creatorRole: _creatorRole,
+        actorRoleSnapshots: auth.authorizationRoleSnapshots,
+      ),
+    )).value;
     final warnings = await _afterRole(
       context,
       'delete',
@@ -1935,7 +2099,32 @@ final class OrganizationPlugin<TContext>
       updatedAt: now,
     );
     team = await _beforeTeam(context, 'create', user, team, auth.organization);
-    team = await store.createTeam(team, teamLimit: options.teams.teamLimit);
+    final storedTeam = await _atomicMutationStore().executeOrganizationMutation(
+      AuthOrganizationTeamMutationCommand(
+        kind: AuthOrganizationTeamMutationKind.create,
+        actorMembership: auth.membership,
+        team: team,
+        teamLimit: options.teams.teamLimit,
+        actorRoleSnapshots: auth.authorizationRoleSnapshots,
+        idempotency: AuthOrganizationIdempotency(
+          key: _idempotencyKey(input),
+          organizationId: auth.organization.id,
+          actorId: user.id,
+          operationId: 'organization.createTeam',
+          fingerprint: _fingerprint(
+            team.toJson(),
+            volatileKeys: const {'id', 'createdAt', 'updatedAt'},
+          ),
+        ),
+      ),
+    );
+    team = storedTeam.value;
+    if (storedTeam.replayed) {
+      return AuthOrganizationMutationResult(
+        data: team,
+        warnings: const <AuthOrganizationWarning>[],
+      );
+    }
     final warnings = await _afterTeam(
       context,
       'create',
@@ -2001,7 +2190,15 @@ final class OrganizationPlugin<TContext>
       updated,
       auth.organization,
     );
-    updated = await store.updateTeam(updated);
+    updated = (await _atomicMutationStore().executeOrganizationMutation(
+      AuthOrganizationTeamMutationCommand(
+        kind: AuthOrganizationTeamMutationKind.update,
+        actorMembership: auth.membership,
+        team: updated,
+        expectedTeam: team,
+        actorRoleSnapshots: auth.authorizationRoleSnapshots,
+      ),
+    )).value;
     final warnings = await _afterTeam(
       context,
       'update',
@@ -2035,17 +2232,16 @@ final class OrganizationPlugin<TContext>
       resource: 'team',
       action: 'delete',
     );
-    final transformed = await _beforeTeam(
-      context,
-      'delete',
-      user,
-      team,
-      auth.organization,
-    );
-    final deleted = await store.deleteTeam(
-      transformed.id,
-      allowLastTeam: options.teams.allowRemovingLastTeam,
-    );
+    await _beforeTeam(context, 'delete', user, team, auth.organization);
+    final deleted = (await _atomicMutationStore().executeOrganizationMutation(
+      AuthOrganizationTeamMutationCommand(
+        kind: AuthOrganizationTeamMutationKind.delete,
+        actorMembership: auth.membership,
+        team: team,
+        allowLastTeam: options.teams.allowRemovingLastTeam,
+        actorRoleSnapshots: auth.authorizationRoleSnapshots,
+      ),
+    )).value;
     final warnings = await _afterTeam(
       context,
       'delete',
@@ -2119,6 +2315,7 @@ final class OrganizationPlugin<TContext>
     required AuthUser actor,
     required String teamId,
     required String userId,
+    required String idempotencyKey,
   }) async {
     _requireTeams();
     final team = await store.findTeam(teamId);
@@ -2143,10 +2340,34 @@ final class OrganizationPlugin<TContext>
       member,
       auth.organization,
     );
-    member = await store.addTeamMember(
-      member,
-      memberLimit: options.teams.teamMemberLimit,
-    );
+    final storedMember = await _atomicMutationStore()
+        .executeOrganizationMutation(
+          AuthOrganizationTeamMemberMutationCommand(
+            kind: AuthOrganizationTeamMemberMutationKind.add,
+            actorMembership: auth.membership,
+            team: team,
+            teamMember: member,
+            memberLimit: options.teams.teamMemberLimit,
+            actorRoleSnapshots: auth.authorizationRoleSnapshots,
+            idempotency: AuthOrganizationIdempotency(
+              key: idempotencyKey,
+              organizationId: auth.organization.id,
+              actorId: actor.id,
+              operationId: 'organization.addTeamMember',
+              fingerprint: _fingerprint(
+                member.toJson(),
+                volatileKeys: const {'id', 'createdAt'},
+              ),
+            ),
+          ),
+        );
+    member = storedMember.value;
+    if (storedMember.replayed) {
+      return AuthOrganizationMutationResult(
+        data: member,
+        warnings: const <AuthOrganizationWarning>[],
+      );
+    }
     final warnings = await _afterTeamMember(
       context,
       'add',
@@ -2184,14 +2405,22 @@ final class OrganizationPlugin<TContext>
     );
     final existing = await store.findTeamMember(teamId, userId);
     if (existing == null) throw AuthFlowException('team_member_not_found');
-    final transformed = await _beforeTeamMember(
+    await _beforeTeamMember(
       context,
       'remove',
       actor,
       existing,
       auth.organization,
     );
-    final removed = await store.removeTeamMember(teamId, transformed.userId);
+    final removed = (await _atomicMutationStore().executeOrganizationMutation(
+      AuthOrganizationTeamMemberMutationCommand(
+        kind: AuthOrganizationTeamMemberMutationKind.remove,
+        actorMembership: auth.membership,
+        team: team,
+        teamMember: existing,
+        actorRoleSnapshots: auth.authorizationRoleSnapshots,
+      ),
+    )).value;
     final warnings = await _afterTeamMember(
       context,
       'remove',
@@ -2256,6 +2485,17 @@ final class OrganizationPlugin<TContext>
       );
     }
     return target as AuthOrganizationMembershipMutationStore;
+  }
+
+  AuthOrganizationAtomicMutationStore _atomicMutationStore() {
+    final target = store;
+    if (target is! AuthOrganizationAtomicMutationStore) {
+      throw StateError(
+        'The organization store cannot atomically authorize organization '
+        'mutations and enforce their durable invariants.',
+      );
+    }
+    return target as AuthOrganizationAtomicMutationStore;
   }
 
   Future<void> _validateInvitationTeam(
@@ -2572,6 +2812,44 @@ final class OrganizationPlugin<TContext>
   void _requireTeams() {
     if (!options.teams.enabled) throw AuthFlowException('teams_disabled');
   }
+}
+
+String _idempotencyKey(Map<String, dynamic> input) {
+  final value = input['idempotencyKey'];
+  if (value is! String || value.trim().isEmpty) {
+    throw AuthFlowException('invalid_idempotency_key');
+  }
+  return value.trim();
+}
+
+String _fingerprint(
+  Object? value, {
+  Set<String> volatileKeys = const <String>{},
+}) => sha256
+    .convert(
+      utf8.encode(jsonEncode(_canonicalOrganizationValue(value, volatileKeys))),
+    )
+    .toString();
+
+Object? _canonicalOrganizationValue(Object? value, Set<String> volatileKeys) {
+  if (value is Map) {
+    final keys =
+        value.keys
+            .map((key) => key.toString())
+            .where((key) => !volatileKeys.contains(key))
+            .toList(growable: false)
+          ..sort();
+    return <String, Object?>{
+      for (final key in keys)
+        key: _canonicalOrganizationValue(value[key], volatileKeys),
+    };
+  }
+  if (value is Iterable) {
+    return value
+        .map((item) => _canonicalOrganizationValue(item, volatileKeys))
+        .toList(growable: false);
+  }
+  return value;
 }
 
 final class _InMemoryOrganizationDeletionOperation

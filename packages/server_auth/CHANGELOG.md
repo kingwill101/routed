@@ -13,6 +13,13 @@
   atomic create/replace/patch/membership/tombstone store boundaries, exact Group
   scopes, stable-ID-only application role projection, generic failures, and
   stateful/property coverage for isolation, bounds, conflicts, and replay.
+- Move high-risk organization invitation, membership, role, team, and
+  team-member writes behind typed snapshot-checked store transactions with
+  rollback, contention conformance, and exact-bound idempotent replay for
+  create/invite/add operations.
+- Require bounded caller idempotency keys in typed organization clients and
+  document lifecycle hooks, delivery, audit, and event sinks as post-commit
+  host boundaries.
 - Require every portable and host-owned endpoint to publish typed read or
   mutation semantics, including persistence boundary, atomicity, replay
   behavior, and validated persistence-schema/atomic-operation references.

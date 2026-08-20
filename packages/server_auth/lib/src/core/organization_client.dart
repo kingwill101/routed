@@ -55,6 +55,7 @@ final class AuthOrganizationClient {
   Future<AuthOrganizationMutationResult<AuthOrganization>> create({
     required String name,
     required String slug,
+    required String idempotencyKey,
     String? logo,
     Map<String, dynamic>? metadata,
     bool keepCurrentActiveOrganization = false,
@@ -63,6 +64,7 @@ final class AuthOrganizationClient {
       await _post('/organization/create', {
         'name': name,
         'slug': slug,
+        'idempotencyKey': idempotencyKey,
         'logo': logo,
         'metadata': metadata,
       }),
@@ -228,6 +230,7 @@ final class AuthOrganizationClient {
   Future<AuthOrganizationMutationResult<AuthOrganizationInvitation>>
   inviteMember({
     required String email,
+    required String idempotencyKey,
     Iterable<String> roles = const ['member'],
     String? organizationId,
     String? teamId,
@@ -235,6 +238,7 @@ final class AuthOrganizationClient {
     await _post('/organization/invite-member', {
       'organizationId': _organizationId(organizationId),
       'email': email,
+      'idempotencyKey': idempotencyKey,
       'roles': roles.toList(),
       'teamId': teamId,
     }),
@@ -293,10 +297,12 @@ final class AuthOrganizationClient {
   Future<AuthOrganizationMutationResult<AuthOrganizationRole>> createRole({
     required String name,
     required Map<String, Iterable<String>> permissions,
+    required String idempotencyKey,
     String? organizationId,
   }) => _roleMutation('/organization/create-role', {
     'organizationId': _organizationId(organizationId),
     'name': name,
+    'idempotencyKey': idempotencyKey,
     'permissions': _permissionJson(permissions),
   });
 
@@ -341,11 +347,13 @@ final class AuthOrganizationClient {
 
   Future<AuthOrganizationMutationResult<AuthOrganizationTeam>> createTeam({
     required String name,
+    required String idempotencyKey,
     String? organizationId,
     Map<String, dynamic>? attributes,
   }) => _teamMutation('/organization/create-team', {
     'organizationId': _organizationId(organizationId),
     'name': name,
+    'idempotencyKey': idempotencyKey,
     'attributes': attributes,
   });
 
@@ -406,8 +414,18 @@ final class AuthOrganizationClient {
   );
 
   Future<AuthOrganizationMutationResult<AuthOrganizationTeamMember>>
-  addTeamMember({required String teamId, required String userId}) =>
-      _teamMemberMutation('/organization/add-team-member', teamId, userId);
+  addTeamMember({
+    required String teamId,
+    required String userId,
+    required String idempotencyKey,
+  }) async => _mutation(
+    await _post('/organization/add-team-member', {
+      'teamId': teamId,
+      'userId': userId,
+      'idempotencyKey': idempotencyKey,
+    }),
+    AuthOrganizationTeamMember.fromJson,
+  );
 
   Future<AuthOrganizationMutationResult<AuthOrganizationTeamMember>>
   removeTeamMember({required String teamId, required String userId}) =>
