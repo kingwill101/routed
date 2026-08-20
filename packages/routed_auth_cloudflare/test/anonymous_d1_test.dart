@@ -31,14 +31,22 @@ void main() {
 
   test('migration 7 appends anonymous tables after versions 1 through 6', () {
     const schema = CloudflareD1AuthSchema();
+    final anonymousMigration = schema.migrations.singleWhere(
+      (migration) => migration.version == 7,
+    );
 
-    expect(CloudflareD1AuthSchema.currentVersion, 7);
+    expect(CloudflareD1AuthSchema.currentVersion, greaterThanOrEqualTo(7));
     expect(
       schema.migrations.map((migration) => migration.version),
-      orderedEquals([1, 2, 3, 4, 5, 6, 7]),
+      orderedEquals(
+        List<int>.generate(
+          CloudflareD1AuthSchema.currentVersion,
+          (index) => index + 1,
+        ),
+      ),
     );
     expect(
-      schema.migrations.last.statements.join('\n'),
+      anonymousMigration.statements.join('\n'),
       allOf(
         contains('routed_auth_anonymous_mutation_guards'),
         contains('routed_auth_anonymous_mutation_receipts'),
