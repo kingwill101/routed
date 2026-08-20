@@ -88,7 +88,11 @@ void main() {
       () async {
         final response = await _endpoint(_plugin(), 'saml.metadata').invoke(
           _invocation('browser-binding-value-0001'),
-          AuthEndpointRequest(body: const {'providerId': 'enterprise'}),
+          AuthEndpointRequest(
+            path: <AuthRouteParameterKey, String>{
+              authSamlProviderIdRouteParameter: 'enterprise',
+            },
+          ),
         );
         expect(response, isA<AuthEndpointHttpResponse>());
         final metadata = response as AuthEndpointHttpResponse;
@@ -125,7 +129,12 @@ void main() {
         };
         final result = await _endpoint(plugin, 'saml.acs').invoke(
           _invocation('browser-binding-value-0001'),
-          AuthEndpointRequest(body: payload),
+          AuthEndpointRequest(
+            path: <AuthRouteParameterKey, String>{
+              authSamlProviderIdRouteParameter: 'enterprise',
+            },
+            body: payload,
+          ),
         );
 
         expect(result, isA<AuthEndpointAuthenticationIntent>());
@@ -141,7 +150,12 @@ void main() {
         await expectLater(
           () => _endpoint(plugin, 'saml.acs').invoke(
             _invocation('browser-binding-value-0001'),
-            AuthEndpointRequest(body: payload),
+            AuthEndpointRequest(
+              path: <AuthRouteParameterKey, String>{
+                authSamlProviderIdRouteParameter: 'enterprise',
+              },
+              body: payload,
+            ),
           ),
           throwsA(
             isA<AuthFlowException>().having(
@@ -161,6 +175,9 @@ void main() {
         () => _endpoint(plugin, 'saml.acs').invoke(
           _invocation('different-browser-value-0002'),
           AuthEndpointRequest(
+            path: <AuthRouteParameterKey, String>{
+              authSamlProviderIdRouteParameter: 'enterprise',
+            },
             body: {
               'providerId': 'enterprise',
               'SAMLResponse': base64.encode(
@@ -191,6 +208,9 @@ void main() {
           () => _endpoint(disabled, 'saml.acs').invoke(
             _invocation('browser-binding-value-0001'),
             AuthEndpointRequest(
+              path: <AuthRouteParameterKey, String>{
+                authSamlProviderIdRouteParameter: 'enterprise',
+              },
               body: {
                 'providerId': 'enterprise',
                 'SAMLResponse': base64.encode(utf8.encode(xml)),
@@ -209,6 +229,9 @@ void main() {
             await _endpoint(enabled, 'saml.acs').invoke(
                   _invocation('browser-binding-value-0001'),
                   AuthEndpointRequest(
+                    path: <AuthRouteParameterKey, String>{
+                      authSamlProviderIdRouteParameter: 'enterprise',
+                    },
                     body: {
                       'providerId': 'enterprise',
                       'SAMLResponse': base64.encode(utf8.encode(xml)),
@@ -277,14 +300,11 @@ void main() {
       final wrongStarted = await _start(wrongProvider);
       await expectLater(
         () => _endpoint(wrongProvider, 'saml.acs').invoke(
-          _invocation('browser-binding-value-0001').withRequest(
-            AuthEndpointRequest(
-              path: <AuthRouteParameterKey, String>{
-                authSamlProviderIdRouteParameter: 'other',
-              },
-            ),
-          ),
+          _invocation('browser-binding-value-0001'),
           AuthEndpointRequest(
+            path: <AuthRouteParameterKey, String>{
+              authSamlProviderIdRouteParameter: 'other',
+            },
             body: {
               'providerId': 'other',
               'SAMLResponse': base64.encode(
@@ -370,6 +390,9 @@ Future<void> _expectGenericFailure(
   () => _endpoint(plugin, 'saml.acs').invoke(
     _invocation('browser-binding-value-0001'),
     AuthEndpointRequest(
+      path: <AuthRouteParameterKey, String>{
+        authSamlProviderIdRouteParameter: 'enterprise',
+      },
       body: {
         'providerId': 'enterprise',
         'SAMLResponse': base64.encode(utf8.encode(xml)),
