@@ -65,6 +65,9 @@
   declare atomic single-use token-endpoint semantics only for code-only grant
   configurations. A lost post-commit HTTP response remains intentionally
   non-replayable because raw token values are never persisted.
+- Require durable OAuth client and authorization-code exchange stores to
+  identify one backend-owned persistence domain. Durable provider mode now
+  rejects split or in-memory topologies instead of falling back.
 - Require every portable and host-owned endpoint to publish typed read or
   mutation semantics, including persistence boundary, atomicity, replay
   behavior, and validated persistence-schema/atomic-operation references.

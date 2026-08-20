@@ -1,9 +1,13 @@
 ## 0.1.0
 
-- Document that D1 does not yet own the OAuth provider-mode code/token tables
-  or implement the atomic authorization-code exchange capability. Durable D1
-  applications now fail configuration instead of silently combining D1 auth
-  state with the in-memory exchange store.
+- Add prefix-isolated D1 OAuth client, authorization-code, access-token, and
+  refresh-token persistence with digest-only secrets and credentials.
+- Add a backend-native atomic authorization-code exchange that revalidates all
+  bindings, persists the prepared token digest, and consumes the code in one D1
+  batch. Public conformance, contention, PKCE, injected rollback, refresh-token
+  rotation, topology, migration, and deletion coverage are included.
+- Reject in-memory, foreign-database, and otherwise split provider-mode stores
+  whenever the host auth store is durable; there is no durable fallback bridge.
 - Add exact owner-checked OAuth account unlinking by provider ID and provider
   account ID. D1 binds an authoritative topology backed by its own users,
   credentials, accounts, and email-OTP stores, rechecks a usable fallback in

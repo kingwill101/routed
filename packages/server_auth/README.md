@@ -864,7 +864,10 @@ The in-memory exchange store is for tests and local development. A production
 adapter implements `OAuthAuthorizationCodeExchangeStore` with one backend
 transaction that revalidates the code digest, stable authorization ID, client,
 redirect URI, S256 verifier, and expiry, consumes the code, and persists the
-prepared token-digest record. Run
+prepared token-digest record. Its OAuth client and exchange stores also expose
+the same backend-owned `OAuthProviderPersistenceTopology` domain. Durable auth
+runtimes reject split domains or an in-memory store instead of falling back.
+Run
 `verifyOAuthAuthorizationCodeExchangeStoreConformance` from
 `package:server_auth/testing.dart` in every durable adapter test suite.
 
