@@ -500,9 +500,9 @@ CloudflareD1Meta? _meta(Object? value) {
     sizeAfter: _int(meta['size_after'] ?? meta['sizeAfter']),
     lastRowId: meta['last_row_id'] ?? meta['lastRowId'],
     servedBy: _string(meta['served_by'] ?? meta['servedBy']),
-    servedByPrimary: _string(
-      meta['served_by_primary'] ?? meta['servedByPrimary'],
-    ),
+    servedByColo: _string(meta['served_by_colo'] ?? meta['servedByColo']),
+    servedByPrimary:
+        (meta['served_by_primary'] ?? meta['servedByPrimary']) as bool?,
     servedByRegion: _string(meta['served_by_region'] ?? meta['servedByRegion']),
     servedByLocation: _string(
       meta['served_by_location'] ?? meta['servedByLocation'],

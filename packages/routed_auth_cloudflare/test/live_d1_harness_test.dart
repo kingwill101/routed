@@ -303,7 +303,12 @@ void main() {
                 'results': [
                   {'value': 42},
                 ],
-                'meta': {'rows_read': 1, 'changes': 0},
+                'meta': {
+                  'rows_read': 1,
+                  'changes': 0,
+                  'served_by_colo': 'LHR',
+                  'served_by_primary': true,
+                },
               },
             ],
           }),
@@ -314,12 +319,13 @@ void main() {
         transport: transport,
       ).connect(accountId: _accountId, databaseId: _databaseId);
 
-      final value = await database
-          .prepare('SELECT ? AS value')
-          .bind([42])
-          .first<int>(column: 'value');
+      final result = await database.prepare('SELECT ? AS value').bind([
+        42,
+      ]).all<Map<String, Object?>>();
 
-      expect(value, 42);
+      expect(result.results.single['value'], 42);
+      expect(result.meta?.servedByColo, 'LHR');
+      expect(result.meta?.servedByPrimary, isTrue);
       expect(transport.calls, 1);
       expect(jsonDecode(transport.bodies.single!), {
         'sql': 'SELECT ? AS value',

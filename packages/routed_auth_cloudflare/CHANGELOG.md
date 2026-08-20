@@ -4,9 +4,12 @@
   organization lookup, digest-only bearer credentials, database-constrained
   issuance replay identity, atomic rotation and disablement, and typed replay
   lifetime configuration.
-- Add schema migration version 5 for SCIM connections, credentials, and replay
+- Add schema migration version 6 for SCIM connections, credentials, and replay
   metadata. Foreign-key cascades join direct subject/tenant cleanup and guarded
   user deletion to the same D1 transaction domain.
+- Decode Cloudflare REST D1 metadata using the current boolean
+  `served_by_primary` contract and cover the browser-shaped response in the
+  live-control-plane adapter tests.
 - Run the public managed-SCIM adapter conformance suite locally and from the
   opt-in live-D1 executor, with property, contention, digest-persistence, and
   injected rollback tests. No deployed D1 run is claimed by this release.

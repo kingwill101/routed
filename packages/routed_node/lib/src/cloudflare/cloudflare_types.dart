@@ -19,6 +19,7 @@ final class CloudflareD1Meta {
     this.sizeAfter,
     this.lastRowId,
     this.servedBy,
+    this.servedByColo,
     this.servedByPrimary,
     this.servedByRegion,
     this.servedByLocation,
@@ -33,7 +34,8 @@ final class CloudflareD1Meta {
   final int? sizeAfter;
   final Object? lastRowId;
   final String? servedBy;
-  final String? servedByPrimary;
+  final String? servedByColo;
+  final bool? servedByPrimary;
   final String? servedByRegion;
   final String? servedByLocation;
   final String? bookmark;

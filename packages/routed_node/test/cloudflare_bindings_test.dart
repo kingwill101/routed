@@ -8,12 +8,18 @@ void main() {
     const result = CloudflareD1Result<int>(
       success: true,
       results: <int>[1, 2],
-      meta: CloudflareD1Meta(rowsRead: 2),
+      meta: CloudflareD1Meta(
+        rowsRead: 2,
+        servedByColo: 'LHR',
+        servedByPrimary: true,
+      ),
     );
 
     expect(result.success, isTrue);
     expect(result.results, <int>[1, 2]);
     expect(result.meta?.rowsRead, 2);
+    expect(result.meta?.servedByColo, 'LHR');
+    expect(result.meta?.servedByPrimary, isTrue);
 
     final response = CloudflareResponse.json({'ok': true});
     expect(response.ok, isTrue);

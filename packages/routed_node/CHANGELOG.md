@@ -8,7 +8,8 @@
   serialization paths so the host adapter remains analyzer-clean.
 
 - Fix D1 metadata decoding for Cloudflare's snake_case `rows_read` and
-  `rows_written` fields.
+  `rows_written` fields, and align `served_by_primary` with Cloudflare's
+  boolean contract while exposing the `served_by_colo` location.
 - Added host-neutral Cloudflare bindings for Request `cf` metadata, the Cache
   API, R2 buckets, Queue producers, and Worker service bindings.
 - Added host-neutral Cloudflare bindings for Container instances and
