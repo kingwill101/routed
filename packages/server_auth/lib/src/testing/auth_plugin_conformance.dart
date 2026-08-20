@@ -579,6 +579,15 @@ final class AuthPluginConformanceSuite<TContext> {
 
     for (final endpoint in _publicEndpoints) {
       final semantics = endpoint.semantics;
+      final mutationMethod = endpoint.method != AuthOperationMethod.get;
+      final mutationSemantics = semantics is AuthMutationOperationSemantics;
+      if (mutationMethod != mutationSemantics) {
+        _fail(
+          'Endpoint "${endpoint.id}" has ${endpoint.method.name.toUpperCase()} '
+          'transport but declares ${mutationSemantics ? 'mutation' : 'read'} '
+          'semantics.',
+        );
+      }
       if (semantics is! AuthMutationOperationSemantics) continue;
 
       final persistence = semantics.persistence;

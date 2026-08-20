@@ -320,6 +320,37 @@ void main() {
         missingAtomicReference,
         'endpoints.operation-semantics',
       );
+
+      final getMutation = _suite(
+        _FixturePlugin(
+          endpoints: <AuthEndpointDescriptor<Object>>[
+            _endpoint(
+              id: 'sample.mutating-get',
+              method: AuthOperationMethod.get,
+              path: '/sample/mutating-get',
+              semantics: const AuthOperationSemantics.mutation(
+                persistence: AuthMutationPersistence.boundedEphemeral(),
+                replaySafety: AuthMutationReplaySafety.idempotent,
+              ),
+            ),
+          ],
+        ),
+      );
+      await _expectCaseFailure(getMutation, 'endpoints.operation-semantics');
+
+      final postRead = _suite(
+        _FixturePlugin(
+          endpoints: <AuthEndpointDescriptor<Object>>[
+            _endpoint(
+              id: 'sample.reading-post',
+              method: AuthOperationMethod.post,
+              path: '/sample/reading-post',
+              semantics: const AuthOperationSemantics.readOnly(),
+            ),
+          ],
+        ),
+      );
+      await _expectCaseFailure(postRead, 'endpoints.operation-semantics');
     });
 
     test('rejects invalid schema and atomic-operation references', () async {
