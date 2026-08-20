@@ -270,7 +270,6 @@ void main() {
       addTearDown(database.close);
       final store = await CloudflareD1AuthStore.open(database);
       final webAuthnStorage = InMemoryAuthStore();
-      final phoneStore = InMemoryAuthPhoneNumberStore();
       final apiKeyStore = InMemoryAuthApiKeyStore();
       final webAuthn = WebAuthnPlugin<Object>(
         provider: WebAuthnProvider(
@@ -282,13 +281,6 @@ void main() {
           ),
         ),
         storage: webAuthnStorage,
-      );
-      final phone = PhoneNumberPlugin<Object>(
-        store: phoneStore,
-        sendCode: (_) {},
-        codeHashKey: '0123456789abcdef0123456789abcdef',
-        allowSignUp: true,
-        generateCode: (_) => '123456',
       );
       final apiKeys = AuthApiKeyPlugin<Object>(
         store: apiKeyStore,
@@ -304,7 +296,7 @@ void main() {
           ],
           store: store,
           runtimeMode: AuthRuntimeMode.localDevelopment,
-          plugins: <AuthServerPlugin<Object>>[webAuthn, phone, apiKeys],
+          plugins: <AuthServerPlugin<Object>>[webAuthn, apiKeys],
         ),
       );
       final user = await store.users.create(
@@ -324,14 +316,6 @@ void main() {
         user: user,
       );
       expect(options.challenge, isNotEmpty);
-
-      await phone.issueCode(context: Object(), phoneNumber: '+18765551234');
-      final phoneAuthentication = await phone.verifyCode(
-        context: Object(),
-        phoneNumber: '+18765551234',
-        code: '123456',
-      );
-      expect(phoneAuthentication.user.id, isNotEmpty);
 
       final issued = await apiKeys.issue(userId: user.id, name: 'primary');
       expect((await apiKeys.authenticate(issued.key))?.record.userId, user.id);
@@ -358,6 +342,34 @@ void main() {
       expect(await store.accounts.listForUser(user.id), hasLength(2));
     },
   );
+
+  test('D1 phone authentication fails closed without typed commands', () async {
+    final database = FakeCloudflareD1Database();
+    addTearDown(database.close);
+    final store = await CloudflareD1AuthStore.open(database);
+    final phone = PhoneNumberPlugin<Object>(
+      sendCode: (_) {},
+      codeHashKey: '0123456789abcdef0123456789abcdef',
+    );
+
+    expect(
+      () => AuthRuntime<Object>(
+        options: AuthOptions<Object>(
+          providers: const <AuthProvider>[],
+          store: store,
+          runtimeMode: AuthRuntimeMode.localDevelopment,
+          plugins: <AuthServerPlugin<Object>>[phone],
+        ),
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('AuthPhoneNumberBackend'),
+        ),
+      ),
+    );
+  });
 
   test('typed migrations are idempotent and prefixes are isolated', () async {
     final database = FakeCloudflareD1Database();

@@ -15,11 +15,9 @@ void main() {
   test(
     'phone routes deliver, verify, and issue a phone-number session',
     () async {
-      final phoneStore = InMemoryAuthPhoneNumberStore();
       final coreStore = InMemoryAuthStore();
       String? deliveredCode;
       final plugin = PhoneNumberPlugin<EngineContext>(
-        store: phoneStore,
         codeHashKey: _hashKey,
         allowSignUp: true,
         generateCode: (_) => '123456',
@@ -84,7 +82,6 @@ void main() {
     () async {
       final limiter = _PhoneRateLimiter();
       final plugin = PhoneNumberPlugin<EngineContext>(
-        store: InMemoryAuthPhoneNumberStore(),
         codeHashKey: _hashKey,
         allowedAttempts: 2,
         generateCode: (_) => '123456',
@@ -168,7 +165,6 @@ void main() {
     () async {
       const secretMarker = '/srv/secrets/sms-provider.key';
       final plugin = PhoneNumberPlugin<EngineContext>(
-        store: InMemoryAuthPhoneNumberStore(),
         codeHashKey: _hashKey,
         generateCode: (_) => '123456',
         sendCode: (_) => throw StateError('$secretMarker raw=123456'),

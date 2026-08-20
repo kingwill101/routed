@@ -100,6 +100,55 @@ void main() {
       );
     });
 
+    test('preserves atomic phone issue and verification semantics', () {
+      final spec = _registry(<AuthServerPlugin<Object>>[
+        PhoneNumberPlugin<Object>(
+          sendCode: (_) {},
+          codeHashKey: 'openapi-phone-code-key-32-bytes-minimum',
+        ),
+      ]).toOpenApi31(info: _info);
+
+      final issue = spec.paths['/auth/phone-number/send-code']!.post!;
+      expect(
+        issue.extensions[AuthPluginOpenApiGenerator
+            .operationSemanticsExtension],
+        <String, Object?>{
+          'effect': 'mutation',
+          'persistence': 'durable',
+          'atomicity': 'atomic',
+          'replaySafety': 'repeatable',
+          'persistenceReference': <String, Object?>{
+            'schemaId': 'phone_number',
+            'atomicOperationId': 'phoneNumber.issueCode',
+          },
+        },
+      );
+      final verify = spec.paths['/auth/phone-number/verify-code']!.post!;
+      expect(
+        verify.extensions[AuthPluginOpenApiGenerator
+            .operationSemanticsExtension],
+        <String, Object?>{
+          'effect': 'mutation',
+          'persistence': 'durable',
+          'atomicity': 'atomic',
+          'replaySafety': 'singleUse',
+          'persistenceReference': <String, Object?>{
+            'schemaId': 'phone_number',
+            'atomicOperationId': 'phoneNumber.verifyCode',
+          },
+        },
+      );
+      expect(
+        spec.components!.schemas.keys,
+        containsAll(<String>[
+          'AuthPhoneNumberSendCodeRequest',
+          'AuthPhoneNumberSendCodeResponse',
+          'AuthPhoneNumberVerifyCodeRequest',
+          'AuthPhoneNumberVerifyCodeResponse',
+        ]),
+      );
+    });
+
     test('composed plugin additions appear without a route catalogue', () {
       final withoutMagicLink = _registry(<AuthServerPlugin<Object>>[
         AnonymousPlugin<Object>(),

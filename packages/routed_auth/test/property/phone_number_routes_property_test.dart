@@ -11,7 +11,6 @@ const _hashKey = '0123456789abcdef0123456789abcdef';
 void main() {
   test('hostile phone payloads stay inside bounded JSON errors', () async {
     final plugin = PhoneNumberPlugin<EngineContext>(
-      store: InMemoryAuthPhoneNumberStore(),
       codeHashKey: _hashKey,
       generateCode: (_) => '123456',
       sendCode: (_) {},

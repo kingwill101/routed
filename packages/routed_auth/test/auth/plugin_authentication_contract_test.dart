@@ -257,7 +257,6 @@ Future<_PreparedPlugin> _preparePhone({
   final counter = _Counter();
   String? deliveredCode;
   final plugin = PhoneNumberPlugin<EngineContext>(
-    store: InMemoryAuthPhoneNumberStore(),
     codeHashKey: _phoneHashKey,
     allowSignUp: true,
     generateCode: (_) => '123456',
