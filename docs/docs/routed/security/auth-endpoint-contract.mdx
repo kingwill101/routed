@@ -121,6 +121,12 @@ server route.
 | `POST /username/register` | Public | Browser Origin; no CSRF | `username.registration`; canonical username | Creates the credential and issues the configured identity, or returns a 2FA challenge when policy requires it. |
 | `POST /username/sign-in` | Public | Browser Origin; no CSRF | `username.sign_in`; canonical username or email selected by the typed identifier policy | Issues the configured identity, or returns a 2FA challenge. Ambiguous identifiers are rejected. |
 
+### Last authentication method
+
+| Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Result |
+| --- | --- | --- | --- | --- |
+| `GET /last-authentication-method` | Public | Browser Origin; no CSRF | None | Returns `null` or an allowlisted method ID and expiry from the HMAC-protected HttpOnly cookie. It never returns a user ID, provider payload, credential, or token. |
+
 ### WebAuthn / passkeys
 
 | Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Result |
