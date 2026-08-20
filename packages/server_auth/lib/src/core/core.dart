@@ -88,6 +88,7 @@ export 'two_factor.dart';
 export 'users.dart';
 export 'username.dart';
 export 'username_client.dart';
+export 'username_store.dart';
 export 'verification_token_store.dart';
 export 'webauthn.dart';
 export 'webauthn_store.dart';

@@ -1,4 +1,5 @@
 import 'authentication_methods.dart';
+import 'account_policy.dart';
 import 'exceptions.dart';
 import 'models.dart';
 import 'password_hasher.dart';
@@ -10,6 +11,7 @@ import 'tokens.dart' show secureRandomToken;
 import 'two_factor.dart';
 import 'store.dart';
 import 'users.dart';
+import 'username_store.dart';
 
 const String authUsernamePluginId = 'username';
 const String authUsernameAuthenticationMethod = 'username_password';
@@ -18,6 +20,10 @@ const AuthRateLimitOperation authUsernameRegistrationRateLimitOperation =
     AuthRateLimitOperation(authUsernamePluginId, 'registration');
 const AuthRateLimitOperation authUsernameSignInRateLimitOperation =
     AuthRateLimitOperation(authUsernamePluginId, 'sign_in');
+const AuthRateLimitOperation authUsernameChangeRateLimitOperation =
+    AuthRateLimitOperation(authUsernamePluginId, 'change');
+const AuthRateLimitOperation authUsernameRemovalRateLimitOperation =
+    AuthRateLimitOperation(authUsernamePluginId, 'remove');
 
 enum AuthUsernameCaseCanonicalization { lowercase, preserve }
 
@@ -195,6 +201,33 @@ final class AuthUsernameSignInRequest {
       );
 }
 
+final class AuthUsernameChangeRequest {
+  const AuthUsernameChangeRequest({required this.username});
+
+  final String username;
+
+  factory AuthUsernameChangeRequest.fromJson(Map<String, dynamic> json) =>
+      AuthUsernameChangeRequest(username: _requiredString(json, 'username'));
+}
+
+final class AuthUsernameChangeResult {
+  const AuthUsernameChangeResult({
+    required this.username,
+    required this.user,
+    required this.changed,
+  });
+
+  final String username;
+  final AuthUser user;
+  final bool changed;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'status': changed ? 'username_changed' : 'username_unchanged',
+    'username': username,
+    'user': user.toJson(),
+  };
+}
+
 final class AuthUsernameAuthenticationResult {
   const AuthUsernameAuthenticationResult({
     required this.username,
@@ -235,6 +268,7 @@ final class UsernamePlugin<TContext>
         AuthServerPluginTopologyAware<TContext>,
         AuthEndpointContributor<TContext>,
         AuthClientOperationContributor,
+        AuthPersistenceContributor,
         AuthAuthenticationMethodInventoryContributor,
         AuthAuthenticationMethodInventoryBinding,
         AuthRateLimitContributor {
@@ -250,8 +284,11 @@ final class UsernamePlugin<TContext>
     name: 'Username',
   );
 
-  late AuthUsernameCredentialStore _credentials;
+  late AuthUsernameStore _store;
+  late AuthCredentialStore _credentialStore;
   late AuthUserStore _users;
+  AuthAccountStateStore? _accountStates;
+  late AuthAuthenticationMethodService _authenticationMethods;
   late PasswordHasher _passwordHasher;
   late PasswordPolicy _passwordPolicy;
   final List<AuthCredentialPolicyContributor<TContext>> _credentialPolicies =
@@ -270,7 +307,7 @@ final class UsernamePlugin<TContext>
   String get authenticationMethodNamespace => authUsernamePluginId;
 
   @override
-  Object get authenticationMethodStore => _credentials;
+  Object get authenticationMethodStore => _store;
 
   @override
   Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
@@ -282,19 +319,25 @@ final class UsernamePlugin<TContext>
     String userId,
   ) async {
     _ensureConfigured();
-    final credential = await _credentials.findUsernameForUser(userId);
+    final credential = await _store.findUsernameForUser(userId);
+    final user = await _users.findById(userId);
+    final state = await _accountStates?.find(userId);
     return AuthAuthenticationMethodSnapshot.complete([
-      if (credential?.enabled == true)
+      if (credential?.enabled == true &&
+          user != null &&
+          !authUserIsDisabled(user) &&
+          state?.disabled != true &&
+          state?.isLocked() != true)
         AuthAuthenticationMethod.username(credential!.id),
     ]);
   }
 
   @override
   void configure(AuthServerPluginContext<TContext> context) {
-    final credentials = context.store.credentials;
-    if (credentials is! AuthUsernameCredentialStore) {
+    final store = context.store;
+    if (store is! AuthUsernameStore) {
       throw StateError(
-        'UsernamePlugin requires AuthUsernameCredentialStore atomicity.',
+        'UsernamePlugin requires root AuthUsernameStore atomicity.',
       );
     }
     if (authenticationMethod.trim().isEmpty) {
@@ -304,8 +347,17 @@ final class UsernamePlugin<TContext>
         'must not be empty',
       );
     }
-    _credentials = credentials;
+    _store = store as AuthUsernameStore;
+    _credentialStore = context.store.credentials;
     _users = context.store.users;
+    _accountStates = store is AuthAccountStateStore
+        ? store as AuthAccountStateStore
+        : null;
+    _authenticationMethods =
+        context.authenticationMethods ??
+        (throw StateError(
+          'UsernamePlugin requires an authentication-method coordinator.',
+        ));
     _passwordHasher = context.passwordHasher ?? Argon2idPasswordHasher();
     _passwordPolicy = context.passwordPolicy;
     _configured = true;
@@ -350,7 +402,11 @@ final class UsernamePlugin<TContext>
           path: '/username/register',
           semantics: const AuthOperationSemantics.mutation(
             persistence: AuthMutationPersistence.durable(
-              atomicity: AuthMutationAtomicity.nonAtomic,
+              atomicity: AuthMutationAtomicity.atomic,
+              reference: AuthPersistenceOperationReference(
+                schemaId: authUsernamePluginId,
+                atomicOperationId: 'username.register',
+              ),
             ),
             replaySafety: AuthMutationReplaySafety.singleUse,
           ),
@@ -404,6 +460,60 @@ final class UsernamePlugin<TContext>
             );
           },
         ),
+        TypedAuthEndpointDescriptor<
+          TContext,
+          AuthUsernameChangeRequest,
+          AuthUsernameChangeResult
+        >(
+          id: 'username.change',
+          method: AuthOperationMethod.post,
+          path: '/username/change',
+          semantics: const AuthOperationSemantics.mutation(
+            persistence: AuthMutationPersistence.durable(
+              atomicity: AuthMutationAtomicity.atomic,
+              reference: AuthPersistenceOperationReference(
+                schemaId: authUsernamePluginId,
+                atomicOperationId: 'username.change',
+              ),
+            ),
+            replaySafety: AuthMutationReplaySafety.idempotent,
+          ),
+          requestCodec: _changeRequestCodec,
+          responseCodec: _changeResponseCodec,
+          authentication: AuthOperationAuthentication.session,
+          originPolicy: AuthOperationOriginPolicy.browser,
+          csrfPolicy: AuthOperationCsrfPolicy.required,
+          rateLimitOperation: authUsernameChangeRateLimitOperation,
+          handler: (invocation, request) => changeUsername(
+            userId: _invocationUserId(invocation),
+            request: request,
+          ),
+        ),
+        TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
+          id: 'username.remove',
+          method: AuthOperationMethod.post,
+          path: '/username/remove',
+          semantics: const AuthOperationSemantics.mutation(
+            persistence: AuthMutationPersistence.durable(
+              atomicity: AuthMutationAtomicity.atomic,
+              reference: AuthPersistenceOperationReference(
+                schemaId: authUsernamePluginId,
+                atomicOperationId: 'username.remove',
+              ),
+            ),
+            replaySafety: AuthMutationReplaySafety.idempotent,
+          ),
+          requestCodec: _emptyRequestCodec,
+          responseCodec: _objectResponseCodec,
+          authentication: AuthOperationAuthentication.session,
+          originPolicy: AuthOperationOriginPolicy.browser,
+          csrfPolicy: AuthOperationCsrfPolicy.required,
+          rateLimitOperation: authUsernameRemovalRateLimitOperation,
+          handler: (invocation, _) async {
+            await removeUsername(userId: _invocationUserId(invocation));
+            return const <String, dynamic>{'status': 'username_removed'};
+          },
+        ),
       ];
 
   @override
@@ -421,7 +531,59 @@ final class UsernamePlugin<TContext>
       const <AuthRateLimitOperation>[
         authUsernameRegistrationRateLimitOperation,
         authUsernameSignInRateLimitOperation,
+        authUsernameChangeRateLimitOperation,
+        authUsernameRemovalRateLimitOperation,
       ];
+
+  @override
+  Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
+    AuthPersistenceSchema(
+      id: authUsernamePluginId,
+      entities: <AuthEntityDescriptor>[
+        AuthEntityDescriptor(
+          id: 'auth_username',
+          fields: <AuthFieldDescriptor>[
+            AuthFieldDescriptor(name: 'credentialId', kind: 'id'),
+            AuthFieldDescriptor(name: 'userId', kind: 'id'),
+            AuthFieldDescriptor(name: 'identifier', kind: 'string'),
+            AuthFieldDescriptor(name: 'passwordHash', kind: 'digest'),
+            AuthFieldDescriptor(name: 'enabled', kind: 'boolean'),
+          ],
+          relationships: <AuthRelationshipDescriptor>[
+            AuthRelationshipDescriptor(
+              field: 'userId',
+              targetEntity: 'user',
+              cascadeDelete: true,
+            ),
+          ],
+          uniqueConstraints: <List<String>>[
+            <String>['credentialId'],
+            <String>['identifier'],
+          ],
+          indexes: <List<String>>[
+            <String>['userId'],
+          ],
+        ),
+      ],
+      atomicOperations: <AuthAtomicOperationDescriptor>[
+        AuthAtomicOperationDescriptor(
+          id: 'username.register',
+          description:
+              'Reserve the normalized username and optional email with the user and credential.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'username.change',
+          description:
+              'Replace the username reservation, credential identifier, and user projection.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'username.remove',
+          description:
+              'Remove the username credential and projection only when another method remains.',
+        ),
+      ],
+    ),
+  ];
 
   Future<AuthUsernameAuthenticationResult> register({
     required TContext context,
@@ -470,13 +632,20 @@ final class UsernamePlugin<TContext>
       createdAt: now,
       updatedAt: now,
     );
-    AuthUser? created;
+    AuthUsernameMutationResult persisted;
     try {
-      created = await _credentials.registerUsername(user, credential);
+      persisted = await _store.registerUsername(
+        AuthUsernameRegistrationCommand(user: user, credential: credential),
+      );
     } catch (_) {
       throw AuthFlowException('registration_failed');
     }
-    if (created == null) throw AuthFlowException('registration_failed');
+    final created = persisted.user;
+    if (persisted.status != AuthUsernameMutationStatus.created ||
+        created == null ||
+        persisted.credential?.id != credential.id) {
+      throw AuthFlowException('registration_failed');
+    }
     await _enforceAuthenticationPoliciesIfPortable(
       context,
       created,
@@ -507,12 +676,12 @@ final class UsernamePlugin<TContext>
     AuthPasswordCredential? credential;
     try {
       if (identifier.kind == AuthUsernameIdentifierKind.username) {
-        credential = await _credentials.findByIdentifier(identifier.value);
+        credential = await _store.findByUsername(identifier.value);
       } else {
         final user = await _users.findByEmail(identifier.value);
         credential = user == null
             ? null
-            : await _credentials.findUsernameForUser(user.id);
+            : await _store.findUsernameForUser(user.id);
       }
       if (credential == null || !credential.enabled) {
         throw AuthFlowException('invalid_credentials');
@@ -525,7 +694,7 @@ final class UsernamePlugin<TContext>
         throw AuthFlowException('invalid_credentials');
       }
       if (verification.needsRehash) {
-        await _credentials.update(
+        await _credentialStore.update(
           credential.copyWith(
             passwordHash: _passwordHasher.hash(request.password),
             updatedAt: DateTime.now().toUtc(),
@@ -538,7 +707,11 @@ final class UsernamePlugin<TContext>
       throw AuthFlowException('invalid_credentials');
     }
     final user = await _users.findById(credential.userId);
-    if (user == null || authUserIsDisabled(user)) {
+    final state = user == null ? null : await _accountStates?.find(user.id);
+    if (user == null ||
+        authUserIsDisabled(user) ||
+        state?.disabled == true ||
+        state?.isLocked() == true) {
       throw AuthFlowException('invalid_credentials');
     }
     final username = user.attributes['username'];
@@ -562,6 +735,101 @@ final class UsernamePlugin<TContext>
       username: credential.identifier,
       user: user,
     );
+  }
+
+  Future<AuthUsernameChangeResult> changeUsername({
+    required String userId,
+    required AuthUsernameChangeRequest request,
+    DateTime? now,
+  }) async {
+    _ensureConfigured();
+    final username = identifierPolicy.normalizeUsername(request.username);
+    if (username == null) throw AuthFlowException('username_change_failed');
+    final user = await _availableUser(
+      userId,
+      failureCode: 'username_change_failed',
+    );
+    final credential = await _store.findUsernameForUser(user.id);
+    if (credential == null || !credential.enabled) {
+      throw AuthFlowException('username_change_failed');
+    }
+    AuthUsernameMutationResult result;
+    try {
+      result = await _store.changeUsername(
+        AuthUsernameChangeCommand(
+          userId: user.id,
+          credentialId: credential.id,
+          expectedUsername: credential.identifier,
+          username: username,
+          updatedAt: (now ?? DateTime.now()).toUtc(),
+        ),
+      );
+    } catch (_) {
+      throw AuthFlowException('username_change_failed');
+    }
+    final updated = result.user;
+    if (!result.succeeded || updated == null) {
+      throw AuthFlowException('username_change_failed');
+    }
+    return AuthUsernameChangeResult(
+      username: username,
+      user: updated,
+      changed: result.status == AuthUsernameMutationStatus.changed,
+    );
+  }
+
+  Future<void> removeUsername({required String userId}) async {
+    _ensureConfigured();
+    final user = await _availableUser(
+      userId,
+      failureCode: 'username_removal_failed',
+    );
+    final credential = await _store.findUsernameForUser(user.id);
+    if (credential == null) return;
+    AuthAuthenticationMethodMutationResult result;
+    try {
+      result = await _store.removeUsernameIfSafe(
+        AuthUsernameRemovalCommand(
+          userId: user.id,
+          credentialId: credential.id,
+          loadInventory: () => _authenticationMethods.snapshotForUser(user.id),
+        ),
+      );
+    } catch (_) {
+      throw AuthFlowException('username_removal_failed');
+    }
+    switch (result) {
+      case AuthAuthenticationMethodMutationResult.mutated:
+      case AuthAuthenticationMethodMutationResult.notFound:
+        return;
+      case AuthAuthenticationMethodMutationResult.lastAuthenticationMethod:
+        throw AuthFlowException('last_authentication_method');
+      case AuthAuthenticationMethodMutationResult.atomicityUnavailable:
+        throw AuthFlowException('authentication_method_mutation_unavailable');
+    }
+  }
+
+  Future<AuthUser> _availableUser(
+    String userId, {
+    required String failureCode,
+  }) async {
+    final normalized = userId.trim();
+    if (normalized.isEmpty) throw AuthFlowException(failureCode);
+    final user = await _users.findById(normalized);
+    final state = await _accountStates?.find(normalized);
+    if (user == null ||
+        authUserIsDisabled(user) ||
+        state?.disabled == true ||
+        state?.isLocked() == true) {
+      throw AuthFlowException(failureCode);
+    }
+    return user;
+  }
+
+  String _invocationUserId(AuthOperationInvocation<TContext> invocation) {
+    final user = invocation.user;
+    if (user == null) throw AuthFlowException('unauthorized');
+    return user.id;
   }
 
   Future<void> _enforceCredentialPolicies(
@@ -622,6 +890,44 @@ final class UsernamePlugin<TContext>
     schema: _signInRequestSchema,
   );
 
+  static final AuthOperationCodec<AuthUsernameChangeRequest>
+  _changeRequestCodec = AuthOperationCodec(
+    decode: AuthUsernameChangeRequest.fromJson,
+    encode: (_) => throw UnsupportedError('Request-only codec'),
+    required: true,
+    schema: _changeRequestSchema,
+  );
+
+  static final AuthOperationCodec<AuthUsernameChangeResult>
+  _changeResponseCodec = AuthOperationCodec(
+    decode: (_) => throw UnsupportedError('Response-only codec'),
+    encode: (response) => response.toJson(),
+    schema: _changeResponseSchema,
+  );
+
+  static final AuthOperationCodec<Map<String, dynamic>> _emptyRequestCodec =
+      AuthOperationCodec(
+        decode: (_) => const <String, dynamic>{},
+        encode: (value) => value,
+        schema: const <String, Object?>{
+          'type': 'object',
+          'additionalProperties': false,
+        },
+      );
+
+  static final AuthOperationCodec<Object?> _objectResponseCodec =
+      AuthOperationCodec(
+        decode: (value) => value,
+        encode: (value) => value,
+        schema: const <String, Object?>{
+          'type': 'object',
+          'required': <String>['status'],
+          'properties': <String, Object?>{
+            'status': <String, Object?>{'const': 'username_removed'},
+          },
+        },
+      );
+
   AuthOperationCodec<AuthUsernameAuthenticationResponse> get _responseCodec =>
       AuthOperationCodec(
         decode: (_) => throw UnsupportedError('Response-only codec'),
@@ -673,6 +979,27 @@ const Map<String, Object?> _signInRequestSchema = <String, Object?>{
       'writeOnly': true,
       'maxLength': 16384,
     },
+  },
+};
+
+const Map<String, Object?> _changeRequestSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': <String>['username'],
+  'properties': <String, Object?>{
+    'username': <String, Object?>{'type': 'string', 'maxLength': 256},
+  },
+};
+
+const Map<String, Object?> _changeResponseSchema = <String, Object?>{
+  'type': 'object',
+  'required': <String>['status', 'username', 'user'],
+  'properties': <String, Object?>{
+    'status': <String, Object?>{
+      'enum': <String>['username_changed', 'username_unchanged'],
+    },
+    'username': <String, Object?>{'type': 'string'},
+    'user': <String, Object?>{'type': 'object'},
   },
 };
 

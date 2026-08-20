@@ -26,6 +26,18 @@ final class AuthUsernameClientAuthentication {
   final AuthSession session;
 }
 
+final class AuthUsernameClientChange {
+  const AuthUsernameClientChange({
+    required this.username,
+    required this.user,
+    required this.changed,
+  });
+
+  final String username;
+  final AuthUser user;
+  final bool changed;
+}
+
 /// Typed client for an explicitly installed username server plugin.
 final class AuthUsernameClient {
   const AuthUsernameClient({required this.transport});
@@ -53,6 +65,40 @@ final class AuthUsernameClient {
     'password': password,
     'captchaToken': ?captchaToken,
   });
+
+  Future<AuthUsernameClientChange> change({required String username}) async {
+    final response = await transport.request(
+      'POST',
+      '/username/change',
+      body: <String, dynamic>{'username': username},
+    );
+    final body = _mapBody(response.body);
+    final status = body['status'];
+    final user = body['user'];
+    final canonical = body['username'];
+    if ((status != 'username_changed' && status != 'username_unchanged') ||
+        canonical is! String ||
+        canonical.isEmpty ||
+        user is! Map) {
+      throw const FormatException('Invalid username change response');
+    }
+    return AuthUsernameClientChange(
+      username: canonical,
+      user: AuthUser.fromJson(Map<String, dynamic>.from(user)),
+      changed: status == 'username_changed',
+    );
+  }
+
+  Future<void> remove() async {
+    final response = await transport.request(
+      'POST',
+      '/username/remove',
+      body: const <String, dynamic>{},
+    );
+    if (_mapBody(response.body)['status'] != 'username_removed') {
+      throw const FormatException('Invalid username removal response');
+    }
+  }
 
   Future<AuthUsernameClientAuthentication> _authenticate(
     String path,

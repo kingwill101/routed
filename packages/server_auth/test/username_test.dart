@@ -269,6 +269,341 @@ void main() {
       );
     });
 
+    test(
+      'rename collision preserves the old reservation and projection',
+      () async {
+        final store = InMemoryAuthStore();
+        final plugin = _plugin(store: store);
+        final first = await plugin.register(
+          context: 'first',
+          request: const AuthUsernameRegistrationRequest(
+            username: 'first-user',
+            password: 'safe-password-123',
+          ),
+        );
+        await plugin.register(
+          context: 'second',
+          request: const AuthUsernameRegistrationRequest(
+            username: 'second-user',
+            password: 'safe-password-123',
+          ),
+        );
+
+        await expectLater(
+          plugin.changeUsername(
+            userId: first.user.id,
+            request: const AuthUsernameChangeRequest(username: ' SECOND-USER '),
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'username_change_failed',
+            ),
+          ),
+        );
+
+        expect(
+          (await store.findByUsername('first-user'))?.userId,
+          first.user.id,
+        );
+        expect(await store.users.findById(first.user.id), same(first.user));
+        expect(await store.findByUsername('second-user'), isNotNull);
+      },
+    );
+
+    test(
+      'concurrent renames have one winner and never lose the old name early',
+      () async {
+        final store = InMemoryAuthStore();
+        final plugin = _plugin(store: store);
+        final registered = await plugin.register(
+          context: 'register',
+          request: const AuthUsernameRegistrationRequest(
+            username: 'rename-race',
+            password: 'safe-password-123',
+          ),
+        );
+
+        final outcomes = await Future.wait([
+          _capture(
+            () => plugin.changeUsername(
+              userId: registered.user.id,
+              request: const AuthUsernameChangeRequest(username: 'winner-one'),
+            ),
+          ),
+          _capture(
+            () => plugin.changeUsername(
+              userId: registered.user.id,
+              request: const AuthUsernameChangeRequest(username: 'winner-two'),
+            ),
+          ),
+        ]);
+
+        expect(outcomes.whereType<AuthUsernameChangeResult>(), hasLength(1));
+        expect(
+          outcomes.whereType<AuthFlowException>().single.code,
+          'username_change_failed',
+        );
+        expect(await store.findByUsername('rename-race'), isNull);
+        final current = await store.findUsernameForUser(registered.user.id);
+        expect(current?.identifier, anyOf('winner-one', 'winner-two'));
+        expect(
+          (await store.users.findById(
+            registered.user.id,
+          ))?.attributes['username'],
+          current?.identifier,
+        );
+      },
+    );
+
+    test('same-target rename replay is deterministic and idempotent', () async {
+      final plugin = _plugin();
+      final registered = await plugin.register(
+        context: 'register',
+        request: const AuthUsernameRegistrationRequest(
+          username: 'before-replay',
+          password: 'safe-password-123',
+        ),
+      );
+
+      final first = await plugin.changeUsername(
+        userId: registered.user.id,
+        request: const AuthUsernameChangeRequest(username: 'after-replay'),
+      );
+      final replay = await plugin.changeUsername(
+        userId: registered.user.id,
+        request: const AuthUsernameChangeRequest(username: ' AFTER-REPLAY '),
+      );
+
+      expect(first.changed, isTrue);
+      expect(replay.changed, isFalse);
+      expect(replay.username, first.username);
+      expect(replay.user.id, first.user.id);
+    });
+
+    test(
+      'registration and rename faults roll back every owned record',
+      () async {
+        AuthUsernameFaultPoint? armed =
+            AuthUsernameFaultPoint.registrationAfterUserWrite;
+        final store = InMemoryAuthStore(
+          usernameFaultInjector: (point) {
+            if (point == armed) {
+              armed = null;
+              throw StateError('injected username fault');
+            }
+          },
+        );
+        final plugin = _plugin(store: store);
+
+        await expectLater(
+          plugin.register(
+            context: 'faulted-register',
+            request: const AuthUsernameRegistrationRequest(
+              username: 'fault-register',
+              email: 'fault-register@example.com',
+              password: 'safe-password-123',
+            ),
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'registration_failed',
+            ),
+          ),
+        );
+        expect(await store.findByUsername('fault-register'), isNull);
+        expect(
+          await store.users.findByEmail('fault-register@example.com'),
+          isNull,
+        );
+
+        final registered = await plugin.register(
+          context: 'successful-register',
+          request: const AuthUsernameRegistrationRequest(
+            username: 'fault-before',
+            password: 'safe-password-123',
+          ),
+        );
+        armed = AuthUsernameFaultPoint.changeAfterCredentialWrite;
+        await expectLater(
+          plugin.changeUsername(
+            userId: registered.user.id,
+            request: const AuthUsernameChangeRequest(username: 'fault-after'),
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'username_change_failed',
+            ),
+          ),
+        );
+        expect(await store.findByUsername('fault-after'), isNull);
+        expect(
+          (await store.findUsernameForUser(registered.user.id))?.identifier,
+          'fault-before',
+        );
+        expect(
+          (await store.users.findById(
+            registered.user.id,
+          ))?.attributes['username'],
+          'fault-before',
+        );
+      },
+    );
+
+    test(
+      'disabled and locked users fail every username path generically',
+      () async {
+        final store = InMemoryAuthStore();
+        final plugin = _plugin(store: store);
+        final disabled = await plugin.register(
+          context: 'disabled-register',
+          request: const AuthUsernameRegistrationRequest(
+            username: 'disabled-name',
+            password: 'safe-password-123',
+          ),
+        );
+        await store.disable(disabled.user.id);
+        final locked = await plugin.register(
+          context: 'locked-register',
+          request: const AuthUsernameRegistrationRequest(
+            username: 'locked-name',
+            password: 'safe-password-123',
+          ),
+        );
+        await store.upsert(
+          AuthAccountState(
+            userId: locked.user.id,
+            lockedUntil: DateTime.now().toUtc().add(const Duration(hours: 1)),
+          ),
+        );
+
+        for (final (user, target) in [
+          (disabled.user, 'disabled-new'),
+          (locked.user, 'locked-new'),
+        ]) {
+          await expectLater(
+            plugin.changeUsername(
+              userId: user.id,
+              request: AuthUsernameChangeRequest(username: target),
+            ),
+            throwsA(
+              isA<AuthFlowException>().having(
+                (error) => error.code,
+                'code',
+                'username_change_failed',
+              ),
+            ),
+          );
+          expect(await store.findByUsername(target), isNull);
+          await expectLater(
+            plugin.signIn(
+              context: 'unavailable-sign-in',
+              request: AuthUsernameSignInRequest(
+                identifier: user.attributes['username']! as String,
+                password: 'safe-password-123',
+              ),
+            ),
+            throwsA(
+              isA<AuthFlowException>().having(
+                (error) => error.code,
+                'code',
+                'invalid_credentials',
+              ),
+            ),
+          );
+          await expectLater(
+            plugin.removeUsername(userId: user.id),
+            throwsA(
+              isA<AuthFlowException>().having(
+                (error) => error.code,
+                'code',
+                'username_removal_failed',
+              ),
+            ),
+          );
+        }
+        expect(
+          (await plugin.authenticationMethodsForUser(disabled.user.id)).methods,
+          isEmpty,
+        );
+        expect(
+          (await plugin.authenticationMethodsForUser(locked.user.id)).methods,
+          isEmpty,
+        );
+      },
+    );
+
+    test(
+      'safe removal updates inventory, projection, replay, and hard deletion',
+      () async {
+        final store = InMemoryAuthStore();
+        final plugin = UsernamePlugin<String>();
+        AuthRuntime<String>(
+          options: AuthOptions<String>(
+            providers: const <AuthProvider>[
+              AuthProvider(
+                id: 'github',
+                name: 'GitHub',
+                type: AuthProviderType.oauth,
+              ),
+            ],
+            store: store,
+            storeMode: AuthStoreMode.ephemeral,
+            passwordHasher: _Hasher(),
+            plugins: <AuthServerPlugin<String>>[plugin],
+          ),
+        );
+        final registered = await plugin.register(
+          context: 'register',
+          request: const AuthUsernameRegistrationRequest(
+            username: 'remove-name',
+            password: 'safe-password-123',
+          ),
+        );
+        await store.accounts.link(
+          AuthAccount(
+            providerId: 'github',
+            providerAccountId: 'github-account',
+            userId: registered.user.id,
+          ),
+        );
+
+        await plugin.removeUsername(userId: registered.user.id);
+        await plugin.removeUsername(userId: registered.user.id);
+        expect(await store.findByUsername('remove-name'), isNull);
+        expect(
+          (await store.users.findById(registered.user.id))?.attributes,
+          isNot(contains('username')),
+        );
+
+        final replacement = await plugin.register(
+          context: 'replacement',
+          request: const AuthUsernameRegistrationRequest(
+            username: 'hard-delete-name',
+            password: 'safe-password-123',
+          ),
+        );
+        expect(
+          await store.deleteUserForAdministration(replacement.user.id),
+          isTrue,
+        );
+        expect(await store.findByUsername('hard-delete-name'), isNull);
+        final reused = await plugin.register(
+          context: 'reuse',
+          request: const AuthUsernameRegistrationRequest(
+            username: 'hard-delete-name',
+            password: 'safe-password-123',
+          ),
+        );
+        expect(reused.user.id, isNot(replacement.user.id));
+      },
+    );
+
     test('runs captcha before breached-password registration policy', () async {
       final captcha = _CaptchaVerifier();
       final breached = _BreachedLookup();
@@ -343,6 +678,8 @@ void main() {
       expect(plugin.endpoints.map((endpoint) => endpoint.id), [
         'username.register',
         'username.signIn',
+        'username.change',
+        'username.remove',
       ]);
       expect(
         plugin.endpoints,
@@ -351,13 +688,25 @@ void main() {
       expect(plugin.clientOperations.map((operation) => operation.path), [
         '/username/register',
         '/username/sign-in',
+        '/username/change',
+        '/username/remove',
       ]);
       expect(
         plugin.rateLimitOperations,
         containsAll([
           authUsernameRegistrationRateLimitOperation,
           authUsernameSignInRateLimitOperation,
+          authUsernameChangeRateLimitOperation,
+          authUsernameRemovalRateLimitOperation,
         ]),
+      );
+      final durable = plugin.endpoints
+          .where((endpoint) => endpoint.id != 'username.signIn')
+          .map((endpoint) => endpoint.semantics)
+          .whereType<AuthMutationOperationSemantics>();
+      expect(
+        durable.map((semantics) => semantics.persistence.atomicity),
+        everyElement(AuthMutationAtomicity.atomic),
       );
     });
   });

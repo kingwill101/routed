@@ -12,6 +12,7 @@ import 'verification_token_store.dart';
 import 'jwt_version_store.dart';
 import 'webauthn_store.dart';
 import 'users.dart';
+import 'username_store.dart';
 import 'device_authorization_store.dart';
 import 'email_otp_store.dart';
 
@@ -164,37 +165,6 @@ abstract interface class AuthCredentialStore {
 /// credential without assuming that their login identifier is an email.
 abstract interface class AuthCredentialUserLookupStore {
   FutureOr<AuthPasswordCredential?> findForUser(String userId);
-}
-
-/// Optional persistence capability required by username authentication.
-///
-/// Implementations must commit the user, their optional normalized email, and
-/// the canonical username password credential in one transaction. The same
-/// uniqueness indexes and transaction boundary must be shared with ordinary
-/// email credential registration so concurrent requests cannot claim either
-/// identifier namespace twice.
-///
-/// This capability is deliberately separate from [AuthCredentialStore]. Auth
-/// adapters that do not opt into username authentication remain source
-/// compatible, while the username plugin can fail at configuration time when
-/// an adapter cannot provide the required atomicity.
-abstract interface class AuthUsernameCredentialStore
-    implements AuthCredentialStore, AuthCredentialUserLookupStore {
-  /// Atomically registers a canonical username credential and its user.
-  ///
-  /// Returns `null` when the username, email, user ID, or credential ID is
-  /// already claimed. [credential.identifier] must be the canonical username
-  /// and must not be an email-shaped identifier.
-  FutureOr<AuthUser?> registerUsername(
-    AuthUser user,
-    AuthPasswordCredential credential,
-  );
-
-  /// Finds the canonical username credential owned by [userId].
-  ///
-  /// This must not return an email credential when a backend permits multiple
-  /// password credential kinds for one user.
-  FutureOr<AuthPasswordCredential?> findUsernameForUser(String userId);
 }
 
 /// Resolves the password credential owned by [userId].
@@ -415,6 +385,7 @@ typedef _InMemoryAuthCoreDeletionState = ({
 class InMemoryAuthStore
     implements
         AuthStore,
+        AuthUsernameStore,
         AuthAdminStoreCapabilities,
         AuthWebAuthnStoreCapabilities,
         AuthAccountStateStore,
@@ -422,7 +393,7 @@ class InMemoryAuthStore
         AuthOAuthAccountMutationStore,
         AuthUserDeletionCoordinatorHost,
         AuthInMemoryUserDeletionBackend {
-  InMemoryAuthStore()
+  InMemoryAuthStore({AuthUsernameFaultInjector? usernameFaultInjector})
     : users = _InMemoryUserStore(),
       credentials = _InMemoryCredentialStore(),
       accounts = _InMemoryAccountStore(),
@@ -437,7 +408,8 @@ class InMemoryAuthStore
       deviceAuthorizations = InMemoryAuthDeviceAuthorizationStore(),
       emailOtps = InMemoryAuthEmailOtpStore(),
       _deletionDomain = AuthInMemoryUserDeletionDomain(),
-      _accountStates = InMemoryAuthAccountStateStore() {
+      _accountStates = InMemoryAuthAccountStateStore(),
+      _usernameFaultInjector = usernameFaultInjector {
     (credentials as _InMemoryCredentialStore).users = users;
     _deletionCoordinator = AuthInMemoryUserDeletionCoordinator(
       domain: _deletionDomain,
@@ -485,10 +457,209 @@ class InMemoryAuthStore
   final AuthEmailOtpStore emailOtps;
 
   final InMemoryAuthAccountStateStore _accountStates;
+  final AuthUsernameFaultInjector? _usernameFaultInjector;
   final AuthInMemoryUserDeletionDomain _deletionDomain;
   late final AuthInMemoryUserDeletionCoordinator _deletionCoordinator;
   final Map<String, Future<void>> _authenticationMethodMutationTails =
       <String, Future<void>>{};
+  final Map<String, Future<void>> _usernameMutationTails =
+      <String, Future<void>>{};
+
+  @override
+  Future<AuthUsernameMutationResult> registerUsername(
+    AuthUsernameRegistrationCommand command,
+  ) async {
+    final created = await _credentials._register(
+      command.user,
+      command.credential,
+      username: true,
+      afterUserWrite: () => _injectUsernameFault(
+        AuthUsernameFaultPoint.registrationAfterUserWrite,
+      ),
+    );
+    return created == null
+        ? const AuthUsernameMutationResult(
+            status: AuthUsernameMutationStatus.conflict,
+          )
+        : AuthUsernameMutationResult(
+            status: AuthUsernameMutationStatus.created,
+            user: created,
+            credential: command.credential,
+          );
+  }
+
+  @override
+  Future<AuthPasswordCredential?> findUsernameForUser(String userId) =>
+      _credentials.findUsernameForUser(userId);
+
+  @override
+  Future<AuthPasswordCredential?> findByUsername(String username) =>
+      _credentials.findByIdentifier(username);
+
+  @override
+  Future<AuthUsernameMutationResult> changeUsername(
+    AuthUsernameChangeCommand command,
+  ) => _serializeUsernameMutation(command.userId, () async {
+    final user = _users._usersById[command.userId];
+    final credential = _credentials._credentialsById[command.credentialId];
+    if (user == null ||
+        credential == null ||
+        credential.userId != command.userId ||
+        credential.identifier.contains('@')) {
+      return const AuthUsernameMutationResult(
+        status: AuthUsernameMutationStatus.notFound,
+      );
+    }
+    if (authUserIsDisabled(user)) {
+      return const AuthUsernameMutationResult(
+        status: AuthUsernameMutationStatus.userUnavailable,
+      );
+    }
+    final state = await _accountStates.find(user.id);
+    if (state?.disabled == true || state?.isLocked() == true) {
+      return const AuthUsernameMutationResult(
+        status: AuthUsernameMutationStatus.userUnavailable,
+      );
+    }
+    if (credential.identifier == command.username &&
+        user.attributes['username'] == command.username) {
+      return AuthUsernameMutationResult(
+        status: AuthUsernameMutationStatus.unchanged,
+        user: user,
+        credential: credential,
+      );
+    }
+    if (credential.identifier != command.expectedUsername ||
+        user.attributes['username'] != command.expectedUsername) {
+      return const AuthUsernameMutationResult(
+        status: AuthUsernameMutationStatus.conflict,
+      );
+    }
+    final conflictingId =
+        _credentials._credentialIdsByIdentifier[command.username];
+    if (conflictingId != null && conflictingId != credential.id) {
+      return const AuthUsernameMutationResult(
+        status: AuthUsernameMutationStatus.conflict,
+      );
+    }
+    if (!_credentials._inFlightIdentifiers.add(command.username)) {
+      return const AuthUsernameMutationResult(
+        status: AuthUsernameMutationStatus.conflict,
+      );
+    }
+    final updatedCredential = AuthPasswordCredential(
+      id: credential.id,
+      userId: credential.userId,
+      identifier: command.username,
+      passwordHash: credential.passwordHash,
+      createdAt: credential.createdAt,
+      updatedAt: command.updatedAt.toUtc(),
+      enabled: credential.enabled,
+    );
+    final updatedUser = _usernameProjection(
+      user,
+      from: command.expectedUsername,
+      to: command.username,
+    );
+    try {
+      _credentials._credentialIdsByIdentifier.remove(credential.identifier);
+      _credentials._credentialIdsByIdentifier[command.username] = credential.id;
+      _credentials._credentialsById[credential.id] = updatedCredential;
+      await _injectUsernameFault(
+        AuthUsernameFaultPoint.changeAfterCredentialWrite,
+      );
+      _users._usersById[user.id] = updatedUser;
+      if (user.email != null) _users._usersByEmail[user.email!] = updatedUser;
+      await _injectUsernameFault(AuthUsernameFaultPoint.changeAfterUserWrite);
+      return AuthUsernameMutationResult(
+        status: AuthUsernameMutationStatus.changed,
+        user: updatedUser,
+        credential: updatedCredential,
+      );
+    } catch (_) {
+      _credentials._credentialIdsByIdentifier.remove(command.username);
+      _credentials._credentialIdsByIdentifier[credential.identifier] =
+          credential.id;
+      _credentials._credentialsById[credential.id] = credential;
+      _users._usersById[user.id] = user;
+      if (user.email != null) _users._usersByEmail[user.email!] = user;
+      rethrow;
+    } finally {
+      _credentials._inFlightIdentifiers.remove(command.username);
+    }
+  });
+
+  @override
+  Future<AuthAuthenticationMethodMutationResult> removeUsernameIfSafe(
+    AuthUsernameRemovalCommand command,
+  ) => mutateAuthenticationMethodIfSafe(
+    userId: command.userId,
+    target: AuthAuthenticationMethod.username(command.credentialId),
+    loadInventory: command.loadInventory,
+    mutate: () async {
+      final user = _users._usersById[command.userId];
+      final credential = _credentials._credentialsById[command.credentialId];
+      if (user == null ||
+          credential == null ||
+          credential.userId != command.userId ||
+          credential.identifier.contains('@')) {
+        return false;
+      }
+      final updatedUser = _usernameProjection(
+        user,
+        from: credential.identifier,
+        to: null,
+      );
+      try {
+        _users._usersById[user.id] = updatedUser;
+        if (user.email != null) _users._usersByEmail[user.email!] = updatedUser;
+        await _injectUsernameFault(
+          AuthUsernameFaultPoint.removalAfterUserWrite,
+        );
+        _credentials._credentialsById.remove(credential.id);
+        _credentials._credentialIdsByIdentifier.remove(credential.identifier);
+        await _injectUsernameFault(
+          AuthUsernameFaultPoint.removalAfterCredentialWrite,
+        );
+        return true;
+      } catch (_) {
+        _users._usersById[user.id] = user;
+        if (user.email != null) _users._usersByEmail[user.email!] = user;
+        _credentials._credentialsById[credential.id] = credential;
+        _credentials._credentialIdsByIdentifier[credential.identifier] =
+            credential.id;
+        rethrow;
+      }
+    },
+  );
+
+  Future<T> _serializeUsernameMutation<T>(
+    String userId,
+    Future<T> Function() mutation,
+  ) {
+    final completer = Completer<T>();
+    final previous = _usernameMutationTails[userId] ?? Future<void>.value();
+    late final Future<void> current;
+    current = previous.then((_) async {
+      try {
+        completer.complete(await mutation());
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    _usernameMutationTails[userId] = current;
+    current.whenComplete(() {
+      if (identical(_usernameMutationTails[userId], current)) {
+        _usernameMutationTails.remove(userId);
+      }
+    });
+    return completer.future;
+  }
+
+  Future<void> _injectUsernameFault(AuthUsernameFaultPoint point) async {
+    final injector = _usernameFaultInjector;
+    if (injector != null) await injector(point);
+  }
 
   @override
   Future<AuthAuthenticationMethodMutationResult>
@@ -822,6 +993,28 @@ class InMemoryAuthStore
 ///
 /// Each callback belongs to one typed domain store. This is intentionally a
 /// store implementation rather than an adapter compatibility layer.
+AuthUser _usernameProjection(
+  AuthUser user, {
+  required String from,
+  required String? to,
+}) {
+  final attributes = Map<String, dynamic>.from(user.attributes);
+  if (to == null) {
+    attributes.remove('username');
+  } else {
+    attributes['username'] = to;
+  }
+  return AuthUser(
+    id: user.id,
+    email: user.email,
+    name: user.name == from ? to : user.name,
+    image: user.image,
+    roles: user.roles,
+    isAnonymous: user.isAnonymous,
+    attributes: attributes,
+  );
+}
+
 class CallbackAuthStore implements AuthStore, AuthWebAuthnStoreCapabilities {
   CallbackAuthStore({
     FutureOr<AuthUser?> Function(String id)? onFindUserById,
@@ -1259,7 +1452,8 @@ class _InMemoryUserStore implements AuthUserStore {
   }
 }
 
-class _InMemoryCredentialStore implements AuthUsernameCredentialStore {
+class _InMemoryCredentialStore
+    implements AuthCredentialStore, AuthCredentialUserLookupStore {
   AuthUserStore? users;
   final Map<String, AuthPasswordCredential> _credentialsById =
       <String, AuthPasswordCredential>{};
@@ -1316,7 +1510,6 @@ class _InMemoryCredentialStore implements AuthUsernameCredentialStore {
     return null;
   }
 
-  @override
   Future<AuthPasswordCredential?> findUsernameForUser(String userId) async {
     final normalizedUserId = userId.trim();
     if (normalizedUserId.isEmpty) return null;
@@ -1335,16 +1528,11 @@ class _InMemoryCredentialStore implements AuthUsernameCredentialStore {
     AuthPasswordCredential credential,
   ) => _register(user, credential, username: false);
 
-  @override
-  Future<AuthUser?> registerUsername(
-    AuthUser user,
-    AuthPasswordCredential credential,
-  ) => _register(user, credential, username: true);
-
   Future<AuthUser?> _register(
     AuthUser user,
     AuthPasswordCredential credential, {
     required bool username,
+    FutureOr<void> Function()? afterUserWrite,
   }) async {
     if (credential.id.trim().isEmpty ||
         credential.userId.trim().isEmpty ||
@@ -1387,10 +1575,19 @@ class _InMemoryCredentialStore implements AuthUsernameCredentialStore {
           _credentialsById.containsKey(credential.id)) {
         return null;
       }
-      final created = await userStore.create(user);
-      _credentialsById[credential.id] = credential;
-      _credentialIdsByIdentifier[credential.identifier] = credential.id;
-      return created;
+      AuthUser? created;
+      try {
+        created = await userStore.create(user);
+        await afterUserWrite?.call();
+        _credentialsById[credential.id] = credential;
+        _credentialIdsByIdentifier[credential.identifier] = credential.id;
+        return created;
+      } catch (_) {
+        if (created != null) await userStore.delete(user.id);
+        _credentialsById.remove(credential.id);
+        _credentialIdsByIdentifier.remove(credential.identifier);
+        rethrow;
+      }
     } finally {
       _inFlightIdentifiers.remove(credential.identifier);
       _inFlightCredentialIds.remove(credential.id);

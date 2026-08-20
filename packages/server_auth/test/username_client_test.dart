@@ -17,10 +17,33 @@ void main() {
         httpClient: MockClient((request) async {
           requests.add(request);
           final input = jsonDecode(request.body) as Map<String, dynamic>;
-          final registering = request.url.path.endsWith('/username/register');
+          final path = request.url.path;
+          if (path.endsWith('/username/remove')) {
+            expect(input, isEmpty);
+            return http.Response(
+              jsonEncode(<String, dynamic>{'status': 'username_removed'}),
+              200,
+            );
+          }
+          if (path.endsWith('/username/change')) {
+            expect(input, <String, dynamic>{'username': 'Grace'});
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'status': 'username_changed',
+                'username': 'grace',
+                'user': <String, dynamic>{
+                  'id': 'user-1',
+                  'email': 'ada@example.com',
+                  'roles': <String>[],
+                  'attributes': <String, dynamic>{'username': 'grace'},
+                },
+              }),
+              200,
+            );
+          }
           expect(input['password'], 'safe-password-123');
           expect(input['captchaToken'], 'opaque-captcha');
-          if (registering) {
+          if (path.endsWith('/username/register')) {
             expect(input['username'], 'Ada');
             expect(input['email'], 'ada@example.com');
           } else {
@@ -58,14 +81,21 @@ void main() {
         password: 'safe-password-123',
         captchaToken: 'opaque-captcha',
       );
+      final changed = await username.change(username: 'Grace');
+      await username.remove();
 
       expect(requests.map((request) => request.url.path), [
         '/auth/username/register',
         '/auth/username/sign-in',
+        '/auth/username/change',
+        '/auth/username/remove',
       ]);
       expect(registered.username, 'ada');
       expect(signedIn.session.user.attributes['username'], 'ada');
       expect(signedIn.session.token, 'jwt-token');
+      expect(changed.username, 'grace');
+      expect(changed.changed, isTrue);
+      expect(changed.user.attributes['username'], 'grace');
     },
   );
 
