@@ -22,7 +22,7 @@ final class CloudflareD1AuthSchema {
   /// underscores are accepted because SQLite cannot bind identifiers.
   final String tablePrefix;
 
-  static const int currentVersion = 4;
+  static const int currentVersion = 5;
 
   String table(String suffix) {
     final prefix = tablePrefix.trim();
@@ -50,7 +50,80 @@ final class CloudflareD1AuthSchema {
     CloudflareD1AuthMigration(version: 3, statements: _versionThree),
     CloudflareD1AuthMigration(version: 4, statements: _versionFour),
     CloudflareD1AuthMigration(version: 5, statements: _versionFive),
+    CloudflareD1AuthMigration(version: 6, statements: _versionSix),
   ];
+
+  List<String> get _versionSix {
+    final connections = table('scim_connections');
+    final credentials = table('scim_credentials');
+    final replays = table('scim_replays');
+    return [
+      '''CREATE TABLE IF NOT EXISTS $connections (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        organization_id TEXT NOT NULL,
+        provisioning_domain_id TEXT NOT NULL,
+        subject_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        scopes TEXT NOT NULL,
+        scope_mask INTEGER NOT NULL CHECK (scope_mask > 0),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        disabled_at TEXT
+      )''',
+      'CREATE INDEX IF NOT EXISTS ${connections}_binding '
+          'ON $connections(tenant_id, organization_id, created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS ${connections}_subject '
+          'ON $connections(subject_id)',
+      'CREATE INDEX IF NOT EXISTS ${connections}_tenant '
+          'ON $connections(tenant_id)',
+      '''CREATE TABLE IF NOT EXISTS $credentials (
+        id TEXT PRIMARY KEY,
+        connection_id TEXT NOT NULL,
+        tenant_id TEXT NOT NULL,
+        organization_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        key_prefix TEXT NOT NULL,
+        secret_digest TEXT NOT NULL UNIQUE,
+        scopes TEXT NOT NULL,
+        scope_mask INTEGER NOT NULL CHECK (scope_mask > 0),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        expires_at TEXT,
+        last_used_at TEXT,
+        revoked_at TEXT,
+        FOREIGN KEY(connection_id) REFERENCES $connections(id)
+          ON DELETE CASCADE
+      )''',
+      'CREATE INDEX IF NOT EXISTS ${credentials}_connection '
+          'ON $credentials(connection_id, created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS ${credentials}_binding '
+          'ON $credentials(tenant_id, organization_id)',
+      '''CREATE TABLE IF NOT EXISTS $replays (
+        tenant_id TEXT NOT NULL,
+        organization_id TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        fingerprint TEXT NOT NULL,
+        connection_id TEXT NOT NULL,
+        credential_id TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        PRIMARY KEY(
+          tenant_id,
+          organization_id,
+          operation,
+          idempotency_key
+        ),
+        FOREIGN KEY(connection_id) REFERENCES $connections(id)
+          ON DELETE CASCADE,
+        FOREIGN KEY(credential_id) REFERENCES $credentials(id)
+          ON DELETE CASCADE
+      )''',
+      'CREATE INDEX IF NOT EXISTS ${replays}_expiry ON $replays(expires_at)',
+      'CREATE INDEX IF NOT EXISTS ${replays}_connection '
+          'ON $replays(connection_id)',
+    ];
+  }
 
   List<String> get _versionFour {
     final clients = table('oauth_clients');
@@ -302,6 +375,9 @@ final class CloudflareD1AuthSchema {
   /// retain migration history and never call it during normal operation.
   Future<void> dropAll(CloudflareD1Database database) async {
     final suffixes = [
+      'scim_replays',
+      'scim_credentials',
+      'scim_connections',
       'oauth_access_tokens',
       'oauth_authorization_codes',
       'oauth_clients',

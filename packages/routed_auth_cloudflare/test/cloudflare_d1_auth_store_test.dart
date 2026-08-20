@@ -446,7 +446,7 @@ void main() {
       database
           .select('SELECT version FROM $migrationsTable ORDER BY version')
           .map((row) => row['version']),
-      [1, 2, 3, 4, 5],
+      [1, 2, 3, 4, 5, 6],
     );
   });
 

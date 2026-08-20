@@ -21,6 +21,7 @@ final class CloudflareD1AuthStore
   CloudflareD1AuthStore(
     CloudflareD1Database database, {
     this.schema = const CloudflareD1AuthSchema(),
+    this.scimReplayTtl = const Duration(days: 1),
     DateTime Function()? clock,
   }) : _database = database,
        _clock = clock ?? DateTime.now {
@@ -44,6 +45,12 @@ final class CloudflareD1AuthStore
       clock: _clock,
     );
     _deletionCoordinator = deletionCoordinator;
+    scimConnectionStore = CloudflareD1ScimConnectionStore._(
+      sql,
+      schema,
+      deletionCoordinator.domain,
+      replayTtl: scimReplayTtl,
+    );
     oauthClientStore = CloudflareD1OAuthClientStore._(
       sql,
       schema,
@@ -75,16 +82,23 @@ final class CloudflareD1AuthStore
   static Future<CloudflareD1AuthStore> open(
     CloudflareD1Database database, {
     CloudflareD1AuthSchema schema = const CloudflareD1AuthSchema(),
+    Duration scimReplayTtl = const Duration(days: 1),
     DateTime Function()? clock,
   }) async {
     await schema.migrate(database);
-    return CloudflareD1AuthStore(database, schema: schema, clock: clock);
+    return CloudflareD1AuthStore(
+      database,
+      schema: schema,
+      scimReplayTtl: scimReplayTtl,
+      clock: clock,
+    );
   }
 
   final CloudflareD1Database _database;
   late final _D1 _sql;
   final DateTime Function() _clock;
   final CloudflareD1AuthSchema schema;
+  final Duration scimReplayTtl;
   late final CloudflareD1UserDeletionCoordinator _deletionCoordinator;
   bool _authenticationMethodTopologyBound = false;
   bool _authenticationMethodInventoryAuthoritative = false;
@@ -723,6 +737,9 @@ final class CloudflareD1AuthStore
   /// Authoritative D1 authorization-code exchange boundary.
   late final CloudflareD1OAuthAuthorizationCodeExchangeStore
   oauthAuthorizationCodeExchangeStore;
+
+  /// Digest-only managed-SCIM connection persistence in this D1 domain.
+  late final CloudflareD1ScimConnectionStore scimConnectionStore;
 
   /// Applies all pending schema migrations.
   Future<void> migrate() => schema.migrate(_database);
@@ -1577,6 +1594,783 @@ final class CloudflareD1OAuthAuthorizationCodeExchangeStore
           ? OAuthAuthorizationCodeExchangeStatus.invalidGrant
           : OAuthAuthorizationCodeExchangeStatus.alreadyCommitted,
     );
+  }
+}
+
+/// Durable managed-SCIM connection and bearer-credential persistence.
+///
+/// Only non-reversible bearer digests cross this boundary. Issuance replay
+/// identity is constrained by D1 and every multi-row mutation is submitted as
+/// one atomic D1 batch. The adapter has no in-memory or split-database mode.
+final class CloudflareD1ScimConnectionStore
+    implements AuthScimConnectionStore, AuthUserDeletionPlanFactory {
+  CloudflareD1ScimConnectionStore._(
+    this._sql,
+    this.schema,
+    this.domain, {
+    this.replayTtl = const Duration(days: 1),
+  }) {
+    if (replayTtl <= Duration.zero) {
+      throw ArgumentError.value(replayTtl, 'replayTtl', 'must be positive');
+    }
+  }
+
+  final _D1 _sql;
+  final CloudflareD1AuthSchema schema;
+  final CloudflareD1UserDeletionDomain domain;
+  final Duration replayTtl;
+
+  String get _connections => schema.table('scim_connections');
+  String get _credentials => schema.table('scim_credentials');
+  String get _replays => schema.table('scim_replays');
+
+  @override
+  AuthUserDeletionPlan createDeletionPlan({
+    required AuthUserDeletionDomain domain,
+    required AuthUser user,
+    required String namespace,
+  }) {
+    if (!identical(domain, this.domain)) {
+      throw StateError('Managed SCIM received a foreign D1 domain.');
+    }
+    return CloudflareD1UserDeletionPlan(
+      domain: this.domain,
+      userId: user.id,
+      namespace: namespace,
+      statements: [
+        CloudflareD1UserDeletionStatement(
+          sql:
+              'DELETE FROM $_connections '
+              'WHERE subject_id = ? AND {{guard}}',
+          parameters: [user.id],
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<AuthScimStoredConnectionCreation> createConnection(
+    AuthScimCreateConnectionTransaction transaction,
+  ) async {
+    final connection = transaction.connection;
+    final credential = transaction.credential;
+    _validateScimCredential(connection, credential);
+    const operation = 'create';
+    final replay = await _readReplay(
+      connection.binding,
+      operation,
+      transaction.idempotency,
+      connection.createdAt,
+    );
+    if (replay != null) {
+      return AuthScimStoredConnectionCreation(
+        connection: replay.connection,
+        credential: replay.credential,
+        replayed: true,
+      );
+    }
+
+    try {
+      await _sql.batch([
+        _sql.database
+            .prepare('''INSERT INTO $_connections
+              (id, tenant_id, organization_id, provisioning_domain_id,
+               subject_id, name, scopes, scope_mask, created_at, updated_at,
+               disabled_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''')
+            .bind(_scimConnectionValues(connection)),
+        _sql.database
+            .prepare('''INSERT INTO $_credentials
+              (id, connection_id, tenant_id, organization_id, name,
+               key_prefix, secret_digest, scopes, scope_mask, created_at,
+               updated_at, expires_at, last_used_at, revoked_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''')
+            .bind(_scimCredentialValues(credential)),
+        _replayInsert(
+          connection.binding,
+          operation,
+          transaction.idempotency,
+          connection.id,
+          credential.id,
+          connection.createdAt,
+        ),
+      ]);
+    } catch (_) {
+      final committed = await _readReplay(
+        connection.binding,
+        operation,
+        transaction.idempotency,
+        connection.createdAt,
+      );
+      if (committed != null) {
+        return AuthScimStoredConnectionCreation(
+          connection: committed.connection,
+          credential: committed.credential,
+          replayed: true,
+        );
+      }
+      if (await _hasScimConflict(connection, credential)) {
+        throw const AuthScimConnectionStoreException(
+          AuthScimConnectionStoreFailure.conflict,
+        );
+      }
+      throw StateError('D1 managed SCIM creation failed atomically.');
+    }
+    return AuthScimStoredConnectionCreation(
+      connection: connection,
+      credential: credential,
+      replayed: false,
+    );
+  }
+
+  @override
+  Future<AuthScimConnectionPage> listConnections(
+    AuthScimConnectionCatalogQuery query,
+  ) async {
+    final predicate = 'tenant_id = ? AND organization_id = ?';
+    final values = [query.binding.tenantId, query.binding.organizationId];
+    final results = await _sql.batchRows([
+      _sql.database
+          .prepare(
+            'SELECT COUNT(*) AS total FROM $_connections '
+            'WHERE $predicate',
+          )
+          .bind(values),
+      _sql.database
+          .prepare(
+            'SELECT * FROM $_connections WHERE $predicate '
+            'ORDER BY created_at DESC LIMIT ? OFFSET ?',
+          )
+          .bind([...values, query.limit, query.offset]),
+    ]);
+    final total = (results.first.results.single['total'] as num).toInt();
+    return AuthScimConnectionPage(
+      items: results.last.results
+          .map(_decodeScimConnection)
+          .toList(growable: false),
+      total: total,
+      limit: query.limit,
+      offset: query.offset,
+    );
+  }
+
+  @override
+  Future<AuthScimManagedConnection?> findConnection(
+    AuthScimConnectionBinding binding,
+    String connectionId,
+  ) => _sql.first(
+    'SELECT * FROM $_connections WHERE id = ? AND tenant_id = ? '
+    'AND organization_id = ?',
+    [connectionId.trim(), binding.tenantId, binding.organizationId],
+    _decodeScimConnection,
+  );
+
+  @override
+  Future<AuthScimManagedConnection?> updateConnection(
+    AuthScimUpdateConnectionTransaction transaction,
+  ) async {
+    final next = transaction.connection;
+    final binding = transaction.binding;
+    if (next.tenantId != binding.tenantId ||
+        next.organizationId != binding.organizationId ||
+        !next.isActive) {
+      throw const AuthScimConnectionStoreException(
+        AuthScimConnectionStoreFailure.conflict,
+      );
+    }
+    final allowedMask = _scimGrantedMask(next.scopes);
+    final results = await _sql.batch([
+      _sql.database
+          .prepare('''UPDATE $_connections SET
+              provisioning_domain_id = ?, name = ?, scopes = ?,
+              scope_mask = ?, updated_at = ?
+            WHERE id = ? AND tenant_id = ? AND organization_id = ?
+              AND subject_id = ? AND created_at = ? AND updated_at = ?
+              AND disabled_at IS NULL''')
+          .bind([
+            next.provisioningDomainId,
+            next.name,
+            _encodeScimScopes(next.scopes),
+            allowedMask,
+            _date(next.updatedAt),
+            next.id,
+            binding.tenantId,
+            binding.organizationId,
+            next.subjectId,
+            _date(next.createdAt),
+            _date(transaction.expectedUpdatedAt),
+          ]),
+      _sql.database
+          .prepare('''UPDATE $_credentials SET
+              updated_at = ?, revoked_at = ?
+            WHERE connection_id = ? AND revoked_at IS NULL
+              AND (scope_mask & ~$allowedMask) != 0
+              AND EXISTS (
+                SELECT 1 FROM $_connections
+                WHERE id = ? AND tenant_id = ? AND organization_id = ?
+                  AND updated_at = ? AND scope_mask = ?
+              )''')
+          .bind([
+            _date(next.updatedAt),
+            _date(next.updatedAt),
+            next.id,
+            next.id,
+            binding.tenantId,
+            binding.organizationId,
+            _date(next.updatedAt),
+            allowedMask,
+          ]),
+    ]);
+    if ((results.first.meta?.changes ?? 0) != 1) {
+      final existing = await findConnection(binding, next.id);
+      if (existing == null) return null;
+      throw const AuthScimConnectionStoreException(
+        AuthScimConnectionStoreFailure.conflict,
+      );
+    }
+    return findConnection(binding, next.id);
+  }
+
+  @override
+  Future<AuthScimManagedConnection?> disableConnection(
+    AuthScimConnectionBinding binding,
+    String connectionId, {
+    required DateTime disabledAt,
+  }) async {
+    final id = connectionId.trim();
+    final existing = await findConnection(binding, id);
+    if (existing == null) return null;
+    final current = disabledAt.toUtc();
+    await _sql.batch([
+      _sql.database
+          .prepare('''UPDATE $_connections
+            SET updated_at = ?, disabled_at = ?
+            WHERE id = ? AND tenant_id = ? AND organization_id = ?
+              AND disabled_at IS NULL''')
+          .bind([
+            _date(current),
+            _date(current),
+            id,
+            binding.tenantId,
+            binding.organizationId,
+          ]),
+      _sql.database
+          .prepare('''UPDATE $_credentials
+            SET updated_at = ?, revoked_at = ?
+            WHERE connection_id = ? AND revoked_at IS NULL
+              AND EXISTS (
+                SELECT 1 FROM $_connections WHERE id = ?
+                  AND tenant_id = ? AND organization_id = ?
+                  AND disabled_at IS NOT NULL
+              )''')
+          .bind([
+            _date(current),
+            _date(current),
+            id,
+            id,
+            binding.tenantId,
+            binding.organizationId,
+          ]),
+    ]);
+    return findConnection(binding, id);
+  }
+
+  @override
+  Future<AuthScimStoredCredentialIssuance> issueCredential(
+    AuthScimIssueCredentialTransaction transaction,
+  ) async {
+    final credential = transaction.credential;
+    final connection = await findConnection(
+      transaction.binding,
+      credential.connectionId,
+    );
+    if (connection == null) {
+      throw const AuthScimConnectionStoreException(
+        AuthScimConnectionStoreFailure.notFound,
+      );
+    }
+    _validateScimCredential(connection, credential);
+    if (!connection.isActive) {
+      throw const AuthScimConnectionStoreException(
+        AuthScimConnectionStoreFailure.disabled,
+      );
+    }
+    final operation = 'issue:${connection.id}';
+    final replay = await _readReplay(
+      transaction.binding,
+      operation,
+      transaction.idempotency,
+      credential.createdAt,
+    );
+    if (replay != null) {
+      return AuthScimStoredCredentialIssuance(
+        credential: replay.credential,
+        replayed: true,
+      );
+    }
+
+    try {
+      await _sql.batch([
+        _sql.database
+            .prepare('''INSERT INTO $_credentials
+              (id, connection_id, tenant_id, organization_id, name,
+               key_prefix, secret_digest, scopes, scope_mask, created_at,
+               updated_at, expires_at, last_used_at, revoked_at)
+              SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+              WHERE EXISTS (
+                SELECT 1 FROM $_connections WHERE id = ?
+                  AND tenant_id = ? AND organization_id = ?
+                  AND disabled_at IS NULL
+              )''')
+            .bind([
+              ..._scimCredentialValues(credential),
+              connection.id,
+              transaction.binding.tenantId,
+              transaction.binding.organizationId,
+            ]),
+        _replayInsert(
+          transaction.binding,
+          operation,
+          transaction.idempotency,
+          connection.id,
+          credential.id,
+          credential.createdAt,
+        ),
+      ]);
+    } catch (_) {
+      final committed = await _readReplay(
+        transaction.binding,
+        operation,
+        transaction.idempotency,
+        credential.createdAt,
+      );
+      if (committed != null) {
+        return AuthScimStoredCredentialIssuance(
+          credential: committed.credential,
+          replayed: true,
+        );
+      }
+      if (await _hasScimCredentialConflict(credential)) {
+        throw const AuthScimConnectionStoreException(
+          AuthScimConnectionStoreFailure.conflict,
+        );
+      }
+      throw StateError('D1 managed SCIM issuance failed atomically.');
+    }
+    return AuthScimStoredCredentialIssuance(
+      credential: credential,
+      replayed: false,
+    );
+  }
+
+  @override
+  Future<AuthScimStoredCredentialIssuance?> rotateCredential(
+    AuthScimRotateCredentialTransaction transaction,
+  ) async {
+    final binding = transaction.binding;
+    final connection = await findConnection(binding, transaction.connectionId);
+    if (connection == null) return null;
+    if (!connection.isActive) {
+      throw const AuthScimConnectionStoreException(
+        AuthScimConnectionStoreFailure.disabled,
+      );
+    }
+    _validateScimCredential(connection, transaction.replacement);
+    final operation =
+        'rotate:${connection.id}:${transaction.credentialId.trim()}';
+    final replay = await _readReplay(
+      binding,
+      operation,
+      transaction.idempotency,
+      transaction.revokedAt,
+    );
+    if (replay != null) {
+      return AuthScimStoredCredentialIssuance(
+        credential: replay.credential,
+        replayed: true,
+      );
+    }
+
+    final now = transaction.revokedAt.toUtc();
+    final replacement = transaction.replacement;
+    try {
+      final results = await _sql.batch([
+        _sql.database
+            .prepare('''INSERT INTO $_credentials
+              (id, connection_id, tenant_id, organization_id, name,
+               key_prefix, secret_digest, scopes, scope_mask, created_at,
+               updated_at, expires_at, last_used_at, revoked_at)
+              SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+              WHERE EXISTS (
+                SELECT 1 FROM $_credentials AS old
+                JOIN $_connections AS connection
+                  ON connection.id = old.connection_id
+                WHERE old.id = ? AND old.connection_id = ?
+                  AND old.revoked_at IS NULL
+                  AND (old.expires_at IS NULL OR old.expires_at > ?)
+                  AND connection.tenant_id = ?
+                  AND connection.organization_id = ?
+                  AND connection.disabled_at IS NULL
+              )''')
+            .bind([
+              ..._scimCredentialValues(replacement),
+              transaction.credentialId.trim(),
+              connection.id,
+              _date(now),
+              binding.tenantId,
+              binding.organizationId,
+            ]),
+        _sql.database
+            .prepare('''UPDATE $_credentials
+              SET updated_at = ?, revoked_at = ?
+              WHERE id = ? AND connection_id = ? AND revoked_at IS NULL
+                AND (expires_at IS NULL OR expires_at > ?)
+                AND EXISTS (
+                  SELECT 1 FROM $_credentials AS replacement
+                  WHERE replacement.id = ?
+                    AND replacement.connection_id = ?
+                    AND replacement.secret_digest = ?
+                )''')
+            .bind([
+              _date(now),
+              _date(now),
+              transaction.credentialId.trim(),
+              connection.id,
+              _date(now),
+              replacement.id,
+              connection.id,
+              replacement.secretDigest,
+            ]),
+        _sql.database
+            .prepare('''INSERT INTO $_replays
+              (tenant_id, organization_id, operation, idempotency_key,
+               fingerprint, connection_id, credential_id, expires_at)
+              SELECT ?, ?, ?, ?, ?, ?, ?, ?
+              WHERE EXISTS (
+                SELECT 1 FROM $_credentials AS old
+                WHERE old.id = ? AND old.connection_id = ?
+                  AND old.revoked_at = ?
+              ) AND EXISTS (
+                SELECT 1 FROM $_credentials AS replacement
+                WHERE replacement.id = ?
+                  AND replacement.connection_id = ?
+                  AND replacement.secret_digest = ?
+              )''')
+            .bind([
+              binding.tenantId,
+              binding.organizationId,
+              operation,
+              transaction.idempotency.key,
+              transaction.idempotency.fingerprint,
+              connection.id,
+              replacement.id,
+              _date(now.add(replayTtl)),
+              transaction.credentialId.trim(),
+              connection.id,
+              _date(now),
+              replacement.id,
+              connection.id,
+              replacement.secretDigest,
+            ]),
+      ]);
+      if ((results.first.meta?.changes ?? 0) == 1 &&
+          (results[1].meta?.changes ?? 0) == 1 &&
+          (results.last.meta?.changes ?? 0) == 1) {
+        return AuthScimStoredCredentialIssuance(
+          credential: replacement,
+          replayed: false,
+        );
+      }
+      if (results.any((result) => (result.meta?.changes ?? 0) != 0)) {
+        throw StateError('D1 managed SCIM rotation changed partial state.');
+      }
+      return null;
+    } catch (_) {
+      final committed = await _readReplay(
+        binding,
+        operation,
+        transaction.idempotency,
+        now,
+      );
+      if (committed != null) {
+        return AuthScimStoredCredentialIssuance(
+          credential: committed.credential,
+          replayed: true,
+        );
+      }
+      if (await _hasScimCredentialConflict(replacement)) {
+        throw const AuthScimConnectionStoreException(
+          AuthScimConnectionStoreFailure.conflict,
+        );
+      }
+      throw StateError('D1 managed SCIM rotation failed atomically.');
+    }
+  }
+
+  @override
+  Future<AuthScimCredentialRecord?> revokeCredential(
+    AuthScimConnectionBinding binding,
+    String connectionId,
+    String credentialId, {
+    required DateTime revokedAt,
+  }) async {
+    final current = revokedAt.toUtc();
+    final id = credentialId.trim();
+    final connection = connectionId.trim();
+    await _sql.run(
+      '''UPDATE $_credentials SET updated_at = ?, revoked_at = ?
+        WHERE id = ? AND connection_id = ? AND revoked_at IS NULL
+          AND EXISTS (
+            SELECT 1 FROM $_connections WHERE id = ?
+              AND tenant_id = ? AND organization_id = ?
+          )''',
+      [
+        _date(current),
+        _date(current),
+        id,
+        connection,
+        connection,
+        binding.tenantId,
+        binding.organizationId,
+      ],
+    );
+    return _sql.first(
+      '''SELECT credential.* FROM $_credentials AS credential
+        JOIN $_connections AS connection
+          ON connection.id = credential.connection_id
+        WHERE credential.id = ? AND credential.connection_id = ?
+          AND connection.tenant_id = ? AND connection.organization_id = ?''',
+      [id, connection, binding.tenantId, binding.organizationId],
+      _decodeScimCredential,
+    );
+  }
+
+  @override
+  Future<AuthScimCredentialPage> listCredentials(
+    AuthScimCredentialCatalogQuery query, {
+    required DateTime now,
+  }) async {
+    final connection = await findConnection(query.binding, query.connectionId);
+    if (connection == null) {
+      throw const AuthScimConnectionStoreException(
+        AuthScimConnectionStoreFailure.notFound,
+      );
+    }
+    final results = await _sql.batchRows([
+      _sql.database
+          .prepare(
+            'SELECT COUNT(*) AS total FROM $_credentials '
+            'WHERE connection_id = ?',
+          )
+          .bind([connection.id]),
+      _sql.database
+          .prepare(
+            'SELECT * FROM $_credentials WHERE connection_id = ? '
+            'ORDER BY created_at DESC LIMIT ? OFFSET ?',
+          )
+          .bind([connection.id, query.limit, query.offset]),
+    ]);
+    final total = (results.first.results.single['total'] as num).toInt();
+    final current = now.toUtc();
+    return AuthScimCredentialPage(
+      items: results.last.results
+          .map(_decodeScimCredential)
+          .map((credential) => credential.toPublic(now: current))
+          .toList(growable: false),
+      total: total,
+      limit: query.limit,
+      offset: query.offset,
+    );
+  }
+
+  @override
+  Future<AuthScimConnectionIdentity?> resolveCredentialDigest(
+    String digest, {
+    required DateTime now,
+  }) async {
+    final normalized = digest.trim();
+    if (!RegExp(r'^[A-Za-z0-9_-]{43,128}$').hasMatch(normalized)) return null;
+    final current = now.toUtc();
+    final predicate = '''credential.secret_digest = ?
+      AND credential.revoked_at IS NULL
+      AND (credential.expires_at IS NULL OR credential.expires_at > ?)
+      AND connection.disabled_at IS NULL
+      AND connection.tenant_id = credential.tenant_id
+      AND connection.organization_id = credential.organization_id
+      AND (credential.scope_mask & ~connection.scope_mask) = 0''';
+    final results = await _sql.batchRows([
+      _sql.database
+          .prepare('''SELECT
+              connection.id AS connection_id,
+              credential.id AS credential_id,
+              connection.tenant_id AS tenant_id,
+              connection.organization_id AS organization_id,
+              connection.provisioning_domain_id AS provisioning_domain_id,
+              connection.subject_id AS subject_id,
+              credential.scopes AS credential_scopes,
+              credential.expires_at AS credential_expires_at
+            FROM $_credentials AS credential
+            JOIN $_connections AS connection
+              ON connection.id = credential.connection_id
+            WHERE $predicate''')
+          .bind([normalized, _date(current)]),
+      _sql.database
+          .prepare('''UPDATE $_credentials AS credential
+            SET updated_at = ?, last_used_at = ?
+            WHERE secret_digest = ? AND revoked_at IS NULL
+              AND (expires_at IS NULL OR expires_at > ?)
+              AND EXISTS (
+                SELECT 1 FROM $_connections AS connection
+                WHERE connection.id = credential.connection_id
+                  AND connection.disabled_at IS NULL
+                  AND connection.tenant_id = credential.tenant_id
+                  AND connection.organization_id = credential.organization_id
+                  AND (credential.scope_mask & ~connection.scope_mask) = 0
+              )''')
+          .bind([_date(current), _date(current), normalized, _date(current)]),
+    ]);
+    if (results.first.results.length != 1 ||
+        (results.last.meta?.changes ?? 0) != 1) {
+      return null;
+    }
+    final row = results.first.results.single;
+    return AuthScimConnectionIdentity(
+      connectionId: row['connection_id']! as String,
+      credentialId: row['credential_id']! as String,
+      tenantId: row['tenant_id']! as String,
+      organizationId: row['organization_id']! as String,
+      provisioningDomainId: row['provisioning_domain_id']! as String,
+      subjectId: row['subject_id']! as String,
+      scopes: _decodeScimScopes(row['credential_scopes']),
+      expiresAt: _optionalDate(row['credential_expires_at']),
+    );
+  }
+
+  @override
+  Future<void> deleteForSubject(String subjectId) async {
+    await _sql.run('DELETE FROM $_connections WHERE subject_id = ?', [
+      subjectId.trim(),
+    ]);
+  }
+
+  @override
+  Future<void> deleteForTenant(String tenantId) async {
+    await _sql.run('DELETE FROM $_connections WHERE tenant_id = ?', [
+      tenantId.trim(),
+    ]);
+  }
+
+  CloudflareD1PreparedStatement _replayInsert(
+    AuthScimConnectionBinding binding,
+    String operation,
+    AuthScimIdempotencyBinding idempotency,
+    String connectionId,
+    String credentialId,
+    DateTime now,
+  ) => _sql.database
+      .prepare('''INSERT INTO $_replays
+        (tenant_id, organization_id, operation, idempotency_key, fingerprint,
+         connection_id, credential_id, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)''')
+      .bind([
+        binding.tenantId,
+        binding.organizationId,
+        operation,
+        idempotency.key,
+        idempotency.fingerprint,
+        connectionId,
+        credentialId,
+        _date(now.toUtc().add(replayTtl)),
+      ]);
+
+  Future<_D1ScimReplay?> _readReplay(
+    AuthScimConnectionBinding binding,
+    String operation,
+    AuthScimIdempotencyBinding idempotency,
+    DateTime now,
+  ) async {
+    final keyValues = [
+      binding.tenantId,
+      binding.organizationId,
+      operation,
+      idempotency.key,
+    ];
+    await _sql.run(
+      '''DELETE FROM $_replays
+        WHERE tenant_id = ? AND organization_id = ? AND operation = ?
+          AND idempotency_key = ? AND expires_at <= ?''',
+      [...keyValues, _date(now)],
+    );
+    final replay = await _sql.first(
+      '''SELECT
+          replay.fingerprint AS replay_fingerprint,
+          connection.id AS connection_id,
+          connection.tenant_id AS connection_tenant_id,
+          connection.organization_id AS connection_organization_id,
+          connection.provisioning_domain_id AS connection_domain_id,
+          connection.subject_id AS connection_subject_id,
+          connection.name AS connection_name,
+          connection.scopes AS connection_scopes,
+          connection.created_at AS connection_created_at,
+          connection.updated_at AS connection_updated_at,
+          connection.disabled_at AS connection_disabled_at,
+          credential.id AS credential_id,
+          credential.connection_id AS credential_connection_id,
+          credential.tenant_id AS credential_tenant_id,
+          credential.organization_id AS credential_organization_id,
+          credential.name AS credential_name,
+          credential.key_prefix AS credential_key_prefix,
+          credential.secret_digest AS credential_secret_digest,
+          credential.scopes AS credential_scopes,
+          credential.created_at AS credential_created_at,
+          credential.updated_at AS credential_updated_at,
+          credential.expires_at AS credential_expires_at,
+          credential.last_used_at AS credential_last_used_at,
+          credential.revoked_at AS credential_revoked_at
+        FROM $_replays AS replay
+        JOIN $_connections AS connection
+          ON connection.id = replay.connection_id
+        JOIN $_credentials AS credential
+          ON credential.id = replay.credential_id
+        WHERE replay.tenant_id = ? AND replay.organization_id = ?
+          AND replay.operation = ? AND replay.idempotency_key = ?
+          AND replay.expires_at > ?''',
+      [...keyValues, _date(now)],
+      _decodeScimReplay,
+    );
+    if (replay != null && replay.fingerprint != idempotency.fingerprint) {
+      throw const AuthScimConnectionStoreException(
+        AuthScimConnectionStoreFailure.replayMismatch,
+      );
+    }
+    return replay;
+  }
+
+  Future<bool> _hasScimConflict(
+    AuthScimManagedConnection connection,
+    AuthScimCredentialRecord credential,
+  ) async {
+    final row = await _sql.first(
+      '''SELECT 1 AS present WHERE
+        EXISTS (SELECT 1 FROM $_connections WHERE id = ?) OR
+        EXISTS (SELECT 1 FROM $_credentials
+          WHERE id = ? OR secret_digest = ?)''',
+      [connection.id, credential.id, credential.secretDigest],
+      (_) => true,
+    );
+    return row ?? false;
+  }
+
+  Future<bool> _hasScimCredentialConflict(
+    AuthScimCredentialRecord credential,
+  ) async {
+    final row = await _sql.first(
+      'SELECT 1 AS present FROM $_credentials '
+      'WHERE id = ? OR secret_digest = ? LIMIT 1',
+      [credential.id, credential.secretDigest],
+      (_) => true,
+    );
+    return row ?? false;
   }
 }
 
@@ -2994,6 +3788,159 @@ void _validatePreparedD1OAuthToken(
 }
 
 String _s256Challenge(String verifier) => pkceS256CodeChallenge(verifier);
+
+List<Object?> _scimConnectionValues(AuthScimManagedConnection value) => [
+  value.id,
+  value.tenantId,
+  value.organizationId,
+  value.provisioningDomainId,
+  value.subjectId,
+  value.name,
+  _encodeScimScopes(value.scopes),
+  _scimGrantedMask(value.scopes),
+  _date(value.createdAt),
+  _date(value.updatedAt),
+  _nullableDate(value.disabledAt),
+];
+
+List<Object?> _scimCredentialValues(AuthScimCredentialRecord value) => [
+  value.id,
+  value.connectionId,
+  value.tenantId,
+  value.organizationId,
+  value.name,
+  value.keyPrefix,
+  value.secretDigest,
+  _encodeScimScopes(value.scopes),
+  _scimExactMask(value.scopes),
+  _date(value.createdAt),
+  _date(value.updatedAt),
+  _nullableDate(value.expiresAt),
+  _nullableDate(value.lastUsedAt),
+  _nullableDate(value.revokedAt),
+];
+
+AuthScimManagedConnection _decodeScimConnection(Map<String, Object?> row) =>
+    AuthScimManagedConnection(
+      id: row['id']! as String,
+      tenantId: row['tenant_id']! as String,
+      organizationId: row['organization_id']! as String,
+      provisioningDomainId: row['provisioning_domain_id']! as String,
+      subjectId: row['subject_id']! as String,
+      name: row['name']! as String,
+      scopes: _decodeScimScopes(row['scopes']),
+      createdAt: DateTime.parse(row['created_at']! as String),
+      updatedAt: DateTime.parse(row['updated_at']! as String),
+      disabledAt: _optionalDate(row['disabled_at']),
+    );
+
+AuthScimCredentialRecord _decodeScimCredential(Map<String, Object?> row) =>
+    AuthScimCredentialRecord(
+      id: row['id']! as String,
+      connectionId: row['connection_id']! as String,
+      tenantId: row['tenant_id']! as String,
+      organizationId: row['organization_id']! as String,
+      name: row['name']! as String,
+      keyPrefix: row['key_prefix']! as String,
+      secretDigest: row['secret_digest']! as String,
+      scopes: _decodeScimScopes(row['scopes']),
+      createdAt: DateTime.parse(row['created_at']! as String),
+      updatedAt: DateTime.parse(row['updated_at']! as String),
+      expiresAt: _optionalDate(row['expires_at']),
+      lastUsedAt: _optionalDate(row['last_used_at']),
+      revokedAt: _optionalDate(row['revoked_at']),
+    );
+
+_D1ScimReplay _decodeScimReplay(Map<String, Object?> row) => _D1ScimReplay(
+  fingerprint: row['replay_fingerprint']! as String,
+  connection: AuthScimManagedConnection(
+    id: row['connection_id']! as String,
+    tenantId: row['connection_tenant_id']! as String,
+    organizationId: row['connection_organization_id']! as String,
+    provisioningDomainId: row['connection_domain_id']! as String,
+    subjectId: row['connection_subject_id']! as String,
+    name: row['connection_name']! as String,
+    scopes: _decodeScimScopes(row['connection_scopes']),
+    createdAt: DateTime.parse(row['connection_created_at']! as String),
+    updatedAt: DateTime.parse(row['connection_updated_at']! as String),
+    disabledAt: _optionalDate(row['connection_disabled_at']),
+  ),
+  credential: AuthScimCredentialRecord(
+    id: row['credential_id']! as String,
+    connectionId: row['credential_connection_id']! as String,
+    tenantId: row['credential_tenant_id']! as String,
+    organizationId: row['credential_organization_id']! as String,
+    name: row['credential_name']! as String,
+    keyPrefix: row['credential_key_prefix']! as String,
+    secretDigest: row['credential_secret_digest']! as String,
+    scopes: _decodeScimScopes(row['credential_scopes']),
+    createdAt: DateTime.parse(row['credential_created_at']! as String),
+    updatedAt: DateTime.parse(row['credential_updated_at']! as String),
+    expiresAt: _optionalDate(row['credential_expires_at']),
+    lastUsedAt: _optionalDate(row['credential_last_used_at']),
+    revokedAt: _optionalDate(row['credential_revoked_at']),
+  ),
+);
+
+void _validateScimCredential(
+  AuthScimManagedConnection connection,
+  AuthScimCredentialRecord credential,
+) {
+  if (credential.connectionId != connection.id ||
+      credential.tenantId != connection.tenantId ||
+      credential.organizationId != connection.organizationId ||
+      !authScimScopesAllow(connection.scopes, credential.scopes)) {
+    throw const AuthScimConnectionStoreException(
+      AuthScimConnectionStoreFailure.scopeMismatch,
+    );
+  }
+}
+
+String _encodeScimScopes(Iterable<AuthScimScope> scopes) {
+  final values = scopes.map((scope) => scope.name).toList()..sort();
+  return jsonEncode(values);
+}
+
+Set<AuthScimScope> _decodeScimScopes(Object? value) {
+  final decoded = value is String ? jsonDecode(value) : value;
+  if (decoded is! List || decoded.isEmpty) {
+    throw const FormatException('Invalid stored SCIM scopes.');
+  }
+  return Set<AuthScimScope>.unmodifiable(
+    decoded.map((entry) => AuthScimScope.values.byName(entry.toString())),
+  );
+}
+
+int _scimExactMask(Iterable<AuthScimScope> scopes) => scopes.fold<int>(
+  0,
+  (mask, scope) =>
+      mask |
+      switch (scope) {
+        AuthScimScope.usersRead => 1,
+        AuthScimScope.usersWrite => 2,
+        AuthScimScope.groupsRead => 4,
+        AuthScimScope.groupsWrite => 8,
+      },
+);
+
+int _scimGrantedMask(Iterable<AuthScimScope> scopes) {
+  var mask = _scimExactMask(scopes);
+  if ((mask & 2) != 0) mask |= 1;
+  if ((mask & 8) != 0) mask |= 4;
+  return mask;
+}
+
+final class _D1ScimReplay {
+  const _D1ScimReplay({
+    required this.fingerprint,
+    required this.connection,
+    required this.credential,
+  });
+
+  final String fingerprint;
+  final AuthScimManagedConnection connection;
+  final AuthScimCredentialRecord credential;
+}
 
 List<String> _decodeStringList(Object? value) {
   final decoded = value is String ? jsonDecode(value) : value;
