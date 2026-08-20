@@ -752,6 +752,243 @@ void main() {
     });
 
     test(
+      'registers browser-shaped Apple attestation through trust policy',
+      () async {
+        WebAuthnAttestationMetadata? observed;
+        final fixture = _Fixture(
+          attestationTrustPolicy: WebAuthnAttestationTrustPolicy(
+            evaluateCertificate: (metadata) {
+              observed = metadata;
+              return WebAuthnAttestationTrustDecision.accept;
+            },
+          ),
+        );
+        await fixture.store.users.create(fixture.user);
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        final saved = await fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _appleRegistrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+          ),
+        );
+
+        expect(saved.name, 'Apple passkey');
+        expect(observed?.format, 'apple');
+        expect(observed?.kind, WebAuthnAttestationKind.certificate);
+        expect(observed?.certificateTrustPath, hasLength(2));
+        expect(observed?.certificateTrustPath.first.derBytes, isNotEmpty);
+
+        final authentication = await fixture.feature.beginAuthentication(
+          context: fixture.context,
+          userId: fixture.user.id,
+        );
+        final result = await fixture.feature.finishAuthentication(
+          context: fixture.context,
+          credential: _assertionCredential(
+            challenge: authentication.challenge,
+            credentialId: saved.credentialId,
+            keyPair: fixture.keyPair,
+            counter: 1,
+          ),
+          userId: fixture.user.id,
+        );
+        expect(result.authenticator.counter, 1);
+      },
+    );
+
+    test('rejects Apple nonce and leaf-key mismatches', () async {
+      final cases =
+          <Map<String, dynamic> Function(String challenge, _KeyPair keyPair)>[
+            (challenge, keyPair) => _appleRegistrationCredential(
+              challenge: challenge,
+              keyPair: keyPair,
+              nonceOverride: List<int>.filled(32, 0),
+            ),
+            (challenge, keyPair) => _appleRegistrationCredential(
+              challenge: challenge,
+              keyPair: keyPair,
+              certificateKey: _KeyPair.create(privateValue: BigInt.two),
+            ),
+          ];
+      for (final credential in cases) {
+        final fixture = _Fixture();
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: credential(registration.challenge, fixture.keyPair),
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'webauthn_attestation_invalid',
+            ),
+          ),
+        );
+      }
+    });
+
+    test('rejects forged or invalid Apple certificate chains', () async {
+      final cases =
+          <Map<String, dynamic> Function(String challenge, _KeyPair keyPair)>[
+            (challenge, keyPair) => _appleRegistrationCredential(
+              challenge: challenge,
+              keyPair: keyPair,
+              certificateIssuerKey: _KeyPair.create(
+                privateValue: BigInt.from(23),
+              ),
+            ),
+            (challenge, keyPair) => _appleRegistrationCredential(
+              challenge: challenge,
+              keyPair: keyPair,
+              rootIsCertificateAuthority: false,
+            ),
+            (challenge, keyPair) => _appleRegistrationCredential(
+              challenge: challenge,
+              keyPair: keyPair,
+              certificateChain: <Object?>[List<int>.filled(16385, 0)],
+            ),
+            (challenge, keyPair) => _appleRegistrationCredential(
+              challenge: challenge,
+              keyPair: keyPair,
+              certificateChain: const <Object?>[],
+            ),
+          ];
+      for (final credential in cases) {
+        final fixture = _Fixture();
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: credential(registration.challenge, fixture.keyPair),
+          ),
+          throwsA(
+            isA<AuthFlowException>()
+                .having(
+                  (error) => error.code,
+                  'code',
+                  'webauthn_attestation_invalid',
+                )
+                .having(
+                  (error) => error.toString(),
+                  'public representation',
+                  isNot(anyOf(contains('certificate'), contains('nonce'))),
+                ),
+          ),
+        );
+      }
+    });
+
+    test('rejects malformed and duplicate Apple nonce extensions', () async {
+      final malformed = <List<int>?>[
+        null,
+        <int>[0x30, 0x80, 0x00, 0x00],
+        (ASN1Sequence()..add(ASN1OctetString(octets: Uint8List(31)))).encode(),
+        (ASN1Sequence()
+              ..add(ASN1OctetString(octets: Uint8List(32)))
+              ..add(ASN1OctetString(octets: Uint8List(32))))
+            .encode(),
+        List<int>.filled(1025, 0),
+      ];
+      for (final extension in malformed) {
+        final fixture = _Fixture();
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: _appleRegistrationCredential(
+              challenge: registration.challenge,
+              keyPair: fixture.keyPair,
+              omitNonceExtension: extension == null,
+              nonceExtensionOverride: extension,
+            ),
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'webauthn_attestation_invalid',
+            ),
+          ),
+        );
+      }
+
+      final fixture = _Fixture();
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+      await expectLater(
+        () => fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _appleRegistrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            duplicateNonceExtension: true,
+          ),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'webauthn_attestation_invalid',
+          ),
+        ),
+      );
+    });
+
+    test('rejects unexpected and duplicate Apple statement fields', () async {
+      for (final options in <({bool unexpected, bool duplicate})>[
+        (unexpected: true, duplicate: false),
+        (unexpected: false, duplicate: true),
+      ]) {
+        final fixture = _Fixture();
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        await expectLater(
+          () => fixture.feature.finishRegistration(
+            context: fixture.context,
+            user: fixture.user,
+            credential: _appleRegistrationCredential(
+              challenge: registration.challenge,
+              keyPair: fixture.keyPair,
+              unexpectedStatementField: options.unexpected,
+              duplicateX5cField: options.duplicate,
+            ),
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              'webauthn_attestation_invalid',
+            ),
+          ),
+        );
+      }
+    });
+
+    test(
       'registers and authenticates a browser-shaped FIDO U2F attestation',
       () async {
         final fixture = _Fixture();
@@ -2251,6 +2488,113 @@ Map<String, dynamic> _androidKeyRegistrationCredential({
   };
 }
 
+Map<String, dynamic> _appleRegistrationCredential({
+  required String challenge,
+  required _KeyPair keyPair,
+  _KeyPair? rootKey,
+  _KeyPair? certificateKey,
+  _KeyPair? certificateIssuerKey,
+  List<int>? nonceOverride,
+  List<int>? nonceExtensionOverride,
+  bool omitNonceExtension = false,
+  bool duplicateNonceExtension = false,
+  bool rootIsCertificateAuthority = true,
+  bool unexpectedStatementField = false,
+  bool duplicateX5cField = false,
+  List<Object?>? certificateChain,
+}) {
+  final credentialId = Uint8List.fromList(
+    List<int>.generate(16, (index) => index + 1),
+  );
+  final coseKey = cbor.cbor.encode(<Object?, Object?>{
+    1: 2,
+    3: -7,
+    -1: 1,
+    -2: keyPair.x.toList(growable: false),
+    -3: keyPair.y.toList(growable: false),
+  });
+  final authData = <int>[
+    ...crypto.sha256.convert(utf8.encode('example.com')).bytes,
+    0x41,
+    0,
+    0,
+    0,
+    0,
+    ...List<int>.filled(16, 0),
+    credentialId.length >> 8,
+    credentialId.length & 0xff,
+    ...credentialId,
+    ...coseKey,
+  ];
+  final clientDataJson = _clientData(
+    type: 'webauthn.create',
+    challenge: challenge,
+    origin: 'https://example.com',
+  );
+  final clientDataHash = crypto.sha256.convert(clientDataJson).bytes;
+  final nonce =
+      nonceOverride ??
+      crypto.sha256.convert(<int>[...authData, ...clientDataHash]).bytes;
+  final effectiveRootKey =
+      rootKey ?? _KeyPair.create(privateValue: BigInt.from(0x31));
+  final rootCertificate = _appleTestCertificate(
+    subjectKey: effectiveRootKey,
+    issuerKey: effectiveRootKey,
+    subjectOrganizationalUnit: 'Apple WebAuthn Root',
+    issuerOrganizationalUnit: 'Apple WebAuthn Root',
+    isCertificateAuthority: rootIsCertificateAuthority,
+  );
+  final leafCertificate = _appleTestCertificate(
+    subjectKey: certificateKey ?? keyPair,
+    issuerKey: certificateIssuerKey ?? effectiveRootKey,
+    subjectOrganizationalUnit: 'Apple Anonymous Attestation',
+    issuerOrganizationalUnit: 'Apple WebAuthn Root',
+    nonceExtension: omitNonceExtension
+        ? null
+        : nonceExtensionOverride ??
+              (ASN1Sequence()
+                    ..add(ASN1OctetString(octets: Uint8List.fromList(nonce))))
+                  .encode(),
+    duplicateNonceExtension: duplicateNonceExtension,
+  );
+  final chain = certificateChain ?? <Object?>[leafCertificate, rootCertificate];
+  final statement = <String, Object?>{'x5c': chain};
+  if (unexpectedStatementField) statement['receipt'] = <int>[1, 2, 3];
+  final attestationObject = duplicateX5cField
+      ? Uint8List.fromList(<int>[
+          0xa3,
+          ...cbor.cbor.encode('fmt'),
+          ...cbor.cbor.encode('apple'),
+          ...cbor.cbor.encode('authData'),
+          ...cbor.cbor.encode(authData),
+          ...cbor.cbor.encode('attStmt'),
+          0xa2,
+          ...cbor.cbor.encode('x5c'),
+          ...cbor.cbor.encode(chain),
+          ...cbor.cbor.encode('x5c'),
+          ...cbor.cbor.encode(chain),
+        ])
+      : Uint8List.fromList(
+          cbor.cbor.encode(<String, Object?>{
+            'fmt': 'apple',
+            'authData': authData,
+            'attStmt': statement,
+          }),
+        );
+  final encodedId = base64UrlNoPadding(credentialId);
+  return <String, dynamic>{
+    'id': encodedId,
+    'rawId': encodedId,
+    'type': 'public-key',
+    'response': <String, dynamic>{
+      'clientDataJSON': base64UrlNoPadding(clientDataJson),
+      'attestationObject': base64UrlNoPadding(attestationObject),
+      'transports': <String>['internal'],
+    },
+    'name': 'Apple passkey',
+  };
+}
+
 Map<String, dynamic> _u2fRegistrationCredential({
   required String challenge,
   required _KeyPair keyPair,
@@ -2692,6 +3036,69 @@ Uint8List _androidTestCertificate({
   final tbsCertificate = ASN1Sequence()
     ..add(_explicitAsn1(0xa0, ASN1Integer(BigInt.two).encode()))
     ..add(ASN1Integer(BigInt.from(androidKeyExtension == null ? 20 : 21)))
+    ..add(signatureAlgorithm)
+    ..add(issuer)
+    ..add(
+      ASN1Sequence()
+        ..add(ASN1UtcTime(DateTime.utc(2020, 1, 1)))
+        ..add(ASN1UtcTime(DateTime.utc(2040, 1, 1))),
+    )
+    ..add(subject)
+    ..add(subjectPublicKeyInfo)
+    ..add(_explicitAsn1(0xa3, extensions.encode()));
+  final signature = _signEs256(issuerKey, tbsCertificate.encode());
+  return Uint8List.fromList(
+    (ASN1Sequence()
+          ..add(tbsCertificate)
+          ..add(signatureAlgorithm)
+          ..add(ASN1BitString(stringValues: signature)))
+        .encode(),
+  );
+}
+
+Uint8List _appleTestCertificate({
+  required _KeyPair subjectKey,
+  required _KeyPair issuerKey,
+  required String subjectOrganizationalUnit,
+  required String issuerOrganizationalUnit,
+  bool isCertificateAuthority = false,
+  List<int>? nonceExtension,
+  bool duplicateNonceExtension = false,
+}) {
+  final signatureAlgorithm = ASN1Sequence()
+    ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.10045.4.3.2'));
+  final subject = _certificateName(subjectOrganizationalUnit);
+  final issuer = _certificateName(issuerOrganizationalUnit);
+  final publicKeyAlgorithm = ASN1Sequence()
+    ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.10045.2.1'))
+    ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.10045.3.1.7'));
+  final subjectPublicKeyInfo = ASN1Sequence()
+    ..add(publicKeyAlgorithm)
+    ..add(
+      ASN1BitString(
+        stringValues: <int>[0x04, ...subjectKey.x, ...subjectKey.y],
+      ),
+    );
+  final basicConstraints = ASN1Sequence();
+  if (isCertificateAuthority) basicConstraints.add(ASN1Boolean(true));
+  final extensions = ASN1Sequence()
+    ..add(
+      ASN1Sequence()
+        ..add(ASN1ObjectIdentifier.fromIdentifierString('2.5.29.19'))
+        ..add(ASN1Boolean(true))
+        ..add(ASN1OctetString(octets: basicConstraints.encode())),
+    );
+  if (nonceExtension != null) {
+    ASN1Sequence extension() => ASN1Sequence()
+      ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.113635.100.8.2'))
+      ..add(ASN1OctetString(octets: Uint8List.fromList(nonceExtension)));
+
+    extensions.add(extension());
+    if (duplicateNonceExtension) extensions.add(extension());
+  }
+  final tbsCertificate = ASN1Sequence()
+    ..add(_explicitAsn1(0xa0, ASN1Integer(BigInt.two).encode()))
+    ..add(ASN1Integer(BigInt.from(nonceExtension == null ? 40 : 41)))
     ..add(signatureAlgorithm)
     ..add(issuer)
     ..add(

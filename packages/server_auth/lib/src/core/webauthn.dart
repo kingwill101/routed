@@ -1076,6 +1076,7 @@ final class WebAuthnPlugin<TContext>
   }) async {
     dynamic decoded;
     try {
+      _StrictCborReader(bytes).validateSingle();
       decoded = cbor.cbor.decode(bytes, decodeBase64: false);
     } catch (_) {
       throw AuthFlowException('webauthn_attestation_invalid');
@@ -1126,6 +1127,13 @@ final class WebAuthnPlugin<TContext>
       );
     } else if (format == 'android-key') {
       verifiedStatement = await _verifyAndroidKeyAttestation(
+        statement: statement,
+        authenticatorData: authDataBytes,
+        clientDataHash: clientDataHash,
+        credentialPublicKey: parsed.publicKeyCose!,
+      );
+    } else if (format == 'apple') {
+      verifiedStatement = await _verifyAppleAttestation(
         statement: statement,
         authenticatorData: authDataBytes,
         clientDataHash: clientDataHash,
@@ -1371,6 +1379,98 @@ final class WebAuthnPlugin<TContext>
           .map((certificate) => certificate.derBytes)
           .toList(growable: false),
     );
+  }
+
+  Future<_VerifiedAttestationStatement> _verifyAppleAttestation({
+    required Map statement,
+    required Uint8List authenticatorData,
+    required Uint8List clientDataHash,
+    required Uint8List credentialPublicKey,
+  }) async {
+    if (statement.length != 1 || !statement.containsKey('x5c')) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    final certificates = _parseAppleCertificateChain(statement['x5c']);
+    final leaf = certificates.first;
+    final credentialKey = _decodeCosePublicKey(credentialPublicKey);
+    if (!leaf.isVersion3 ||
+        leaf.isCertificateAuthority ||
+        !_cosePublicKeysEqual(leaf.publicKey, credentialKey)) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    for (var index = 0; index + 1 < certificates.length; index++) {
+      final certificate = certificates[index];
+      final issuer = certificates[index + 1];
+      if (!_constantTimeBytesEqual(certificate.issuer, issuer.subject) ||
+          !issuer.hasBasicConstraints ||
+          !issuer.isCertificateAuthority ||
+          !await _verifyCertificateSignature(certificate, issuer.publicKey)) {
+        throw AuthFlowException('webauthn_attestation_invalid');
+      }
+    }
+
+    final nonce = Uint8List.fromList(
+      crypto.sha256.convert(<int>[
+        ...authenticatorData,
+        ...clientDataHash,
+      ]).bytes,
+    );
+    _validateAppleNonceExtension(leaf.appleNonceExtension, nonce: nonce);
+    return _VerifiedAttestationStatement(
+      kind: WebAuthnAttestationKind.certificate,
+      certificateTrustPath: certificates
+          .map((certificate) => certificate.derBytes)
+          .toList(growable: false),
+    );
+  }
+
+  List<_PackedAttestationCertificate> _parseAppleCertificateChain(
+    Object? value,
+  ) {
+    if (value is! List || value.isEmpty || value.length > 8) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    try {
+      final certificates = <_PackedAttestationCertificate>[];
+      for (final item in value) {
+        if (item is! List ||
+            item.isEmpty ||
+            item.length > 16384 ||
+            item.any((byte) => byte is! int || byte < 0 || byte > 255)) {
+          throw const FormatException();
+        }
+        certificates.add(
+          _parsePackedCertificate(Uint8List.fromList(item.cast<int>())),
+        );
+      }
+      if (certificates.first.appleNonceExtension == null) {
+        throw const FormatException();
+      }
+      return certificates;
+    } catch (_) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+  }
+
+  void _validateAppleNonceExtension(
+    Uint8List? extension, {
+    required Uint8List nonce,
+  }) {
+    try {
+      if (extension == null || extension.isEmpty || extension.length > 1024) {
+        throw const FormatException();
+      }
+      final sequence = _DerReader(extension).readSingle();
+      final fields = _derChildren(sequence, universalTag: 16, maxElements: 2);
+      if (fields.length != 1) throw const FormatException();
+      final certificateNonce = _derOctets(fields.single);
+      if (certificateNonce.length != 32 ||
+          !_constantTimeBytesEqual(certificateNonce, nonce)) {
+        throw const FormatException();
+      }
+    } catch (_) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
   }
 
   List<_PackedAttestationCertificate> _parseAndroidKeyCertificateChain(
@@ -1650,6 +1750,8 @@ final class WebAuthnPlugin<TContext>
       var isCertificateAuthority = false;
       Uint8List? certificateAaguid;
       Uint8List? androidKeyAttestationExtension;
+      Uint8List? appleNonceExtension;
+      final extensionIdentifiers = <String>{};
       for (final element in elements.skip(offset + 6)) {
         if (element.tag != 0xa3) continue;
         final extensionParser = ASN1Parser(element.valueBytes);
@@ -1671,11 +1773,16 @@ final class WebAuthnPlugin<TContext>
               value is! ASN1OctetString) {
             throw const FormatException();
           }
+          final extensionIdentifier = identifier.objectIdentifierAsString;
+          if (extensionIdentifier == null ||
+              !extensionIdentifiers.add(extensionIdentifier)) {
+            throw const FormatException();
+          }
           final isCritical = extensionElements.length == 3;
           if (isCritical && extensionElements[1] is! ASN1Boolean) {
             throw const FormatException();
           }
-          if (identifier.objectIdentifierAsString == '2.5.29.19') {
+          if (extensionIdentifier == '2.5.29.19') {
             if (hasBasicConstraints) throw const FormatException();
             final basicConstraintsParser = ASN1Parser(value.octets);
             final basicConstraints = basicConstraintsParser.nextObject();
@@ -1697,8 +1804,7 @@ final class WebAuthnPlugin<TContext>
                 throw const FormatException();
               }
             }
-          } else if (identifier.objectIdentifierAsString ==
-              '1.3.6.1.4.1.45724.1.1.4') {
+          } else if (extensionIdentifier == '1.3.6.1.4.1.45724.1.1.4') {
             if (isCritical &&
                 (extensionElements[1] as ASN1Boolean).boolValue == true) {
               throw const FormatException();
@@ -1709,8 +1815,7 @@ final class WebAuthnPlugin<TContext>
               throw const FormatException();
             }
             certificateAaguid = Uint8List.fromList(encodedAaguid.octets!);
-          } else if (identifier.objectIdentifierAsString ==
-              '1.3.6.1.4.1.11129.2.1.17') {
+          } else if (extensionIdentifier == '1.3.6.1.4.1.11129.2.1.17') {
             if (androidKeyAttestationExtension != null ||
                 value.octets == null ||
                 value.octets!.isEmpty ||
@@ -1718,6 +1823,13 @@ final class WebAuthnPlugin<TContext>
               throw const FormatException();
             }
             androidKeyAttestationExtension = Uint8List.fromList(value.octets!);
+          } else if (extensionIdentifier == '1.2.840.113635.100.8.2') {
+            if (value.octets == null ||
+                value.octets!.isEmpty ||
+                value.octets!.length > 1024) {
+              throw const FormatException();
+            }
+            appleNonceExtension = Uint8List.fromList(value.octets!);
           }
         }
       }
@@ -1738,6 +1850,7 @@ final class WebAuthnPlugin<TContext>
         commonName: names['2.5.4.3'],
         aaguid: certificateAaguid,
         androidKeyAttestationExtension: androidKeyAttestationExtension,
+        appleNonceExtension: appleNonceExtension,
       );
     } catch (_) {
       throw AuthFlowException('webauthn_attestation_invalid');
@@ -2400,6 +2513,7 @@ final class _PackedAttestationCertificate {
     this.commonName,
     this.aaguid,
     this.androidKeyAttestationExtension,
+    this.appleNonceExtension,
   });
 
   final Uint8List derBytes;
@@ -2418,6 +2532,7 @@ final class _PackedAttestationCertificate {
   final String? commonName;
   final Uint8List? aaguid;
   final Uint8List? androidKeyAttestationExtension;
+  final Uint8List? appleNonceExtension;
 }
 
 final class _AndroidAuthorizationList {
@@ -2430,6 +2545,133 @@ final class _AndroidAuthorizationList {
   final Set<int> purposes;
   final int? origin;
   final bool hasAllApplications;
+}
+
+/// Performs the structural checks that the simple CBOR decoder cannot retain,
+/// most importantly duplicate map keys. WebAuthn inputs are attacker-controlled
+/// and duplicate security-sensitive fields must not be silently overwritten.
+final class _StrictCborReader {
+  _StrictCborReader(this._bytes);
+
+  final Uint8List _bytes;
+  var _offset = 0;
+  var _depth = 0;
+  var _items = 0;
+
+  void validateSingle() {
+    _readItem();
+    if (_offset != _bytes.length) throw const FormatException();
+  }
+
+  String _readItem({bool asKey = false}) {
+    if (++_items > 16384 || ++_depth > 32 || _offset >= _bytes.length) {
+      throw const FormatException();
+    }
+    final start = _offset;
+    try {
+      final initial = _bytes[_offset++];
+      final major = initial >> 5;
+      final argument = _readArgument(initial & 0x1f);
+      switch (major) {
+        case 0:
+        case 1:
+          if (argument == null) throw const FormatException();
+          return asKey ? 'integer:$major:$argument' : '';
+        case 2:
+        case 3:
+          final value = _readString(major, argument);
+          if (!asKey) return '';
+          if (major == 2) return 'bytes:${base64UrlEncode(value)}';
+          return 'text:${utf8.decode(value, allowMalformed: false)}';
+        case 4:
+          _readSequence(argument, map: false);
+          break;
+        case 5:
+          _readSequence(argument, map: true);
+          break;
+        case 6:
+          if (argument == null) throw const FormatException();
+          _readItem();
+          break;
+        case 7:
+          if (argument == null) throw const FormatException();
+          break;
+        default:
+          throw const FormatException();
+      }
+      return asKey
+          ? 'encoded:${base64UrlEncode(_bytes.sublist(start, _offset))}'
+          : '';
+    } finally {
+      _depth--;
+    }
+  }
+
+  void _readSequence(int? length, {required bool map}) {
+    final seen = map ? <String>{} : null;
+    var count = 0;
+    while (length == null || count < length) {
+      if (length == null && _peekBreak()) {
+        _offset++;
+        return;
+      }
+      if (map) {
+        final key = _readItem(asKey: true);
+        if (!seen!.add(key)) throw const FormatException();
+        _readItem();
+      } else {
+        _readItem();
+      }
+      count++;
+    }
+  }
+
+  Uint8List _readString(int major, int? length) {
+    if (length != null) return _take(length);
+    final builder = BytesBuilder(copy: false);
+    while (!_peekBreak()) {
+      if (_offset >= _bytes.length) throw const FormatException();
+      final initial = _bytes[_offset++];
+      if (initial >> 5 != major) throw const FormatException();
+      final chunkLength = _readArgument(initial & 0x1f);
+      if (chunkLength == null) throw const FormatException();
+      builder.add(_take(chunkLength));
+      if (builder.length > 65536) throw const FormatException();
+    }
+    _offset++;
+    return builder.takeBytes();
+  }
+
+  int? _readArgument(int additionalInfo) {
+    if (additionalInfo < 24) return additionalInfo;
+    final octets = switch (additionalInfo) {
+      24 => 1,
+      25 => 2,
+      26 => 4,
+      27 => 8,
+      31 => 0,
+      _ => throw const FormatException(),
+    };
+    if (additionalInfo == 31) return null;
+    final valueBytes = _take(octets);
+    var value = 0;
+    for (final byte in valueBytes) {
+      value = (value << 8) | byte;
+    }
+    if (value > (1 << 30)) throw const FormatException();
+    return value;
+  }
+
+  Uint8List _take(int length) {
+    if (length < 0 || _offset + length > _bytes.length) {
+      throw const FormatException();
+    }
+    final result = Uint8List.sublistView(_bytes, _offset, _offset + length);
+    _offset += length;
+    return result;
+  }
+
+  bool _peekBreak() => _offset < _bytes.length && _bytes[_offset] == 0xff;
 }
 
 final class _DerValue {
