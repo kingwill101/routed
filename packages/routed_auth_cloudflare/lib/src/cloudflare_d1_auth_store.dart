@@ -27,6 +27,7 @@ final class CloudflareD1AuthStore
     this.scimReplayTtl = const Duration(days: 1),
     this.anonymousReplayTtl = const Duration(days: 1),
     this.anonymousMaxReceipts = 10000,
+    this.apiKeyMaxRecords = 10000,
     DateTime Function()? clock,
   }) : _database = database,
        _clock = clock ?? DateTime.now {
@@ -41,6 +42,13 @@ final class CloudflareD1AuthStore
       throw ArgumentError.value(
         anonymousMaxReceipts,
         'anonymousMaxReceipts',
+        'must be positive',
+      );
+    }
+    if (apiKeyMaxRecords <= 0) {
+      throw ArgumentError.value(
+        apiKeyMaxRecords,
+        'apiKeyMaxRecords',
         'must be positive',
       );
     }
@@ -64,6 +72,14 @@ final class CloudflareD1AuthStore
       clock: _clock,
     );
     _deletionCoordinator = deletionCoordinator;
+    apiKeys = CloudflareD1AuthApiKeyStore._(
+      sql,
+      schema,
+      deletionCoordinator.domain,
+      _clock,
+      apiKeyMaxRecords,
+      this,
+    );
     scimConnectionStore = CloudflareD1ScimConnectionStore._(
       sql,
       schema,
@@ -104,6 +120,7 @@ final class CloudflareD1AuthStore
     Duration scimReplayTtl = const Duration(days: 1),
     Duration anonymousReplayTtl = const Duration(days: 1),
     int anonymousMaxReceipts = 10000,
+    int apiKeyMaxRecords = 10000,
     DateTime Function()? clock,
   }) async {
     await schema.migrate(database);
@@ -113,6 +130,7 @@ final class CloudflareD1AuthStore
       scimReplayTtl: scimReplayTtl,
       anonymousReplayTtl: anonymousReplayTtl,
       anonymousMaxReceipts: anonymousMaxReceipts,
+      apiKeyMaxRecords: apiKeyMaxRecords,
       clock: clock,
     );
   }
@@ -124,6 +142,7 @@ final class CloudflareD1AuthStore
   final Duration scimReplayTtl;
   final Duration anonymousReplayTtl;
   final int anonymousMaxReceipts;
+  final int apiKeyMaxRecords;
   late final CloudflareD1UserDeletionCoordinator _deletionCoordinator;
   bool _authenticationMethodTopologyBound = false;
   bool _authenticationMethodInventoryAuthoritative = false;
@@ -167,6 +186,8 @@ final class CloudflareD1AuthStore
           ? const {AuthAuthenticationMethodKind.oauthProvider}
           : identical(binding.authenticationMethodStore, emailOtps)
           ? const {AuthAuthenticationMethodKind.emailOtp}
+          : identical(binding.authenticationMethodStore, apiKeys)
+          ? const {AuthAuthenticationMethodKind.apiKey}
           : const <AuthAuthenticationMethodKind>{};
       if (binding.authenticationMethodKinds.isEmpty ||
           binding.authenticationMethodKinds.any(
@@ -1328,6 +1349,9 @@ final class CloudflareD1AuthStore
     );
   }
 
+  /// Digest-only, bounded API-key persistence in this D1 domain.
+  late final CloudflareD1AuthApiKeyStore apiKeys;
+
   /// Applies all pending schema migrations.
   Future<void> migrate() => schema.migrate(_database);
 }
@@ -1588,6 +1612,7 @@ final class CloudflareD1UserDeletionCoordinator
       (schema.table('device_authorizations'), 'user_id'),
       (schema.table('oauth_authorization_codes'), 'user_id'),
       (schema.table('oauth_access_tokens'), 'user_id'),
+      (schema.table('api_keys'), 'user_id'),
     ]) {
       yield _sql.database
           .prepare('DELETE FROM ${entry.$1} WHERE ${entry.$2} = ? AND $guard')
@@ -1726,6 +1751,361 @@ final class _D1 {
       throw StateError('D1 statement failed: ${result.error}');
     }
   }
+}
+
+/// Bounded, digest-only API-key persistence backed by Cloudflare D1.
+final class CloudflareD1AuthApiKeyStore
+    implements
+        AuthApiKeyStore,
+        AuthApiKeyUserAccessRevocationStore,
+        AuthApiKeyPrimaryMutationStore,
+        AuthUserDeletionPlanFactory {
+  CloudflareD1AuthApiKeyStore._(
+    this._sql,
+    this.schema,
+    this.domain,
+    this._clock,
+    this.maxRecords,
+    this._root,
+  );
+
+  final _D1 _sql;
+  final CloudflareD1AuthSchema schema;
+  final CloudflareD1UserDeletionDomain domain;
+  final DateTime Function() _clock;
+  final int maxRecords;
+  final CloudflareD1AuthStore _root;
+
+  String get table => schema.table('api_keys');
+
+  @override
+  AuthUserDeletionPlan createDeletionPlan({
+    required AuthUserDeletionDomain domain,
+    required AuthUser user,
+    required String namespace,
+  }) {
+    if (!identical(domain, this.domain)) {
+      throw StateError('API keys received a foreign D1 deletion domain.');
+    }
+    return CloudflareD1UserDeletionPlan(
+      domain: this.domain,
+      userId: user.id,
+      namespace: namespace,
+      statements: [
+        CloudflareD1UserDeletionStatement(
+          sql: 'DELETE FROM $table WHERE user_id = ? AND {{guard}}',
+          parameters: [user.id],
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<AuthApiKeyRecord> create(AuthApiKeyRecord record) async {
+    _validateD1ApiKeyRecord(record);
+    final now = _clock().toUtc();
+    final results = await _sql.batch([
+      _pruneStatement(now),
+      _sql.database
+          .prepare('''INSERT OR IGNORE INTO $table
+            (id, user_id, name, key_prefix, secret_hash, scopes, created_at,
+             updated_at, expires_at, last_used_at, revoked_at)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            WHERE (SELECT COUNT(*) FROM $table) < ?
+              AND NOT EXISTS (
+                SELECT 1 FROM ${schema.table('deletion_receipts')}
+                WHERE user_id_hash = ?
+              )''')
+          .bind([
+            ..._apiKeyValues(record),
+            maxRecords,
+            hashOpaqueToken(record.userId),
+          ]),
+    ]);
+    if ((results[1].meta?.changes ?? 0) != 1) {
+      throw StateError('API key storage capacity or owner is unavailable.');
+    }
+    return record;
+  }
+
+  @override
+  Future<AuthApiKeyRecord?> findById(String id) => _sql.first(
+    'SELECT * FROM $table WHERE id = ?',
+    [_d1ApiKeyComponent(id, 'id', 512)],
+    _decodeApiKeyRecord,
+  );
+
+  @override
+  Future<List<AuthApiKeyRecord>> listForUser(String userId) => _sql.all(
+    'SELECT * FROM $table WHERE user_id = ? ORDER BY created_at, id',
+    [_d1ApiKeyComponent(userId, 'userId', 512)],
+    _decodeApiKeyRecord,
+  );
+
+  @override
+  Future<AuthApiKeyRecord?> touchIfActive(String id, DateTime lastUsedAt) =>
+      _sql.first(
+        '''UPDATE $table SET last_used_at = ?, updated_at = ?
+       WHERE id = ? AND revoked_at IS NULL
+         AND (expires_at IS NULL OR expires_at > ?)
+       RETURNING *''',
+        [
+          _date(lastUsedAt),
+          _date(lastUsedAt),
+          _d1ApiKeyComponent(id, 'id', 512),
+          _date(lastUsedAt),
+        ],
+        _decodeApiKeyRecord,
+      );
+
+  @override
+  Future<AuthApiKeyRecord?> revokeForUser(
+    String userId,
+    String id, {
+    DateTime? revokedAt,
+  }) {
+    final current = (revokedAt ?? _clock()).toUtc();
+    return _sql.first(
+      '''UPDATE $table SET revoked_at = ?, updated_at = ?
+         WHERE user_id = ? AND id = ?
+         RETURNING *''',
+      [
+        _date(current),
+        _date(current),
+        _d1ApiKeyComponent(userId, 'userId', 512),
+        _d1ApiKeyComponent(id, 'id', 512),
+      ],
+      _decodeApiKeyRecord,
+    );
+  }
+
+  @override
+  Future<int> revokeAllForUser(String userId, {DateTime? revokedAt}) async {
+    final current = (revokedAt ?? _clock()).toUtc();
+    final result = await _sql.run(
+      '''UPDATE $table SET revoked_at = ?, updated_at = ?
+         WHERE user_id = ? AND revoked_at IS NULL''',
+      [
+        _date(current),
+        _date(current),
+        _d1ApiKeyComponent(userId, 'userId', 512),
+      ],
+    );
+    return result.meta?.changes ?? 0;
+  }
+
+  @override
+  Future<AuthApiKeyRecord?> rotateForUser({
+    required String userId,
+    required String id,
+    required AuthApiKeyRecord replacement,
+    DateTime? revokedAt,
+  }) async {
+    _validateD1ApiKeyRecord(replacement);
+    final owner = _d1ApiKeyComponent(userId, 'userId', 512);
+    final currentId = _d1ApiKeyComponent(id, 'id', 512);
+    final current = (revokedAt ?? _clock()).toUtc();
+    if (replacement.userId != owner ||
+        replacement.id == currentId ||
+        !replacement.isActive(now: current)) {
+      return null;
+    }
+    final timestamp = _date(current);
+    final rotationMarker = secureRandomToken(length: 24);
+    final results = await _sql.batch([
+      _pruneStatement(current),
+      _sql.database
+          .prepare('''INSERT OR IGNORE INTO $table
+            (id, user_id, name, key_prefix, secret_hash, scopes, created_at,
+             updated_at, expires_at, last_used_at, revoked_at, rotation_marker)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            WHERE (SELECT COUNT(*) FROM $table) <= ?
+              AND EXISTS (
+                SELECT 1 FROM $table
+                WHERE id = ? AND user_id = ? AND revoked_at IS NULL
+                  AND (expires_at IS NULL OR expires_at > ?)
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM ${schema.table('deletion_receipts')}
+                WHERE user_id_hash = ?
+              )''')
+          .bind([
+            ..._apiKeyValues(replacement),
+            rotationMarker,
+            maxRecords,
+            currentId,
+            owner,
+            timestamp,
+            hashOpaqueToken(owner),
+          ]),
+      _sql.database
+          .prepare('''UPDATE $table SET revoked_at = ?, updated_at = ?
+            WHERE id = ? AND user_id = ? AND revoked_at IS NULL
+              AND EXISTS (SELECT 1 FROM $table
+                WHERE id = ? AND rotation_marker = ?)
+              AND (SELECT COUNT(*) FROM $table) <= ?''')
+          .bind([
+            timestamp,
+            timestamp,
+            currentId,
+            owner,
+            replacement.id,
+            rotationMarker,
+            maxRecords,
+          ]),
+      _sql.database
+          .prepare('''DELETE FROM $table
+            WHERE id = ? AND user_id = ? AND revoked_at IS NULL
+              AND EXISTS (SELECT 1 FROM $table
+                WHERE id = ? AND rotation_marker = ?)
+              AND (SELECT COUNT(*) FROM $table) > ?''')
+          .bind([currentId, owner, replacement.id, rotationMarker, maxRecords]),
+      _sql.database
+          .prepare('''UPDATE $table SET rotation_marker = NULL
+            WHERE id = ? AND rotation_marker = ?''')
+          .bind([replacement.id, rotationMarker]),
+    ]);
+    if ((results[1].meta?.changes ?? 0) != 1 ||
+        (results[2].meta?.changes ?? 0) + (results[3].meta?.changes ?? 0) !=
+            1 ||
+        (results[4].meta?.changes ?? 0) != 1) {
+      return null;
+    }
+    return replacement;
+  }
+
+  @override
+  Future<void> deleteForUser(String userId) async {
+    await _sql.run('DELETE FROM $table WHERE user_id = ?', [
+      _d1ApiKeyComponent(userId, 'userId', 512),
+    ]);
+  }
+
+  @override
+  Future<AuthAuthenticationMethodMutationResult> revokePrimaryKeyIfSafe(
+    AuthApiKeyPrimaryRevocationCommand command,
+  ) async {
+    if (!_root._authenticationMethodTopologyBound ||
+        !_root._authenticationMethodInventoryAuthoritative) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+    final snapshot = await command.loadInventory();
+    if (!snapshot.isComplete) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+    final target = AuthAuthenticationMethod.apiKey(command.keyId);
+    if (!snapshot.methods.contains(target)) {
+      return AuthAuthenticationMethodMutationResult.notFound;
+    }
+    final fallbacks = snapshot.methods
+        .where((method) => method.canAuthenticate && method != target)
+        .toList(growable: false);
+    if (fallbacks.isEmpty) {
+      return AuthAuthenticationMethodMutationResult.lastAuthenticationMethod;
+    }
+
+    final predicate = _primaryFallbackPredicate(
+      command.userId,
+      command.keyId,
+      command.revokedAt,
+      fallbacks,
+    );
+    if (predicate == null) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+    final current = _date(command.revokedAt);
+    final result = await _sql.run(
+      '''UPDATE $table SET revoked_at = ?, updated_at = ?
+         WHERE user_id = ? AND id = ? AND revoked_at IS NULL
+           AND (expires_at IS NULL OR expires_at > ?)
+           AND (${predicate.$1})''',
+      [
+        current,
+        current,
+        command.userId,
+        command.keyId,
+        current,
+        ...predicate.$2,
+      ],
+    );
+    if ((result.meta?.changes ?? 0) == 1) {
+      return AuthAuthenticationMethodMutationResult.mutated;
+    }
+    final existing = await findById(command.keyId);
+    return existing == null ||
+            existing.userId != command.userId ||
+            !existing.isActive(now: command.revokedAt)
+        ? AuthAuthenticationMethodMutationResult.notFound
+        : AuthAuthenticationMethodMutationResult.lastAuthenticationMethod;
+  }
+
+  (String, List<Object?>)? _primaryFallbackPredicate(
+    String userId,
+    String keyId,
+    DateTime now,
+    List<AuthAuthenticationMethod> methods,
+  ) {
+    var credentials = false;
+    var email = false;
+    var apiKeys = false;
+    final oauthProviders = <String>{};
+    for (final method in methods) {
+      switch (method.kind) {
+        case AuthAuthenticationMethodKind.password:
+        case AuthAuthenticationMethodKind.username:
+          credentials = true;
+        case AuthAuthenticationMethodKind.oauthProvider:
+          final providerId = method.providerId;
+          if (providerId == null || method.providerAccountId == null) {
+            return null;
+          }
+          oauthProviders.add(providerId);
+        case AuthAuthenticationMethodKind.emailOtp:
+        case AuthAuthenticationMethodKind.emailLink:
+          email = true;
+        case AuthAuthenticationMethodKind.apiKey:
+          apiKeys = true;
+        case AuthAuthenticationMethodKind.passkey:
+        case AuthAuthenticationMethodKind.phone:
+        case AuthAuthenticationMethodKind.plugin:
+          return null;
+      }
+    }
+    final clauses = <String>[];
+    final values = <Object?>[];
+    if (credentials) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('credentials')}
+        WHERE user_id = ? AND enabled = 1)''');
+      values.add(userId);
+    }
+    if (oauthProviders.isNotEmpty) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('accounts')}
+        WHERE user_id = ? AND provider_id IN
+          (${List.filled(oauthProviders.length, '?').join(', ')}))''');
+      values.addAll([userId, ...oauthProviders]);
+    }
+    if (email) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('users')}
+        WHERE id = ? AND email IS NOT NULL AND email <> ''
+          AND COALESCE(json_extract(payload, '\$.attributes.disabled'), 0) <> 1
+          AND COALESCE(json_extract(payload, '\$.attributes.accountDisabled'), 0) <> 1
+          AND json_extract(payload, '\$.attributes.deletedAt') IS NULL)''');
+      values.add(userId);
+    }
+    if (apiKeys) {
+      clauses.add('''EXISTS (SELECT 1 FROM $table
+        WHERE user_id = ? AND id <> ? AND revoked_at IS NULL
+          AND (expires_at IS NULL OR expires_at > ?))''');
+      values.addAll([userId, keyId, _date(now)]);
+    }
+    return clauses.isEmpty ? null : (clauses.join(' OR '), values);
+  }
+
+  CloudflareD1PreparedStatement _pruneStatement(DateTime now) => _sql.database
+      .prepare('''DELETE FROM $table
+        WHERE revoked_at IS NOT NULL
+           OR (expires_at IS NOT NULL AND expires_at <= ?)''')
+      .bind([_date(now)]);
 }
 
 /// Prefix-isolated OAuth client registry backed by Cloudflare D1.
@@ -4554,6 +4934,80 @@ final class _D1ScimReplay {
   final String fingerprint;
   final AuthScimManagedConnection connection;
   final AuthScimCredentialRecord credential;
+}
+
+List<Object?> _apiKeyValues(AuthApiKeyRecord value) => [
+  value.id,
+  value.userId,
+  value.name,
+  value.keyPrefix,
+  value.secretHash,
+  jsonEncode(value.scopes),
+  _date(value.createdAt),
+  _date(value.updatedAt),
+  _nullableDate(value.expiresAt),
+  _nullableDate(value.lastUsedAt),
+  _nullableDate(value.revokedAt),
+];
+
+AuthApiKeyRecord _decodeApiKeyRecord(Map<String, Object?> row) {
+  final record = AuthApiKeyRecord(
+    id: row['id']! as String,
+    userId: row['user_id']! as String,
+    name: row['name']! as String,
+    keyPrefix: row['key_prefix']! as String,
+    secretHash: row['secret_hash']! as String,
+    scopes: _decodeStringList(row['scopes']),
+    createdAt: DateTime.parse(row['created_at']! as String).toUtc(),
+    updatedAt: DateTime.parse(row['updated_at']! as String).toUtc(),
+    expiresAt: _optionalDate(row['expires_at']),
+    lastUsedAt: _optionalDate(row['last_used_at']),
+    revokedAt: _optionalDate(row['revoked_at']),
+  );
+  _validateD1ApiKeyRecord(record);
+  return record;
+}
+
+void _validateD1ApiKeyRecord(AuthApiKeyRecord record) {
+  _d1ApiKeyComponent(record.id, 'record.id', 512);
+  _d1ApiKeyComponent(record.userId, 'record.userId', 512);
+  _d1ApiKeyComponent(record.name, 'record.name', 100);
+  _d1ApiKeyComponent(record.keyPrefix, 'record.keyPrefix', 128);
+  if (!RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(record.secretHash)) {
+    throw ArgumentError.value(
+      record.secretHash,
+      'record.secretHash',
+      'must be a SHA-256 base64url digest',
+    );
+  }
+  if (record.updatedAt.toUtc().isBefore(record.createdAt.toUtc())) {
+    throw ArgumentError.value(
+      record.updatedAt,
+      'record.updatedAt',
+      'must not be before createdAt',
+    );
+  }
+  if (record.scopes.length > 128 ||
+      record.scopes.toSet().length != record.scopes.length ||
+      record.scopes.any(
+        (scope) =>
+            scope.isEmpty ||
+            scope.length > 100 ||
+            scope != scope.trim().toLowerCase() ||
+            !RegExp(r'^[a-z0-9:_./*-]+$').hasMatch(scope),
+      )) {
+    throw ArgumentError.value(record.scopes, 'record.scopes', 'must be safe');
+  }
+}
+
+String _d1ApiKeyComponent(String value, String name, int maxLength) {
+  if (value.isEmpty ||
+      value != value.trim() ||
+      value.length > maxLength ||
+      value.contains(RegExp(r'[\u0000-\u001f\u007f]'))) {
+    throw ArgumentError.value(value, name, 'must be a bounded safe value');
+  }
+  return value;
 }
 
 List<String> _decodeStringList(Object? value) {

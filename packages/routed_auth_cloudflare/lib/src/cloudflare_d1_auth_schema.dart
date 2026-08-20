@@ -22,7 +22,7 @@ final class CloudflareD1AuthSchema {
   /// underscores are accepted because SQLite cannot bind identifiers.
   final String tablePrefix;
 
-  static const int currentVersion = 8;
+  static const int currentVersion = 9;
 
   String table(String suffix) {
     final prefix = tablePrefix.trim();
@@ -53,7 +53,32 @@ final class CloudflareD1AuthSchema {
     CloudflareD1AuthMigration(version: 6, statements: _versionSix),
     CloudflareD1AuthMigration(version: 7, statements: _versionSeven),
     CloudflareD1AuthMigration(version: 8, statements: _versionEight),
+    CloudflareD1AuthMigration(version: 9, statements: _versionNine),
   ];
+
+  List<String> get _versionNine {
+    final apiKeys = table('api_keys');
+    return [
+      '''CREATE TABLE IF NOT EXISTS $apiKeys (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        key_prefix TEXT NOT NULL,
+        secret_hash TEXT NOT NULL UNIQUE,
+        scopes TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        expires_at TEXT,
+        last_used_at TEXT,
+        revoked_at TEXT,
+        rotation_marker TEXT UNIQUE
+      )''',
+      'CREATE INDEX IF NOT EXISTS ${apiKeys}_user '
+          'ON $apiKeys(user_id, created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS ${apiKeys}_active '
+          'ON $apiKeys(user_id, revoked_at, expires_at)',
+    ];
+  }
 
   List<String> get _versionSeven {
     final guards = table('anonymous_mutation_guards');
@@ -426,6 +451,7 @@ final class CloudflareD1AuthSchema {
   /// retain migration history and never call it during normal operation.
   Future<void> dropAll(CloudflareD1Database database) async {
     final suffixes = [
+      'api_keys',
       'anonymous_mutation_guards',
       'anonymous_mutation_receipts',
       'scim_replays',
