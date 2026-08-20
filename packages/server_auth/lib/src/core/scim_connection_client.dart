@@ -1,0 +1,215 @@
+import 'dart:convert';
+
+import 'client.dart';
+import 'scim_connection_models.dart';
+import 'scim_models.dart';
+
+/// Installs only the managed-SCIM connection API selected by the application.
+final class AuthScimConnectionClientPlugin
+    implements AuthClientPlugin<AuthScimConnectionClient> {
+  const AuthScimConnectionClientPlugin();
+
+  @override
+  String get id => 'scim_connections';
+
+  @override
+  AuthScimConnectionClient install(AuthClientPluginContext context) =>
+      AuthScimConnectionClient(transport: context.transport);
+}
+
+/// Typed client for the opt-in managed SCIM connection plugin.
+final class AuthScimConnectionClient {
+  const AuthScimConnectionClient({required this.transport});
+
+  final AuthClientTransport transport;
+
+  Future<AuthScimConnectionCreation> create({
+    required String organizationId,
+    required String name,
+    required String provisioningDomainId,
+    required Iterable<AuthScimScope> scopes,
+    required String credentialName,
+    required String idempotencyKey,
+    DateTime? expiresAt,
+  }) async => AuthScimConnectionCreation.fromJson(
+    await _post('/scim/connections/create', <String, dynamic>{
+      'organizationId': organizationId,
+      'name': name,
+      'provisioningDomainId': provisioningDomainId,
+      'scopes': scopes.map((value) => value.name).toList(growable: false),
+      'credentialName': credentialName,
+      'idempotencyKey': idempotencyKey,
+      if (expiresAt != null) 'expiresAt': expiresAt.toUtc().toIso8601String(),
+    }),
+  );
+
+  Future<AuthScimConnectionPage> list({
+    required String organizationId,
+    int limit = 100,
+    int offset = 0,
+  }) async {
+    final json = await _get('/scim/connections', <String, String>{
+      'organizationId': organizationId,
+      'limit': '$limit',
+      'offset': '$offset',
+    });
+    return _connectionPage(json);
+  }
+
+  Future<AuthScimManagedConnection> update({
+    required String organizationId,
+    required String connectionId,
+    required DateTime expectedUpdatedAt,
+    required String name,
+    required String provisioningDomainId,
+    required Iterable<AuthScimScope> scopes,
+  }) async => AuthScimManagedConnection.fromJson(
+    await _post('/scim/connections/update', <String, dynamic>{
+      'organizationId': organizationId,
+      'connectionId': connectionId,
+      'expectedUpdatedAt': expectedUpdatedAt.toUtc().toIso8601String(),
+      'name': name,
+      'provisioningDomainId': provisioningDomainId,
+      'scopes': scopes.map((value) => value.name).toList(growable: false),
+    }),
+  );
+
+  Future<AuthScimManagedConnection> disable({
+    required String organizationId,
+    required String connectionId,
+  }) async => AuthScimManagedConnection.fromJson(
+    await _post('/scim/connections/disable', <String, dynamic>{
+      'organizationId': organizationId,
+      'connectionId': connectionId,
+    }),
+  );
+
+  Future<AuthScimCredentialPage> listCredentials({
+    required String organizationId,
+    required String connectionId,
+    int limit = 100,
+    int offset = 0,
+  }) async {
+    final json = await _get('/scim/connections/credentials', <String, String>{
+      'organizationId': organizationId,
+      'connectionId': connectionId,
+      'limit': '$limit',
+      'offset': '$offset',
+    });
+    return _credentialPage(json);
+  }
+
+  Future<AuthScimCredentialIssuance> issueCredential({
+    required String organizationId,
+    required String connectionId,
+    required String name,
+    required Iterable<AuthScimScope> scopes,
+    required String idempotencyKey,
+    DateTime? expiresAt,
+  }) async => AuthScimCredentialIssuance.fromJson(
+    await _post('/scim/connections/credentials/issue', <String, dynamic>{
+      'organizationId': organizationId,
+      'connectionId': connectionId,
+      'name': name,
+      'scopes': scopes.map((value) => value.name).toList(growable: false),
+      'idempotencyKey': idempotencyKey,
+      if (expiresAt != null) 'expiresAt': expiresAt.toUtc().toIso8601String(),
+    }),
+  );
+
+  Future<AuthScimCredentialIssuance> rotateCredential({
+    required String organizationId,
+    required String connectionId,
+    required String credentialId,
+    required String name,
+    required Iterable<AuthScimScope> scopes,
+    required String idempotencyKey,
+    DateTime? expiresAt,
+  }) async => AuthScimCredentialIssuance.fromJson(
+    await _post('/scim/connections/credentials/rotate', <String, dynamic>{
+      'organizationId': organizationId,
+      'connectionId': connectionId,
+      'credentialId': credentialId,
+      'name': name,
+      'scopes': scopes.map((value) => value.name).toList(growable: false),
+      'idempotencyKey': idempotencyKey,
+      if (expiresAt != null) 'expiresAt': expiresAt.toUtc().toIso8601String(),
+    }),
+  );
+
+  Future<AuthScimCredential> revokeCredential({
+    required String organizationId,
+    required String connectionId,
+    required String credentialId,
+  }) async => AuthScimCredential.fromJson(
+    await _post('/scim/connections/credentials/revoke', <String, dynamic>{
+      'organizationId': organizationId,
+      'connectionId': connectionId,
+      'credentialId': credentialId,
+    }),
+  );
+
+  Future<Map<String, dynamic>> _get(
+    String path,
+    Map<String, String> query,
+  ) async => _body(
+    (await transport.request('GET', path, queryParameters: query)).body,
+  );
+
+  Future<Map<String, dynamic>> _post(
+    String path,
+    Map<String, dynamic> body,
+  ) async => _body((await transport.mutate('POST', path, body)).body);
+}
+
+AuthScimConnectionPage _connectionPage(Map<String, dynamic> json) {
+  final values = json['items'];
+  if (values is! List) throw const FormatException('Invalid connection page.');
+  return AuthScimConnectionPage(
+    items: List<AuthScimManagedConnection>.unmodifiable(
+      values.map((value) {
+        if (value is! Map) {
+          throw const FormatException('Invalid connection page item.');
+        }
+        return AuthScimManagedConnection.fromJson(
+          Map<String, dynamic>.from(value),
+        );
+      }),
+    ),
+    total: _int(json, 'total'),
+    limit: _int(json, 'limit'),
+    offset: _int(json, 'offset'),
+  );
+}
+
+AuthScimCredentialPage _credentialPage(Map<String, dynamic> json) {
+  final values = json['items'];
+  if (values is! List) throw const FormatException('Invalid credential page.');
+  return AuthScimCredentialPage(
+    items: List<AuthScimCredential>.unmodifiable(
+      values.map((value) {
+        if (value is! Map) {
+          throw const FormatException('Invalid credential page item.');
+        }
+        return AuthScimCredential.fromJson(Map<String, dynamic>.from(value));
+      }),
+    ),
+    total: _int(json, 'total'),
+    limit: _int(json, 'limit'),
+    offset: _int(json, 'offset'),
+  );
+}
+
+Map<String, dynamic> _body(String source) {
+  final decoded = jsonDecode(source);
+  if (decoded is! Map) throw const FormatException('Invalid auth response.');
+  return Map<String, dynamic>.from(decoded);
+}
+
+int _int(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value is int) return value;
+  final parsed = int.tryParse('$value');
+  if (parsed == null) throw FormatException('Invalid $key.');
+  return parsed;
+}
