@@ -322,6 +322,12 @@ final class UsernamePlugin<TContext>
           id: 'username.register',
           method: AuthOperationMethod.post,
           path: '/username/register',
+          semantics: const AuthOperationSemantics.mutation(
+            persistence: AuthMutationPersistence.durable(
+              atomicity: AuthMutationAtomicity.nonAtomic,
+            ),
+            replaySafety: AuthMutationReplaySafety.singleUse,
+          ),
           requestCodec: _registrationRequestCodec,
           responseCodec: _responseCodec,
           authentication: AuthOperationAuthentication.none,
@@ -349,6 +355,10 @@ final class UsernamePlugin<TContext>
           id: 'username.signIn',
           method: AuthOperationMethod.post,
           path: '/username/sign-in',
+          semantics: const AuthOperationSemantics.mutation(
+            persistence: AuthMutationPersistence.session(),
+            replaySafety: AuthMutationReplaySafety.repeatable,
+          ),
           requestCodec: _signInRequestCodec,
           responseCodec: _responseCodec,
           authentication: AuthOperationAuthentication.none,

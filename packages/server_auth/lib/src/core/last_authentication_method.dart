@@ -307,6 +307,7 @@ final class AuthLastAuthenticationMethodPlugin<TContext>
           id: 'lastAuthenticationMethod.read',
           method: AuthOperationMethod.get,
           path: '/last-authentication-method',
+          semantics: const AuthOperationSemantics.readOnly(),
           authentication: AuthOperationAuthentication.none,
           originPolicy: AuthOperationOriginPolicy.browser,
           requestCodec: _requestCodec,

@@ -37,6 +37,7 @@ void main() {
           id: 'sample.limit',
           method: AuthOperationMethod.post,
           path: '/sample',
+          semantics: const AuthOperationSemantics.readOnly(),
           requestCodec: AuthOperationCodec<_LimiterInput>(
             schema: const <String, Object?>{},
             decode: (json) => _LimiterInput(json['value'] as String),

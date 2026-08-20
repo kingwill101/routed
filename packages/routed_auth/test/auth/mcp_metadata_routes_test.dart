@@ -182,6 +182,7 @@ final class _RedirectPlugin
       id: 'redirect-test.endpoint',
       method: AuthOperationMethod.get,
       path: '/redirect',
+      semantics: const AuthOperationSemantics.readOnly(),
       requestCodec: AuthOperationCodec<Map<String, dynamic>>(
         decode: (value) => value,
         encode: (value) => value,

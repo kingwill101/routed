@@ -13,6 +13,7 @@ void main() {
         'clients.public-endpoints',
         'clients.installed-contracts',
         'endpoints.mutation-protection',
+        'endpoints.operation-semantics',
       ];
 
       expect(suite.cases.map((value) => value.id), expectedIds);
@@ -261,6 +262,123 @@ void main() {
       await _expectCaseFailure(suite, 'endpoints.mutation-protection');
     });
 
+    test('rejects missing and invalid mutation semantics', () async {
+      final missing = _suite(
+        const _FixturePlugin(
+          endpoints: <AuthEndpointDescriptor<Object>>[],
+          hostEndpoints: <AuthEndpointDescriptor<Object>>[
+            _MissingSemanticsEndpoint(),
+          ],
+        ),
+      );
+      await _expectCaseFailure(missing, 'endpoints.operation-semantics');
+
+      final missingAtomicReference = _suite(
+        _FixturePlugin(
+          endpoints: <AuthEndpointDescriptor<Object>>[
+            _endpoint(
+              id: 'sample.atomic',
+              method: AuthOperationMethod.post,
+              path: '/sample/atomic',
+              semantics: const AuthOperationSemantics.mutation(
+                persistence: AuthMutationPersistence.durable(
+                  atomicity: AuthMutationAtomicity.atomic,
+                ),
+                replaySafety: AuthMutationReplaySafety.singleUse,
+              ),
+            ),
+          ],
+        ),
+      );
+      await _expectCaseFailure(
+        missingAtomicReference,
+        'endpoints.operation-semantics',
+      );
+    });
+
+    test('rejects invalid schema and atomic-operation references', () async {
+      final undeclaredSchema = _suite(
+        _FixturePlugin(
+          endpoints: <AuthEndpointDescriptor<Object>>[
+            _endpoint(
+              id: 'sample.persist',
+              method: AuthOperationMethod.post,
+              path: '/sample/persist',
+              semantics: const AuthOperationSemantics.mutation(
+                persistence: AuthMutationPersistence.durable(
+                  atomicity: AuthMutationAtomicity.nonAtomic,
+                  reference: AuthPersistenceOperationReference(
+                    schemaId: 'missing',
+                  ),
+                ),
+                replaySafety: AuthMutationReplaySafety.idempotent,
+              ),
+            ),
+          ],
+        ),
+      );
+      await _expectCaseFailure(
+        undeclaredSchema,
+        'endpoints.operation-semantics',
+      );
+
+      final undeclaredAtomicOperation = _suite(
+        _FixturePlugin(
+          endpoints: <AuthEndpointDescriptor<Object>>[
+            _endpoint(
+              id: 'sample.atomic',
+              method: AuthOperationMethod.post,
+              path: '/sample/atomic',
+              semantics: const AuthOperationSemantics.mutation(
+                persistence: AuthMutationPersistence.durable(
+                  atomicity: AuthMutationAtomicity.atomic,
+                  reference: AuthPersistenceOperationReference(
+                    schemaId: 'sample',
+                    atomicOperationId: 'missing',
+                  ),
+                ),
+                replaySafety: AuthMutationReplaySafety.singleUse,
+              ),
+            ),
+          ],
+          persistenceSchemas: const <AuthPersistenceSchema>[
+            AuthPersistenceSchema(
+              id: 'sample',
+              entities: <AuthEntityDescriptor>[],
+            ),
+          ],
+        ),
+      );
+      await _expectCaseFailure(
+        undeclaredAtomicOperation,
+        'endpoints.operation-semantics',
+      );
+    });
+
+    test('rejects unsafe anonymous browser mutations', () async {
+      const operation = AuthRateLimitOperation('sample', 'unsafe');
+      final suite = _suite(
+        _FixturePlugin(
+          endpoints: <AuthEndpointDescriptor<Object>>[
+            _endpoint(
+              id: 'sample.unsafe',
+              method: AuthOperationMethod.post,
+              path: '/sample/unsafe',
+              originPolicy: AuthOperationOriginPolicy.browser,
+              rateLimitOperation: operation,
+              semantics: const AuthOperationSemantics.mutation(
+                persistence: AuthMutationPersistence.session(),
+                replaySafety: AuthMutationReplaySafety.unguarded,
+              ),
+            ),
+          ],
+          rateLimitOperations: const <AuthRateLimitOperation>[operation],
+        ),
+      );
+
+      await _expectCaseFailure(suite, 'endpoints.operation-semantics');
+    });
+
     test(
       'requires anonymous non-browser mutations to be rate limited',
       () async {
@@ -352,6 +470,7 @@ TypedAuthEndpointDescriptor<Object, Map<String, dynamic>, Object?> _endpoint({
   AuthOperationOriginPolicy originPolicy = AuthOperationOriginPolicy.none,
   AuthOperationCsrfPolicy csrfPolicy = AuthOperationCsrfPolicy.none,
   AuthRateLimitOperation? rateLimitOperation,
+  AuthOperationSemantics? semantics,
   Map<String, Object?> requestSchema = const <String, Object?>{
     'type': 'object',
   },
@@ -360,6 +479,14 @@ TypedAuthEndpointDescriptor<Object, Map<String, dynamic>, Object?> _endpoint({
     id: id,
     method: method,
     path: path,
+    semantics:
+        semantics ??
+        (method == AuthOperationMethod.get
+            ? const AuthOperationSemantics.readOnly()
+            : const AuthOperationSemantics.mutation(
+                persistence: AuthMutationPersistence.boundedEphemeral(),
+                replaySafety: AuthMutationReplaySafety.repeatable,
+              )),
     requestCodec: AuthOperationCodec<Map<String, dynamic>>(
       decode: (value) => value,
       encode: (value) => value,
@@ -404,11 +531,15 @@ final class _FixturePlugin
         AuthServerPlugin<Object>,
         AuthEndpointContributor<Object>,
         AuthClientOperationContributor,
-        AuthRateLimitContributor {
+        AuthRateLimitContributor,
+        AuthPersistenceContributor,
+        AuthHostEndpointContributor<Object> {
   const _FixturePlugin({
     required this.endpoints,
     this.clientOperations = const <AuthClientOperationDescriptor>[],
     this.rateLimitOperations = const <AuthRateLimitOperation>[],
+    this.persistenceSchemas = const <AuthPersistenceSchema>[],
+    this.hostEndpoints = const <AuthEndpointDescriptor<Object>>[],
   });
 
   @override
@@ -422,6 +553,12 @@ final class _FixturePlugin
 
   @override
   final Iterable<AuthRateLimitOperation> rateLimitOperations;
+
+  @override
+  final Iterable<AuthPersistenceSchema> persistenceSchemas;
+
+  @override
+  final Iterable<AuthEndpointDescriptor<Object>> hostEndpoints;
 
   @override
   void configure(AuthServerPluginContext<Object> context) {}
@@ -438,6 +575,10 @@ final class _UntypedEndpoint implements AuthEndpointDescriptor<Object> {
 
   @override
   String get path => '/sample/untyped';
+
+  @override
+  AuthOperationSemantics get semantics =>
+      const AuthOperationSemantics.readOnly();
 
   @override
   AuthOperationAuthentication get authentication =>
@@ -461,3 +602,44 @@ final class _UntypedEndpoint implements AuthEndpointDescriptor<Object> {
     Map<String, dynamic> input,
   ) => null;
 }
+
+final class _MissingSemanticsEndpoint
+    implements AuthEndpointDescriptor<Object>, AuthEndpointContractDescriptor {
+  const _MissingSemanticsEndpoint();
+
+  @override
+  String get id => 'sample.missingSemantics';
+  @override
+  AuthOperationMethod get method => AuthOperationMethod.post;
+  @override
+  String get path => '/sample/missing-semantics';
+  @override
+  AuthOperationSemantics get semantics =>
+      throw StateError('Mutation semantics were not declared.');
+  @override
+  AuthOperationAuthentication get authentication =>
+      AuthOperationAuthentication.none;
+  @override
+  AuthOperationOriginPolicy get originPolicy => AuthOperationOriginPolicy.none;
+  @override
+  AuthOperationCsrfPolicy get csrfPolicy => AuthOperationCsrfPolicy.none;
+  @override
+  AuthRateLimitOperation? get rateLimitOperation => null;
+  @override
+  bool get serverOnly => true;
+  @override
+  AuthOperationContract get requestCodec => _missingSemanticsCodec;
+  @override
+  AuthOperationContract get responseCodec => _missingSemanticsCodec;
+  @override
+  Object? invoke(
+    AuthOperationInvocation<Object> invocation,
+    Map<String, dynamic> input,
+  ) => const <String, Object?>{};
+}
+
+final AuthOperationCodec<Map<String, dynamic>> _missingSemanticsCodec =
+    AuthOperationCodec<Map<String, dynamic>>(
+      decode: (value) => value,
+      encode: (value) => value,
+    );

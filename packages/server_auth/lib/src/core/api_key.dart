@@ -612,6 +612,15 @@ final class AuthApiKeyPlugin<TContext>
       id: 'apiKey.create',
       method: AuthOperationMethod.post,
       path: '/api-keys/create',
+      semantics: const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.nonAtomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: authApiKeyPluginId,
+          ),
+        ),
+        replaySafety: AuthMutationReplaySafety.repeatable,
+      ),
       requestCodec: _apiKeyCreateRequestCodec,
       responseCodec: _apiKeyIssuedResponseCodec,
       originPolicy: AuthOperationOriginPolicy.browser,
@@ -631,6 +640,7 @@ final class AuthApiKeyPlugin<TContext>
       id: 'apiKey.list',
       method: AuthOperationMethod.get,
       path: '/api-keys/list',
+      semantics: const AuthOperationSemantics.readOnly(),
       requestCodec: _emptyRequestCodec,
       responseCodec: _apiKeyListResponseCodec,
       originPolicy: AuthOperationOriginPolicy.none,
@@ -649,6 +659,16 @@ final class AuthApiKeyPlugin<TContext>
       id: 'apiKey.revoke',
       method: AuthOperationMethod.post,
       path: '/api-keys/revoke',
+      semantics: const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: authApiKeyPluginId,
+            atomicOperationId: 'api_key.revoke_for_user',
+          ),
+        ),
+        replaySafety: AuthMutationReplaySafety.singleUse,
+      ),
       requestCodec: _apiKeyIdRequestCodec,
       responseCodec: _apiKeyMetadataResponseCodec,
       originPolicy: AuthOperationOriginPolicy.browser,
@@ -665,6 +685,16 @@ final class AuthApiKeyPlugin<TContext>
       id: 'apiKey.rotate',
       method: AuthOperationMethod.post,
       path: '/api-keys/rotate',
+      semantics: const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: authApiKeyPluginId,
+            atomicOperationId: 'api_key.rotate_for_user',
+          ),
+        ),
+        replaySafety: AuthMutationReplaySafety.singleUse,
+      ),
       requestCodec: _apiKeyRotateRequestCodec,
       responseCodec: _apiKeyIssuedResponseCodec,
       originPolicy: AuthOperationOriginPolicy.browser,
@@ -695,6 +725,10 @@ final class AuthApiKeyPlugin<TContext>
             id: 'apiKey.exchange',
             method: AuthOperationMethod.post,
             path: '/api-keys/exchange',
+            semantics: const AuthOperationSemantics.mutation(
+              persistence: AuthMutationPersistence.session(),
+              replaySafety: AuthMutationReplaySafety.repeatable,
+            ),
             requestCodec: _emptyRequestCodec,
             responseCodec: _sessionResponseCodec,
             authentication: AuthOperationAuthentication.apiKey,

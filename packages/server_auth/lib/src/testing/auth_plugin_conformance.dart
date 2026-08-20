@@ -156,6 +156,12 @@ final class AuthPluginConformanceSuite<TContext> {
        _endpoints = List<AuthEndpointDescriptor<TContext>>.unmodifiable(
          runtime.registry.endpoints,
        ),
+       _publicEndpoints = List<AuthEndpointDescriptor<TContext>>.unmodifiable(
+         runtime.registry.publicEndpoints,
+       ),
+       _persistenceSchemas = List<AuthPersistenceSchema>.unmodifiable(
+         runtime.registry.persistenceSchemas,
+       ),
        _clientOperations = List<AuthClientOperationDescriptor>.unmodifiable(
          runtime.registry.clientOperations,
        ),
@@ -172,6 +178,8 @@ final class AuthPluginConformanceSuite<TContext> {
 
   final List<AuthServerPlugin<TContext>> _plugins;
   final List<AuthEndpointDescriptor<TContext>> _endpoints;
+  final List<AuthEndpointDescriptor<TContext>> _publicEndpoints;
+  final List<AuthPersistenceSchema> _persistenceSchemas;
   final List<AuthClientOperationDescriptor> _clientOperations;
   final List<AuthRateLimitOperation> _rateLimitOperations;
   final Map<String, String> _publicEndpointClientExceptions;
@@ -214,6 +222,12 @@ final class AuthPluginConformanceSuite<TContext> {
           id: 'endpoints.mutation-protection',
           description: 'declares safe mutation protection metadata',
           verify: _verifyMutationProtection,
+        ),
+        _case(
+          id: 'endpoints.operation-semantics',
+          description:
+              'declares valid persistence and replay semantics for mutations',
+          verify: _verifyOperationSemantics,
         ),
       ]);
 
@@ -484,7 +498,7 @@ final class AuthPluginConformanceSuite<TContext> {
   }
 
   void _verifyMutationProtection() {
-    for (final endpoint in _endpoints) {
+    for (final endpoint in _publicEndpoints) {
       if (endpoint.method == AuthOperationMethod.get) {
         if (endpoint.csrfPolicy != AuthOperationCsrfPolicy.none) {
           _fail('GET endpoint "${endpoint.id}" must not require CSRF.');
@@ -525,6 +539,84 @@ final class AuthPluginConformanceSuite<TContext> {
         _fail(
           'Anonymous mutation "${endpoint.id}" must declare a rate-limit '
           'operation when CSRF does not apply.',
+        );
+      }
+    }
+  }
+
+  void _verifyOperationSemantics() {
+    final schemas = <String, AuthPersistenceSchema>{};
+    for (final schema in _persistenceSchemas) {
+      final id = schema.id.trim();
+      if (id.isEmpty || schemas.containsKey(id)) {
+        _fail('Persistence schema ID "${schema.id}" is empty or duplicated.');
+      }
+      schemas[id] = schema;
+    }
+
+    for (final endpoint in _publicEndpoints) {
+      final semantics = endpoint.semantics;
+      if (semantics is! AuthMutationOperationSemantics) continue;
+
+      final persistence = semantics.persistence;
+      final reference = persistence.reference;
+      if (persistence.kind != AuthMutationPersistenceKind.durable) {
+        if (persistence.atomicity != AuthMutationAtomicity.notApplicable ||
+            reference != null) {
+          _fail(
+            'Mutation "${endpoint.id}" has durable-only atomic metadata on '
+            'a ${persistence.kind.name} persistence boundary.',
+          );
+        }
+      } else if (persistence.atomicity == AuthMutationAtomicity.notApplicable) {
+        _fail('Durable mutation "${endpoint.id}" must declare its atomicity.');
+      }
+
+      if (reference != null) {
+        final schemaId = reference.schemaId.trim();
+        final schema = schemas[schemaId];
+        if (schema == null || schemaId != reference.schemaId) {
+          _fail(
+            'Mutation "${endpoint.id}" references undeclared persistence '
+            'schema "${reference.schemaId}".',
+          );
+        }
+        final atomicOperationId = reference.atomicOperationId;
+        if (atomicOperationId != null) {
+          final normalized = atomicOperationId.trim();
+          if (normalized != atomicOperationId ||
+              !schema.atomicOperations.any(
+                (operation) => operation.id == atomicOperationId,
+              )) {
+            _fail(
+              'Mutation "${endpoint.id}" references undeclared atomic '
+              'operation "$atomicOperationId" in schema "$schemaId".',
+            );
+          }
+        }
+      }
+
+      if (persistence.atomicity == AuthMutationAtomicity.atomic &&
+          reference?.atomicOperationId == null) {
+        _fail(
+          'Atomic durable mutation "${endpoint.id}" must reference a '
+          'declared atomic operation.',
+        );
+      }
+
+      final anonymousBrowserMutation =
+          endpoint.authentication == AuthOperationAuthentication.none &&
+          endpoint.originPolicy == AuthOperationOriginPolicy.browser;
+      if (anonymousBrowserMutation && endpoint.rateLimitOperation == null) {
+        _fail(
+          'Anonymous browser mutation "${endpoint.id}" must be rate limited.',
+        );
+      }
+      if (anonymousBrowserMutation &&
+          semantics.replaySafety == AuthMutationReplaySafety.unguarded) {
+        _fail(
+          'Anonymous browser mutation "${endpoint.id}" must declare '
+          'replay safety.',
         );
       }
     }

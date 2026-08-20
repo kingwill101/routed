@@ -255,6 +255,9 @@ final class _CollisionEndpoint
   @override
   String get path => '/providers';
   @override
+  AuthOperationSemantics get semantics =>
+      const AuthOperationSemantics.readOnly();
+  @override
   AuthOperationAuthentication get authentication =>
       AuthOperationAuthentication.none;
   @override

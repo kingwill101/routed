@@ -247,6 +247,17 @@ final class DeviceAuthorizationPlugin<TContext>
     id: id,
     method: method,
     path: path,
+    semantics: AuthOperationSemantics.mutation(
+      persistence: const AuthMutationPersistence.durable(
+        atomicity: AuthMutationAtomicity.nonAtomic,
+        reference: AuthPersistenceOperationReference(
+          schemaId: authDeviceAuthorizationPluginId,
+        ),
+      ),
+      replaySafety: id == 'deviceAuthorization.request'
+          ? AuthMutationReplaySafety.repeatable
+          : AuthMutationReplaySafety.singleUse,
+    ),
     requestCodec: _mapCodec,
     responseCodec: _objectCodec,
     authentication: authentication,

@@ -376,6 +376,7 @@ final class OrganizationPlugin<TContext>
       id: operationId,
       method: method,
       path: _paths[operationId]!,
+      semantics: _operationSemantics(operationId),
       requestCodec: _mapCodec,
       responseCodec: _objectCodec,
       authentication: operationId == 'organization.checkSlug'
@@ -393,6 +394,59 @@ final class OrganizationPlugin<TContext>
       ),
       handler: (invocation, request) =>
           _invokeEndpoint(operationId, invocation, request),
+    );
+  }
+
+  static AuthOperationSemantics _operationSemantics(String operationId) {
+    if (_readOperations.contains(operationId)) {
+      return const AuthOperationSemantics.readOnly();
+    }
+    if (operationId == 'organization.setActive' ||
+        operationId == 'organization.setActiveTeam') {
+      return const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.session(),
+        replaySafety: AuthMutationReplaySafety.idempotent,
+      );
+    }
+    final atomicOperation = switch (operationId) {
+      'organization.create' => 'createOrganization',
+      'organization.acceptInvitation' => 'acceptInvitation',
+      'organization.updateRole' => 'renameRole',
+      'organization.delete' => 'cascadeOrganization',
+      _ => null,
+    };
+    final replaySafety = switch (operationId) {
+      'organization.update' ||
+      'organization.updateMemberRole' ||
+      'organization.updateRole' ||
+      'organization.updateTeam' => AuthMutationReplaySafety.idempotent,
+      'organization.delete' ||
+      'organization.leave' ||
+      'organization.acceptInvitation' ||
+      'organization.rejectInvitation' ||
+      'organization.cancelInvitation' ||
+      'organization.removeMember' ||
+      'organization.deleteRole' ||
+      'organization.removeTeam' ||
+      'organization.removeTeamMember' => AuthMutationReplaySafety.singleUse,
+      'organization.create' ||
+      'organization.inviteMember' ||
+      'organization.createRole' ||
+      'organization.createTeam' ||
+      'organization.addTeamMember' => AuthMutationReplaySafety.repeatable,
+      _ => AuthMutationReplaySafety.unguarded,
+    };
+    return AuthOperationSemantics.mutation(
+      persistence: AuthMutationPersistence.durable(
+        atomicity: atomicOperation == null
+            ? AuthMutationAtomicity.nonAtomic
+            : AuthMutationAtomicity.atomic,
+        reference: AuthPersistenceOperationReference(
+          schemaId: 'organization',
+          atomicOperationId: atomicOperation,
+        ),
+      ),
+      replaySafety: replaySafety,
     );
   }
 

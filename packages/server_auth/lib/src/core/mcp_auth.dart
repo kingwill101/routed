@@ -216,6 +216,7 @@ final class McpAuthPlugin<TContext>
     id: id,
     method: AuthOperationMethod.get,
     path: path,
+    semantics: const AuthOperationSemantics.readOnly(),
     requestCodec: _requestCodec,
     responseCodec: _responseCodec,
     authentication: AuthOperationAuthentication.none,
@@ -233,6 +234,10 @@ final class McpAuthPlugin<TContext>
         id: 'mcpAuth.registerClient',
         method: AuthOperationMethod.post,
         path: '/oauth/register',
+        semantics: const AuthOperationSemantics.mutation(
+          persistence: AuthMutationPersistence.external(),
+          replaySafety: AuthMutationReplaySafety.unguarded,
+        ),
         requestCodec: AuthOperationCodec<Map<String, dynamic>>(
           decode: (value) => value,
           encode: (value) => value,

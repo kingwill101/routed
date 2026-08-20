@@ -2106,6 +2106,7 @@ AuthEndpointDescriptor<TContext> _twoFactorHostEndpoint<TContext>({
   id: id,
   method: method,
   path: path,
+  semantics: _twoFactorOperationSemantics(id),
   requestCodec: AuthOperationCodec<Map<String, dynamic>>(
     decode: _decodeTwoFactorMap,
     encode: _encodeTwoFactorMap,
@@ -2130,6 +2131,61 @@ AuthEndpointDescriptor<TContext> _twoFactorHostEndpoint<TContext>({
   handler: (invocation, request) =>
       throw UnsupportedError('This endpoint is implemented by the auth host.'),
 );
+
+AuthOperationSemantics _twoFactorOperationSemantics(String id) {
+  switch (id) {
+    case 'twoFactor.status':
+      return const AuthOperationSemantics.readOnly();
+    case 'twoFactor.enroll':
+    case 'twoFactor.stepUp':
+      return const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.boundedEphemeral(),
+        replaySafety: AuthMutationReplaySafety.repeatable,
+      );
+    case 'twoFactor.stepUpRevoke':
+      return const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.boundedEphemeral(),
+        replaySafety: AuthMutationReplaySafety.idempotent,
+      );
+    case 'twoFactor.challengeVerify':
+    case 'twoFactor.challengeRecoveryCode':
+      return const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.session(),
+        replaySafety: AuthMutationReplaySafety.singleUse,
+      );
+    case 'twoFactor.trustedDevicesRevoke':
+      return const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.nonAtomic,
+        ),
+        replaySafety: AuthMutationReplaySafety.idempotent,
+      );
+    case 'twoFactor.enrollVerify':
+    case 'twoFactor.recoveryCode':
+    case 'twoFactor.disable':
+      return const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.nonAtomic,
+        ),
+        replaySafety: AuthMutationReplaySafety.singleUse,
+      );
+    case 'twoFactor.verify':
+      return const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.nonAtomic,
+        ),
+        replaySafety: AuthMutationReplaySafety.unguarded,
+      );
+    case 'twoFactor.recoveryCodesRegenerate':
+      return const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.nonAtomic,
+        ),
+        replaySafety: AuthMutationReplaySafety.repeatable,
+      );
+  }
+  throw StateError('Unknown two-factor operation $id');
+}
 
 Map<String, dynamic> _decodeTwoFactorMap(Map<String, dynamic> value) => value;
 Object? _encodeTwoFactorMap(Map<String, dynamic> value) => value;

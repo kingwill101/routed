@@ -1,5 +1,11 @@
 ## 0.2.0 - 2026-08-20
 
+- Require every portable and host-owned endpoint to publish typed read or
+  mutation semantics, including persistence boundary, atomicity, replay
+  behavior, and validated persistence-schema/atomic-operation references.
+- Extend plugin conformance with negative mutation-contract fixtures and audit
+  built-in endpoint metadata without overstating multi-step transaction or
+  replay guarantees.
 - Make auth runtime posture fail closed: durable options now require an exact
   HTTPS origin/proxy boundary, secure browser and cookie policy, production
   account defaults, an explicit rate limiter, and algorithm-sized JWT secrets,

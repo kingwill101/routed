@@ -187,6 +187,28 @@ final class EmailOtpPlugin<TContext>
     id: id,
     method: AuthOperationMethod.post,
     path: path,
+    semantics: id == 'emailOtp.checkVerificationOtp'
+        ? const AuthOperationSemantics.mutation(
+            persistence: AuthMutationPersistence.durable(
+              atomicity: AuthMutationAtomicity.atomic,
+              reference: AuthPersistenceOperationReference(
+                schemaId: authEmailOtpPluginId,
+                atomicOperationId: 'emailOtp.verify',
+              ),
+            ),
+            replaySafety: AuthMutationReplaySafety.singleUse,
+          )
+        : AuthOperationSemantics.mutation(
+            persistence: const AuthMutationPersistence.durable(
+              atomicity: AuthMutationAtomicity.nonAtomic,
+              reference: AuthPersistenceOperationReference(
+                schemaId: authEmailOtpPluginId,
+              ),
+            ),
+            replaySafety: id == 'emailOtp.sendVerificationOtp'
+                ? AuthMutationReplaySafety.repeatable
+                : AuthMutationReplaySafety.singleUse,
+          ),
     requestCodec: _mapCodec,
     responseCodec: _objectCodec,
     authentication: authentication,

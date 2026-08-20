@@ -260,6 +260,10 @@ final class PhoneNumberPlugin<TContext>
           id: 'phoneNumber.sendCode',
           method: AuthOperationMethod.post,
           path: '/phone-number/send-code',
+          semantics: const AuthOperationSemantics.mutation(
+            persistence: AuthMutationPersistence.external(),
+            replaySafety: AuthMutationReplaySafety.repeatable,
+          ),
           requestCodec: _sendRequestCodec,
           responseCodec: _sendResponseCodec,
           authentication: AuthOperationAuthentication.none,
@@ -284,6 +288,15 @@ final class PhoneNumberPlugin<TContext>
           id: 'phoneNumber.verifyCode',
           method: AuthOperationMethod.post,
           path: '/phone-number/verify-code',
+          semantics: const AuthOperationSemantics.mutation(
+            persistence: AuthMutationPersistence.durable(
+              atomicity: AuthMutationAtomicity.nonAtomic,
+              reference: AuthPersistenceOperationReference(
+                schemaId: authPhoneNumberPluginId,
+              ),
+            ),
+            replaySafety: AuthMutationReplaySafety.singleUse,
+          ),
           requestCodec: _verifyRequestCodec,
           responseCodec: _verifyResponseCodec,
           authentication: AuthOperationAuthentication.none,

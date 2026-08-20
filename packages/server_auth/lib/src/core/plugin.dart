@@ -16,6 +16,127 @@ enum AuthOperationOriginPolicy { none, browser }
 
 enum AuthOperationCsrfPolicy { none, required }
 
+/// Whether an auth endpoint observes state or changes it.
+///
+/// Every endpoint descriptor must choose one of the two variants explicitly.
+/// This keeps newly-added custom and host-owned endpoints from silently
+/// bypassing persistence and replay-safety review.
+sealed class AuthOperationSemantics {
+  const AuthOperationSemantics();
+
+  const factory AuthOperationSemantics.readOnly() =
+      AuthReadOnlyOperationSemantics;
+
+  const factory AuthOperationSemantics.mutation({
+    required AuthMutationPersistence persistence,
+    required AuthMutationReplaySafety replaySafety,
+  }) = AuthMutationOperationSemantics;
+}
+
+/// A state-observing endpoint.
+final class AuthReadOnlyOperationSemantics extends AuthOperationSemantics {
+  const AuthReadOnlyOperationSemantics();
+}
+
+/// The persistence boundary that owns a mutation.
+enum AuthMutationPersistenceKind {
+  /// Application or plugin state expected to survive process restarts.
+  durable,
+
+  /// Host session state, including issuing, rotating, or clearing a session.
+  session,
+
+  /// A short-lived challenge or browser-local value with a fixed lifetime.
+  boundedEphemeral,
+
+  /// State owned by an external application or identity provider.
+  external,
+}
+
+/// Whether a mutation is committed as one indivisible persistence operation.
+enum AuthMutationAtomicity { atomic, nonAtomic, notApplicable }
+
+/// What a caller can expect when the same mutation is submitted again.
+enum AuthMutationReplaySafety {
+  /// A committed result may be requested again without applying it twice.
+  idempotent,
+
+  /// The input can be consumed successfully at most once.
+  singleUse,
+
+  /// Repetition is an intentional part of the public operation.
+  repeatable,
+
+  /// The implementation does not currently provide a replay guarantee.
+  unguarded,
+}
+
+/// A reference to public plugin persistence metadata.
+///
+/// [atomicOperationId] is required when an endpoint claims atomic durable
+/// persistence. Conformance resolves both identifiers against the composed
+/// [AuthPersistenceSchema] declarations.
+final class AuthPersistenceOperationReference {
+  const AuthPersistenceOperationReference({
+    required this.schemaId,
+    this.atomicOperationId,
+  });
+
+  final String schemaId;
+  final String? atomicOperationId;
+}
+
+/// Typed persistence semantics for a state-changing auth operation.
+final class AuthMutationPersistence {
+  const AuthMutationPersistence._({
+    required this.kind,
+    required this.atomicity,
+    this.reference,
+  });
+
+  const AuthMutationPersistence.durable({
+    required AuthMutationAtomicity atomicity,
+    AuthPersistenceOperationReference? reference,
+  }) : this._(
+         kind: AuthMutationPersistenceKind.durable,
+         atomicity: atomicity,
+         reference: reference,
+       );
+
+  const AuthMutationPersistence.session()
+    : this._(
+        kind: AuthMutationPersistenceKind.session,
+        atomicity: AuthMutationAtomicity.notApplicable,
+      );
+
+  const AuthMutationPersistence.boundedEphemeral()
+    : this._(
+        kind: AuthMutationPersistenceKind.boundedEphemeral,
+        atomicity: AuthMutationAtomicity.notApplicable,
+      );
+
+  const AuthMutationPersistence.external()
+    : this._(
+        kind: AuthMutationPersistenceKind.external,
+        atomicity: AuthMutationAtomicity.notApplicable,
+      );
+
+  final AuthMutationPersistenceKind kind;
+  final AuthMutationAtomicity atomicity;
+  final AuthPersistenceOperationReference? reference;
+}
+
+/// A state-changing endpoint with explicit persistence and replay behavior.
+final class AuthMutationOperationSemantics extends AuthOperationSemantics {
+  const AuthMutationOperationSemantics({
+    required this.persistence,
+    required this.replaySafety,
+  });
+
+  final AuthMutationPersistence persistence;
+  final AuthMutationReplaySafety replaySafety;
+}
+
 /// Serialization contract for one side of an auth operation.
 ///
 /// [schema] is JSON Schema Draft 2020-12 metadata. It is optional at runtime,
@@ -236,6 +357,7 @@ abstract interface class AuthEndpointDescriptor<TContext> {
   String get id;
   AuthOperationMethod get method;
   String get path;
+  AuthOperationSemantics get semantics;
   AuthOperationAuthentication get authentication;
   AuthOperationOriginPolicy get originPolicy;
   AuthOperationCsrfPolicy get csrfPolicy;
@@ -357,6 +479,7 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
     required this.requestCodec,
     required this.responseCodec,
     required this.handler,
+    required this.semantics,
     this.authentication = AuthOperationAuthentication.session,
     this.originPolicy = AuthOperationOriginPolicy.browser,
     this.csrfPolicy = AuthOperationCsrfPolicy.none,
@@ -371,6 +494,8 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
   final AuthOperationMethod method;
   @override
   final String path;
+  @override
+  final AuthOperationSemantics semantics;
   @override
   final AuthOperationCodec<TRequest> requestCodec;
   @override

@@ -463,6 +463,7 @@ final class WebAuthnPlugin<TContext>
       id: id,
       method: method,
       path: path,
+      semantics: _operationSemantics(id),
       requestCodec: _mapCodec,
       responseCodec: _objectCodec,
       authentication: authentication,
@@ -472,6 +473,43 @@ final class WebAuthnPlugin<TContext>
       handler: (invocation, request) =>
           _invokeEndpoint(id, invocation, request),
     );
+  }
+
+  static AuthOperationSemantics _operationSemantics(String id) {
+    switch (id) {
+      case 'webauthn.credentialList':
+        return const AuthOperationSemantics.readOnly();
+      case 'webauthn.registrationOptions':
+      case 'webauthn.authenticationOptions':
+        return const AuthOperationSemantics.mutation(
+          persistence: AuthMutationPersistence.boundedEphemeral(),
+          replaySafety: AuthMutationReplaySafety.repeatable,
+        );
+      case 'webauthn.credentialRename':
+        return const AuthOperationSemantics.mutation(
+          persistence: AuthMutationPersistence.durable(
+            atomicity: AuthMutationAtomicity.atomic,
+            reference: AuthPersistenceOperationReference(
+              schemaId: authWebAuthnPluginId,
+              atomicOperationId: 'authenticator.rename',
+            ),
+          ),
+          replaySafety: AuthMutationReplaySafety.idempotent,
+        );
+      case 'webauthn.registrationVerify':
+      case 'webauthn.authenticationVerify':
+      case 'webauthn.credentialDelete':
+        return const AuthOperationSemantics.mutation(
+          persistence: AuthMutationPersistence.durable(
+            atomicity: AuthMutationAtomicity.nonAtomic,
+            reference: AuthPersistenceOperationReference(
+              schemaId: authWebAuthnPluginId,
+            ),
+          ),
+          replaySafety: AuthMutationReplaySafety.singleUse,
+        );
+    }
+    throw StateError('Unknown WebAuthn operation $id');
   }
 
   Future<Object?> _invokeEndpoint(

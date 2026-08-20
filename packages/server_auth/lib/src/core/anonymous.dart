@@ -82,6 +82,15 @@ final class AnonymousPlugin<TContext>
       id: 'anonymous.signIn',
       method: AuthOperationMethod.post,
       path: '/sign-in/anonymous',
+      semantics: const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.nonAtomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: authAnonymousPluginId,
+          ),
+        ),
+        replaySafety: AuthMutationReplaySafety.repeatable,
+      ),
       requestCodec: _emptyRequestCodec,
       responseCodec: _authenticationResponseCodec,
       authentication: AuthOperationAuthentication.none,
@@ -94,6 +103,16 @@ final class AnonymousPlugin<TContext>
       id: 'anonymous.delete',
       method: AuthOperationMethod.post,
       path: '/delete-anonymous-user',
+      semantics: const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.durable(
+          atomicity: AuthMutationAtomicity.atomic,
+          reference: AuthPersistenceOperationReference(
+            schemaId: authAnonymousPluginId,
+            atomicOperationId: 'anonymous.deleteUser',
+          ),
+        ),
+        replaySafety: AuthMutationReplaySafety.singleUse,
+      ),
       requestCodec: _emptyRequestCodec,
       responseCodec: _deletedResponseCodec,
       authentication: AuthOperationAuthentication.session,
@@ -129,6 +148,13 @@ final class AnonymousPlugin<TContext>
           fields: <AuthFieldDescriptor>[
             AuthFieldDescriptor(name: 'isAnonymous', kind: 'boolean'),
           ],
+        ),
+      ],
+      atomicOperations: <AuthAtomicOperationDescriptor>[
+        AuthAtomicOperationDescriptor(
+          id: 'anonymous.deleteUser',
+          description:
+              'Delete the anonymous user through the backend-owned deletion transaction.',
         ),
       ],
     ),

@@ -178,6 +178,7 @@ final class OAuthProviderModePlugin<TContext>
           id: operationId,
           method: method,
           path: _paths[operationId]!,
+          semantics: _operationSemantics(operationId),
           requestCodec: const AuthOperationCodec(
             decode: _identityMap,
             encode: _identityMap,
@@ -203,6 +204,49 @@ final class OAuthProviderModePlugin<TContext>
         );
       })
       .toList(growable: false);
+
+  static AuthOperationSemantics _operationSemantics(String operationId) {
+    switch (operationId) {
+      case 'oauth_provider.userinfo':
+      case 'oauth_provider.discovery':
+      case 'oauth_provider.jwks':
+      case 'oauth_provider.introspect':
+      case 'oauth_provider.clients.list':
+        return const AuthOperationSemantics.readOnly();
+      case 'oauth_provider.authorize':
+      case 'oauth_provider.clients.create':
+        return const AuthOperationSemantics.mutation(
+          persistence: AuthMutationPersistence.durable(
+            atomicity: AuthMutationAtomicity.nonAtomic,
+            reference: AuthPersistenceOperationReference(
+              schemaId: 'oauth_provider_mode',
+            ),
+          ),
+          replaySafety: AuthMutationReplaySafety.repeatable,
+        );
+      case 'oauth_provider.clients.delete':
+        return const AuthOperationSemantics.mutation(
+          persistence: AuthMutationPersistence.durable(
+            atomicity: AuthMutationAtomicity.nonAtomic,
+            reference: AuthPersistenceOperationReference(
+              schemaId: 'oauth_provider_mode',
+            ),
+          ),
+          replaySafety: AuthMutationReplaySafety.singleUse,
+        );
+      case 'oauth_provider.token':
+        return const AuthOperationSemantics.mutation(
+          persistence: AuthMutationPersistence.durable(
+            atomicity: AuthMutationAtomicity.nonAtomic,
+            reference: AuthPersistenceOperationReference(
+              schemaId: 'oauth_provider_mode',
+            ),
+          ),
+          replaySafety: AuthMutationReplaySafety.unguarded,
+        );
+    }
+    throw StateError('Unknown OAuth provider operation $operationId');
+  }
 
   @override
   Iterable<AuthClientOperationDescriptor> get clientOperations => endpoints.map(

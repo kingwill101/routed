@@ -321,8 +321,20 @@ account, session, client, and plugin contracts above:
   persisted nor compared directly. Built-in registration, sign-in, reset,
   change, administration, email-change, and deletion paths all use the
   configured password hasher.
-- [ ] Every state-changing auth operation has an explicit persistence and
-  replay-safety story.
+- [x] Every advertised portable and host-owned auth endpoint explicitly
+  declares read-only or mutation semantics. Mutations carry typed persistence,
+  atomicity, and replay behavior; conformance validates plugin schema and
+  atomic-operation references, and OpenAPI preserves the public contract.
+  The audit intentionally records weaker guarantees where implementations are
+  multi-step: OAuth's mixed-grant token endpoint cannot atomically combine
+  authorization-code consumption with token issuance; device token polling,
+  claiming, and application token delivery are separate steps; WebAuthn
+  verification consumes a challenge separately from authenticator creation or
+  counter updates; username registration does not yet publish a persistence
+  descriptor; and several organization and two-factor mutations span store or
+  host boundaries without one declared transaction. These operations remain
+  `nonAtomic` or `unguarded` until their adapters expose a stronger bounded
+  operation.
 - [x] Every advertised auth endpoint has documented authentication,
   CSRF/origin, rate-limit, redirect, session/body-token, and error semantics in
   the public auth endpoint security contract, including plugin-gated 2FA route

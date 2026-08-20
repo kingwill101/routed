@@ -71,7 +71,11 @@ final suite = AuthPluginConformanceSuite.fromRuntime(
 );
 
 for (final conformanceCase in suite.filtered(
-  include: {'endpoints.typed-contracts', 'endpoints.mutation-protection'},
+  include: {
+    'endpoints.typed-contracts',
+    'endpoints.mutation-protection',
+    'endpoints.operation-semantics',
+  },
 )) {
   test(conformanceCase.id, conformanceCase.run);
 }
@@ -79,12 +83,51 @@ for (final conformanceCase in suite.filtered(
 
 The cases check stable composition and route identifiers, typed operation
 contracts, rate-limit references, bidirectional public client-operation
-mappings, and safe origin/CSRF metadata. Every non-server-only endpoint needs a
+mapping, safe origin/CSRF metadata, and explicit persistence/replay semantics
+for every portable or host-owned mutation. Every non-server-only endpoint needs a
 matching client operation unless the suite is given a non-empty explanation
 for a deliberate protocol/discovery omission. Rate-limited anonymous
 verification may omit session CSRF with either browser-origin validation or an
 explicit non-browser policy. The reusable suite itself has no dependency on
 `package:test`.
+
+Endpoint authors must choose read-only or mutation semantics directly on the
+descriptor. Mutations identify their durable, session, bounded-ephemeral, or
+external persistence boundary and whether replay is idempotent, single-use,
+intentionally repeatable, or currently unguarded. Atomic durable claims must
+reference an operation declared by the composed plugin's public persistence
+schema:
+
+```dart
+import 'package:server_auth/server_auth.dart';
+
+final rotateEndpoint = TypedAuthEndpointDescriptor<
+  Object,
+  Map<String, dynamic>,
+  Object?
+>(
+  id: 'keys.rotate',
+  method: AuthOperationMethod.post,
+  path: '/keys/rotate',
+  semantics: const AuthOperationSemantics.mutation(
+    persistence: AuthMutationPersistence.durable(
+      atomicity: AuthMutationAtomicity.atomic,
+      reference: AuthPersistenceOperationReference(
+        schemaId: 'keys',
+        atomicOperationId: 'keys.rotate',
+      ),
+    ),
+    replaySafety: AuthMutationReplaySafety.singleUse,
+  ),
+  requestCodec: requestCodec,
+  responseCodec: responseCodec,
+  handler: rotateKey,
+);
+```
+
+Conformance resolves both reference IDs against the frozen plugin topology. A
+multi-step handler must use `nonAtomic` unless its adapter exposes one real
+transactional operation covering the entire advertised mutation.
 
 ## Quick start
 

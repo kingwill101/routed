@@ -493,6 +493,7 @@ final class _EchoServerPlugin
           id: 'echo.read',
           method: AuthOperationMethod.post,
           path: '/echo',
+          semantics: const AuthOperationSemantics.readOnly(),
           requestCodec: AuthOperationCodec<Map<String, dynamic>>(
             decode: (value) {
               if (value['value'] is! String) {

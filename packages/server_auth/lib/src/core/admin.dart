@@ -231,6 +231,56 @@ final class AdminPlugin<TContext>
     'admin.getAccountState',
   };
 
+  static AuthOperationSemantics _operationSemantics(String operation) {
+    if (_reads.contains(operation) ||
+        operation == 'admin.listUserSessions' ||
+        operation == 'admin.hasPermission') {
+      return const AuthOperationSemantics.readOnly();
+    }
+    if (operation == 'admin.impersonateUser') {
+      return const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.session(),
+        replaySafety: AuthMutationReplaySafety.repeatable,
+      );
+    }
+    if (operation == 'admin.stopImpersonating') {
+      return const AuthOperationSemantics.mutation(
+        persistence: AuthMutationPersistence.session(),
+        replaySafety: AuthMutationReplaySafety.idempotent,
+      );
+    }
+    final atomicOperation = switch (operation) {
+      'admin.createUser' => 'createUserWithCredential',
+      'admin.setRole' => 'preserveAdministrator',
+      'admin.removeUser' => 'hardDeleteUser',
+      'admin.updateUser' ||
+      'admin.setUserPassword' ||
+      'admin.banUser' ||
+      'admin.unbanUser' ||
+      'admin.disableUser' ||
+      'admin.enableUser' ||
+      'admin.verifyEmail' ||
+      'admin.unlockUser' => 'mutateUserAndRevokeAccess',
+      _ => null,
+    };
+    return AuthOperationSemantics.mutation(
+      persistence: AuthMutationPersistence.durable(
+        atomicity: atomicOperation == null
+            ? AuthMutationAtomicity.nonAtomic
+            : AuthMutationAtomicity.atomic,
+        reference: atomicOperation == null
+            ? null
+            : AuthPersistenceOperationReference(
+                schemaId: 'admin',
+                atomicOperationId: atomicOperation,
+              ),
+      ),
+      replaySafety: operation == 'admin.revokeUserSessions'
+          ? AuthMutationReplaySafety.idempotent
+          : AuthMutationReplaySafety.singleUse,
+    );
+  }
+
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints => _paths.keys
       .map((operation) {
@@ -245,6 +295,7 @@ final class AdminPlugin<TContext>
           id: operation,
           method: method,
           path: _paths[operation]!,
+          semantics: _operationSemantics(operation),
           requestCodec: _mapCodec,
           responseCodec: _objectCodec,
           authentication: AuthOperationAuthentication.session,
