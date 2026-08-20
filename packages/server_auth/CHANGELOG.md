@@ -16,6 +16,14 @@
   adapter conformance through `package:server_auth/testing.dart`. Host session
   and cookie delivery remains explicitly outside pending-challenge commands;
   host password mutations remain outside trusted-device revocation commands.
+- Add a separate plugin-first managed SCIM connection API with exact tenant,
+  organization, subject, provisioning-domain, and scope binding; atomic
+  connection/initial-credential creation, updates, disablement, rotation,
+  revocation, subject/tenant deletion, bounded catalogs, and expiry handling.
+  Credentials persist only a strong digest and safe metadata; first delivery
+  is one-time, while idempotent replays return metadata without reconstructing
+  the raw secret. Add a separately selected typed client and reusable adapter
+  conformance plus fault, contention, and property coverage.
 - Replace pre-issuance device-grant consumption with bounded digest-only
   issuance leases and a typed authorization-ID-idempotent application token
   issuer. Matching completion/release transitions make ambiguous failures and

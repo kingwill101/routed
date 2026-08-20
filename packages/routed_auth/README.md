@@ -352,6 +352,82 @@ the request principal without creating a browser session. If
 `/auth/api-keys/exchange` to create a normal server session. Use
 `currentApiKey` to inspect scopes in application middleware or handlers.
 
+## Managed SCIM connections
+
+Compose `AuthScimConnectionPlugin<EngineContext>` only in deployments that
+want an authenticated management surface. Routed automatically mounts the
+typed connection and credential operations under `/auth/scim/connections`.
+The application-provided authorizer must return the exact tenant,
+organization, and management subject for each request; returning `null` denies
+the operation.
+
+```dart
+import 'package:routed_auth/routed_auth.dart';
+
+final connectionStore = MyDurableScimConnectionStore(database);
+final managedScim = AuthScimConnectionPlugin<EngineContext>(
+  store: connectionStore,
+  authorize: (request) async {
+    final user = request.invocation.user;
+    if (user == null ||
+        !await canManageScim(user.id, request.organizationId)) {
+      return null;
+    }
+    return AuthScimConnectionManagementPrincipal(
+      tenantId: await tenantFor(user.id),
+      organizationId: request.organizationId,
+      subjectId: user.id,
+    );
+  },
+);
+
+final provisioning = ScimPlugin<EngineContext>(
+  store: MyScimProvisioningStore(database),
+  tokenResolver: AuthScimManagedBearerTokenResolver(
+    store: connectionStore,
+  ),
+);
+
+final auth = AuthDeploymentPresets.localDevelopment<EngineContext>(
+  providers: [CredentialsProvider()],
+  plugins: [managedScim, provisioning],
+  trustedOrigins: [Uri.parse('http://localhost:3000')],
+);
+```
+
+Management reads require a session. Mutations also inherit Routed's browser
+Origin, Fetch Metadata, CSRF, rate-limit, and generic-error handling. Creating
+a connection, issuing a credential, and rotating a credential require an
+idempotency key. The first committed response contains the raw bearer secret;
+a replay contains only safe metadata. Disabling a connection atomically
+revokes every credential, and user/tenant deletion removes credentials with
+their connections.
+
+Install the management client independently:
+
+```dart
+const scimConnections = AuthScimConnectionClientPlugin();
+final authClient = AuthClient(
+  baseUrl: Uri.parse('https://api.example.com'),
+  plugins: const [scimConnections],
+);
+
+final created = await authClient.plugins.use(scimConnections).create(
+  organizationId: organizationId,
+  name: 'Workforce directory',
+  provisioningDomainId: 'employees',
+  scopes: const [AuthScimScope.usersWrite, AuthScimScope.groupsWrite],
+  credentialName: 'Identity provider',
+  idempotencyKey: createRequestId,
+);
+
+// Store or deliver this value now. It is never returned by a replay.
+final bearerSecret = created.issuance.secret;
+```
+
+Production deployments need a durable `AuthScimConnectionStore`; the bundled
+in-memory store is bounded and intended for tests and local development.
+
 ## Organizations
 
 Compose `OrganizationPlugin<EngineContext>` to opt in. `AuthRoutes` discovers

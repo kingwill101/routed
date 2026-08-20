@@ -1,5 +1,8 @@
 ## 0.1.0
 
+- Generate managed SCIM connection and credential operations with session
+  security, CSRF headers, bounded request/response schemas, one-time secret
+  marking, and exact durable atomic-operation and replay-safety metadata.
 - Generate typed SCIM Group collection/resource operations, direct-member
   request/response schemas, bearer security, protocol media types, status
   responses, and durable atomic-operation semantics.

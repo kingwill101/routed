@@ -251,8 +251,11 @@ account, session, client, and plugin contracts above:
 - [ ] Add explicit application identity projection/reconciliation around stable
   directory subjects; never infer links from email or grant sign-in access from
   provisioning alone.
-- [ ] Add a managed connection and digest-only credential catalog with scoped,
-  expiry/revocation-aware one-time issuance and rotation APIs.
+- [x] Add a managed connection and digest-only credential catalog with scoped,
+  expiry/revocation-aware one-time issuance and rotation APIs, required
+  idempotency payload binding, exact tenant/organization authorization,
+  bounded catalogs, atomic disable/deletion cleanup, adapter conformance,
+  Routed/OpenAPI contracts, and an independently selected client plugin.
 - [x] Add the first SAML SSO server/client plugin slice with immutable typed
   connections, exact provider/IdP/NameID identity, SP metadata, HTTP-POST
   AuthnRequest and ACS flows, durable atomic request/assertion replay state,

@@ -253,9 +253,65 @@ The resolver must digest the presented token immediately and atomically return
 one immutable `AuthScimConnectionIdentity`: connection ID, credential ID,
 tenant ID, organization ID, provisioning-domain ID, subject, expiry, and exact
 User or Group read/write scopes. It must reject revoked or expired credentials
-and must never persist, log, or return a raw token. This plugin does not issue
-tokens; if an application adds issuance later, the raw value may be displayed
-only once.
+and must never persist, log, or return a raw token.
+
+Applications that want the auth runtime to manage that catalog can compose the
+separate management plugin and connect its digest resolver to the protocol
+plugin:
+
+```dart
+import 'package:server_auth/server_auth.dart';
+
+final connectionStore = MyDurableScimConnectionStore(database);
+
+final connections = AuthScimConnectionPlugin<MyRequestContext>(
+  store: connectionStore,
+  authorize: (request) async {
+    final user = request.invocation.user;
+    if (user == null ||
+        !await canManageDirectory(user.id, request.organizationId)) {
+      return null;
+    }
+    return AuthScimConnectionManagementPrincipal(
+      tenantId: await tenantFor(user.id),
+      organizationId: request.organizationId,
+      subjectId: user.id,
+    );
+  },
+);
+
+final scim = ScimPlugin<MyRequestContext>(
+  tokenResolver: AuthScimManagedBearerTokenResolver(
+    store: connectionStore,
+  ),
+  store: MyScimProvisioningStore(database),
+);
+
+final options = AuthOptions<MyRequestContext>(
+  providers: const [],
+  store: authStore,
+  storeMode: AuthStoreMode.durable,
+  plugins: [connections, scim],
+);
+```
+
+`AuthScimConnectionPlugin` creates the connection and initial credential in one
+transaction, supports bounded connection/credential catalogs, optimistic
+connection updates, disablement, issuance, rotation, revocation, and expiry,
+and contributes user-deletion plans. Tenant deletion is an explicit trusted
+operation on the plugin. A durable adapter must implement
+`AuthScimConnectionStore` and should run the reusable
+`AuthScimConnectionStoreConformanceSuite`.
+
+Raw bearer credentials are returned only by the first successful create,
+issue, or rotate response. Required idempotency keys bind each issuance to its
+normalized payload. A replay returns the same safe connection and credential
+metadata with `replayed: true`, but never returns or reconstructs the raw
+secret. Therefore response delivery remains intentionally at-most-once: after
+an ambiguous network failure, rotate the credential instead of retrying until
+a raw value appears. Persistence contains only a strong digest, safe prefix,
+scopes, expiry/revocation timestamps, and exact connection/tenant/organization
+binding.
 
 Each provisioning-store call receives the resolved connection context and must
 enforce the exact connection, tenant, organization, and provisioning domain in
@@ -296,9 +352,11 @@ list/get/create/replace/patch/delete operations under its auth base path (for
 Routed, `/auth/scim/v2`). Group endpoints require exact Group scopes and all
 responses use `application/scim+json`. Public failures use generic SCIM error
 documents and never include bearer tokens or persistence exception details.
-Managed connection/credential APIs and application projection orchestration
-remain explicitly deferred; there is no SCIM client plugin because directories
-consume the protocol directly.
+The protocol surface has no SCIM client plugin because directories consume it
+directly. Connection administration is independently selectable through
+`AuthScimConnectionClientPlugin`; clients that do not install it receive no
+management methods. Application projection orchestration remains explicitly
+application-owned.
 
 ## Device authorization issuance
 

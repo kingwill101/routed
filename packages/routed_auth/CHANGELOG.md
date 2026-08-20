@@ -9,6 +9,11 @@
   Routed still issues sessions and delivers cookies after the command commits,
   so failed host delivery requires a fresh sign-in challenge. Password
   mutation and trusted-device revocation also remain separate backend commands.
+- Mount the opt-in managed SCIM connection and credential catalog with shared
+  session, browser-origin, CSRF, rate-limit, and generic-error enforcement;
+  preserve one-time raw-secret delivery and exact application-authorized
+  tenant/organization binding across create, list, update, disable, issue,
+  rotate, revoke, and bounded catalog operations.
 - Route device-token polling through the bounded issuance-lease protocol so
   issuer failures can retry with the same stable authorization ID while
   concurrent, stale, disabled-account, and consumed grants fail generically.
