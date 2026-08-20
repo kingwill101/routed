@@ -251,10 +251,11 @@ void main() {
         expect(saved.counter, 0);
         expect(saved.credentialId, isNotEmpty);
 
-        final authentication = await fixture.feature.beginAuthentication(
-          context: fixture.context,
-          userId: fixture.user.id,
-        );
+        final authentication = await fixture.feature
+            .beginUserBoundAuthentication(
+              context: fixture.context,
+              user: fixture.user,
+            );
         expect(authentication.allowCredentials, contains(saved.credentialId));
         final assertion = _assertionCredential(
           challenge: authentication.challenge,
@@ -271,6 +272,100 @@ void main() {
         expect(result.authenticator.counter, 1);
       },
     );
+
+    test('public options do not distinguish known and unknown users', () async {
+      final fixture = _Fixture();
+      await fixture.store.users.create(fixture.user);
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+      final saved = await fixture.feature.finishRegistration(
+        context: fixture.context,
+        user: fixture.user,
+        credential: _registrationCredential(
+          challenge: registration.challenge,
+          keyPair: fixture.keyPair,
+        ),
+      );
+      final endpoint = fixture.feature.endpoints.firstWhere(
+        (value) => value.id == 'webauthn.authenticationOptions',
+      );
+      final invocation = AuthOperationInvocation<Object>(
+        context: fixture.context,
+        user: null,
+      );
+
+      final known = Map<String, dynamic>.from(
+        (await endpoint.invoke(invocation, <String, dynamic>{
+              'userId': fixture.user.id,
+            }))!
+            as Map,
+      );
+      final unknown = Map<String, dynamic>.from(
+        (await endpoint.invoke(invocation, <String, dynamic>{
+              'userId': 'unknown-user',
+            }))!
+            as Map,
+      );
+
+      expect(known, isNot(contains('allowCredentials')));
+      expect(unknown, isNot(contains('allowCredentials')));
+      expect(jsonEncode(known), isNot(contains(saved.credentialId)));
+      expect(jsonEncode(unknown), isNot(contains(saved.credentialId)));
+      known.remove('challenge');
+      unknown.remove('challenge');
+      expect(known, equals(unknown));
+    });
+
+    test('only an authenticated principal receives credential IDs', () async {
+      final fixture = _Fixture();
+      await fixture.store.users.create(fixture.user);
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+      final saved = await fixture.feature.finishRegistration(
+        context: fixture.context,
+        user: fixture.user,
+        credential: _registrationCredential(
+          challenge: registration.challenge,
+          keyPair: fixture.keyPair,
+        ),
+      );
+      final endpoint = fixture.feature.endpoints.firstWhere(
+        (value) => value.id == 'webauthn.authenticationOptions',
+      );
+
+      final own = Map<String, dynamic>.from(
+        (await endpoint.invoke(
+              AuthOperationInvocation<Object>(
+                context: fixture.context,
+                user: fixture.user,
+              ),
+              const <String, dynamic>{},
+            ))!
+            as Map,
+      );
+      final other = Map<String, dynamic>.from(
+        (await endpoint.invoke(
+              AuthOperationInvocation<Object>(
+                context: fixture.context,
+                user: fixture.user,
+              ),
+              const <String, dynamic>{'userId': 'another-user'},
+            ))!
+            as Map,
+      );
+
+      expect(
+        own['allowCredentials'],
+        equals(<Map<String, String>>[
+          <String, String>{'type': 'public-key', 'id': saved.credentialId},
+        ]),
+      );
+      expect(other, isNot(contains('allowCredentials')));
+    });
 
     test('registers and authenticates an Ed25519 passkey', () async {
       final fixture = _Fixture();
@@ -1675,6 +1770,247 @@ void main() {
         expect(saved.userId, fixture.user.id);
       },
     );
+
+    test('accepts a leaf signed by an omitted trusted root', () async {
+      final rootKey = _KeyPair.create(privateValue: BigInt.from(3));
+      final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+      final rootCertificate = _androidTestCertificate(
+        subjectKey: rootKey,
+        issuerKey: rootKey,
+        subjectOrganizationalUnit: 'Packed Root',
+        issuerOrganizationalUnit: 'Packed Root',
+        isCertificateAuthority: true,
+      );
+      final leafCertificate = _androidTestCertificate(
+        subjectKey: attestationKey,
+        issuerKey: rootKey,
+        subjectOrganizationalUnit: 'Authenticator Attestation',
+        issuerOrganizationalUnit: 'Packed Root',
+      );
+      final fixture = _Fixture(
+        attestationTrustPolicy: WebAuthnAttestationTrustPolicy.trustedRoots(
+          roots: <List<int>>[rootCertificate],
+        ),
+      );
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+
+      final saved = await fixture.feature.finishRegistration(
+        context: fixture.context,
+        user: fixture.user,
+        credential: _registrationCredential(
+          challenge: registration.challenge,
+          keyPair: fixture.keyPair,
+          attestationFormat: 'packed',
+          packedSigningKey: attestationKey,
+          packedCertificateChain: <Object?>[leafCertificate],
+        ),
+      );
+
+      expect(saved.userId, fixture.user.id);
+    });
+
+    test(
+      'accepts leaf and intermediate signed by an omitted trusted root',
+      () async {
+        final rootKey = _KeyPair.create(privateValue: BigInt.from(3));
+        final intermediateKey = _KeyPair.create(privateValue: BigInt.from(4));
+        final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+        final rootCertificate = _androidTestCertificate(
+          subjectKey: rootKey,
+          issuerKey: rootKey,
+          subjectOrganizationalUnit: 'Packed Root',
+          issuerOrganizationalUnit: 'Packed Root',
+          isCertificateAuthority: true,
+        );
+        final intermediateCertificate = _androidTestCertificate(
+          subjectKey: intermediateKey,
+          issuerKey: rootKey,
+          subjectOrganizationalUnit: 'Packed Intermediate',
+          issuerOrganizationalUnit: 'Packed Root',
+          isCertificateAuthority: true,
+        );
+        final leafCertificate = _androidTestCertificate(
+          subjectKey: attestationKey,
+          issuerKey: intermediateKey,
+          subjectOrganizationalUnit: 'Authenticator Attestation',
+          issuerOrganizationalUnit: 'Packed Intermediate',
+        );
+        final fixture = _Fixture(
+          attestationTrustPolicy: WebAuthnAttestationTrustPolicy.trustedRoots(
+            roots: <List<int>>[rootCertificate],
+          ),
+        );
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+
+        final saved = await fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _registrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            attestationFormat: 'packed',
+            packedSigningKey: attestationKey,
+            packedCertificateChain: <Object?>[
+              leafCertificate,
+              intermediateCertificate,
+            ],
+          ),
+        );
+
+        expect(saved.userId, fixture.user.id);
+      },
+    );
+
+    test('rejects a malformed configured trust anchor generically', () async {
+      final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+      final fixture = _Fixture(
+        attestationTrustPolicy: WebAuthnAttestationTrustPolicy.trustedRoots(
+          roots: const <List<int>>[
+            <int>[0x30, 0x00],
+          ],
+        ),
+      );
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+
+      await expectLater(
+        () => fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _registrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            attestationFormat: 'packed',
+            packedSigningKey: attestationKey,
+            packedCertificateChain: <Object?>[
+              _packedAttestationCertificate(attestationKey),
+            ],
+          ),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'webauthn_attestation_untrusted',
+          ),
+        ),
+      );
+    });
+
+    test('rejects an omitted root with a forged signing key', () async {
+      final trustedRootKey = _KeyPair.create(privateValue: BigInt.from(3));
+      final forgedRootKey = _KeyPair.create(privateValue: BigInt.from(4));
+      final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+      final trustedRoot = _androidTestCertificate(
+        subjectKey: trustedRootKey,
+        issuerKey: trustedRootKey,
+        subjectOrganizationalUnit: 'Packed Root',
+        issuerOrganizationalUnit: 'Packed Root',
+        isCertificateAuthority: true,
+      );
+      final forgedLeaf = _androidTestCertificate(
+        subjectKey: attestationKey,
+        issuerKey: forgedRootKey,
+        subjectOrganizationalUnit: 'Authenticator Attestation',
+        issuerOrganizationalUnit: 'Packed Root',
+      );
+      final fixture = _Fixture(
+        attestationTrustPolicy: WebAuthnAttestationTrustPolicy.trustedRoots(
+          roots: <List<int>>[trustedRoot],
+        ),
+      );
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+
+      await expectLater(
+        () => fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _registrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            attestationFormat: 'packed',
+            packedSigningKey: attestationKey,
+            packedCertificateChain: <Object?>[forgedLeaf],
+          ),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'webauthn_attestation_untrusted',
+          ),
+        ),
+      );
+    });
+
+    test('rejects a non-CA intermediate in the trust path', () async {
+      final rootKey = _KeyPair.create(privateValue: BigInt.from(3));
+      final intermediateKey = _KeyPair.create(privateValue: BigInt.from(4));
+      final attestationKey = _KeyPair.create(privateValue: BigInt.two);
+      final rootCertificate = _androidTestCertificate(
+        subjectKey: rootKey,
+        issuerKey: rootKey,
+        subjectOrganizationalUnit: 'Packed Root',
+        issuerOrganizationalUnit: 'Packed Root',
+        isCertificateAuthority: true,
+      );
+      final intermediateCertificate = _androidTestCertificate(
+        subjectKey: intermediateKey,
+        issuerKey: rootKey,
+        subjectOrganizationalUnit: 'Packed Intermediate',
+        issuerOrganizationalUnit: 'Packed Root',
+      );
+      final leafCertificate = _androidTestCertificate(
+        subjectKey: attestationKey,
+        issuerKey: intermediateKey,
+        subjectOrganizationalUnit: 'Authenticator Attestation',
+        issuerOrganizationalUnit: 'Packed Intermediate',
+      );
+      final fixture = _Fixture(
+        attestationTrustPolicy: WebAuthnAttestationTrustPolicy.trustedRoots(
+          roots: <List<int>>[rootCertificate],
+        ),
+      );
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+
+      await expectLater(
+        () => fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _registrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+            attestationFormat: 'packed',
+            packedSigningKey: attestationKey,
+            packedCertificateChain: <Object?>[
+              leafCertificate,
+              intermediateCertificate,
+            ],
+          ),
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (error) => error.code,
+            'code',
+            'webauthn_attestation_invalid',
+          ),
+        ),
+      );
+    });
 
     test(
       'rejects an untrusted self-signed path with a generic error',

@@ -213,21 +213,23 @@ final class WebAuthnAttestationTrustPolicy {
     this.self = WebAuthnUnprovenAttestationDecision.accept,
     this.certificate = WebAuthnAttestationTrustDecision.downgrade,
     this.evaluateCertificate,
-  });
+  }) : _trustedRoots = const <Uint8List>[];
 
   /// Ordinary-passkey policy with no hardware provenance claim.
   const WebAuthnAttestationTrustPolicy.passkeys()
     : none = WebAuthnUnprovenAttestationDecision.accept,
       self = WebAuthnUnprovenAttestationDecision.accept,
       certificate = WebAuthnAttestationTrustDecision.downgrade,
-      evaluateCertificate = null;
+      evaluateCertificate = null,
+      _trustedRoots = const <Uint8List>[];
 
-  /// Trusts only paths whose final certificate exactly matches a configured
-  /// DER trust anchor.
+  /// Trusts paths that terminate at, or are signed by, a configured DER trust
+  /// anchor.
   ///
-  /// Signature and path-link verification happens before this policy runs.
-  /// Exact anchor matching is intentionally local and deterministic; core does
-  /// not fetch FIDO metadata or certificate roots from the network.
+  /// Signature, issuer, and CA path constraints are verified locally. The
+  /// authenticator may include the anchor in `x5c`, but normal chains that end
+  /// at a leaf or intermediate signed by an omitted anchor are also accepted.
+  /// Core does not fetch FIDO metadata or certificate roots from the network.
   factory WebAuthnAttestationTrustPolicy.trustedRoots({
     required Iterable<List<int>> roots,
     WebAuthnUnprovenAttestationDecision none =
@@ -237,29 +239,36 @@ final class WebAuthnAttestationTrustPolicy {
     WebAuthnAttestationTrustDecision untrusted =
         WebAuthnAttestationTrustDecision.reject,
   }) {
-    final fingerprints = roots.map((root) {
-      if (root.isEmpty || root.length > 16384) {
-        throw ArgumentError.value(root, 'roots', 'must contain bounded DER');
-      }
-      return crypto.sha256.convert(root).toString();
-    }).toSet();
-    if (fingerprints.isEmpty) {
+    final trustedRoots = roots
+        .map((root) {
+          if (root.isEmpty || root.length > 16384) {
+            throw ArgumentError.value(
+              root,
+              'roots',
+              'must contain bounded DER',
+            );
+          }
+          return Uint8List.fromList(root);
+        })
+        .toList(growable: false);
+    if (trustedRoots.isEmpty) {
       throw ArgumentError.value(roots, 'roots', 'must not be empty');
     }
-    return WebAuthnAttestationTrustPolicy(
+    return WebAuthnAttestationTrustPolicy._(
       none: none,
       self: self,
       certificate: untrusted,
-      evaluateCertificate: (metadata) {
-        final path = metadata.certificateTrustPath;
-        if (path.isNotEmpty &&
-            fingerprints.contains(path.last.sha256Fingerprint)) {
-          return WebAuthnAttestationTrustDecision.accept;
-        }
-        return untrusted;
-      },
+      trustedRoots: trustedRoots,
     );
   }
+
+  const WebAuthnAttestationTrustPolicy._({
+    required this.none,
+    required this.self,
+    required this.certificate,
+    required List<Uint8List> trustedRoots,
+  }) : evaluateCertificate = null,
+       _trustedRoots = trustedRoots;
 
   final WebAuthnUnprovenAttestationDecision none;
   final WebAuthnUnprovenAttestationDecision self;
@@ -269,6 +278,8 @@ final class WebAuthnAttestationTrustPolicy {
 
   /// Optional local trust evaluator for certificate-backed attestation.
   final WebAuthnCertificateAttestationTrustEvaluator? evaluateCertificate;
+
+  final List<Uint8List> _trustedRoots;
 }
 
 /// Typed WebAuthn/passkey plugin for `server_auth` runtimes.
@@ -474,10 +485,19 @@ final class WebAuthnPlugin<TContext>
         return <String, dynamic>{'credential': saved.toJson()};
       case 'webauthn.authenticationOptions':
         final userId = _optionalString(request, 'userId');
-        return (await beginAuthentication(
-          context: invocation.context,
-          userId: userId,
-        )).toJson();
+        final authenticatedUser = invocation.user;
+        final options =
+            authenticatedUser != null &&
+                (userId == null || userId == authenticatedUser.id)
+            ? await beginUserBoundAuthentication(
+                context: invocation.context,
+                user: authenticatedUser,
+              )
+            : await beginAuthentication(
+                context: invocation.context,
+                userId: userId,
+              );
+        return options.toJson();
       case 'webauthn.authenticationVerify':
         final credential = _requiredMap(request, 'credential');
         final result = await finishAuthentication(
@@ -745,7 +765,9 @@ final class WebAuthnPlugin<TContext>
               ? WebAuthnAttestationTrustDecision.accept
               : WebAuthnAttestationTrustDecision.reject,
         WebAuthnAttestationKind.certificate =>
-          attestationTrustPolicy.evaluateCertificate == null
+          attestationTrustPolicy._trustedRoots.isNotEmpty
+              ? await _evaluateTrustedRoots(metadata)
+              : attestationTrustPolicy.evaluateCertificate == null
               ? attestationTrustPolicy.certificate
               : await attestationTrustPolicy.evaluateCertificate!(metadata),
       };
@@ -757,10 +779,84 @@ final class WebAuthnPlugin<TContext>
     }
   }
 
-  /// Begins a discoverable or user-bound authentication ceremony.
+  Future<WebAuthnAttestationTrustDecision> _evaluateTrustedRoots(
+    WebAuthnAttestationMetadata metadata,
+  ) async {
+    final encodedPath = metadata.certificateTrustPath;
+    if (encodedPath.isEmpty) return attestationTrustPolicy.certificate;
+
+    final path = encodedPath
+        .map(
+          (certificate) =>
+              _parsePackedCertificate(Uint8List.fromList(certificate.derBytes)),
+        )
+        .toList(growable: false);
+    for (final intermediate in path.skip(1)) {
+      if (!intermediate.isVersion3 ||
+          !intermediate.hasBasicConstraints ||
+          !intermediate.isCertificateAuthority) {
+        return attestationTrustPolicy.certificate;
+      }
+    }
+
+    final finalCertificate = path.last;
+    for (final encodedAnchor in attestationTrustPolicy._trustedRoots) {
+      if (_constantTimeBytesEqual(finalCertificate.derBytes, encodedAnchor)) {
+        return WebAuthnAttestationTrustDecision.accept;
+      }
+
+      _PackedAttestationCertificate anchor;
+      try {
+        anchor = _parsePackedCertificate(encodedAnchor);
+      } on AuthFlowException {
+        continue;
+      }
+      if (!anchor.isVersion3 ||
+          !anchor.hasBasicConstraints ||
+          !anchor.isCertificateAuthority ||
+          !_constantTimeBytesEqual(finalCertificate.issuer, anchor.subject)) {
+        continue;
+      }
+      if (await _verifyCertificateSignature(
+        finalCertificate,
+        anchor.publicKey,
+      )) {
+        return WebAuthnAttestationTrustDecision.accept;
+      }
+    }
+    return attestationTrustPolicy.certificate;
+  }
+
+  /// Begins a discoverable authentication ceremony.
+  ///
+  /// [userId] only binds the challenge to an asserted account identifier. It
+  /// never looks up that account or exposes its credential IDs, so known and
+  /// unknown identifiers produce indistinguishable public options.
   Future<AuthWebAuthnAuthenticationOptions> beginAuthentication({
     required TContext context,
     String? userId,
+    DateTime? now,
+  }) => _beginAuthentication(context: context, userId: userId, now: now);
+
+  /// Begins a credential-filtered ceremony for an already authenticated user.
+  ///
+  /// Routes must source [user] from their authenticated principal rather than
+  /// from request input. This is the only API that returns `allowCredentials`.
+  Future<AuthWebAuthnAuthenticationOptions> beginUserBoundAuthentication({
+    required TContext context,
+    required AuthUser user,
+    DateTime? now,
+  }) => _beginAuthentication(
+    context: context,
+    userId: user.id,
+    credentialLookupUserId: user.id,
+    now: now,
+  );
+
+  Future<AuthWebAuthnAuthenticationOptions> _beginAuthentication({
+    required TContext context,
+    String? userId,
+    String? credentialLookupUserId,
     DateTime? now,
   }) async {
     _ensureConfigured();
@@ -783,9 +879,9 @@ final class WebAuthnPlugin<TContext>
         expiresAt: current.add(challengeTtl),
       ),
     );
-    final credentials = normalizedUserId == null
+    final credentials = credentialLookupUserId == null
         ? const <WebAuthnAuthenticator>[]
-        : await _authenticatorStore.listForUser(normalizedUserId);
+        : await _authenticatorStore.listForUser(credentialLookupUserId);
     final userVerification = provider.authenticationOptions.userVerification;
     _validateUserVerification(userVerification);
     return AuthWebAuthnAuthenticationOptions(
