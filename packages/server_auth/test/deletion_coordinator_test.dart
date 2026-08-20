@@ -110,6 +110,38 @@ void main() {
       },
     );
 
+    test(
+      'tombstone purge retains the user-ID receipt and rejects disabled users',
+      () async {
+        final store = InMemoryAuthStore();
+        final disabled = AuthUser(
+          id: 'disabled-user',
+          attributes: <String, dynamic>{'disabled': true},
+        );
+        await store.users.create(disabled);
+
+        expect(
+          await store.purgeTombstonedUserForAdministration(disabled.id),
+          isFalse,
+        );
+        expect(await store.users.findById(disabled.id), disabled);
+
+        final user = AuthUser(id: 'purged-user', email: 'purged@example.com');
+        await store.users.create(user);
+        expect(await store.tombstoneUserForAdministration(user.id), isTrue);
+        expect(
+          await store.purgeTombstonedUserForAdministration(user.id),
+          isTrue,
+        );
+        await expectLater(
+          store.users.create(
+            AuthUser(id: 'purged-user', email: 'replacement@example.com'),
+          ),
+          throwsStateError,
+        );
+      },
+    );
+
     test('rejects foreign plans before any mutation', () async {
       final first = InMemoryAuthStore();
       final second = InMemoryAuthStore();

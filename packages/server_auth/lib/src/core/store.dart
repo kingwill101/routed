@@ -744,7 +744,8 @@ class InMemoryAuthStore
   Future<bool> purgeTombstonedUserForAdministration(String userId) async {
     final id = userId.trim();
     final user = await users.findById(id);
-    if (user == null || !authUserIsDisabled(user)) return false;
+    if (user == null || user.attributes['deletedAt'] is! String) return false;
+    _users.recordHardDeletion(id);
     _users.delete(id);
     await _accountStates.delete(id);
     return true;
