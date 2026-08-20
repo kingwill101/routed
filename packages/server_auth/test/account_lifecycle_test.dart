@@ -1011,6 +1011,7 @@ void main() {
       final now = DateTime.now().toUtc();
       await codeStore.create(
         OAuthAuthorizationCode(
+          authorizationId: 'authorization-1',
           codeHash: hashOpaqueToken('auth-code-1'),
           clientId: 'c1',
           userId: 'u1',
@@ -1043,6 +1044,7 @@ void main() {
       final now = DateTime.now().toUtc();
       await codeStore.create(
         OAuthAuthorizationCode(
+          authorizationId: 'authorization-expired',
           codeHash: hashOpaqueToken('expired-code'),
           clientId: 'c1',
           userId: 'u1',

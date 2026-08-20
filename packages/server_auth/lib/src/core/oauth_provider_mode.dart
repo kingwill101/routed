@@ -39,8 +39,7 @@ final class OAuthProviderModePlugin<TContext>
         AuthOAuthTokenEndpointHost<TContext> {
   OAuthProviderModePlugin({
     required this.clientStore,
-    required this.authorizationCodeStore,
-    required this.accessTokenStore,
+    required this.authorizationCodeExchangeStore,
     this.options = const OAuthProviderModeOptions(),
   }) {
     if (options.oidc != null && !options.supportedScopes.contains('openid')) {
@@ -55,11 +54,19 @@ final class OAuthProviderModePlugin<TContext>
   /// Store for OAuth client registrations.
   final OAuthClientStore clientStore;
 
-  /// Store for authorization codes.
-  final OAuthAuthorizationCodeStore authorizationCodeStore;
+  /// Authoritative exchange capability for authorization-code grants.
+  ///
+  /// The capability owns the code and token stores so provider mode cannot
+  /// accidentally compose a split, non-atomic exchange topology.
+  final OAuthAuthorizationCodeExchangeStore authorizationCodeExchangeStore;
 
-  /// Store for access tokens.
-  final OAuthAccessTokenStore accessTokenStore;
+  /// Store for authorization codes owned by [authorizationCodeExchangeStore].
+  OAuthAuthorizationCodeStore get authorizationCodeStore =>
+      authorizationCodeExchangeStore.authorizationCodeStore;
+
+  /// Store for access tokens owned by [authorizationCodeExchangeStore].
+  OAuthAccessTokenStore get accessTokenStore =>
+      authorizationCodeExchangeStore.accessTokenStore;
 
   /// Configuration options.
   final OAuthProviderModeOptions options;
@@ -124,6 +131,14 @@ final class OAuthProviderModePlugin<TContext>
     _deletionDomain = (host as AuthUserDeletionCoordinatorHost)
         .userDeletionCoordinator
         .domain;
+    if (authorizationCodeExchangeStore
+            is InMemoryOAuthAuthorizationCodeExchangeStore &&
+        _deletionDomain is! AuthInMemoryUserDeletionDomain) {
+      throw StateError(
+        'The in-memory OAuth exchange store cannot be used with a durable '
+        'auth persistence domain.',
+      );
+    }
   }
 
   @override
@@ -205,7 +220,7 @@ final class OAuthProviderModePlugin<TContext>
       })
       .toList(growable: false);
 
-  static AuthOperationSemantics _operationSemantics(String operationId) {
+  AuthOperationSemantics _operationSemantics(String operationId) {
     switch (operationId) {
       case 'oauth_provider.userinfo':
       case 'oauth_provider.discovery':
@@ -235,6 +250,18 @@ final class OAuthProviderModePlugin<TContext>
           replaySafety: AuthMutationReplaySafety.singleUse,
         );
       case 'oauth_provider.token':
+        if (_authorizationCodeIsOnlyTokenGrant) {
+          return const AuthOperationSemantics.mutation(
+            persistence: AuthMutationPersistence.durable(
+              atomicity: AuthMutationAtomicity.atomic,
+              reference: AuthPersistenceOperationReference(
+                schemaId: 'oauth_provider_mode',
+                atomicOperationId: 'exchangeCode',
+              ),
+            ),
+            replaySafety: AuthMutationReplaySafety.singleUse,
+          );
+        }
         return const AuthOperationSemantics.mutation(
           persistence: AuthMutationPersistence.durable(
             atomicity: AuthMutationAtomicity.nonAtomic,
@@ -247,6 +274,11 @@ final class OAuthProviderModePlugin<TContext>
     }
     throw StateError('Unknown OAuth provider operation $operationId');
   }
+
+  bool get _authorizationCodeIsOnlyTokenGrant =>
+      _grantHandlers.isEmpty &&
+      options.supportedGrantTypes.length == 1 &&
+      options.supportedGrantTypes.single == 'authorization_code';
 
   @override
   Iterable<AuthClientOperationDescriptor> get clientOperations => endpoints.map(
@@ -319,6 +351,7 @@ final class OAuthProviderModePlugin<TContext>
         AuthEntityDescriptor(
           id: 'oauth_authorization_code',
           fields: [
+            AuthFieldDescriptor(name: 'authorizationId', kind: 'id'),
             AuthFieldDescriptor(name: 'codeHash', kind: 'secret_digest'),
             AuthFieldDescriptor(name: 'clientId', kind: 'id'),
             AuthFieldDescriptor(name: 'userId', kind: 'id'),
@@ -334,9 +367,14 @@ final class OAuthProviderModePlugin<TContext>
             AuthFieldDescriptor(name: 'createdAt', kind: 'datetime'),
           ],
           indexes: [
+            ['authorizationId'],
             ['clientId'],
             ['userId'],
             ['expiresAt'],
+          ],
+          uniqueConstraints: [
+            ['authorizationId'],
+            ['codeHash'],
           ],
         ),
         AuthEntityDescriptor(
@@ -352,8 +390,10 @@ final class OAuthProviderModePlugin<TContext>
               kind: 'nullable_secret_digest',
             ),
             AuthFieldDescriptor(name: 'issuedAt', kind: 'datetime'),
+            AuthFieldDescriptor(name: 'authorizationId', kind: 'nullable_id'),
           ],
           indexes: [
+            ['authorizationId'],
             ['clientId'],
             ['userId'],
             ['expiresAt'],
@@ -464,6 +504,7 @@ final class OAuthProviderModePlugin<TContext>
     final code = secureRandomToken();
     final now = DateTime.now().toUtc();
     final authCode = OAuthAuthorizationCode(
+      authorizationId: secureRandomToken(),
       codeHash: hashOpaqueToken(code),
       clientId: clientId,
       userId: user.id,
@@ -557,30 +598,38 @@ final class OAuthProviderModePlugin<TContext>
       throw AuthFlowException('invalid_request');
     }
 
-    // Validate client
-    final client = await clientStore.findById(clientId);
-    if (client == null || !client.enabled) {
-      throw AuthFlowException('invalid_client');
-    }
-
-    // Atomically consume the authorization code and all of its bindings. A
-    // failed binding check still consumes a matching code to prevent retries
-    // with captured credentials.
-    final authCode = await authorizationCodeStore.consume(
+    final now = DateTime.now().toUtc();
+    final request = OAuthAuthorizationCodeExchangeRequest(
       codeHash: hashOpaqueToken(code),
       clientId: clientId,
       redirectUri: redirectUri,
       codeVerifier: codeVerifier,
+      now: now,
     );
-    if (authCode == null) {
+    final preparation = await authorizationCodeExchangeStore.prepare(request);
+    final authCode = preparation.authorization;
+    if (preparation.status != OAuthAuthorizationCodePreparationStatus.ready ||
+        authCode == null) {
       throw AuthFlowException('invalid_grant');
     }
 
+    // Eligibility failures happen before code consumption. The atomic commit
+    // below revalidates every code binding, so concurrent exchanges still have
+    // one winner and a disabled account does not create a burned-code replay
+    // window. Tokens remain inactive if a client or account is disabled after
+    // commit because introspection and protected-resource lookups recheck both.
+    final client = await clientStore.findById(clientId);
+    if (client == null ||
+        !client.enabled ||
+        !client.grantTypes.contains('authorization_code')) {
+      throw AuthFlowException('invalid_grant');
+    }
     final user = await _activeUser(authCode.userId);
     if (user == null) throw AuthFlowException('invalid_grant');
 
-    // Issue tokens
-    return _issueTokens(
+    return _commitAuthorizationCodeTokens(
+      request: request,
+      authorization: authCode,
       clientId: clientId,
       userId: authCode.userId,
       scope: authCode.scope,
@@ -588,6 +637,71 @@ final class OAuthProviderModePlugin<TContext>
       oidcUser: user,
       issueRefreshToken: client.grantTypes.contains('refresh_token'),
     );
+  }
+
+  Future<Map<String, dynamic>> _commitAuthorizationCodeTokens({
+    required OAuthAuthorizationCodeExchangeRequest request,
+    required OAuthAuthorizationCode authorization,
+    required String clientId,
+    required String userId,
+    required String scope,
+    required AuthUser oidcUser,
+    required bool issueRefreshToken,
+    String? nonce,
+  }) async {
+    final now = DateTime.now().toUtc();
+    final accessTokenValue = secureRandomToken();
+    final refreshTokenValue = secureRandomToken();
+    final hasRefreshToken =
+        issueRefreshToken && options.refreshTokenLifetime > Duration.zero;
+    final preparedToken = OAuthAccessToken(
+      tokenHash: hashOpaqueToken(accessTokenValue),
+      clientId: clientId,
+      userId: userId,
+      scope: scope,
+      expiresAt: now.add(options.accessTokenLifetime),
+      refreshTokenHash: hasRefreshToken
+          ? hashOpaqueToken(refreshTokenValue)
+          : null,
+      refreshTokenExpiresAt: hasRefreshToken
+          ? now.add(options.refreshTokenLifetime)
+          : null,
+      issuedAt: now,
+      authorizationId: authorization.authorizationId,
+    );
+    final idToken = _containsScope(scope, 'openid')
+        ? _issueIdToken(
+            clientId: clientId,
+            user: oidcUser,
+            scope: scope,
+            nonce: nonce,
+          )
+        : null;
+
+    final result = await authorizationCodeExchangeStore.commit(
+      request: OAuthAuthorizationCodeExchangeRequest(
+        codeHash: request.codeHash,
+        clientId: request.clientId,
+        redirectUri: request.redirectUri,
+        codeVerifier: request.codeVerifier,
+        now: DateTime.now().toUtc(),
+      ),
+      expectedAuthorizationId: authorization.authorizationId,
+      preparedToken: preparedToken,
+    );
+    if (result.status != OAuthAuthorizationCodeExchangeStatus.committed) {
+      // A committed exchange cannot be replayed because raw token values were
+      // delivery-only and are intentionally absent from persistence.
+      throw AuthFlowException('invalid_grant');
+    }
+    return <String, dynamic>{
+      'access_token': accessTokenValue,
+      'token_type': 'Bearer',
+      'expires_in': options.accessTokenLifetime.inSeconds,
+      if (hasRefreshToken) 'refresh_token': refreshTokenValue,
+      'scope': scope,
+      'id_token': ?idToken,
+    };
   }
 
   Future<Map<String, dynamic>> _handleClientCredentialsGrant(
@@ -943,7 +1057,11 @@ final class OAuthProviderModePlugin<TContext>
 
   Future<AuthUser?> _activeUser(String userId) async {
     final user = await _store.users.findById(userId);
-    if (user == null || user.attributes['deletedAt'] != null) return null;
+    if (user == null ||
+        authUserIsDisabled(user) ||
+        user.attributes['deletedAt'] != null) {
+      return null;
+    }
     final states = _store is AuthAccountStateStore
         ? _store as AuthAccountStateStore
         : null;

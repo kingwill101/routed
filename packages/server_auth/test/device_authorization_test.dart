@@ -758,8 +758,11 @@ void main() {
       );
       final provider = OAuthProviderModePlugin<Object>(
         clientStore: InMemoryOAuthClientStore(),
-        authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
-        accessTokenStore: InMemoryOAuthAccessTokenStore(),
+        authorizationCodeExchangeStore:
+            InMemoryOAuthAuthorizationCodeExchangeStore(
+          authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+          accessTokenStore: InMemoryOAuthAccessTokenStore(),
+        ),
       );
       final runtime = AuthRuntime<Object>(
         options: AuthOptions<Object>(
@@ -811,8 +814,11 @@ void main() {
       );
       final authorization = OAuthProviderModePlugin<Object>(
         clientStore: InMemoryOAuthClientStore(),
-        authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
-        accessTokenStore: InMemoryOAuthAccessTokenStore(),
+        authorizationCodeExchangeStore:
+            InMemoryOAuthAuthorizationCodeExchangeStore(
+          authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+          accessTokenStore: InMemoryOAuthAccessTokenStore(),
+        ),
       );
       final runtime = AuthRuntime<Object>(
         options: AuthOptions<Object>(

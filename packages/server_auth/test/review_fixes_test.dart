@@ -101,8 +101,11 @@ void main() {
       codeStore = InMemoryOAuthAuthorizationCodeStore();
       plugin = OAuthProviderModePlugin<Object>(
         clientStore: clientStore,
-        authorizationCodeStore: codeStore,
-        accessTokenStore: InMemoryOAuthAccessTokenStore(),
+        authorizationCodeExchangeStore:
+            InMemoryOAuthAuthorizationCodeExchangeStore(
+          authorizationCodeStore: codeStore,
+          accessTokenStore: InMemoryOAuthAccessTokenStore(),
+        ),
         options: const OAuthProviderModeOptions(
           supportedScopes: ['read', 'profile', 'email'],
           requirePkce: false,
@@ -245,8 +248,11 @@ void main() {
       final clientStore = InMemoryOAuthClientStore();
       plugin = OAuthProviderModePlugin<Object>(
         clientStore: clientStore,
-        authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
-        accessTokenStore: InMemoryOAuthAccessTokenStore(),
+        authorizationCodeExchangeStore:
+            InMemoryOAuthAuthorizationCodeExchangeStore(
+          authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+          accessTokenStore: InMemoryOAuthAccessTokenStore(),
+        ),
         options: const OAuthProviderModeOptions(
           supportedScopes: ['api:read'],
           accessTokenLifetime: Duration(milliseconds: 1),
@@ -367,8 +373,11 @@ void main() {
       );
       final limited = OAuthProviderModePlugin<Object>(
         clientStore: clientStore,
-        authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
-        accessTokenStore: InMemoryOAuthAccessTokenStore(),
+        authorizationCodeExchangeStore:
+            InMemoryOAuthAuthorizationCodeExchangeStore(
+          authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+          accessTokenStore: InMemoryOAuthAccessTokenStore(),
+        ),
         options: const OAuthProviderModeOptions(
           supportedScopes: ['api:read'],
           maxRefreshTokenUses: 1,
@@ -431,8 +440,11 @@ void main() {
       );
       final plugin = OAuthProviderModePlugin<Object>(
         clientStore: clientStore,
-        authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
-        accessTokenStore: InMemoryOAuthAccessTokenStore(),
+        authorizationCodeExchangeStore:
+            InMemoryOAuthAuthorizationCodeExchangeStore(
+          authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+          accessTokenStore: InMemoryOAuthAccessTokenStore(),
+        ),
         options: const OAuthProviderModeOptions(
           authorizationEndpoint: '/identity/authorize',
           tokenEndpoint: '/identity/token',
@@ -545,8 +557,11 @@ void main() {
       );
       plugin = OAuthProviderModePlugin<Object>(
         clientStore: clientStore,
-        authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
-        accessTokenStore: tokenStore,
+        authorizationCodeExchangeStore:
+            InMemoryOAuthAuthorizationCodeExchangeStore(
+          authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+          accessTokenStore: tokenStore,
+        ),
         options: const OAuthProviderModeOptions(
           userInfoClaimsByScope: {
             'profile': ['custom', 'sub', 'email'],

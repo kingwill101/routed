@@ -49,8 +49,11 @@ void main() {
       );
       plugin = OAuthProviderModePlugin<Object>(
         clientStore: clientStore,
-        authorizationCodeStore: codeStore,
-        accessTokenStore: tokenStore,
+        authorizationCodeExchangeStore:
+            InMemoryOAuthAuthorizationCodeExchangeStore(
+              authorizationCodeStore: codeStore,
+              accessTokenStore: tokenStore,
+            ),
         options: OAuthProviderModeOptions(oidc: oidc),
       )..configure(AuthServerPluginContext<Object>(store: authStore));
     });
@@ -211,6 +214,93 @@ void main() {
         ),
         _flow('invalid_grant'),
       );
+      await authStore.enable('user-1');
+      final response =
+          await _endpoint(plugin, 'oauth_provider.token').invoke(
+                AuthOperationInvocation<Object>(context: Object(), user: null),
+                request,
+              )
+              as Map<String, dynamic>;
+      expect(response['access_token'], isNotEmpty);
+    });
+
+    test('disabled clients do not burn an otherwise valid code', () async {
+      final redirect =
+          await _endpoint(plugin, 'oauth_provider.authorize').invoke(
+                AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: AuthUser(id: 'user-1'),
+                ),
+                const <String, dynamic>{
+                  'client_id': 'client-1',
+                  'redirect_uri': 'https://client.example.test/callback',
+                  'response_type': 'code',
+                  'scope': 'profile',
+                  'code_challenge': _challenge,
+                  'code_challenge_method': 'S256',
+                },
+              )
+              as AuthEndpointRedirect;
+      final client = (await clientStore.findById('client-1'))!;
+      await clientStore.update(client.copyWith(enabled: false));
+      final request = <String, dynamic>{
+        'grant_type': 'authorization_code',
+        'client_id': 'client-1',
+        'client_secret': 'secret',
+        'redirect_uri': 'https://client.example.test/callback',
+        'code': redirect.location.queryParameters['code'],
+        'code_verifier': _verifier,
+      };
+
+      await expectLater(
+        _endpoint(plugin, 'oauth_provider.token').invoke(
+          AuthOperationInvocation<Object>(context: Object(), user: null),
+          request,
+        ),
+        _flow('invalid_client'),
+      );
+      await clientStore.update(client.copyWith(enabled: true));
+      final response =
+          await _endpoint(plugin, 'oauth_provider.token').invoke(
+                AuthOperationInvocation<Object>(context: Object(), user: null),
+                request,
+              )
+              as Map<String, dynamic>;
+      expect(response['access_token'], isNotEmpty);
+    });
+
+    test('locked accounts do not burn an otherwise valid code', () async {
+      final redirect =
+          await _endpoint(plugin, 'oauth_provider.authorize').invoke(
+                AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: AuthUser(id: 'user-1'),
+                ),
+                const <String, dynamic>{
+                  'client_id': 'client-1',
+                  'redirect_uri': 'https://client.example.test/callback',
+                  'response_type': 'code',
+                  'scope': 'profile',
+                  'code_challenge': _challenge,
+                  'code_challenge_method': 'S256',
+                },
+              )
+              as AuthEndpointRedirect;
+      await authStore.upsert(
+        AuthAccountState(
+          userId: 'user-1',
+          lockedUntil: DateTime.now().toUtc().add(const Duration(minutes: 5)),
+        ),
+      );
+      final request = <String, dynamic>{
+        'grant_type': 'authorization_code',
+        'client_id': 'client-1',
+        'client_secret': 'secret',
+        'redirect_uri': 'https://client.example.test/callback',
+        'code': redirect.location.queryParameters['code'],
+        'code_verifier': _verifier,
+      };
+
       await expectLater(
         _endpoint(plugin, 'oauth_provider.token').invoke(
           AuthOperationInvocation<Object>(context: Object(), user: null),
@@ -218,6 +308,14 @@ void main() {
         ),
         _flow('invalid_grant'),
       );
+      await authStore.unlock('user-1');
+      final response =
+          await _endpoint(plugin, 'oauth_provider.token').invoke(
+                AuthOperationInvocation<Object>(context: Object(), user: null),
+                request,
+              )
+              as Map<String, dynamic>;
+      expect(response['access_token'], isNotEmpty);
     });
 
     test('authorization endpoint rejects plain PKCE', () async {
@@ -242,6 +340,41 @@ void main() {
   });
 
   group('OAuthProviderModePlugin security boundaries', () {
+    test(
+      'declares atomic single-use semantics only for a code-only endpoint',
+      () {
+        OAuthProviderModePlugin<Object> provider(List<String> grants) =>
+            OAuthProviderModePlugin<Object>(
+              clientStore: InMemoryOAuthClientStore(),
+              authorizationCodeExchangeStore:
+                  InMemoryOAuthAuthorizationCodeExchangeStore(),
+              options: OAuthProviderModeOptions(supportedGrantTypes: grants),
+            );
+
+        final codeOnly =
+            _endpoint(
+                  provider(const ['authorization_code']),
+                  'oauth_provider.token',
+                ).semantics
+                as AuthMutationOperationSemantics;
+        expect(codeOnly.persistence.atomicity, AuthMutationAtomicity.atomic);
+        expect(
+          codeOnly.persistence.reference?.atomicOperationId,
+          'exchangeCode',
+        );
+        expect(codeOnly.replaySafety, AuthMutationReplaySafety.singleUse);
+
+        final mixed =
+            _endpoint(
+                  provider(const ['authorization_code', 'client_credentials']),
+                  'oauth_provider.token',
+                ).semantics
+                as AuthMutationOperationSemantics;
+        expect(mixed.persistence.atomicity, AuthMutationAtomicity.nonAtomic);
+        expect(mixed.replaySafety, AuthMutationReplaySafety.unguarded);
+      },
+    );
+
     test('OAuth-only mode neither advertises nor grants openid', () async {
       final clients = InMemoryOAuthClientStore();
       await clients.create(
@@ -255,8 +388,11 @@ void main() {
       );
       final plugin = OAuthProviderModePlugin<Object>(
         clientStore: clients,
-        authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
-        accessTokenStore: InMemoryOAuthAccessTokenStore(),
+        authorizationCodeExchangeStore:
+            InMemoryOAuthAuthorizationCodeExchangeStore(
+              authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+              accessTokenStore: InMemoryOAuthAccessTokenStore(),
+            ),
         options: const OAuthProviderModeOptions(
           supportedScopes: ['openid', 'api:read'],
         ),
@@ -304,8 +440,11 @@ void main() {
       );
       final plugin = OAuthProviderModePlugin<Object>(
         clientStore: clients,
-        authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
-        accessTokenStore: InMemoryOAuthAccessTokenStore(),
+        authorizationCodeExchangeStore:
+            InMemoryOAuthAuthorizationCodeExchangeStore(
+              authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+              accessTokenStore: InMemoryOAuthAccessTokenStore(),
+            ),
         options: OAuthProviderModeOptions(
           oidc: OAuthOidcConfiguration(
             issuer: Uri.parse('https://issuer.example.test'),
@@ -335,6 +474,7 @@ void main() {
         final store = InMemoryOAuthAuthorizationCodeStore();
         final now = DateTime.now().toUtc();
         final record = OAuthAuthorizationCode(
+          authorizationId: 'authorization-binding-test',
           codeHash: hashOpaqueToken('raw-code'),
           clientId: 'client-1',
           userId: 'user-1',
@@ -389,12 +529,16 @@ void main() {
       final tokenStore = InMemoryOAuthAccessTokenStore();
       final plugin = OAuthProviderModePlugin<Object>(
         clientStore: InMemoryOAuthClientStore(),
-        authorizationCodeStore: codeStore,
-        accessTokenStore: tokenStore,
+        authorizationCodeExchangeStore:
+            InMemoryOAuthAuthorizationCodeExchangeStore(
+              authorizationCodeStore: codeStore,
+              accessTokenStore: tokenStore,
+            ),
       );
       final now = DateTime.now().toUtc();
       await codeStore.create(
         OAuthAuthorizationCode(
+          authorizationId: 'authorization-delete-user',
           codeHash: hashOpaqueToken('pending-code'),
           clientId: 'client-1',
           userId: 'user-1',
@@ -434,14 +578,18 @@ void main() {
       final tokenStore = InMemoryOAuthAccessTokenStore();
       final plugin = OAuthProviderModePlugin<Object>(
         clientStore: InMemoryOAuthClientStore(),
-        authorizationCodeStore: codeStore,
-        accessTokenStore: tokenStore,
+        authorizationCodeExchangeStore:
+            InMemoryOAuthAuthorizationCodeExchangeStore(
+              authorizationCodeStore: codeStore,
+              accessTokenStore: tokenStore,
+            ),
       );
       final now = DateTime.now().toUtc();
       await core.users.create(AuthUser(id: 'user-1'));
       plugin.configure(AuthServerPluginContext<Object>(store: core));
       await codeStore.create(
         OAuthAuthorizationCode(
+          authorizationId: 'authorization-delete-client',
           codeHash: hashOpaqueToken('pending-code'),
           clientId: 'client-1',
           userId: 'user-1',

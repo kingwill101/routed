@@ -39,6 +39,22 @@ void main() {
     }
   });
 
+  test('D1 rejects the in-memory OAuth provider exchange topology', () async {
+    final database = FakeCloudflareD1Database();
+    addTearDown(database.close);
+    final store = await CloudflareD1AuthStore.open(database);
+    final provider = OAuthProviderModePlugin<Object>(
+      clientStore: InMemoryOAuthClientStore(),
+      authorizationCodeExchangeStore:
+          InMemoryOAuthAuthorizationCodeExchangeStore(),
+    );
+
+    expect(
+      () => provider.configure(AuthServerPluginContext<Object>(store: store)),
+      throwsStateError,
+    );
+  });
+
   test('D1 unlink excludes the exact provider and account pair', () async {
     final database = FakeCloudflareD1Database();
     addTearDown(database.close);

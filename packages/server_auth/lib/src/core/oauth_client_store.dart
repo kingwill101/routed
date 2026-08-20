@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+
 import 'deletion_transaction.dart';
 import 'oauth_provider_models.dart';
 import 'tokens.dart' show constantTimeStringEquals, hashOpaqueToken;
@@ -85,6 +86,106 @@ abstract interface class OAuthAccessTokenStore {
   FutureOr<int> deleteExpired({DateTime? now});
 }
 
+/// Digest-only bindings presented during an authorization-code exchange.
+final class OAuthAuthorizationCodeExchangeRequest {
+  const OAuthAuthorizationCodeExchangeRequest({
+    required this.codeHash,
+    required this.clientId,
+    required this.redirectUri,
+    required this.codeVerifier,
+    required this.now,
+  });
+
+  /// Digest of the one-time authorization code.
+  final String codeHash;
+  final String clientId;
+  final String redirectUri;
+  final String? codeVerifier;
+  final DateTime now;
+}
+
+/// Result of checking exchange bindings without consuming a valid code.
+///
+/// A store must consume a matching code digest when any supplied binding is
+/// wrong. A ready result remains subject to the atomic [commit] comparison.
+enum OAuthAuthorizationCodePreparationStatus { ready, invalidGrant }
+
+final class OAuthAuthorizationCodePreparation {
+  const OAuthAuthorizationCodePreparation._(this.status, this.authorization);
+
+  const OAuthAuthorizationCodePreparation.ready(
+    OAuthAuthorizationCode authorization,
+  ) : this._(OAuthAuthorizationCodePreparationStatus.ready, authorization);
+
+  const OAuthAuthorizationCodePreparation.invalidGrant()
+    : this._(OAuthAuthorizationCodePreparationStatus.invalidGrant, null);
+
+  final OAuthAuthorizationCodePreparationStatus status;
+  final OAuthAuthorizationCode? authorization;
+}
+
+/// Result of the backend-owned code-consumption and token-persistence commit.
+enum OAuthAuthorizationCodeExchangeStatus {
+  committed,
+  invalidGrant,
+  alreadyCommitted,
+}
+
+/// Atomic authorization-code exchange result.
+///
+/// No result contains raw code or token material. [alreadyCommitted] tells the
+/// caller that a previous request won, but does not promise response replay.
+final class OAuthAuthorizationCodeExchangeResult {
+  const OAuthAuthorizationCodeExchangeResult(this.status);
+
+  final OAuthAuthorizationCodeExchangeStatus status;
+}
+
+/// Authoritative persistence capability for authorization-code grants.
+///
+/// Implementations own the authorization-code and access-token stores used by
+/// provider mode. [commit] must atomically:
+///
+/// 1. revalidate the code digest, authorization ID, client, redirect URI,
+///    S256 verifier, and expiry;
+/// 2. consume the code; and
+/// 3. persist [preparedToken], which contains digests only.
+///
+/// Durable implementations must use a backend transaction implemented by the
+/// adapter. Callback-style transactions are intentionally not part of this
+/// API. Raw authorization codes and raw access or refresh tokens must never be
+/// persisted, logged, serialized, or included in errors.
+abstract interface class OAuthAuthorizationCodeExchangeStore {
+  OAuthAuthorizationCodeStore get authorizationCodeStore;
+  OAuthAccessTokenStore get accessTokenStore;
+
+  /// Checks bindings and returns the persisted authorization needed to prepare
+  /// token digests and an OIDC ID token before commit.
+  ///
+  /// A code with a matching digest but wrong binding is consumed. A correctly
+  /// bound code is not consumed until [commit], allowing account and client
+  /// eligibility checks to fail without burning it.
+  FutureOr<OAuthAuthorizationCodePreparation> prepare(
+    OAuthAuthorizationCodeExchangeRequest request,
+  );
+
+  /// Atomically consumes [expectedAuthorizationId] and saves [preparedToken].
+  FutureOr<OAuthAuthorizationCodeExchangeResult> commit({
+    required OAuthAuthorizationCodeExchangeRequest request,
+    required String expectedAuthorizationId,
+    required OAuthAccessToken preparedToken,
+  });
+}
+
+/// Fault points exposed by the in-memory adapter for rollback tests.
+enum InMemoryOAuthCodeExchangeFaultPoint {
+  afterCodeConsumption,
+  afterTokenSave,
+}
+
+typedef InMemoryOAuthCodeExchangeFaultInjector =
+    FutureOr<void> Function(InMemoryOAuthCodeExchangeFaultPoint point);
+
 /// In-memory OAuth client store for tests and development.
 class InMemoryOAuthClientStore implements OAuthClientStore {
   final Map<String, OAuthClient> _clients = {};
@@ -157,7 +258,10 @@ class InMemoryOAuthAuthorizationCodeStore
     _validateAuthorizationCode(code);
     final now = DateTime.now().toUtc();
     _codes.removeWhere((_, value) => !value.isValid(now: now));
-    if (_codes.containsKey(code.codeHash)) {
+    if (_codes.containsKey(code.codeHash) ||
+        _codes.values.any(
+          (existing) => existing.authorizationId == code.authorizationId,
+        )) {
       throw StateError('OAuth authorization code already exists');
     }
     while (_codes.length >= maxEntries) {
@@ -232,6 +336,13 @@ class InMemoryOAuthAccessTokenStore
 
   @override
   Future<void> save(OAuthAccessToken token) async {
+    if (_tokens.containsKey(token.tokenHash) ||
+        token.authorizationId != null &&
+            _tokens.values.any(
+              (existing) => existing.authorizationId == token.authorizationId,
+            )) {
+      throw StateError('OAuth access token already exists');
+    }
     _tokens[token.tokenHash] = token;
   }
 
@@ -337,8 +448,122 @@ class InMemoryOAuthAccessTokenStore
   }
 }
 
+/// In-memory atomic authorization-code exchange store.
+///
+/// This adapter is intended for tests and local development. It serializes
+/// exchanges and restores both maps when any fault occurs between code
+/// consumption and token persistence.
+final class InMemoryOAuthAuthorizationCodeExchangeStore
+    implements OAuthAuthorizationCodeExchangeStore {
+  InMemoryOAuthAuthorizationCodeExchangeStore({
+    InMemoryOAuthAuthorizationCodeStore? authorizationCodeStore,
+    InMemoryOAuthAccessTokenStore? accessTokenStore,
+    this.faultInjector,
+  }) : authorizationCodeStore =
+           authorizationCodeStore ?? InMemoryOAuthAuthorizationCodeStore(),
+       accessTokenStore = accessTokenStore ?? InMemoryOAuthAccessTokenStore();
+
+  @override
+  final InMemoryOAuthAuthorizationCodeStore authorizationCodeStore;
+
+  @override
+  final InMemoryOAuthAccessTokenStore accessTokenStore;
+
+  final InMemoryOAuthCodeExchangeFaultInjector? faultInjector;
+  Future<void> _tail = Future<void>.value();
+
+  @override
+  Future<OAuthAuthorizationCodePreparation> prepare(
+    OAuthAuthorizationCodeExchangeRequest request,
+  ) => _serialized(() async {
+    final code = authorizationCodeStore._codes[request.codeHash.trim()];
+    if (code == null) {
+      return const OAuthAuthorizationCodePreparation.invalidGrant();
+    }
+    if (!code.isValid(now: request.now)) {
+      authorizationCodeStore._codes.remove(code.codeHash);
+      return const OAuthAuthorizationCodePreparation.invalidGrant();
+    }
+    if (!_bindingsMatch(code, request)) {
+      authorizationCodeStore._codes.remove(code.codeHash);
+      return const OAuthAuthorizationCodePreparation.invalidGrant();
+    }
+    return OAuthAuthorizationCodePreparation.ready(code);
+  });
+
+  @override
+  Future<OAuthAuthorizationCodeExchangeResult> commit({
+    required OAuthAuthorizationCodeExchangeRequest request,
+    required String expectedAuthorizationId,
+    required OAuthAccessToken preparedToken,
+  }) => _serialized(() async {
+    final existingToken = accessTokenStore._tokens.values
+        .where(
+          (token) => token.authorizationId == expectedAuthorizationId.trim(),
+        )
+        .firstOrNull;
+    if (existingToken != null) {
+      return const OAuthAuthorizationCodeExchangeResult(
+        OAuthAuthorizationCodeExchangeStatus.alreadyCommitted,
+      );
+    }
+
+    final codeCheckpoint = Map<String, OAuthAuthorizationCode>.of(
+      authorizationCodeStore._codes,
+    );
+    final tokenCheckpoint = Map<String, OAuthAccessToken>.of(
+      accessTokenStore._tokens,
+    );
+    try {
+      final code = authorizationCodeStore._codes.remove(
+        request.codeHash.trim(),
+      );
+      if (code == null ||
+          !code.isValid(now: request.now) ||
+          code.authorizationId != expectedAuthorizationId.trim() ||
+          !_bindingsMatch(code, request)) {
+        return const OAuthAuthorizationCodeExchangeResult(
+          OAuthAuthorizationCodeExchangeStatus.invalidGrant,
+        );
+      }
+      _validatePreparedToken(code, preparedToken, request.now);
+      await faultInjector?.call(
+        InMemoryOAuthCodeExchangeFaultPoint.afterCodeConsumption,
+      );
+      await accessTokenStore.save(preparedToken);
+      await faultInjector?.call(
+        InMemoryOAuthCodeExchangeFaultPoint.afterTokenSave,
+      );
+      return const OAuthAuthorizationCodeExchangeResult(
+        OAuthAuthorizationCodeExchangeStatus.committed,
+      );
+    } catch (_) {
+      authorizationCodeStore._codes
+        ..clear()
+        ..addAll(codeCheckpoint);
+      accessTokenStore._tokens
+        ..clear()
+        ..addAll(tokenCheckpoint);
+      rethrow;
+    }
+  });
+
+  Future<T> _serialized<T>(Future<T> Function() operation) async {
+    final previous = _tail;
+    final release = Completer<void>();
+    _tail = release.future;
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release.complete();
+    }
+  }
+}
+
 void _validateAuthorizationCode(OAuthAuthorizationCode code) {
-  if (code.codeHash.trim().isEmpty ||
+  if (code.authorizationId.trim().isEmpty ||
+      code.codeHash.trim().isEmpty ||
       code.clientId.trim().isEmpty ||
       code.userId.trim().isEmpty ||
       code.redirectUri.trim().isEmpty) {
@@ -360,5 +585,38 @@ void _validateAuthorizationCode(OAuthAuthorizationCode code) {
   final createdAt = code.createdAt;
   if (createdAt != null && !code.expiresAt.toUtc().isAfter(createdAt.toUtc())) {
     throw ArgumentError('OAuth authorization code must not be expired');
+  }
+}
+
+bool _bindingsMatch(
+  OAuthAuthorizationCode code,
+  OAuthAuthorizationCodeExchangeRequest request,
+) {
+  if (code.clientId != request.clientId.trim() ||
+      code.redirectUri != request.redirectUri) {
+    return false;
+  }
+  final challenge = code.codeChallenge;
+  if (challenge == null) return true;
+  final verifier = request.codeVerifier;
+  if (code.codeChallengeMethod != 'S256' || verifier == null) return false;
+  final digest = sha256.convert(utf8.encode(verifier));
+  final expected = base64Url.encode(digest.bytes).replaceAll('=', '');
+  return constantTimeStringEquals(expected, challenge);
+}
+
+void _validatePreparedToken(
+  OAuthAuthorizationCode code,
+  OAuthAccessToken token,
+  DateTime now,
+) {
+  if (token.authorizationId != code.authorizationId ||
+      token.tokenHash.trim().isEmpty ||
+      token.clientId != code.clientId ||
+      token.userId != code.userId ||
+      token.scope != code.scope ||
+      !token.expiresAt.toUtc().isAfter(now.toUtc()) ||
+      token.refreshTokenHash?.trim().isEmpty == true) {
+    throw ArgumentError('Prepared OAuth token does not match authorization.');
   }
 }

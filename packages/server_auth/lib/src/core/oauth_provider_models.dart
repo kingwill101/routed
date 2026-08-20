@@ -134,6 +134,7 @@ class OAuthClient {
 /// and hashed before it reaches the store.
 class OAuthAuthorizationCode {
   const OAuthAuthorizationCode({
+    required this.authorizationId,
     required this.codeHash,
     required this.clientId,
     required this.userId,
@@ -145,6 +146,13 @@ class OAuthAuthorizationCode {
     this.nonce,
     this.createdAt,
   });
+
+  /// Stable persistence identifier for this authorization.
+  ///
+  /// This is not the authorization code and is safe to persist. It lets an
+  /// exchange store distinguish a retry from a digest collision without
+  /// retaining any delivery credential.
+  final String authorizationId;
 
   /// Digest of the raw authorization code.
   final String codeHash;
@@ -184,6 +192,7 @@ class OAuthAuthorizationCode {
 
   /// Serializes persistence-safe data without the raw authorization code.
   Map<String, dynamic> toStorageJson() => <String, dynamic>{
+    'authorizationId': authorizationId,
     'codeHash': codeHash,
     'clientId': clientId,
     'userId': userId,
@@ -209,6 +218,7 @@ class OAuthAccessToken {
     this.refreshTokenExpiresAt,
     this.refreshTokenUses = 0,
     this.issuedAt,
+    this.authorizationId,
   });
 
   /// Digest of the opaque access token held by the client.
@@ -242,6 +252,12 @@ class OAuthAccessToken {
   /// When the token was issued.
   final DateTime? issuedAt;
 
+  /// Authorization that produced this record, for authorization-code grants.
+  ///
+  /// Other grants leave this null. The value is a persistence identifier, not
+  /// an authorization code or token.
+  final String? authorizationId;
+
   OAuthAccessToken copyWith({
     String? tokenHash,
     String? clientId,
@@ -252,6 +268,7 @@ class OAuthAccessToken {
     DateTime? refreshTokenExpiresAt,
     int? refreshTokenUses,
     DateTime? issuedAt,
+    String? authorizationId,
   }) {
     return OAuthAccessToken(
       tokenHash: tokenHash ?? this.tokenHash,
@@ -264,6 +281,7 @@ class OAuthAccessToken {
           refreshTokenExpiresAt ?? this.refreshTokenExpiresAt,
       refreshTokenUses: refreshTokenUses ?? this.refreshTokenUses,
       issuedAt: issuedAt ?? this.issuedAt,
+      authorizationId: authorizationId ?? this.authorizationId,
     );
   }
 
