@@ -67,6 +67,9 @@ final class AuthEmailOtpFixture<TContext> {
 
   final AuthTestSequence<String> _codes;
 
+  static const String _testOnlyHashKey =
+      'fixture-only-email-otp-key-not-for-production-use';
+
   /// Raw delivery payloads retained in memory for the test only.
   final AuthTestDeliveryLog<AuthEmailOtpDelivery<TContext>> deliveries =
       AuthTestDeliveryLog<AuthEmailOtpDelivery<TContext>>();
@@ -78,6 +81,7 @@ final class AuthEmailOtpFixture<TContext> {
     bool disableSignUp = false,
   }) => EmailOtpPlugin<TContext>(
     sendCode: deliveries.capture,
+    rateLimitHashKey: _testOnlyHashKey,
     generateOtp: _nextCode,
     expiresIn: expiresIn,
     allowedAttempts: allowedAttempts,

@@ -77,6 +77,8 @@ final class AnonymousPlugin<TContext>
       requestCodec: _mapCodec,
       responseCodec: _objectCodec,
       authentication: AuthOperationAuthentication.session,
+      originPolicy: AuthOperationOriginPolicy.browser,
+      csrfPolicy: AuthOperationCsrfPolicy.required,
       rateLimitOperation: const AuthRateLimitOperation('anonymous', 'delete'),
       handler: (invocation, request) => _deleteEndpoint(invocation),
     ),

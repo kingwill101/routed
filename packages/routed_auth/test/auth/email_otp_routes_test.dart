@@ -9,6 +9,8 @@ import 'package:server_testing/server_testing.dart';
 
 import '../test_engine.dart';
 
+const _rateLimitHashKey = 'email-otp-route-test-key-not-for-production-use';
+
 SessionConfig _sessionConfig() {
   final key = base64.encode(List<int>.generate(32, (index) => index + 1));
   return SessionConfig.cookie(
@@ -25,7 +27,91 @@ SessionConfig _sessionConfig() {
 
 String _cookieHeader(Cookie cookie) => '${cookie.name}=${cookie.value}';
 
+final class _EmailOtpLimiter implements AuthRateLimiter<EngineContext> {
+  final List<AuthRateLimitRequest<EngineContext>> requests = [];
+
+  @override
+  AuthRateLimitDecision check(AuthRateLimitRequest<EngineContext> request) {
+    requests.add(request);
+    return const AuthRateLimitDecision.allow();
+  }
+}
+
 void main() {
+  test(
+    'email OTP routes use a keyed target limiter without leaking request secrets',
+    () async {
+      final limiter = _EmailOtpLimiter();
+      final plugin = EmailOtpPlugin<EngineContext>(
+        rateLimitHashKey: _rateLimitHashKey,
+        generateOtp: (_) => '123456',
+        sendCode: (_) {},
+      );
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
+          providers: const [],
+          plugins: [plugin],
+          rateLimiter: limiter,
+        ),
+      );
+      final engine = testEngine(
+        config: EngineConfig(
+          security: const EngineSecurityFeatures(csrfProtection: false),
+        ),
+      );
+      AuthRoutes(manager).register(engine.defaultRouter);
+      await engine.initialize();
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+
+      final sent = await client.postJson(
+        '/auth/email-otp/send-verification-otp',
+        const <String, dynamic>{
+          'email': ' Ada@Example.COM ',
+          'type': 'sign-in',
+        },
+      );
+      sent.assertStatus(HttpStatus.ok);
+      final checked = await client.postJson(
+        '/auth/email-otp/check-verification-otp',
+        const <String, dynamic>{
+          'email': 'ada@example.com',
+          'type': 'sign-in',
+          'otp': '123456',
+        },
+      );
+      checked.assertStatus(HttpStatus.ok);
+
+      expect(limiter.requests, hasLength(2));
+      final sendRequest = limiter.requests.first;
+      final checkRequest = limiter.requests.last;
+      expect(sendRequest.providerId, authEmailOtpPluginId);
+      expect(checkRequest.providerId, authEmailOtpPluginId);
+      expect(sendRequest.providerId, sendRequest.operation.namespace);
+      expect(checkRequest.providerId, checkRequest.operation.namespace);
+      expect(sendRequest.identifier, checkRequest.identifier);
+      expect(sendRequest.identifier, startsWith('email:'));
+      expect(
+        sendRequest.identifier!.length,
+        lessThanOrEqualTo(authRateLimitIdentifierMaximumLength),
+      );
+      expect(sendRequest.identifier, isNot(contains('ada@example.com')));
+      expect(checkRequest.identifier, isNot(contains('123456')));
+
+      final malformed = await client.postJson(
+        '/auth/email-otp/check-verification-otp',
+        const <String, dynamic>{'type': 'sign-in', 'otp': '123456'},
+      );
+      malformed.assertStatus(HttpStatus.unauthorized);
+      expect(malformed.json(), const <String, dynamic>{
+        'error': 'invalid_request',
+      });
+      expect(limiter.requests.last.identifier, isNull);
+    },
+  );
+
   test(
     'email OTP sign-in rejects cross-origin forms but allows same-origin and native clients',
     () async {
@@ -37,6 +123,7 @@ void main() {
           providers: const [],
           plugins: [
             EmailOtpPlugin<EngineContext>(
+              rateLimitHashKey: _rateLimitHashKey,
               generateOtp: (_) => '123456',
               sendCode: (delivery) => sentCode = delivery.code,
             ),
@@ -114,6 +201,7 @@ void main() {
     () async {
       String? sentCode;
       final feature = EmailOtpPlugin<EngineContext>(
+        rateLimitHashKey: _rateLimitHashKey,
         generateOtp: (_) => '123456',
         sendCode: (delivery) {
           sentCode = delivery.code;
@@ -193,6 +281,7 @@ void main() {
 
   test('invalid email OTP stays a bounded auth error', () async {
     final feature = EmailOtpPlugin<EngineContext>(
+      rateLimitHashKey: _rateLimitHashKey,
       sendCode: (delivery) async {},
     );
     final manager = AuthManager(

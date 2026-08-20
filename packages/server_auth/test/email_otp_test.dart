@@ -1,5 +1,8 @@
+import 'package:property_testing/property_testing.dart';
 import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
+
+const _rateLimitHashKey = 'email-otp-test-rate-limit-key-not-for-production';
 
 void main() {
   group('InMemoryAuthEmailOtpStore', () {
@@ -106,10 +109,95 @@ void main() {
   });
 
   group('EmailOtpPlugin', () {
+    test('requires a production-strength limiter digest key', () {
+      expect(
+        () =>
+            EmailOtpPlugin<Object>(sendCode: (_) {}, rateLimitHashKey: 'short'),
+        throwsArgumentError,
+      );
+    });
+
+    test(
+      'property: canonical emails have bounded keyed OTP-independent limiter IDs',
+      () async {
+        final plugin = EmailOtpPlugin<Object>(
+          sendCode: (_) {},
+          rateLimitHashKey: _rateLimitHashKey,
+        );
+        final send =
+            plugin.endpoints.singleWhere(
+                  (endpoint) => endpoint.id == 'emailOtp.sendVerificationOtp',
+                )
+                as AuthEndpointRateLimitIdentifierDescriptor;
+        final check =
+            plugin.endpoints.singleWhere(
+                  (endpoint) => endpoint.id == 'emailOtp.checkVerificationOtp',
+                )
+                as AuthEndpointRateLimitIdentifierDescriptor;
+        final expected = send.resolveRateLimitIdentifier(
+          const <String, dynamic>{
+            'email': ' Ada@Example.COM ',
+            'type': 'sign-in',
+          },
+        );
+
+        expect(expected, startsWith('email:'));
+        expect(
+          expected!.length,
+          lessThanOrEqualTo(authRateLimitIdentifierMaximumLength),
+        );
+        expect(expected, isNot(contains('ada@example.com')));
+        expect(
+          send.resolveRateLimitIdentifier(const <String, dynamic>{
+            'email': 'ada@example.com',
+            'type': 'email-verification',
+          }),
+          expected,
+        );
+
+        final runner = PropertyTestRunner<String>(
+          Gen.frequency<String>(<(int, Generator<String>)>[
+            (7, Chaos.string(minLength: 0, maxLength: 512)),
+            (
+              3,
+              Gen.oneOf<String>(<String>[
+                '123456',
+                '123456\r\nAuthorization: Bearer secret',
+                '<script>alert(1)</script>',
+                '9' * 4096,
+              ]),
+            ),
+          ]),
+          (otp) {
+            final identifier = check.resolveRateLimitIdentifier(
+              <String, dynamic>{
+                'email': 'ADA@example.com',
+                'type': 'sign-in',
+                'otp': otp,
+              },
+            );
+            expect(identifier, expected);
+            if (otp.isNotEmpty) expect(identifier, isNot(contains(otp)));
+          },
+          PropertyConfig(numTests: 500, seed: 20260820),
+        );
+        final result = await runner.run();
+        expect(result.success, isTrue, reason: '${result.error}');
+
+        expect(send.resolveRateLimitIdentifier(const {}), isNull);
+        expect(send.resolveRateLimitIdentifier(const {'email': 7}), isNull);
+        expect(
+          send.resolveRateLimitIdentifier(const {'email': 'not-an-email'}),
+          isNull,
+        );
+      },
+    );
+
     test('sends a hashed OTP and signs in a new user once verified', () async {
       final store = InMemoryAuthStore();
       String? sentCode;
       final feature = EmailOtpPlugin<Object>(
+        rateLimitHashKey: _rateLimitHashKey,
         generateOtp: (_) => '123456',
         sendCode: (delivery) {
           sentCode = delivery.code;
@@ -166,6 +254,7 @@ void main() {
           ),
         );
         final feature = EmailOtpPlugin<Object>(
+          rateLimitHashKey: _rateLimitHashKey,
           disableSignUp: true,
           generateOtp: (_) => '123456',
           sendCode: (delivery) async {},

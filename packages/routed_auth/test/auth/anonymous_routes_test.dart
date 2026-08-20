@@ -122,11 +122,39 @@ void main() {
       },
     );
     csrf.assertStatus(HttpStatus.ok);
+    final crossOrigin = await client.postJson(
+      '/auth/delete-anonymous-user',
+      {'_csrf': csrf.json()['csrfToken']},
+      headers: {
+        HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+        'Origin': ['https://attacker.example'],
+        'Sec-Fetch-Site': ['cross-site'],
+      },
+    );
+    crossOrigin.assertStatus(HttpStatus.forbidden);
+    expect(crossOrigin.json(), {'error': 'invalid_origin'});
+    expect(await manager.store.users.findById(anonymousId), isNotNull);
+
+    final missingCsrf = await client.postJson(
+      '/auth/delete-anonymous-user',
+      const <String, dynamic>{},
+      headers: {
+        HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+        'Origin': ['http://server_testing.internal'],
+        'Sec-Fetch-Site': ['same-origin'],
+      },
+    );
+    missingCsrf.assertStatus(HttpStatus.forbidden);
+    expect(missingCsrf.json(), {'error': 'invalid_csrf'});
+    expect(await manager.store.users.findById(anonymousId), isNotNull);
+
     final deleted = await client.postJson(
       '/auth/delete-anonymous-user',
       {'_csrf': csrf.json()['csrfToken']},
       headers: {
         HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+        'Origin': ['http://server_testing.internal'],
+        'Sec-Fetch-Site': ['same-origin'],
       },
     );
     deleted.assertStatus(HttpStatus.ok);

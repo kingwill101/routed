@@ -52,56 +52,66 @@ Argon2idPasswordHasher _testHasher() =>
     Argon2idPasswordHasher(iterations: 1, memoryKiB: 8, derivedKeyLength: 16);
 
 void main() {
-  test(
-    'registers two-factor routes before a manager reload enables the feature',
-    () async {
-      final initialManager = AuthManager(
-        AuthOptions<EngineContext>(
-          store: InMemoryAuthStore(),
-          storeMode: AuthStoreMode.ephemeral,
-          providers: [CredentialsProvider()],
-        ),
-      );
-      final reloadedManager = AuthManager(
-        AuthOptions<EngineContext>(
-          store: InMemoryAuthStore(),
-          storeMode: AuthStoreMode.ephemeral,
-          providers: [CredentialsProvider()],
-          plugins: [
-            TwoFactorPlugin<EngineContext>(
-              store: InMemoryAuthTwoFactorStore(),
-              challengeStore: InMemoryAuthTwoFactorChallengeStore(),
-              trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
-              stepUpStore: InMemoryAuthTwoFactorStepUpStore(),
-              secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
-            ),
-          ],
-        ),
-      );
-      var currentManager = initialManager;
-      final engine = testEngine(
-        config: EngineConfig(
-          security: const EngineSecurityFeatures(csrfProtection: false),
-        ),
-        providers: [RoutedSessionsProvider(_sessionConfig())],
-      );
-      engine.addGlobalMiddleware(sessionMiddleware());
-      engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
-      AuthRoutes(
-        initialManager,
-        managerOf: () => currentManager,
-      ).register(engine.defaultRouter);
-      await engine.initialize();
-      final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(client.close);
+  test('mounts two-factor routes only when the plugin is installed', () async {
+    final withoutPlugin = AuthManager(
+      AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
+        providers: [CredentialsProvider()],
+      ),
+    );
+    final absentEngine = _authEngine(withoutPlugin);
+    await absentEngine.initialize();
+    final absentClient = TestClient(RoutedRequestHandler(absentEngine));
+    addTearDown(absentClient.close);
 
-      currentManager = reloadedManager;
-      final response = await client.get('/auth/2fa/status');
+    const postPaths = <String>[
+      '/auth/2fa/enroll',
+      '/auth/2fa/enroll/verify',
+      '/auth/2fa/verify',
+      '/auth/2fa/recovery-code',
+      '/auth/2fa/recovery-codes/regenerate',
+      '/auth/2fa/disable',
+      '/auth/2fa/challenge/verify',
+      '/auth/2fa/challenge/recovery-code',
+      '/auth/2fa/trusted-devices/revoke',
+      '/auth/2fa/step-up',
+      '/auth/2fa/step-up/revoke',
+    ];
+    final absentStatus = await absentClient.get('/auth/2fa/status');
+    absentStatus.assertStatus(HttpStatus.notFound);
+    for (final path in postPaths) {
+      final absent = await absentClient.postJson(path, const {});
+      absent.assertStatus(HttpStatus.notFound);
+      expect(absent.body, isNot(contains('two_factor_unavailable')));
+    }
 
-      response.assertStatus(HttpStatus.unauthorized);
-      expect(response.json()['error'], equals('unauthorized'));
-    },
-  );
+    final withPlugin = AuthManager(
+      AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
+        providers: [CredentialsProvider()],
+        plugins: [
+          TwoFactorPlugin<EngineContext>(
+            store: InMemoryAuthTwoFactorStore(),
+            challengeStore: InMemoryAuthTwoFactorChallengeStore(),
+            trustedDeviceStore: InMemoryAuthTwoFactorTrustedDeviceStore(),
+            stepUpStore: InMemoryAuthTwoFactorStepUpStore(),
+            secretProtector: const PlaintextAuthTwoFactorSecretProtector(),
+          ),
+        ],
+      ),
+    );
+    final presentEngine = _authEngine(withPlugin);
+    await presentEngine.initialize();
+    final presentClient = TestClient(RoutedRequestHandler(presentEngine));
+    addTearDown(presentClient.close);
+
+    final response = await presentClient.get('/auth/2fa/status');
+
+    response.assertStatus(HttpStatus.unauthorized);
+    expect(response.json()['error'], equals('unauthorized'));
+  });
 
   test('applies the global rate limiter to two-factor routes', () async {
     final limiter = _BlockingAuthLimiter();

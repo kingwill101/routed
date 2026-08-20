@@ -192,30 +192,29 @@ class AuthRoutes {
           auth.post('/sessions/revoke', _revokeSession);
           auth.post('/sessions/revoke-others', _revokeOtherSessions);
         }
-        // Register optional plugin routes unconditionally. The handlers
-        // resolve the live manager on each request, so managerOf-based config
-        // reloads can activate 2FA after this route table was built.
-        auth.get('/2fa/status', _twoFactorStatus);
-        auth.post('/2fa/enroll', _twoFactorEnroll);
-        auth.post('/2fa/enroll/verify', _twoFactorVerifyEnrollment);
-        auth.post('/2fa/verify', _twoFactorVerify);
-        auth.post('/2fa/recovery-code', _twoFactorRecoveryCode);
-        auth.post(
-          '/2fa/recovery-codes/regenerate',
-          _twoFactorRegenerateRecoveryCodes,
-        );
-        auth.post('/2fa/disable', _twoFactorDisable);
-        auth.post('/2fa/challenge/verify', _twoFactorChallengeVerify);
-        auth.post(
-          '/2fa/challenge/recovery-code',
-          _twoFactorRecoveryChallengeVerify,
-        );
-        auth.post(
-          '/2fa/trusted-devices/revoke',
-          _twoFactorRevokeTrustedDevices,
-        );
-        auth.post('/2fa/step-up', _twoFactorStepUp);
-        auth.post('/2fa/step-up/revoke', _twoFactorStepUpRevoke);
+        if (manager.twoFactor != null) {
+          auth.get('/2fa/status', _twoFactorStatus);
+          auth.post('/2fa/enroll', _twoFactorEnroll);
+          auth.post('/2fa/enroll/verify', _twoFactorVerifyEnrollment);
+          auth.post('/2fa/verify', _twoFactorVerify);
+          auth.post('/2fa/recovery-code', _twoFactorRecoveryCode);
+          auth.post(
+            '/2fa/recovery-codes/regenerate',
+            _twoFactorRegenerateRecoveryCodes,
+          );
+          auth.post('/2fa/disable', _twoFactorDisable);
+          auth.post('/2fa/challenge/verify', _twoFactorChallengeVerify);
+          auth.post(
+            '/2fa/challenge/recovery-code',
+            _twoFactorRecoveryChallengeVerify,
+          );
+          auth.post(
+            '/2fa/trusted-devices/revoke',
+            _twoFactorRevokeTrustedDevices,
+          );
+          auth.post('/2fa/step-up', _twoFactorStepUp);
+          auth.post('/2fa/step-up/revoke', _twoFactorStepUpRevoke);
+        }
         if (manager.apiKeys?.sessionExchangeEnabled == true &&
             manager.options.sessionStrategy == AuthSessionStrategy.session) {
           auth.post('/api-keys/exchange', _apiKeyExchange);

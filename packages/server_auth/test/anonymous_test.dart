@@ -2,6 +2,15 @@ import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('anonymous deletion declares browser Origin and CSRF protection', () {
+    final endpoint = AnonymousPlugin<Object>().endpoints.singleWhere(
+      (endpoint) => endpoint.id == 'anonymous.delete',
+    );
+    expect(endpoint.authentication, AuthOperationAuthentication.session);
+    expect(endpoint.originPolicy, AuthOperationOriginPolicy.browser);
+    expect(endpoint.csrfPolicy, AuthOperationCsrfPolicy.required);
+  });
+
   test('anonymous users are typed, session-safe, and deletable', () async {
     final store = InMemoryAuthStore();
     final feature = AnonymousPlugin<Object>(generateName: (context) => 'Guest');

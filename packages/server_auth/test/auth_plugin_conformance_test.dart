@@ -42,7 +42,10 @@ void main() {
               sendCode: (_) {},
               codeHashKey: '0123456789abcdef0123456789abcdef',
             ),
-            EmailOtpPlugin<Object>(sendCode: (_) {}),
+            EmailOtpPlugin<Object>(
+              sendCode: (_) {},
+              rateLimitHashKey: 'conformance-email-key-not-for-production-use',
+            ),
             WebAuthnPlugin<Object>(provider: webAuthnProvider),
           ],
         ),

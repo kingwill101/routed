@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart' show Hmac, sha256;
 
 import 'deletion_transaction.dart';
 import 'email_otp_store.dart';
@@ -7,7 +10,7 @@ import 'plugin.dart';
 import 'models.dart';
 import 'rate_limit.dart';
 import 'store.dart';
-import 'tokens.dart' show secureRandomToken;
+import 'tokens.dart' show base64UrlNoPadding, secureRandomToken;
 import 'users.dart' show authUserIsDisabled;
 
 const String authEmailOtpPluginId = 'email_otp';
@@ -49,21 +52,31 @@ final class EmailOtpPlugin<TContext>
         AuthReversibleUserDataDeletionContributor {
   EmailOtpPlugin({
     required this.sendCode,
+    required String rateLimitHashKey,
     this.otpLength = 6,
     this.expiresIn = const Duration(minutes: 5),
     this.allowedAttempts = 3,
     this.disableSignUp = false,
     String Function(int length)? generateOtp,
-  }) : _generateOtp = generateOtp ?? _defaultOtp,
+  }) : _rateLimitHashKey = utf8.encode(rateLimitHashKey),
+       _generateOtp = generateOtp ?? _defaultOtp,
        assert(otpLength >= 4 && otpLength <= 12),
        assert(expiresIn > Duration.zero),
-       assert(allowedAttempts > 0);
+       assert(allowedAttempts > 0) {
+    if (_rateLimitHashKey.length < 32) {
+      throw ArgumentError(
+        'rateLimitHashKey must contain at least 32 UTF-8 bytes',
+        'rateLimitHashKey',
+      );
+    }
+  }
 
   final AuthEmailOtpSender<TContext> sendCode;
   final int otpLength;
   final Duration expiresIn;
   final int allowedAttempts;
   final bool disableSignUp;
+  final List<int> _rateLimitHashKey;
   final String Function(int length) _generateOtp;
 
   late AuthEmailOtpStore _store;
@@ -155,8 +168,25 @@ final class EmailOtpPlugin<TContext>
     originPolicy: originPolicy,
     csrfPolicy: csrfPolicy,
     rateLimitOperation: AuthRateLimitOperation('email_otp', operationName),
+    rateLimitIdentifier: (request) => _emailRateLimitIdentifier(request),
     handler: (invocation, request) => _invokeEndpoint(id, invocation, request),
   );
+
+  String? _emailRateLimitIdentifier(Map<String, dynamic> request) {
+    final value = request['email'];
+    if (value is! String) return null;
+    String email;
+    try {
+      email = _email(value);
+    } on AuthFlowException {
+      return null;
+    }
+    final digest = Hmac(
+      sha256,
+      _rateLimitHashKey,
+    ).convert(utf8.encode('rate-limit:email-otp:$email'));
+    return 'email:${base64UrlNoPadding(digest.bytes)}';
+  }
 
   @override
   Iterable<AuthClientOperationDescriptor> get clientOperations => endpoints.map(

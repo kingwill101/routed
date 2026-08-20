@@ -34,6 +34,7 @@ void main() {
           return http.Response(jsonEncode({'csrfToken': 'csrf-1'}), 200);
         }
         expect(request.url.path, '/auth/delete-anonymous-user');
+        expect(request.headers['x-csrf-token'], 'csrf-1');
         expect(jsonDecode(request.body), {'_csrf': 'csrf-1'});
         return http.Response(jsonEncode({'status': 'anonymous_deleted'}), 200);
       }),
