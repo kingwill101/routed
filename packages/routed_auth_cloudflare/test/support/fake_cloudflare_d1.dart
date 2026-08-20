@@ -3,6 +3,14 @@ import 'dart:typed_data';
 import 'package:routed_node/cloudflare.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+/// Fault hook invoked after each statement in a fake D1 batch.
+///
+/// Throwing from the hook simulates a backend statement failure and must cause
+/// the complete batch to roll back. Tests can install the hook after schema
+/// setup and clear it before retrying the same operation.
+typedef FakeCloudflareD1BatchFaultInjector =
+    void Function(int statementIndex, CloudflareD1PreparedStatement statement);
+
 /// Deterministic SQLite-backed implementation of the public D1 contract.
 ///
 /// It executes the adapter's actual SQL and gives `batch()` the same
@@ -14,6 +22,8 @@ final class FakeCloudflareD1Database implements CloudflareD1Database {
   }
 
   final Database _database;
+
+  FakeCloudflareD1BatchFaultInjector? batchFaultInjector;
 
   void close() => _database.close();
 
@@ -41,8 +51,11 @@ final class FakeCloudflareD1Database implements CloudflareD1Database {
     _database.execute('BEGIN IMMEDIATE');
     try {
       final results = <CloudflareD1Result<T>>[];
+      var statementIndex = 0;
       for (final statement in prepared.cast<_FakePreparedStatement>()) {
         results.add(statement.runSync<T>(decode: decode));
+        batchFaultInjector?.call(statementIndex, statement);
+        statementIndex++;
       }
       _database.execute('COMMIT');
       return results;

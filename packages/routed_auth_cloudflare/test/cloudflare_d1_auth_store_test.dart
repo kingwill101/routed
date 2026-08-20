@@ -397,7 +397,7 @@ void main() {
       database
           .select('SELECT version FROM $migrationsTable ORDER BY version')
           .map((row) => row['version']),
-      [1, 2, 3],
+      [1, 2, 3, 4],
     );
   });
 
@@ -624,6 +624,29 @@ void main() {
         maxAttempts: 3,
       ),
     );
+    await store.oauthAuthorizationCodeStore.create(
+      OAuthAuthorizationCode(
+        authorizationId: 'removed-plugin-authorization',
+        codeHash: hashOpaqueToken('removed-plugin-code'),
+        clientId: 'removed-plugin-client',
+        userId: user.id,
+        redirectUri: 'https://removed-plugin.example.test/callback',
+        scope: 'profile',
+        createdAt: now,
+        expiresAt: now.add(const Duration(minutes: 5)),
+      ),
+    );
+    await store.oauthAccessTokenStore.save(
+      OAuthAccessToken(
+        authorizationId: 'removed-plugin-token-authorization',
+        tokenHash: hashOpaqueToken('removed-plugin-access-token'),
+        clientId: 'removed-plugin-client',
+        userId: user.id,
+        scope: 'profile',
+        issuedAt: now,
+        expiresAt: now.add(const Duration(hours: 1)),
+      ),
+    );
     store.bindUserDeletionPlanContributors(const []);
 
     expect(await store.userDeletionCoordinator.deleteUser(user.id), isTrue);
@@ -634,6 +657,16 @@ void main() {
     );
     expect(
       database.select('SELECT * FROM ${schema.table('email_otps')}'),
+      isEmpty,
+    );
+    expect(
+      database.select(
+        'SELECT * FROM ${schema.table('oauth_authorization_codes')}',
+      ),
+      isEmpty,
+    );
+    expect(
+      database.select('SELECT * FROM ${schema.table('oauth_access_tokens')}'),
       isEmpty,
     );
     await expectLater(

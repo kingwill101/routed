@@ -36,12 +36,38 @@ final class CloudflareD1AuthStore
     emailChangeTokens = _D1EmailChangeTokens(sql, schema, _clock);
     deviceAuthorizations = _D1DeviceAuthorizations(sql, schema, _clock);
     emailOtps = _D1EmailOtps(sql, schema, _clock);
-    _deletionCoordinator = CloudflareD1UserDeletionCoordinator._(
+    final deletionCoordinator = CloudflareD1UserDeletionCoordinator._(
       database: database,
       sql: sql,
       schema: schema,
       clock: _clock,
     );
+    _deletionCoordinator = deletionCoordinator;
+    oauthClientStore = CloudflareD1OAuthClientStore._(
+      sql,
+      schema,
+      deletionCoordinator.domain,
+    );
+    oauthAuthorizationCodeStore = CloudflareD1OAuthAuthorizationCodeStore._(
+      sql,
+      schema,
+      deletionCoordinator.domain,
+      _clock,
+    );
+    oauthAccessTokenStore = CloudflareD1OAuthAccessTokenStore._(
+      sql,
+      schema,
+      deletionCoordinator.domain,
+      _clock,
+    );
+    oauthAuthorizationCodeExchangeStore =
+        CloudflareD1OAuthAuthorizationCodeExchangeStore._(
+          sql,
+          schema,
+          deletionCoordinator.domain,
+          oauthAuthorizationCodeStore,
+          oauthAccessTokenStore,
+        );
   }
 
   /// Creates an adapter and applies all pending typed migrations.
@@ -237,6 +263,20 @@ final class CloudflareD1AuthStore
   late final AuthDeviceAuthorizationStore deviceAuthorizations;
   @override
   late final AuthEmailOtpStore emailOtps;
+
+  /// Prefix-isolated D1 OAuth provider client registry.
+  late final CloudflareD1OAuthClientStore oauthClientStore;
+
+  /// Digest-only D1 authorization-code store.
+  late final CloudflareD1OAuthAuthorizationCodeStore
+  oauthAuthorizationCodeStore;
+
+  /// Digest-only D1 access/refresh-token store.
+  late final CloudflareD1OAuthAccessTokenStore oauthAccessTokenStore;
+
+  /// Authoritative D1 authorization-code exchange boundary.
+  late final CloudflareD1OAuthAuthorizationCodeExchangeStore
+  oauthAuthorizationCodeExchangeStore;
 
   /// Applies all pending schema migrations.
   Future<void> migrate() => schema.migrate(_database);
@@ -480,6 +520,8 @@ final class CloudflareD1UserDeletionCoordinator
       (schema.table('password_reset_tokens'), 'user_id'),
       (schema.table('email_change_tokens'), 'user_id'),
       (schema.table('device_authorizations'), 'user_id'),
+      (schema.table('oauth_authorization_codes'), 'user_id'),
+      (schema.table('oauth_access_tokens'), 'user_id'),
     ]) {
       yield _sql.database
           .prepare('DELETE FROM ${entry.$1} WHERE ${entry.$2} = ? AND $guard')
@@ -606,6 +648,489 @@ final class _D1 {
     if (!result.success) {
       throw StateError('D1 statement failed: ${result.error}');
     }
+  }
+}
+
+/// Prefix-isolated OAuth client registry backed by Cloudflare D1.
+final class CloudflareD1OAuthClientStore
+    implements OAuthClientStore, OAuthProviderPersistenceTopology {
+  CloudflareD1OAuthClientStore._(this._sql, this.schema, this.domain);
+
+  final _D1 _sql;
+  final CloudflareD1AuthSchema schema;
+  final CloudflareD1UserDeletionDomain domain;
+
+  String get table => schema.table('oauth_clients');
+
+  @override
+  AuthUserDeletionDomain get oauthProviderPersistenceDomain => domain;
+
+  @override
+  Future<OAuthClient?> findById(String clientId) => _sql.first(
+    'SELECT * FROM $table WHERE client_id = ?',
+    [clientId.trim()],
+    _decodeOAuthClient,
+  );
+
+  @override
+  Future<List<OAuthClient>> listAll() => _sql.all(
+    'SELECT * FROM $table ORDER BY client_id',
+    const [],
+    _decodeOAuthClient,
+  );
+
+  @override
+  Future<OAuthClient> create(OAuthClient client) async {
+    _validateOAuthClient(client);
+    try {
+      await _sql.run(
+        '''INSERT INTO $table
+           (client_id, client_secret_hash, name, description, redirect_uris,
+            grant_types, scopes, token_endpoint_auth_method, created_at,
+            updated_at, enabled)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        _oauthClientValues(client),
+      );
+    } catch (_) {
+      throw StateError('D1 OAuth client creation failed.');
+    }
+    return client;
+  }
+
+  @override
+  Future<OAuthClient> update(OAuthClient client) async {
+    _validateOAuthClient(client);
+    final values = _oauthClientValues(client);
+    final result = await _sql.run(
+      '''UPDATE $table SET client_secret_hash = ?, name = ?, description = ?,
+         redirect_uris = ?, grant_types = ?, scopes = ?,
+         token_endpoint_auth_method = ?, created_at = ?, updated_at = ?,
+         enabled = ? WHERE client_id = ?''',
+      [...values.skip(1), values.first],
+    );
+    if (_oauthChanges(result) != 1) {
+      throw StateError('D1 OAuth client was not found.');
+    }
+    return client;
+  }
+
+  @override
+  Future<void> delete(String clientId) async {
+    final id = clientId.trim();
+    await _sql.batch([
+      _sql.database
+          .prepare(
+            'DELETE FROM ${schema.table('oauth_authorization_codes')} '
+            'WHERE client_id = ?',
+          )
+          .bind([id]),
+      _sql.database
+          .prepare(
+            'DELETE FROM ${schema.table('oauth_access_tokens')} '
+            'WHERE client_id = ?',
+          )
+          .bind([id]),
+      _sql.database.prepare('DELETE FROM $table WHERE client_id = ?').bind([
+        id,
+      ]),
+    ]);
+  }
+
+  @override
+  Future<bool> validateSecret(String clientId, String secret) async {
+    if (secret.isEmpty) return false;
+    final client = await findById(clientId);
+    if (client == null) return false;
+    return constantTimeStringEquals(
+      hashOpaqueToken(secret),
+      client.clientSecretHash,
+    );
+  }
+}
+
+/// Digest-only OAuth authorization-code persistence backed by Cloudflare D1.
+final class CloudflareD1OAuthAuthorizationCodeStore
+    implements OAuthAuthorizationCodeStore {
+  CloudflareD1OAuthAuthorizationCodeStore._(
+    this._sql,
+    this.schema,
+    this.domain,
+    this.clock,
+  );
+
+  final _D1 _sql;
+  final CloudflareD1AuthSchema schema;
+  final CloudflareD1UserDeletionDomain domain;
+  final DateTime Function() clock;
+
+  String get table => schema.table('oauth_authorization_codes');
+
+  @override
+  Future<OAuthAuthorizationCode> create(OAuthAuthorizationCode code) async {
+    _validateD1OAuthAuthorizationCode(code);
+    try {
+      await _sql.run(
+        '''INSERT INTO $table
+           (code_hash, authorization_id, client_id, user_id, redirect_uri,
+            scope, expires_at, code_challenge, code_challenge_method, nonce,
+            created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        _oauthAuthorizationCodeValues(code),
+      );
+    } catch (_) {
+      throw StateError('D1 OAuth authorization code creation failed.');
+    }
+    return code;
+  }
+
+  @override
+  Future<OAuthAuthorizationCode?> consume({
+    required String codeHash,
+    required String clientId,
+    required String redirectUri,
+    required String? codeVerifier,
+    DateTime? now,
+  }) async {
+    final digest = codeHash.trim();
+    final results = await _sql.batchRows([
+      _sql.database.prepare('SELECT * FROM $table WHERE code_hash = ?').bind([
+        digest,
+      ]),
+      _sql.database.prepare('DELETE FROM $table WHERE code_hash = ?').bind([
+        digest,
+      ]),
+    ]);
+    if (_oauthChanges(results.last) != 1 || results.first.results.length != 1) {
+      return null;
+    }
+    final code = _decodeOAuthAuthorizationCode(results.first.results.single);
+    final request = OAuthAuthorizationCodeExchangeRequest(
+      codeHash: digest,
+      clientId: clientId,
+      redirectUri: redirectUri,
+      codeVerifier: codeVerifier,
+      now: (now ?? clock()).toUtc(),
+    );
+    return code.isValid(now: request.now) &&
+            _d1OAuthBindingsMatch(code, request)
+        ? code
+        : null;
+  }
+
+  @override
+  Future<int> deleteExpired({DateTime? now}) async => _oauthChanges(
+    await _sql.run('DELETE FROM $table WHERE expires_at <= ?', [
+      _date((now ?? clock()).toUtc()),
+    ]),
+  );
+
+  @override
+  Future<void> deleteForUser(String userId) async {
+    await _sql.run('DELETE FROM $table WHERE user_id = ?', [userId.trim()]);
+  }
+}
+
+/// Digest-only OAuth access and refresh-token persistence backed by D1.
+final class CloudflareD1OAuthAccessTokenStore implements OAuthAccessTokenStore {
+  CloudflareD1OAuthAccessTokenStore._(
+    this._sql,
+    this.schema,
+    this.domain,
+    this.clock,
+  );
+
+  final _D1 _sql;
+  final CloudflareD1AuthSchema schema;
+  final CloudflareD1UserDeletionDomain domain;
+  final DateTime Function() clock;
+
+  String get table => schema.table('oauth_access_tokens');
+
+  @override
+  Future<void> save(OAuthAccessToken token) async {
+    _validateD1OAuthAccessToken(token);
+    try {
+      await _sql.run(
+        '''INSERT INTO $table
+           (token_hash, authorization_id, client_id, user_id, scope,
+            expires_at, refresh_token_hash, refresh_token_expires_at,
+            refresh_token_uses, issued_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        _oauthAccessTokenValues(token),
+      );
+    } catch (_) {
+      throw StateError('D1 OAuth access token creation failed.');
+    }
+  }
+
+  @override
+  Future<OAuthAccessToken?> findByToken(String token) {
+    if (token.trim().isEmpty) return Future.value(null);
+    return _findByDigest('token_hash', hashOpaqueToken(token));
+  }
+
+  @override
+  Future<OAuthAccessToken?> findByRefreshToken(String refreshToken) {
+    if (refreshToken.trim().isEmpty) return Future.value(null);
+    return _findByDigest('refresh_token_hash', hashOpaqueToken(refreshToken));
+  }
+
+  Future<OAuthAccessToken?> _findByDigest(String column, String digest) =>
+      _sql.first('SELECT * FROM $table WHERE $column = ?', [
+        digest,
+      ], _decodeOAuthAccessToken);
+
+  @override
+  Future<OAuthAccessToken?> rotateRefreshToken({
+    required String refreshToken,
+    required String expectedTokenHash,
+    required OAuthAccessToken replacement,
+    int? maxUses,
+  }) async {
+    if (refreshToken.trim().isEmpty || expectedTokenHash.trim().isEmpty) {
+      return null;
+    }
+    _validateD1OAuthAccessToken(replacement);
+    if (replacement.refreshTokenUses <= 0) {
+      throw ArgumentError('Refresh-token replacement use count is invalid.');
+    }
+    final now = _date(clock().toUtc());
+    final expectedUses = replacement.refreshTokenUses - 1;
+    final predicate = '''token_hash = ? AND refresh_token_hash = ?
+      AND (refresh_token_expires_at IS NULL OR refresh_token_expires_at > ?)
+      AND refresh_token_uses = ? AND client_id = ? AND user_id = ?
+      AND (? IS NULL OR (? > 0 AND refresh_token_uses < ?))''';
+    final predicateValues = <Object?>[
+      expectedTokenHash.trim(),
+      hashOpaqueToken(refreshToken),
+      now,
+      expectedUses,
+      replacement.clientId,
+      replacement.userId,
+      maxUses,
+      maxUses,
+      maxUses,
+    ];
+    try {
+      final results = await _sql.batchRows([
+        _sql.database
+            .prepare('SELECT * FROM $table WHERE $predicate')
+            .bind(predicateValues),
+        _sql.database
+            .prepare('''UPDATE $table SET token_hash = ?,
+                 authorization_id = COALESCE(?, authorization_id),
+                 client_id = ?, user_id = ?, scope = ?, expires_at = ?,
+                 refresh_token_hash = ?, refresh_token_expires_at = ?,
+                 refresh_token_uses = ?, issued_at = ? WHERE $predicate''')
+            .bind([
+              ..._oauthAccessTokenValues(replacement),
+              ...predicateValues,
+            ]),
+      ]);
+      if (_oauthChanges(results.last) != 1 ||
+          results.first.results.length != 1) {
+        return null;
+      }
+      return _decodeOAuthAccessToken(results.first.results.single);
+    } catch (_) {
+      throw StateError('D1 OAuth refresh-token rotation failed atomically.');
+    }
+  }
+
+  @override
+  Future<void> revoke(String token) async {
+    if (token.trim().isEmpty) return;
+    await _sql.run('DELETE FROM $table WHERE token_hash = ?', [
+      hashOpaqueToken(token),
+    ]);
+  }
+
+  @override
+  Future<int> revokeAllForUser(String userId) async => _oauthChanges(
+    await _sql.run('DELETE FROM $table WHERE user_id = ?', [userId.trim()]),
+  );
+
+  @override
+  Future<int> revokeAllForClient(String clientId) async => _oauthChanges(
+    await _sql.run('DELETE FROM $table WHERE client_id = ?', [clientId.trim()]),
+  );
+
+  @override
+  Future<int> deleteExpired({DateTime? now}) async {
+    final current = _date((now ?? clock()).toUtc());
+    return _oauthChanges(
+      await _sql.run(
+        '''DELETE FROM $table WHERE expires_at <= ? AND
+           (refresh_token_hash IS NULL OR
+             (refresh_token_expires_at IS NOT NULL AND
+              refresh_token_expires_at <= ?))''',
+        [current, current],
+      ),
+    );
+  }
+}
+
+/// Authoritative D1 transaction boundary for OAuth authorization-code grants.
+///
+/// Cloudflare documents `D1Database.batch` as a sequential SQL transaction
+/// that rolls back the complete sequence when a statement fails. The insert
+/// and delete below use the same complete authorization predicate. D1 does not
+/// expose an interactive callback transaction and this adapter does not claim
+/// one.
+final class CloudflareD1OAuthAuthorizationCodeExchangeStore
+    implements
+        OAuthAuthorizationCodeExchangeStore,
+        OAuthProviderPersistenceTopology,
+        AuthUserDeletionPlanFactory {
+  CloudflareD1OAuthAuthorizationCodeExchangeStore._(
+    this._sql,
+    this.schema,
+    this.domain,
+    this.authorizationCodeStore,
+    this.accessTokenStore,
+  );
+
+  final _D1 _sql;
+  final CloudflareD1AuthSchema schema;
+  final CloudflareD1UserDeletionDomain domain;
+
+  @override
+  final CloudflareD1OAuthAuthorizationCodeStore authorizationCodeStore;
+
+  @override
+  final CloudflareD1OAuthAccessTokenStore accessTokenStore;
+
+  @override
+  AuthUserDeletionDomain get oauthProviderPersistenceDomain => domain;
+
+  String get codes => schema.table('oauth_authorization_codes');
+  String get tokens => schema.table('oauth_access_tokens');
+
+  @override
+  AuthUserDeletionPlan createDeletionPlan({
+    required AuthUserDeletionDomain domain,
+    required AuthUser user,
+    required String namespace,
+  }) {
+    if (!identical(domain, this.domain)) {
+      throw StateError('OAuth provider received a foreign D1 domain.');
+    }
+    return CloudflareD1UserDeletionPlan(
+      domain: this.domain,
+      userId: user.id,
+      namespace: namespace,
+      statements: [
+        CloudflareD1UserDeletionStatement(
+          sql: 'DELETE FROM $codes WHERE user_id = ? AND {{guard}}',
+          parameters: [user.id],
+        ),
+        CloudflareD1UserDeletionStatement(
+          sql: 'DELETE FROM $tokens WHERE user_id = ? AND {{guard}}',
+          parameters: [user.id],
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<OAuthAuthorizationCodePreparation> prepare(
+    OAuthAuthorizationCodeExchangeRequest request,
+  ) async {
+    final digest = request.codeHash.trim();
+    final binding = _d1OAuthBindingPredicate(request);
+    final results = await _sql.batchRows([
+      _sql.database.prepare('SELECT * FROM $codes WHERE code_hash = ?').bind([
+        digest,
+      ]),
+      _sql.database
+          .prepare(
+            'DELETE FROM $codes WHERE code_hash = ? AND NOT (${binding.sql})',
+          )
+          .bind([digest, ...binding.values]),
+    ]);
+    final rows = results.first.results;
+    if (rows.isEmpty) {
+      return const OAuthAuthorizationCodePreparation.invalidGrant();
+    }
+    if (rows.length != 1) {
+      throw StateError('D1 OAuth authorization code lookup was ambiguous.');
+    }
+    if (_oauthChanges(results.last) == 1) {
+      return const OAuthAuthorizationCodePreparation.invalidGrant();
+    }
+    final code = _decodeOAuthAuthorizationCode(rows.single);
+    if (!code.isValid(now: request.now) ||
+        !_d1OAuthBindingsMatch(code, request)) {
+      throw StateError('D1 OAuth preparation predicate was inconsistent.');
+    }
+    return OAuthAuthorizationCodePreparation.ready(code);
+  }
+
+  @override
+  Future<OAuthAuthorizationCodeExchangeResult> commit({
+    required OAuthAuthorizationCodeExchangeRequest request,
+    required String expectedAuthorizationId,
+    required OAuthAccessToken preparedToken,
+  }) async {
+    final authorizationId = expectedAuthorizationId.trim();
+    _validatePreparedD1OAuthToken(request, authorizationId, preparedToken);
+    final predicate = _d1OAuthCommitPredicate(
+      request,
+      authorizationId,
+      preparedToken,
+    );
+    try {
+      final results = await _sql.batch([
+        _sql.database
+            .prepare('''INSERT INTO $tokens
+                 (token_hash, authorization_id, client_id, user_id, scope,
+                  expires_at, refresh_token_hash, refresh_token_expires_at,
+                  refresh_token_uses, issued_at)
+                 SELECT ?, authorization_id, client_id, user_id, scope,
+                   ?, ?, ?, ?, ? FROM $codes WHERE ${predicate.sql}''')
+            .bind([
+              preparedToken.tokenHash,
+              _date(preparedToken.expiresAt),
+              preparedToken.refreshTokenHash,
+              _nullableDate(preparedToken.refreshTokenExpiresAt),
+              preparedToken.refreshTokenUses,
+              _nullableDate(preparedToken.issuedAt),
+              ...predicate.values,
+            ]),
+        _sql.database
+            .prepare('DELETE FROM $codes WHERE ${predicate.sql}')
+            .bind(predicate.values),
+      ]);
+      final inserted = _oauthChanges(results.first);
+      final deleted = _oauthChanges(results.last);
+      if (inserted == 1 && deleted == 1) {
+        return const OAuthAuthorizationCodeExchangeResult(
+          OAuthAuthorizationCodeExchangeStatus.committed,
+        );
+      }
+      if (inserted != 0 || deleted != 0) {
+        throw StateError('D1 OAuth exchange affected inconsistent rows.');
+      }
+    } catch (error) {
+      if (error is StateError &&
+          error.message == 'D1 OAuth exchange affected inconsistent rows.') {
+        rethrow;
+      }
+      throw StateError(
+        'D1 OAuth authorization-code exchange failed atomically.',
+      );
+    }
+
+    final existing = await _sql.first<OAuthAccessToken>(
+      'SELECT * FROM $tokens WHERE authorization_id = ?',
+      [authorizationId],
+      _decodeOAuthAccessToken,
+    );
+    return OAuthAuthorizationCodeExchangeResult(
+      existing == null
+          ? OAuthAuthorizationCodeExchangeStatus.invalidGrant
+          : OAuthAuthorizationCodeExchangeStatus.alreadyCommitted,
+    );
   }
 }
 
@@ -1766,6 +2291,257 @@ final class _D1EmailOtps
     await sql.run('DELETE FROM $table WHERE email = ?', [_email(email)]);
   }
 }
+
+int _oauthChanges(CloudflareD1Result<Object?> result) {
+  final changes = result.meta?.changes;
+  if (changes == null) {
+    throw StateError('D1 did not report OAuth statement changes.');
+  }
+  return changes;
+}
+
+void _validateOAuthClient(OAuthClient client) {
+  _required(client.clientId, 'client.clientId');
+  _required(client.clientSecretHash, 'client.clientSecretHash');
+  _required(client.name, 'client.name');
+  _required(client.tokenEndpointAuthMethod, 'client.tokenEndpointAuthMethod');
+  if (client.redirectUris.isEmpty ||
+      client.redirectUris.any((value) {
+        final uri = Uri.tryParse(value);
+        return uri == null ||
+            !uri.isAbsolute ||
+            uri.hasFragment ||
+            uri.host.isEmpty;
+      })) {
+    throw ArgumentError('OAuth client redirect URIs must be absolute.');
+  }
+  if (client.grantTypes.isEmpty ||
+      client.grantTypes.any((value) => value.trim().isEmpty) ||
+      client.scopes.any((value) => value.trim().isEmpty)) {
+    throw ArgumentError('OAuth client grants and scopes must be valid.');
+  }
+}
+
+List<Object?> _oauthClientValues(OAuthClient client) => [
+  client.clientId.trim(),
+  client.clientSecretHash,
+  client.name.trim(),
+  client.description,
+  jsonEncode(client.redirectUris),
+  jsonEncode(client.grantTypes),
+  jsonEncode(client.scopes),
+  client.tokenEndpointAuthMethod,
+  _nullableDate(client.createdAt),
+  _nullableDate(client.updatedAt),
+  client.enabled ? 1 : 0,
+];
+
+OAuthClient _decodeOAuthClient(Map<String, Object?> row) => OAuthClient(
+  clientId: row['client_id']! as String,
+  clientSecretHash: row['client_secret_hash']! as String,
+  name: row['name']! as String,
+  description: row['description']?.toString(),
+  redirectUris: _decodeStringList(row['redirect_uris']),
+  grantTypes: _decodeStringList(row['grant_types']),
+  scopes: _decodeStringList(row['scopes']),
+  tokenEndpointAuthMethod: row['token_endpoint_auth_method']! as String,
+  createdAt: _optionalDate(row['created_at']),
+  updatedAt: _optionalDate(row['updated_at']),
+  enabled: (row['enabled'] as num).toInt() == 1,
+);
+
+void _validateD1OAuthAuthorizationCode(OAuthAuthorizationCode code) {
+  _required(code.authorizationId, 'code.authorizationId');
+  _required(code.codeHash, 'code.codeHash');
+  _required(code.clientId, 'code.clientId');
+  _required(code.userId, 'code.userId');
+  _required(code.scope, 'code.scope');
+  final redirect = Uri.tryParse(code.redirectUri);
+  if (redirect == null ||
+      !redirect.isAbsolute ||
+      redirect.hasFragment ||
+      redirect.host.isEmpty) {
+    throw ArgumentError('OAuth redirect URI must be absolute.');
+  }
+  final challenge = code.codeChallenge;
+  if ((challenge == null) != (code.codeChallengeMethod == null) ||
+      challenge != null &&
+          (challenge.trim().isEmpty || code.codeChallengeMethod != 'S256')) {
+    throw ArgumentError('D1 OAuth authorization codes support only S256 PKCE.');
+  }
+  final createdAt = code.createdAt;
+  if (createdAt != null && !code.expiresAt.toUtc().isAfter(createdAt.toUtc())) {
+    throw ArgumentError(
+      'OAuth authorization code expiry must follow creation.',
+    );
+  }
+}
+
+List<Object?> _oauthAuthorizationCodeValues(OAuthAuthorizationCode code) => [
+  code.codeHash.trim(),
+  code.authorizationId.trim(),
+  code.clientId.trim(),
+  code.userId.trim(),
+  code.redirectUri,
+  code.scope,
+  _date(code.expiresAt),
+  code.codeChallenge,
+  code.codeChallengeMethod,
+  code.nonce,
+  _nullableDate(code.createdAt),
+];
+
+OAuthAuthorizationCode _decodeOAuthAuthorizationCode(
+  Map<String, Object?> row,
+) => OAuthAuthorizationCode(
+  codeHash: row['code_hash']! as String,
+  authorizationId: row['authorization_id']! as String,
+  clientId: row['client_id']! as String,
+  userId: row['user_id']! as String,
+  redirectUri: row['redirect_uri']! as String,
+  scope: row['scope']! as String,
+  expiresAt: DateTime.parse(row['expires_at']! as String),
+  codeChallenge: row['code_challenge']?.toString(),
+  codeChallengeMethod: row['code_challenge_method']?.toString(),
+  nonce: row['nonce']?.toString(),
+  createdAt: _optionalDate(row['created_at']),
+);
+
+void _validateD1OAuthAccessToken(OAuthAccessToken token) {
+  _required(token.tokenHash, 'token.tokenHash');
+  _required(token.clientId, 'token.clientId');
+  _required(token.userId, 'token.userId');
+  _required(token.scope, 'token.scope');
+  if (token.refreshTokenHash?.trim().isEmpty == true ||
+      token.refreshTokenHash == null && token.refreshTokenExpiresAt != null ||
+      token.refreshTokenUses < 0) {
+    throw ArgumentError('OAuth refresh-token state is invalid.');
+  }
+  final issuedAt = token.issuedAt;
+  if (issuedAt != null && !token.expiresAt.toUtc().isAfter(issuedAt.toUtc())) {
+    throw ArgumentError('OAuth access-token expiry must follow issuance.');
+  }
+  final refreshExpiry = token.refreshTokenExpiresAt;
+  if (refreshExpiry != null &&
+      issuedAt != null &&
+      !refreshExpiry.toUtc().isAfter(issuedAt.toUtc())) {
+    throw ArgumentError('OAuth refresh-token expiry must follow issuance.');
+  }
+}
+
+List<Object?> _oauthAccessTokenValues(OAuthAccessToken token) => [
+  token.tokenHash.trim(),
+  token.authorizationId?.trim(),
+  token.clientId.trim(),
+  token.userId.trim(),
+  token.scope,
+  _date(token.expiresAt),
+  token.refreshTokenHash,
+  _nullableDate(token.refreshTokenExpiresAt),
+  token.refreshTokenUses,
+  _nullableDate(token.issuedAt),
+];
+
+OAuthAccessToken _decodeOAuthAccessToken(Map<String, Object?> row) =>
+    OAuthAccessToken(
+      tokenHash: row['token_hash']! as String,
+      authorizationId: row['authorization_id']?.toString(),
+      clientId: row['client_id']! as String,
+      userId: row['user_id']! as String,
+      scope: row['scope']! as String,
+      expiresAt: DateTime.parse(row['expires_at']! as String),
+      refreshTokenHash: row['refresh_token_hash']?.toString(),
+      refreshTokenExpiresAt: _optionalDate(row['refresh_token_expires_at']),
+      refreshTokenUses: (row['refresh_token_uses'] as num).toInt(),
+      issuedAt: _optionalDate(row['issued_at']),
+    );
+
+({String sql, List<Object?> values}) _d1OAuthBindingPredicate(
+  OAuthAuthorizationCodeExchangeRequest request,
+) {
+  final expectedChallenge = request.codeVerifier == null
+      ? null
+      : _s256Challenge(request.codeVerifier!);
+  return (
+    sql: '''client_id = ? AND redirect_uri = ? AND expires_at > ? AND
+      (code_challenge IS NULL OR
+       (? IS NOT NULL AND code_challenge_method = 'S256' AND
+        code_challenge = ?))''',
+    values: <Object?>[
+      request.clientId.trim(),
+      request.redirectUri,
+      _date(request.now),
+      expectedChallenge,
+      expectedChallenge,
+    ],
+  );
+}
+
+({String sql, List<Object?> values}) _d1OAuthCommitPredicate(
+  OAuthAuthorizationCodeExchangeRequest request,
+  String authorizationId,
+  OAuthAccessToken token,
+) {
+  final binding = _d1OAuthBindingPredicate(request);
+  return (
+    sql: '''code_hash = ? AND authorization_id = ? AND ${binding.sql}
+      AND user_id = ? AND scope = ?''',
+    values: <Object?>[
+      request.codeHash.trim(),
+      authorizationId,
+      ...binding.values,
+      token.userId.trim(),
+      token.scope,
+    ],
+  );
+}
+
+bool _d1OAuthBindingsMatch(
+  OAuthAuthorizationCode code,
+  OAuthAuthorizationCodeExchangeRequest request,
+) {
+  if (code.clientId != request.clientId.trim() ||
+      code.redirectUri != request.redirectUri) {
+    return false;
+  }
+  final challenge = code.codeChallenge;
+  if (challenge == null) return true;
+  final verifier = request.codeVerifier;
+  return code.codeChallengeMethod == 'S256' &&
+      verifier != null &&
+      constantTimeStringEquals(_s256Challenge(verifier), challenge);
+}
+
+void _validatePreparedD1OAuthToken(
+  OAuthAuthorizationCodeExchangeRequest request,
+  String authorizationId,
+  OAuthAccessToken token,
+) {
+  _required(request.codeHash, 'request.codeHash');
+  _required(request.clientId, 'request.clientId');
+  _required(request.redirectUri, 'request.redirectUri');
+  _required(authorizationId, 'expectedAuthorizationId');
+  _validateD1OAuthAccessToken(token);
+  if (token.authorizationId != authorizationId ||
+      token.clientId != request.clientId.trim() ||
+      !token.expiresAt.toUtc().isAfter(request.now.toUtc())) {
+    throw ArgumentError('Prepared OAuth token does not match the exchange.');
+  }
+}
+
+String _s256Challenge(String verifier) => pkceS256CodeChallenge(verifier);
+
+List<String> _decodeStringList(Object? value) {
+  final decoded = value is String ? jsonDecode(value) : value;
+  return decoded is List
+      ? decoded.map((item) => item.toString()).toList(growable: false)
+      : const [];
+}
+
+DateTime? _optionalDate(Object? value) =>
+    DateTime.tryParse(value?.toString() ?? '')?.toUtc();
+
+String? _nullableDate(DateTime? value) => value == null ? null : _date(value);
 
 String _required(String value, String name) {
   final normalized = value.trim();

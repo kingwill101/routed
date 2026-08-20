@@ -36,6 +36,7 @@ final class OAuthProviderModePlugin<TContext>
         AuthRateLimitContributor,
         AuthUserDeletionPlanContributor,
         AuthUserAccessRevocationContributor,
+        AuthProductionPostureContributor,
         AuthOAuthTokenEndpointHost<TContext> {
   OAuthProviderModePlugin({
     required this.clientStore,
@@ -84,6 +85,19 @@ final class OAuthProviderModePlugin<TContext>
 
   @override
   Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) {
+    final factory =
+        authorizationCodeExchangeStore is AuthUserDeletionPlanFactory
+        ? authorizationCodeExchangeStore as AuthUserDeletionPlanFactory
+        : null;
+    if (factory != null) {
+      return Future.sync(
+        () => factory.createDeletionPlan(
+          domain: _deletionDomain,
+          user: user,
+          namespace: userDataNamespace,
+        ),
+      );
+    }
     if (_deletionDomain is! AuthInMemoryUserDeletionDomain ||
         authorizationCodeStore is! AuthInMemoryUserDeletionStore ||
         accessTokenStore is! AuthInMemoryUserDeletionStore) {
@@ -120,6 +134,28 @@ final class OAuthProviderModePlugin<TContext>
   String get id => authOAuthProviderModePluginId;
 
   @override
+  void validateProductionPosture() {
+    final clients = clientStore is OAuthProviderPersistenceTopology
+        ? clientStore as OAuthProviderPersistenceTopology
+        : null;
+    final exchange =
+        authorizationCodeExchangeStore is OAuthProviderPersistenceTopology
+        ? authorizationCodeExchangeStore as OAuthProviderPersistenceTopology
+        : null;
+    if (clients == null ||
+        exchange == null ||
+        !identical(
+          clients.oauthProviderPersistenceDomain,
+          exchange.oauthProviderPersistenceDomain,
+        )) {
+      throw StateError(
+        'Production OAuth provider mode requires client and exchange stores '
+        'from one authoritative persistence domain.',
+      );
+    }
+  }
+
+  @override
   void configure(AuthServerPluginContext<TContext> context) {
     _store = context.store;
     final host = context.store;
@@ -131,12 +167,22 @@ final class OAuthProviderModePlugin<TContext>
     _deletionDomain = (host as AuthUserDeletionCoordinatorHost)
         .userDeletionCoordinator
         .domain;
-    if (authorizationCodeExchangeStore
-            is InMemoryOAuthAuthorizationCodeExchangeStore &&
-        _deletionDomain is! AuthInMemoryUserDeletionDomain) {
+    if (_deletionDomain is AuthInMemoryUserDeletionDomain) return;
+
+    final clients = clientStore is OAuthProviderPersistenceTopology
+        ? clientStore as OAuthProviderPersistenceTopology
+        : null;
+    final exchange =
+        authorizationCodeExchangeStore is OAuthProviderPersistenceTopology
+        ? authorizationCodeExchangeStore as OAuthProviderPersistenceTopology
+        : null;
+    if (clients == null ||
+        exchange == null ||
+        !identical(clients.oauthProviderPersistenceDomain, _deletionDomain) ||
+        !identical(exchange.oauthProviderPersistenceDomain, _deletionDomain)) {
       throw StateError(
-        'The in-memory OAuth exchange store cannot be used with a durable '
-        'auth persistence domain.',
+        'A durable auth store requires OAuth clients and authorization-code '
+        'exchange state from its own authoritative persistence domain.',
       );
     }
   }

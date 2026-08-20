@@ -86,6 +86,16 @@ abstract interface class OAuthAccessTokenStore {
   FutureOr<int> deleteExpired({DateTime? now});
 }
 
+/// Identifies OAuth provider persistence that is authoritative when durable.
+///
+/// The client store and authorization-code exchange store must expose the
+/// identical domain object. This prevents a durable runtime from booting with
+/// split databases or with only part of provider-mode state made durable.
+abstract interface class OAuthProviderPersistenceTopology {
+  /// Backend-owned domain shared by the client registry and exchange store.
+  AuthUserDeletionDomain get oauthProviderPersistenceDomain;
+}
+
 /// Digest-only bindings presented during an authorization-code exchange.
 final class OAuthAuthorizationCodeExchangeRequest {
   const OAuthAuthorizationCodeExchangeRequest({

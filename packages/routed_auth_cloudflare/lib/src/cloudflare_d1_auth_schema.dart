@@ -22,7 +22,7 @@ final class CloudflareD1AuthSchema {
   /// underscores are accepted because SQLite cannot bind identifiers.
   final String tablePrefix;
 
-  static const int currentVersion = 2;
+  static const int currentVersion = 4;
 
   String table(String suffix) {
     final prefix = tablePrefix.trim();
@@ -48,7 +48,71 @@ final class CloudflareD1AuthSchema {
     CloudflareD1AuthMigration(version: 1, statements: _versionOne),
     CloudflareD1AuthMigration(version: 2, statements: _versionTwo),
     CloudflareD1AuthMigration(version: 3, statements: _versionThree),
+    CloudflareD1AuthMigration(version: 4, statements: _versionFour),
   ];
+
+  List<String> get _versionFour {
+    final clients = table('oauth_clients');
+    final authorizationCodes = table('oauth_authorization_codes');
+    final accessTokens = table('oauth_access_tokens');
+    return [
+      '''CREATE TABLE IF NOT EXISTS $clients (
+        client_id TEXT PRIMARY KEY,
+        client_secret_hash TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        redirect_uris TEXT NOT NULL,
+        grant_types TEXT NOT NULL,
+        scopes TEXT NOT NULL,
+        token_endpoint_auth_method TEXT NOT NULL,
+        created_at TEXT,
+        updated_at TEXT,
+        enabled INTEGER NOT NULL CHECK (enabled IN (0, 1))
+      )''',
+      '''CREATE TABLE IF NOT EXISTS $authorizationCodes (
+        code_hash TEXT PRIMARY KEY,
+        authorization_id TEXT NOT NULL UNIQUE,
+        client_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        redirect_uri TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        code_challenge TEXT,
+        code_challenge_method TEXT,
+        nonce TEXT,
+        created_at TEXT,
+        CHECK (
+          (code_challenge IS NULL AND code_challenge_method IS NULL) OR
+          (code_challenge IS NOT NULL AND code_challenge_method = 'S256')
+        )
+      )''',
+      'CREATE INDEX IF NOT EXISTS ${authorizationCodes}_user '
+          'ON $authorizationCodes(user_id)',
+      'CREATE INDEX IF NOT EXISTS ${authorizationCodes}_client '
+          'ON $authorizationCodes(client_id)',
+      'CREATE INDEX IF NOT EXISTS ${authorizationCodes}_expiry '
+          'ON $authorizationCodes(expires_at)',
+      '''CREATE TABLE IF NOT EXISTS $accessTokens (
+        token_hash TEXT PRIMARY KEY,
+        authorization_id TEXT UNIQUE,
+        client_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        refresh_token_hash TEXT UNIQUE,
+        refresh_token_expires_at TEXT,
+        refresh_token_uses INTEGER NOT NULL DEFAULT 0
+          CHECK (refresh_token_uses >= 0),
+        issued_at TEXT
+      )''',
+      'CREATE INDEX IF NOT EXISTS ${accessTokens}_user '
+          'ON $accessTokens(user_id)',
+      'CREATE INDEX IF NOT EXISTS ${accessTokens}_client '
+          'ON $accessTokens(client_id)',
+      'CREATE INDEX IF NOT EXISTS ${accessTokens}_expiry '
+          'ON $accessTokens(expires_at, refresh_token_expires_at)',
+    ];
+  }
 
   List<String> get _versionThree {
     final deviceAuthorizations = table('device_authorizations');
@@ -222,6 +286,9 @@ final class CloudflareD1AuthSchema {
   /// retain migration history and never call it during normal operation.
   Future<void> dropAll(CloudflareD1Database database) async {
     final suffixes = [
+      'oauth_access_tokens',
+      'oauth_authorization_codes',
+      'oauth_clients',
       'deletion_receipts',
       'email_otps',
       'device_authorizations',
