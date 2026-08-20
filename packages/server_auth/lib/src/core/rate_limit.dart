@@ -33,6 +33,21 @@ enum AuthRateLimitAction {
 
   /// A TOTP, recovery-code, or step-up verification attempt.
   twoFactor,
+
+  /// A reauthenticated request to change the current email address.
+  emailChangeRequest,
+
+  /// Consumption of an email-change confirmation token.
+  emailChangeConfirm,
+
+  /// Removal of a linked external authentication identity.
+  accountUnlink,
+
+  /// Verification and linking of an external authentication identity.
+  accountLink,
+
+  /// A reauthenticated self-service account deletion request.
+  accountDeletion,
 }
 
 /// Stable namespaced identifier for a rate-limited auth operation.

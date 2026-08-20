@@ -96,6 +96,13 @@ abstract interface class AuthUserDataDeletionContributor {
   FutureOr<void> deleteUserData(String userId);
 }
 
+/// Plugin-owned credentials or tokens that must be revoked when a user is
+/// made unavailable without deleting their data.
+abstract interface class AuthUserAccessRevocationContributor {
+  String get userAccessNamespace;
+  FutureOr<void> revokeUserAccess(String userId);
+}
+
 /// Optional second-pass composition after every plugin has been registered.
 abstract interface class AuthServerPluginTopologyAware<TContext> {
   void composePluginTopology(Iterable<AuthServerPlugin<TContext>> plugins);

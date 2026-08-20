@@ -22,9 +22,21 @@ final class AuthAdminUserState {
     this.banned = false,
     this.banReason,
     DateTime? banExpiresAt,
+    this.emailVerified = false,
+    this.disabled = false,
+    this.disabledReason,
+    DateTime? disabledAt,
+    DateTime? lockedUntil,
+    this.failedLoginAttempts = 0,
+    DateTime? lastLoginAt,
+    DateTime? lastFailedLoginAt,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) : banExpiresAt = banExpiresAt?.toUtc(),
+       disabledAt = disabledAt?.toUtc(),
+       lockedUntil = lockedUntil?.toUtc(),
+       lastLoginAt = lastLoginAt?.toUtc(),
+       lastFailedLoginAt = lastFailedLoginAt?.toUtc(),
        createdAt = (createdAt ?? DateTime.now()).toUtc(),
        updatedAt = (updatedAt ?? DateTime.now()).toUtc();
 
@@ -32,6 +44,14 @@ final class AuthAdminUserState {
   final bool banned;
   final String? banReason;
   final DateTime? banExpiresAt;
+  final bool emailVerified;
+  final bool disabled;
+  final String? disabledReason;
+  final DateTime? disabledAt;
+  final DateTime? lockedUntil;
+  final int failedLoginAttempts;
+  final DateTime? lastLoginAt;
+  final DateTime? lastFailedLoginAt;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -40,18 +60,51 @@ final class AuthAdminUserState {
       (banExpiresAt == null ||
           (now ?? DateTime.now()).toUtc().isBefore(banExpiresAt!));
 
+  bool isLocked({DateTime? now}) {
+    if (lockedUntil == null) return false;
+    return (now ?? DateTime.now()).toUtc().isBefore(lockedUntil!);
+  }
+
+  bool canAuthenticate({DateTime? now}) {
+    if (disabled) return false;
+    if (isBanned(now: now)) return false;
+    if (isLocked(now: now)) return false;
+    return true;
+  }
+
   AuthAdminUserState copyWith({
     bool? banned,
     String? banReason,
     DateTime? banExpiresAt,
     bool clearBanReason = false,
     bool clearBanExpiresAt = false,
+    bool? emailVerified,
+    bool? disabled,
+    String? disabledReason,
+    DateTime? disabledAt,
+    DateTime? lockedUntil,
+    int? failedLoginAttempts,
+    DateTime? lastLoginAt,
+    DateTime? lastFailedLoginAt,
     DateTime? updatedAt,
+    bool clearDisabled = false,
+    bool clearLockedUntil = false,
+    bool clearDisabledReason = false,
   }) => AuthAdminUserState(
     userId: userId,
     banned: banned ?? this.banned,
     banReason: clearBanReason ? null : banReason ?? this.banReason,
     banExpiresAt: clearBanExpiresAt ? null : banExpiresAt ?? this.banExpiresAt,
+    emailVerified: emailVerified ?? this.emailVerified,
+    disabled: clearDisabled ? false : (disabled ?? this.disabled),
+    disabledReason: clearDisabledReason
+        ? null
+        : (disabledReason ?? this.disabledReason),
+    disabledAt: clearDisabled ? null : (disabledAt ?? this.disabledAt),
+    lockedUntil: clearLockedUntil ? null : (lockedUntil ?? this.lockedUntil),
+    failedLoginAttempts: failedLoginAttempts ?? this.failedLoginAttempts,
+    lastLoginAt: lastLoginAt ?? this.lastLoginAt,
+    lastFailedLoginAt: lastFailedLoginAt ?? this.lastFailedLoginAt,
     createdAt: createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -61,6 +114,14 @@ final class AuthAdminUserState {
     'banned': isBanned(),
     'banReason': isBanned() ? banReason : null,
     'banExpiresAt': isBanned() ? banExpiresAt?.toIso8601String() : null,
+    'emailVerified': emailVerified,
+    'disabled': disabled,
+    'disabledReason': disabledReason,
+    'disabledAt': disabledAt?.toIso8601String(),
+    'lockedUntil': lockedUntil?.toIso8601String(),
+    'failedLoginAttempts': failedLoginAttempts,
+    'lastLoginAt': lastLoginAt?.toIso8601String(),
+    'lastFailedLoginAt': lastFailedLoginAt?.toIso8601String(),
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
   };
@@ -71,6 +132,14 @@ final class AuthAdminUserState {
         banned: json['banned'] == true,
         banReason: json['banReason']?.toString(),
         banExpiresAt: _optionalDate(json['banExpiresAt']),
+        emailVerified: json['emailVerified'] == true,
+        disabled: json['disabled'] == true,
+        disabledReason: json['disabledReason']?.toString(),
+        disabledAt: _optionalDate(json['disabledAt']),
+        lockedUntil: _optionalDate(json['lockedUntil']),
+        failedLoginAttempts: json['failedLoginAttempts'] as int? ?? 0,
+        lastLoginAt: _optionalDate(json['lastLoginAt']),
+        lastFailedLoginAt: _optionalDate(json['lastFailedLoginAt']),
         createdAt: _requiredDate(json, 'createdAt'),
         updatedAt: _requiredDate(json, 'updatedAt'),
       );

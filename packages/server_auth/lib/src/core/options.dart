@@ -1,7 +1,10 @@
 import 'package:http/http.dart' as http;
 
+import 'account_deletion.dart';
+import 'account_policy.dart';
 import 'authorization.dart';
 import 'browser.dart';
+import 'browser_validator.dart';
 import 'callbacks.dart';
 import 'email_change.dart';
 import 'plugin.dart';
@@ -30,6 +33,8 @@ class AuthOptions<TContext> {
     this.sessionStrategy = AuthSessionStrategy.session,
     this.rateLimiter,
     this.browserProtection = const AuthBrowserProtectionOptions(),
+    this.cookiePolicy = AuthCookiePolicy.production,
+    this.accountPolicy = const AuthAccountPolicy(),
     this.passwordPolicy = const PasswordPolicy(),
     this.jwtOptions = const JwtSessionOptions(secret: ''),
     PasswordHasher? passwordHasher,
@@ -46,6 +51,8 @@ class AuthOptions<TContext> {
     this.passwordResetSender,
     this.emailChangeTtl = const Duration(minutes: 30),
     this.emailChangeSender,
+    this.accountDeletionTtl = const Duration(minutes: 30),
+    this.accountDeletionSender,
     this.httpClient,
     this.enforceCsrf = true,
     this.requireVerifiedEmail = false,
@@ -81,6 +88,13 @@ class AuthOptions<TContext> {
       throw ArgumentError.value(
         emailChangeTtl,
         'emailChangeTtl',
+        'must be greater than zero',
+      );
+    }
+    if (accountDeletionTtl <= Duration.zero) {
+      throw ArgumentError.value(
+        accountDeletionTtl,
+        'accountDeletionTtl',
         'must be greater than zero',
       );
     }
@@ -121,6 +135,12 @@ class AuthOptions<TContext> {
 
   /// Browser origin and Fetch Metadata checks for state-changing auth routes.
   final AuthBrowserProtectionOptions browserProtection;
+
+  /// Cookie security policy for auth cookies.
+  final AuthCookiePolicy cookiePolicy;
+
+  /// Account state and authentication policy.
+  final AuthAccountPolicy accountPolicy;
 
   /// Registration and verifier-input limits for built-in credentials.
   final PasswordPolicy passwordPolicy;
@@ -173,6 +193,12 @@ class AuthOptions<TContext> {
   /// Application-owned delivery callback for email-change confirmations.
   final AuthEmailChangeSender<TContext>? emailChangeSender;
 
+  /// Maximum age of a pending account-deletion confirmation.
+  final Duration accountDeletionTtl;
+
+  /// Application-owned delivery callback for account-deletion confirmations.
+  final AuthAccountDeletionSender<TContext>? accountDeletionSender;
+
   /// HTTP client used for OAuth calls.
   final http.Client? httpClient;
 
@@ -222,6 +248,8 @@ class AuthOptions<TContext> {
     AuthSessionStrategy? sessionStrategy,
     AuthRateLimiter<TContext>? rateLimiter,
     AuthBrowserProtectionOptions? browserProtection,
+    AuthCookiePolicy? cookiePolicy,
+    AuthAccountPolicy? accountPolicy,
     PasswordPolicy? passwordPolicy,
     JwtSessionOptions? jwtOptions,
     PasswordHasher? passwordHasher,
@@ -238,6 +266,8 @@ class AuthOptions<TContext> {
     AuthPasswordResetSender<TContext>? passwordResetSender,
     Duration? emailChangeTtl,
     AuthEmailChangeSender<TContext>? emailChangeSender,
+    Duration? accountDeletionTtl,
+    AuthAccountDeletionSender<TContext>? accountDeletionSender,
     http.Client? httpClient,
     bool? enforceCsrf,
     bool? requireVerifiedEmail,
@@ -254,6 +284,8 @@ class AuthOptions<TContext> {
       sessionStrategy: sessionStrategy ?? this.sessionStrategy,
       rateLimiter: rateLimiter ?? this.rateLimiter,
       browserProtection: browserProtection ?? this.browserProtection,
+      cookiePolicy: cookiePolicy ?? this.cookiePolicy,
+      accountPolicy: accountPolicy ?? this.accountPolicy,
       passwordPolicy: passwordPolicy ?? this.passwordPolicy,
       jwtOptions: jwtOptions ?? this.jwtOptions,
       passwordHasher: passwordHasher ?? this.passwordHasher,
@@ -270,6 +302,9 @@ class AuthOptions<TContext> {
       passwordResetSender: passwordResetSender ?? this.passwordResetSender,
       emailChangeTtl: emailChangeTtl ?? this.emailChangeTtl,
       emailChangeSender: emailChangeSender ?? this.emailChangeSender,
+      accountDeletionTtl: accountDeletionTtl ?? this.accountDeletionTtl,
+      accountDeletionSender:
+          accountDeletionSender ?? this.accountDeletionSender,
       httpClient: httpClient ?? this.httpClient,
       enforceCsrf: enforceCsrf ?? this.enforceCsrf,
       requireVerifiedEmail: requireVerifiedEmail ?? this.requireVerifiedEmail,

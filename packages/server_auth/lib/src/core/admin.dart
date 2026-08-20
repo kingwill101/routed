@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'account_policy.dart';
 import 'admin_models.dart';
 import 'admin_store.dart';
 import 'exceptions.dart';
@@ -129,6 +130,8 @@ final class AdminPlugin<TContext>
   late PasswordHasher _passwordHasher;
   late PasswordPolicy _passwordPolicy;
   late AuthSessionStrategy _sessionStrategy;
+  List<AuthUserAccessRevocationContributor> _accessRevocationContributors =
+      const [];
 
   Set<String> get _adminRoles =>
       normalizeAuthAdminRoles(options.adminRoles).toSet();
@@ -148,6 +151,10 @@ final class AdminPlugin<TContext>
   @override
   void composePluginTopology(Iterable<AuthServerPlugin<TContext>> plugins) {
     final target = store;
+    _accessRevocationContributors = plugins
+        .whereType<AuthUserAccessRevocationContributor>()
+        .where((plugin) => !identical(plugin, this))
+        .toList(growable: false);
     final contributors = plugins
         .whereType<AuthUserDataDeletionContributor>()
         .where((plugin) => !identical(plugin, this))
@@ -185,9 +192,18 @@ final class AdminPlugin<TContext>
     'admin.stopImpersonating': '/admin/stop-impersonating',
     'admin.removeUser': '/admin/remove-user',
     'admin.hasPermission': '/admin/has-permission',
+    'admin.disableUser': '/admin/disable-user',
+    'admin.enableUser': '/admin/enable-user',
+    'admin.verifyEmail': '/admin/verify-email',
+    'admin.unlockUser': '/admin/unlock-user',
+    'admin.getAccountState': '/admin/get-account-state',
   };
 
-  static const Set<String> _reads = {'admin.listUsers', 'admin.getUser'};
+  static const Set<String> _reads = {
+    'admin.listUsers',
+    'admin.getUser',
+    'admin.getAccountState',
+  };
 
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints => _paths.keys
@@ -320,8 +336,16 @@ final class AdminPlugin<TContext>
     AuthAuthenticationPolicyRequest<TContext> request,
   ) async {
     final adminUser = await store.findUser(request.user.id);
-    if (adminUser?.state.isBanned() == true) {
+    if (adminUser == null) return;
+    final state = adminUser.state;
+    if (state.isBanned()) {
       throw AuthFlowException('account_unavailable');
+    }
+    if (state.disabled) {
+      throw AuthFlowException('account_disabled');
+    }
+    if (state.isLocked()) {
+      throw AuthFlowException('account_locked');
     }
   }
 
@@ -440,6 +464,22 @@ final class AdminPlugin<TContext>
             _string(input, 'action'),
           ),
         ).toJson();
+      case 'admin.disableUser':
+        await _require(actor.id, 'user', 'ban');
+        return _disableUser(invocation.context, actor, input);
+      case 'admin.enableUser':
+        await _require(actor.id, 'user', 'ban');
+        return _enableUser(invocation.context, actor, input);
+      case 'admin.verifyEmail':
+        await _require(actor.id, 'user', 'update');
+        return _verifyEmail(invocation.context, actor, input);
+      case 'admin.unlockUser':
+        await _require(actor.id, 'user', 'ban');
+        return _unlockUser(invocation.context, actor, input);
+      case 'admin.getAccountState':
+        final targetId = _optionalString(input, 'userId') ?? actor.id;
+        if (targetId != actor.id) await _require(actor.id, 'user', 'get');
+        return _getAccountState(targetId);
     }
     throw AuthFlowException('operation_not_found');
   }
@@ -952,6 +992,91 @@ final class AdminPlugin<TContext>
         targetUserId: targetUserId,
       ),
     );
+  }
+
+  Future<AuthAdminMutationResult<AuthAdminUser>> _disableUser(
+    TContext context,
+    AuthUser actor,
+    Map<String, dynamic> input,
+  ) async {
+    final userId = _string(input, 'userId');
+    if (actor.id == userId) throw AuthFlowException('self_disable');
+    final reason = _optionalString(input, 'reason');
+    final updated = await store.disableUser(userId, reason: reason);
+    for (final contributor in _accessRevocationContributors) {
+      await contributor.revokeUserAccess(userId);
+    }
+    return _completeMutation(
+      context,
+      actor,
+      'user.disabled',
+      userId,
+      updated,
+      options.hooks.afterUser,
+    );
+  }
+
+  Future<AuthAdminMutationResult<AuthAdminUser>> _enableUser(
+    TContext context,
+    AuthUser actor,
+    Map<String, dynamic> input,
+  ) async {
+    final userId = _string(input, 'userId');
+    final updated = await store.enableUser(userId);
+    return _completeMutation(
+      context,
+      actor,
+      'user.enabled',
+      userId,
+      updated,
+      options.hooks.afterUser,
+    );
+  }
+
+  Future<AuthAdminMutationResult<AuthAdminUser>> _verifyEmail(
+    TContext context,
+    AuthUser actor,
+    Map<String, dynamic> input,
+  ) async {
+    final userId = _string(input, 'userId');
+    final updated = await store.verifyEmail(userId);
+    return _completeMutation(
+      context,
+      actor,
+      'user.email_verified',
+      userId,
+      updated,
+      options.hooks.afterUser,
+    );
+  }
+
+  Future<AuthAdminMutationResult<AuthAdminUser>> _unlockUser(
+    TContext context,
+    AuthUser actor,
+    Map<String, dynamic> input,
+  ) async {
+    final userId = _string(input, 'userId');
+    final updated = await store.unlockUser(userId);
+    return _completeMutation(
+      context,
+      actor,
+      'user.unlocked',
+      userId,
+      updated,
+      options.hooks.afterUser,
+    );
+  }
+
+  Future<Map<String, dynamic>> _getAccountState(String userId) async {
+    final current = await _requiredUser(userId);
+    final accountStates = _coreStore is AuthAccountStateStore
+        ? _coreStore as AuthAccountStateStore
+        : null;
+    final authenticationState = await accountStates?.find(userId);
+    return {
+      ...current.state.toJson(),
+      if (authenticationState != null) ...authenticationState.toJson(),
+    };
   }
 
   Future<void> _report(

@@ -56,7 +56,7 @@ void main() {
           plugins: [feature],
         ),
       );
-      expect(runtime.registry.endpoints, hasLength(15));
+      expect(runtime.registry.endpoints, hasLength(20));
       expect(
         runtime.registry.endpoints.map((endpoint) => endpoint.path),
         containsAll([

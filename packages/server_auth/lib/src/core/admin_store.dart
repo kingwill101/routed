@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'admin_models.dart';
+import 'account_policy.dart';
 import 'exceptions.dart';
 import 'plugin.dart';
 import 'models.dart';
@@ -46,6 +47,14 @@ abstract interface class AuthAdminStore {
     required Set<String> administratorRoles,
     required Set<String> administratorUserIds,
   });
+
+  FutureOr<AuthAdminUser> disableUser(String userId, {String? reason});
+
+  FutureOr<AuthAdminUser> enableUser(String userId);
+
+  FutureOr<AuthAdminUser> verifyEmail(String userId);
+
+  FutureOr<AuthAdminUser> unlockUser(String userId);
 }
 
 /// Serialized admin store for tests and local development.
@@ -285,6 +294,92 @@ final class InMemoryAuthAdminStore implements AuthAdminStore {
     if (deleted) _states.remove(user.id);
     return deleted;
   });
+
+  @override
+  Future<AuthAdminUser> disableUser(String userId, {String? reason}) =>
+      _atomic(() async {
+        final user = await _core.users.findById(userId.trim());
+        if (user == null) throw AuthFlowException('user_not_found');
+        final current = _state(user.id);
+        final now = DateTime.now().toUtc();
+        final updated = current.copyWith(
+          disabled: true,
+          disabledReason: reason?.trim(),
+          disabledAt: now,
+          updatedAt: now,
+        );
+        _states[user.id] = updated;
+        await _persistAccountState(updated, operation: 'disable');
+        await _revoke(user.id);
+        return AuthAdminUser(user: user, state: updated);
+      });
+
+  @override
+  Future<AuthAdminUser> enableUser(String userId) => _atomic(() async {
+    final user = await _core.users.findById(userId.trim());
+    if (user == null) throw AuthFlowException('user_not_found');
+    final current = _state(user.id);
+    final updated = current.copyWith(
+      clearDisabled: true,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    _states[user.id] = updated;
+    await _persistAccountState(updated, operation: 'enable');
+    return AuthAdminUser(user: user, state: updated);
+  });
+
+  @override
+  Future<AuthAdminUser> verifyEmail(String userId) => _atomic(() async {
+    final user = await _core.users.findById(userId.trim());
+    if (user == null) throw AuthFlowException('user_not_found');
+    final current = _state(user.id);
+    final updated = current.copyWith(
+      emailVerified: true,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    _states[user.id] = updated;
+    await _persistAccountState(updated, operation: 'verify');
+    return AuthAdminUser(user: user, state: updated);
+  });
+
+  @override
+  Future<AuthAdminUser> unlockUser(String userId) => _atomic(() async {
+    final user = await _core.users.findById(userId.trim());
+    if (user == null) throw AuthFlowException('user_not_found');
+    final current = _state(user.id);
+    final updated = current.copyWith(
+      clearLockedUntil: true,
+      failedLoginAttempts: 0,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    _states[user.id] = updated;
+    await _persistAccountState(updated, operation: 'unlock');
+    return AuthAdminUser(user: user, state: updated);
+  });
+
+  Future<void> _persistAccountState(
+    AuthAdminUserState state, {
+    required String operation,
+  }) async {
+    final accountStates = _core is AuthAccountStateStore
+        ? _core as AuthAccountStateStore
+        : null;
+    if (accountStates == null) return;
+    final current = await accountStates.find(state.userId);
+    final base = current ?? AuthAccountState(userId: state.userId);
+    final next = switch (operation) {
+      'disable' => base.copyWith(
+        disabled: true,
+        disabledReason: state.disabledReason,
+        disabledAt: state.disabledAt,
+      ),
+      'enable' => base.copyWith(clearDisabled: true),
+      'verify' => base.copyWith(emailVerified: true),
+      'unlock' => base.copyWith(clearLockedUntil: true, failedLoginAttempts: 0),
+      _ => base,
+    };
+    await accountStates.upsert(next);
+  }
 
   Future<void> _revoke(String userId) async {
     await _core.sessions.revokeAllForUser(userId);
