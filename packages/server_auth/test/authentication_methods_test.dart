@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:property_testing/property_testing.dart';
 import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
@@ -302,6 +304,47 @@ void main() {
     await _verifyConcurrentRemoval(<int>[0, 1, 2]);
   });
 
+  test('concurrent primary API-key revocations preserve one key', () async {
+    final root = InMemoryAuthStore();
+    final keyStore = InMemoryAuthApiKeyStore();
+    var sequence = 0;
+    final apiKeys = AuthApiKeyPlugin<Object>(
+      store: keyStore,
+      countsAsPrimaryAuthenticationMethod: true,
+      keyIdGenerator: ({int length = 32}) => 'key-${sequence++}',
+      secretGenerator: ({int length = 32}) => 'secret-$sequence',
+    );
+    final methods = AuthAuthenticationMethodService(store: root);
+    apiKeys.configure(
+      AuthServerPluginContext<Object>(
+        store: root,
+        authenticationMethods: methods,
+      ),
+    );
+    methods.composeContributors(<AuthAuthenticationMethodInventoryContributor>[
+      apiKeys,
+      _TwoPartyInventoryBarrier(),
+    ]);
+    final first = await apiKeys.issue(userId: 'user-1', name: 'first');
+    final second = await apiKeys.issue(userId: 'user-1', name: 'second');
+
+    final outcomes = await Future.wait<Object>([
+      _capture(() async {
+        await apiKeys.revoke('user-1', first.apiKey.id);
+      }),
+      _capture(() async {
+        await apiKeys.revoke('user-1', second.apiKey.id);
+      }),
+    ]);
+    final errors = outcomes.whereType<AuthFlowException>().toList();
+    final snapshot = await methods.snapshotForUser('user-1');
+
+    expect(errors, hasLength(1));
+    expect(errors.single.code, 'last_authentication_method');
+    expect(snapshot.isComplete, isTrue);
+    expect(snapshot.methods, hasLength(1));
+  });
+
   test('property: every removal ordering preserves a fallback', () async {
     final runner = PropertyTestRunner<int>(
       Gen.integer(min: 0, max: 5),
@@ -549,6 +592,31 @@ final class _StaticInventory
   AuthAuthenticationMethodSnapshot authenticationMethodsForUser(
     String userId,
   ) => AuthAuthenticationMethodSnapshot.complete([method]);
+}
+
+final class _TwoPartyInventoryBarrier
+    implements AuthAuthenticationMethodInventoryContributor {
+  final Completer<void> _release = Completer<void>();
+  var _arrivals = 0;
+
+  @override
+  String get authenticationMethodNamespace => 'test_barrier';
+
+  @override
+  Future<AuthAuthenticationMethodSnapshot> authenticationMethodsForUser(
+    String userId,
+  ) async {
+    _arrivals++;
+    if (_arrivals == 1) {
+      Timer.run(() {
+        if (!_release.isCompleted) _release.complete();
+      });
+    } else if (_arrivals == 2 && !_release.isCompleted) {
+      _release.complete();
+    }
+    await _release.future;
+    return AuthAuthenticationMethodSnapshot.complete(const []);
+  }
 }
 
 final class _UnavailableInventory

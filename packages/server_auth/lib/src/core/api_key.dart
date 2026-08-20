@@ -269,7 +269,6 @@ final class InMemoryAuthApiKeyStore
     implements
         AuthApiKeyStore,
         AuthApiKeyUserAccessRevocationStore,
-        AuthApiKeyPrimaryMutationStore,
         AuthInMemoryUserDeletionStore {
   InMemoryAuthApiKeyStore({this.maxRecords = 10000}) {
     if (maxRecords <= 0) {
@@ -364,33 +363,6 @@ final class InMemoryAuthApiKeyStore
       count += 1;
     }
     return count;
-  }
-
-  @override
-  Future<AuthAuthenticationMethodMutationResult> revokePrimaryKeyIfSafe(
-    AuthApiKeyPrimaryRevocationCommand command,
-  ) async {
-    final snapshot = await command.loadInventory();
-    if (!snapshot.isComplete) {
-      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
-    }
-    final target = AuthAuthenticationMethod.apiKey(command.keyId);
-    if (!snapshot.methods.contains(target)) {
-      return AuthAuthenticationMethodMutationResult.notFound;
-    }
-    if (!snapshot.methods.any(
-      (method) => method.canAuthenticate && method != target,
-    )) {
-      return AuthAuthenticationMethodMutationResult.lastAuthenticationMethod;
-    }
-    final revoked = await revokeForUser(
-      command.userId,
-      command.keyId,
-      revokedAt: command.revokedAt,
-    );
-    return revoked == null
-        ? AuthAuthenticationMethodMutationResult.notFound
-        : AuthAuthenticationMethodMutationResult.mutated;
   }
 
   @override
@@ -669,6 +641,18 @@ final class AuthApiKeyPlugin<TContext>
     AuthApiKeyRecord? revoked;
     if (countsAsPrimaryAuthenticationMethod) {
       final result = switch (store) {
+        InMemoryAuthApiKeyStore _ => await _authenticationMethods.removeIfSafe(
+          userId: normalizedUserId,
+          target: AuthAuthenticationMethod.apiKey(normalizedId),
+          mutate: () async {
+            revoked = await store.revokeForUser(
+              normalizedUserId,
+              normalizedId,
+              revokedAt: current,
+            );
+            return revoked != null;
+          },
+        ),
         AuthApiKeyPrimaryMutationStore primaryStore =>
           await primaryStore.revokePrimaryKeyIfSafe(
             AuthApiKeyPrimaryRevocationCommand(
