@@ -230,6 +230,32 @@ abstract interface class AuthEndpointDescriptor<TContext> {
   );
 }
 
+/// Optional endpoint contribution used to derive a private rate-limit key.
+///
+/// The returned value is supplied only to [AuthRateLimiter]. Implementations
+/// must return a canonical non-secret identifier and must never return a
+/// password, captcha token, bearer credential, or other request secret.
+abstract interface class AuthEndpointRateLimitIdentifierDescriptor {
+  String? resolveRateLimitIdentifier(Map<String, dynamic> input);
+}
+
+/// A successful plugin authentication that the host must serialize.
+///
+/// Framework integrations use their normal session projection and callback
+/// pipeline instead of letting a portable plugin decide whether a JWT token
+/// is publicly exposed.
+final class AuthEndpointSessionResponse {
+  AuthEndpointSessionResponse({
+    required this.session,
+    this.provider,
+    Map<String, dynamic> metadata = const <String, dynamic>{},
+  }) : metadata = Map<String, dynamic>.unmodifiable(metadata);
+
+  final AuthSession session;
+  final AuthProvider? provider;
+  final Map<String, dynamic> metadata;
+}
+
 /// Optional typed request/response contracts exposed by an auth endpoint.
 ///
 /// Keeping this separate from [AuthEndpointDescriptor] preserves custom
@@ -243,7 +269,8 @@ abstract interface class AuthEndpointContractDescriptor {
 final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
     implements
         AuthEndpointDescriptor<TContext>,
-        AuthEndpointContractDescriptor {
+        AuthEndpointContractDescriptor,
+        AuthEndpointRateLimitIdentifierDescriptor {
   const TypedAuthEndpointDescriptor({
     required this.id,
     required this.method,
@@ -255,6 +282,7 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
     this.originPolicy = AuthOperationOriginPolicy.browser,
     this.csrfPolicy = AuthOperationCsrfPolicy.none,
     this.rateLimitOperation,
+    this.rateLimitIdentifier,
     this.serverOnly = false,
   });
 
@@ -281,8 +309,13 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
   final AuthOperationCsrfPolicy csrfPolicy;
   @override
   final AuthRateLimitOperation? rateLimitOperation;
+  final String? Function(Map<String, dynamic> input)? rateLimitIdentifier;
   @override
   final bool serverOnly;
+
+  @override
+  String? resolveRateLimitIdentifier(Map<String, dynamic> input) =>
+      rateLimitIdentifier?.call(input);
 
   @override
   Future<Object?> invoke(

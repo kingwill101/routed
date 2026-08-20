@@ -163,6 +163,37 @@ abstract interface class AuthCredentialUserLookupStore {
   FutureOr<AuthPasswordCredential?> findForUser(String userId);
 }
 
+/// Optional persistence capability required by username authentication.
+///
+/// Implementations must commit the user, their optional normalized email, and
+/// the canonical username password credential in one transaction. The same
+/// uniqueness indexes and transaction boundary must be shared with ordinary
+/// email credential registration so concurrent requests cannot claim either
+/// identifier namespace twice.
+///
+/// This capability is deliberately separate from [AuthCredentialStore]. Auth
+/// adapters that do not opt into username authentication remain source
+/// compatible, while the username plugin can fail at configuration time when
+/// an adapter cannot provide the required atomicity.
+abstract interface class AuthUsernameCredentialStore
+    implements AuthCredentialStore, AuthCredentialUserLookupStore {
+  /// Atomically registers a canonical username credential and its user.
+  ///
+  /// Returns `null` when the username, email, user ID, or credential ID is
+  /// already claimed. [credential.identifier] must be the canonical username
+  /// and must not be an email-shaped identifier.
+  FutureOr<AuthUser?> registerUsername(
+    AuthUser user,
+    AuthPasswordCredential credential,
+  );
+
+  /// Finds the canonical username credential owned by [userId].
+  ///
+  /// This must not return an email credential when a backend permits multiple
+  /// password credential kinds for one user.
+  FutureOr<AuthPasswordCredential?> findUsernameForUser(String userId);
+}
+
 /// Resolves the password credential owned by [userId].
 ///
 /// Username-based accounts require an explicit user lookup capability because
@@ -1060,14 +1091,14 @@ class _InMemoryUserStore implements AuthUserStore {
   }
 }
 
-class _InMemoryCredentialStore
-    implements AuthCredentialStore, AuthCredentialUserLookupStore {
+class _InMemoryCredentialStore implements AuthUsernameCredentialStore {
   AuthUserStore? users;
   final Map<String, AuthPasswordCredential> _credentialsById =
       <String, AuthPasswordCredential>{};
   final Map<String, String> _credentialIdsByIdentifier = <String, String>{};
   final Set<String> _inFlightIdentifiers = <String>{};
   final Set<String> _inFlightCredentialIds = <String>{};
+  final Set<String> _inFlightEmails = <String>{};
 
   Iterable<AuthPasswordCredential> get values => _credentialsById.values;
 
@@ -1118,15 +1149,41 @@ class _InMemoryCredentialStore
   }
 
   @override
+  Future<AuthPasswordCredential?> findUsernameForUser(String userId) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) return null;
+    for (final credential in _credentialsById.values) {
+      if (credential.userId == normalizedUserId &&
+          !credential.identifier.contains('@')) {
+        return credential;
+      }
+    }
+    return null;
+  }
+
+  @override
   Future<AuthUser?> register(
     AuthUser user,
     AuthPasswordCredential credential,
-  ) async {
+  ) => _register(user, credential, username: false);
+
+  @override
+  Future<AuthUser?> registerUsername(
+    AuthUser user,
+    AuthPasswordCredential credential,
+  ) => _register(user, credential, username: true);
+
+  Future<AuthUser?> _register(
+    AuthUser user,
+    AuthPasswordCredential credential, {
+    required bool username,
+  }) async {
     if (credential.id.trim().isEmpty ||
         credential.userId.trim().isEmpty ||
         credential.identifier.trim().isEmpty ||
         credential.passwordHash.isEmpty ||
         credential.userId != user.id ||
+        (username && credential.identifier.contains('@')) ||
         _credentialIdsByIdentifier.containsKey(credential.identifier) ||
         _credentialsById.containsKey(credential.id)) {
       return null;
@@ -1140,13 +1197,24 @@ class _InMemoryCredentialStore
       _inFlightIdentifiers.remove(credential.identifier);
       return null;
     }
+    final email = user.email;
+    final reservedEmail = email == null || _inFlightEmails.add(email);
+    if (!reservedEmail) {
+      _inFlightIdentifiers.remove(credential.identifier);
+      _inFlightCredentialIds.remove(credential.id);
+      return null;
+    }
     try {
       final userStore = users;
       if (userStore == null) {
         return null;
       }
       final existing = await userStore.findById(user.id);
+      final existingEmail = email == null
+          ? null
+          : await userStore.findByEmail(email);
       if (existing != null ||
+          existingEmail != null ||
           _credentialIdsByIdentifier.containsKey(credential.identifier) ||
           _credentialsById.containsKey(credential.id)) {
         return null;
@@ -1158,6 +1226,7 @@ class _InMemoryCredentialStore
     } finally {
       _inFlightIdentifiers.remove(credential.identifier);
       _inFlightCredentialIds.remove(credential.id);
+      if (email != null) _inFlightEmails.remove(email);
     }
   }
 

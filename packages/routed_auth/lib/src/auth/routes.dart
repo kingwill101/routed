@@ -6,6 +6,8 @@ import 'package:server_auth/server_auth.dart'
     show
         AuthCredentials,
         AuthEndpointDescriptor,
+        AuthEndpointRateLimitIdentifierDescriptor,
+        AuthEndpointSessionResponse,
         AuthEndpointRedirect,
         AuthOperationAuthentication,
         AuthOperationCsrfPolicy,
@@ -281,10 +283,16 @@ class AuthRoutes {
       }
       final operation = endpoint.rateLimitOperation;
       if (operation != null) {
+        final identifierResolver =
+            endpoint is AuthEndpointRateLimitIdentifierDescriptor
+            ? endpoint as AuthEndpointRateLimitIdentifierDescriptor
+            : null;
+        final endpointIdentifier = identifierResolver
+            ?.resolveRateLimitIdentifier(payload);
         await liveManager.enforceRateLimitOperation(
           ctx,
           operation: operation,
-          identifier: session?.user.id,
+          identifier: endpointIdentifier ?? session?.user.id,
         );
       }
       final mutableSession =
@@ -338,7 +346,24 @@ class AuthRoutes {
           statusCode: response.statusCode,
         );
       }
+      if (response is AuthEndpointSessionResponse) {
+        final sessionPayload = await liveManager.buildSessionPayload(
+          ctx,
+          response.session,
+          provider: response.provider,
+        );
+        return ctx.json(<String, dynamic>{
+          ...response.metadata,
+          ...sessionPayload,
+        });
+      }
       return ctx.json(response);
+    } on AuthTwoFactorRequiredException catch (error) {
+      return ctx.json({
+        'status': 'two_factor_required',
+        'challengeToken': error.challenge.token,
+        'expiresAt': error.challenge.expiresAt.toUtc().toIso8601String(),
+      }, statusCode: HttpStatus.accepted);
     } on AuthFlowException catch (error) {
       if (!payload.containsKey('organizationId') &&
           ctx.hasSession &&
