@@ -1,4 +1,6 @@
 import 'dart:async';
+
+import 'deletion_transaction.dart';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart' show sha256;
@@ -163,13 +165,27 @@ final class AuthOAuthAuthorizationCodeService {
 
 /// In-memory authorization-code store for tests and local development.
 final class InMemoryAuthOAuthAuthorizationCodeStore
-    implements AuthOAuthAuthorizationCodeStore {
+    implements
+        AuthOAuthAuthorizationCodeStore,
+        AuthInMemoryTransactionParticipant {
   InMemoryAuthOAuthAuthorizationCodeStore({this.maxEntries = 1024})
     : assert(maxEntries > 0);
 
   final int maxEntries;
   final Map<String, AuthOAuthAuthorizationCode> _records =
       <String, AuthOAuthAuthorizationCode>{};
+
+  @override
+  Object createInMemoryCheckpoint() =>
+      Map<String, AuthOAuthAuthorizationCode>.of(_records);
+
+  @override
+  void restoreInMemoryCheckpoint(Object checkpoint) {
+    final records = checkpoint as Map<String, AuthOAuthAuthorizationCode>;
+    _records
+      ..clear()
+      ..addAll(records);
+  }
 
   @override
   Future<AuthOAuthAuthorizationCode> create(

@@ -253,10 +253,6 @@ abstract interface class AuthStore {
 
   AuthEmailChangeTokenStore get emailChangeTokens;
 
-  AuthWebAuthnChallengeStore get webAuthnChallenges;
-
-  AuthWebAuthnAuthenticatorStore get webAuthnAuthenticators;
-
   AuthDeviceAuthorizationStore get deviceAuthorizations;
 
   AuthEmailOtpStore get emailOtps;
@@ -303,7 +299,11 @@ abstract interface class AuthAdminStoreCapabilities {
 /// attributes. It is not intended for production persistence; production
 /// applications should provide an implementation backed by their database and
 /// password-hashing policy.
-class InMemoryAuthStore implements AuthStore, AuthAdminStoreCapabilities {
+class InMemoryAuthStore
+    implements
+        AuthStore,
+        AuthAdminStoreCapabilities,
+        AuthWebAuthnStoreCapabilities {
   InMemoryAuthStore()
     : users = _InMemoryUserStore(),
       credentials = _InMemoryCredentialStore(),
@@ -444,7 +444,7 @@ class InMemoryAuthStore implements AuthStore, AuthAdminStoreCapabilities {
 ///
 /// Each callback belongs to one typed domain store. This is intentionally a
 /// store implementation rather than an adapter compatibility layer.
-class CallbackAuthStore implements AuthStore {
+class CallbackAuthStore implements AuthStore, AuthWebAuthnStoreCapabilities {
   CallbackAuthStore({
     FutureOr<AuthUser?> Function(String id)? onFindUserById,
     FutureOr<AuthUser?> Function(String email)? onFindUserByEmail,

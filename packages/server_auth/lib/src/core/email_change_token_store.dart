@@ -85,4 +85,3 @@ final class _EmailChangeRecord {
   final String newEmail;
   final DateTime expiresAt;
 }
-

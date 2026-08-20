@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
 import 'exceptions.dart';
 import 'plugin.dart';
 import 'models.dart';
@@ -219,7 +220,8 @@ abstract interface class AuthApiKeyStore {
 }
 
 /// Bounded in-memory API-key store for tests and local development.
-final class InMemoryAuthApiKeyStore implements AuthApiKeyStore {
+final class InMemoryAuthApiKeyStore
+    implements AuthApiKeyStore, AuthInMemoryTransactionParticipant {
   InMemoryAuthApiKeyStore({this.maxRecords = 10000}) {
     if (maxRecords <= 0) {
       throw ArgumentError.value(
@@ -232,6 +234,18 @@ final class InMemoryAuthApiKeyStore implements AuthApiKeyStore {
 
   final int maxRecords;
   final Map<String, AuthApiKeyRecord> _records = <String, AuthApiKeyRecord>{};
+
+  @override
+  Object createInMemoryCheckpoint() =>
+      Map<String, AuthApiKeyRecord>.of(_records);
+
+  @override
+  void restoreInMemoryCheckpoint(Object checkpoint) {
+    final records = checkpoint as Map<String, AuthApiKeyRecord>;
+    _records
+      ..clear()
+      ..addAll(records);
+  }
 
   @override
   Future<AuthApiKeyRecord> create(AuthApiKeyRecord record) async {
@@ -334,7 +348,7 @@ final class AuthApiKeyPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
-        AuthUserDataDeletionContributor {
+        AuthReversibleUserDataDeletionContributor {
   AuthApiKeyPlugin({
     required this.store,
     this.keyPrefix = 'rka',
@@ -401,6 +415,10 @@ final class AuthApiKeyPlugin<TContext>
   Future<void> deleteUserData(String userId) async {
     await store.deleteForUser(userId);
   }
+
+  @override
+  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) =>
+      AuthUserDataDeletionCheckpoint.capture([store]);
 
   @override
   void configure(AuthServerPluginContext<TContext> context) {}

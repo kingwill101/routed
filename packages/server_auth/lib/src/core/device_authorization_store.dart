@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
 import 'tokens.dart' show hashOpaqueToken;
 
 /// State of an RFC 8628 device authorization transaction.
@@ -141,13 +142,27 @@ abstract interface class AuthDeviceAuthorizationStore {
 
 /// In-memory device authorization store for tests and local development.
 final class InMemoryAuthDeviceAuthorizationStore
-    implements AuthDeviceAuthorizationStore {
+    implements
+        AuthDeviceAuthorizationStore,
+        AuthInMemoryTransactionParticipant {
   InMemoryAuthDeviceAuthorizationStore({this.maxEntries = 1024})
     : assert(maxEntries > 0);
 
   final int maxEntries;
   final Map<String, AuthDeviceAuthorization> _records =
       <String, AuthDeviceAuthorization>{};
+
+  @override
+  Object createInMemoryCheckpoint() =>
+      Map<String, AuthDeviceAuthorization>.of(_records);
+
+  @override
+  void restoreInMemoryCheckpoint(Object checkpoint) {
+    final records = checkpoint as Map<String, AuthDeviceAuthorization>;
+    _records
+      ..clear()
+      ..addAll(records);
+  }
 
   @override
   Future<AuthDeviceAuthorization> create(

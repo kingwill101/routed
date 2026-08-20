@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
 import 'providers.dart';
 
 /// The WebAuthn ceremony for which a challenge was issued.
@@ -104,18 +105,40 @@ abstract interface class AuthWebAuthnAuthenticatorStore {
   );
 }
 
+/// Optional persistence capability required by the WebAuthn plugin.
+///
+/// Keeping these stores outside the base auth store lets existing adapters
+/// continue to implement core authentication without opting into passkeys.
+abstract interface class AuthWebAuthnStoreCapabilities {
+  AuthWebAuthnChallengeStore get webAuthnChallenges;
+
+  AuthWebAuthnAuthenticatorStore get webAuthnAuthenticators;
+}
+
 /// In-memory WebAuthn stores for tests and local development.
 ///
 /// Production applications must provide durable implementations with the
 /// same atomic consume, unique credential, and compare-and-set guarantees.
 final class InMemoryAuthWebAuthnChallengeStore
-    implements AuthWebAuthnChallengeStore {
+    implements AuthWebAuthnChallengeStore, AuthInMemoryTransactionParticipant {
   InMemoryAuthWebAuthnChallengeStore({this.maxEntries = 1024})
     : assert(maxEntries > 0);
 
   final int maxEntries;
   final Map<String, AuthWebAuthnChallenge> _records =
       <String, AuthWebAuthnChallenge>{};
+
+  @override
+  Object createInMemoryCheckpoint() =>
+      Map<String, AuthWebAuthnChallenge>.of(_records);
+
+  @override
+  void restoreInMemoryCheckpoint(Object checkpoint) {
+    final records = checkpoint as Map<String, AuthWebAuthnChallenge>;
+    _records
+      ..clear()
+      ..addAll(records);
+  }
 
   @override
   Future<void> save(AuthWebAuthnChallenge challenge) async {
@@ -165,9 +188,23 @@ final class InMemoryAuthWebAuthnChallengeStore
 
 /// In-memory registered-passkey store for tests and local development.
 final class InMemoryAuthWebAuthnAuthenticatorStore
-    implements AuthWebAuthnAuthenticatorStore {
+    implements
+        AuthWebAuthnAuthenticatorStore,
+        AuthInMemoryTransactionParticipant {
   final Map<String, WebAuthnAuthenticator> _records =
       <String, WebAuthnAuthenticator>{};
+
+  @override
+  Object createInMemoryCheckpoint() =>
+      Map<String, WebAuthnAuthenticator>.of(_records);
+
+  @override
+  void restoreInMemoryCheckpoint(Object checkpoint) {
+    final records = checkpoint as Map<String, WebAuthnAuthenticator>;
+    _records
+      ..clear()
+      ..addAll(records);
+  }
 
   @override
   Future<WebAuthnAuthenticator?> findByCredentialId(String credentialId) async {

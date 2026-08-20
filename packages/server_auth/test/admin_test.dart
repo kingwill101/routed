@@ -427,6 +427,34 @@ void main() {
       );
     });
 
+    test('failed contributor deletion rolls back earlier namespaces', () async {
+      final apiKeyStore = InMemoryAuthApiKeyStore();
+      final apiKeys = AuthApiKeyPlugin<Object>(
+        store: apiKeyStore,
+        keyIdGenerator: ({length = 32}) => 'member-key',
+        secretGenerator: ({length = 32}) => 'member-secret',
+      );
+      final failure = _FailingDeletionPlugin();
+      feature = AdminPlugin<Object>(store: adminStore);
+      AuthRuntime<Object>(
+        options: AuthOptions(
+          providers: const [],
+          store: core,
+          storeMode: AuthStoreMode.ephemeral,
+          plugins: [apiKeys, failure, feature],
+        ),
+      );
+      final issued = await apiKeys.issue(userId: member.id, name: 'CLI');
+
+      await expectLater(
+        _invoke(feature, 'admin.removeUser', admin, {'userId': member.id}),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(await core.users.findById(member.id), member);
+      expect(await apiKeys.authenticate(issued.key), isNotNull);
+    });
+
     test(
       'rejected email conflicts preserve credential lookup indexes',
       () async {
@@ -632,6 +660,32 @@ final class _Hasher implements PasswordHasher {
         matches: encodedHash == 'hash:$password',
         needsRehash: false,
       );
+}
+
+final class _FailingDeletionPlugin
+    implements
+        AuthServerPlugin<Object>,
+        AuthReversibleUserDataDeletionContributor {
+  @override
+  String get id => 'failing-deletion';
+
+  @override
+  String get userDataNamespace => 'failing-deletion';
+
+  @override
+  void configure(AuthServerPluginContext<Object> context) {}
+
+  @override
+  void validateUserDeletion(String userId) {}
+
+  @override
+  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) =>
+      AuthUserDataDeletionCheckpoint.capture(const []);
+
+  @override
+  void deleteUserData(String userId) {
+    throw StateError('simulated deletion failure');
+  }
 }
 
 final class _SessionControl implements AuthServerPluginSessionControl {

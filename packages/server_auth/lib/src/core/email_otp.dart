@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
 import 'email_otp_store.dart';
 import 'exceptions.dart';
 import 'plugin.dart';
@@ -46,7 +47,7 @@ final class EmailOtpPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
-        AuthUserDataDeletionContributor {
+        AuthReversibleUserDataDeletionContributor {
   EmailOtpPlugin({
     required this.sendCode,
     this.otpLength = 6,
@@ -96,6 +97,12 @@ final class EmailOtpPlugin<TContext>
     final user = await _users.findById(userId);
     final email = user?.email;
     if (email != null) await _store.deleteForEmail(email);
+  }
+
+  @override
+  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) {
+    _ensureConfigured();
+    return AuthUserDataDeletionCheckpoint.capture([_store]);
   }
 
   @override

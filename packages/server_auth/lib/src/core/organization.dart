@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
 import 'exceptions.dart';
 import 'plugin.dart';
 import 'models.dart';
@@ -202,7 +203,7 @@ final class OrganizationPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
-        AuthUserDataDeletionContributor {
+        AuthReversibleUserDataDeletionContributor {
   OrganizationPlugin({
     required this.store,
     this.options = const AuthOrganizationOptions(),
@@ -258,6 +259,10 @@ final class OrganizationPlugin<TContext>
       creatorRole: _creatorRole,
     );
   }
+
+  @override
+  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) =>
+      AuthUserDataDeletionCheckpoint.capture([store]);
 
   static const List<String> publicOperationIds = [
     'organization.create',

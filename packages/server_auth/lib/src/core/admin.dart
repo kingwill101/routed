@@ -153,6 +153,16 @@ final class AdminPlugin<TContext>
         .where((plugin) => !identical(plugin, this))
         .toList(growable: false);
     if (target is InMemoryAuthAdminStore) {
+      final unsafe = contributors
+          .where((value) => value is! AuthReversibleUserDataDeletionContributor)
+          .map((value) => value.userDataNamespace)
+          .toList(growable: false);
+      if (unsafe.isNotEmpty) {
+        throw StateError(
+          'In-memory Admin deletion requires reversible contributors: '
+          '${unsafe.join(', ')}.',
+        );
+      }
       target.composeUserDataContributors(contributors);
     }
     final required = {

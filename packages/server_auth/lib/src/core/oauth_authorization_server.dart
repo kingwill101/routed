@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
 import 'device_authorization.dart' show AuthDeviceAccessToken;
 import 'exceptions.dart';
 import 'plugin.dart';
@@ -48,7 +49,7 @@ final class OAuthAuthorizationServerPlugin<TContext>
         AuthClientOperationContributor,
         AuthPersistenceContributor,
         AuthRateLimitContributor,
-        AuthUserDataDeletionContributor {
+        AuthReversibleUserDataDeletionContributor {
   OAuthAuthorizationServerPlugin({
     required this.authorizationCodes,
     required this.resolveClient,
@@ -85,6 +86,10 @@ final class OAuthAuthorizationServerPlugin<TContext>
   Future<void> deleteUserData(String userId) async {
     await authorizationCodes.deleteForUser(userId);
   }
+
+  @override
+  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) =>
+      AuthUserDataDeletionCheckpoint.capture([authorizationCodes]);
 
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints => [

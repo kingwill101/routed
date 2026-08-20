@@ -15,6 +15,7 @@ export 'client_plugins.dart';
 export 'csrf.dart';
 export 'device_authorization_store.dart';
 export 'device_authorization.dart';
+export 'deletion_transaction.dart';
 export 'email_change.dart';
 export 'email_change_token_store.dart';
 export 'email_client.dart';

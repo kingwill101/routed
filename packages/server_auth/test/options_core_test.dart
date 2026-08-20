@@ -266,6 +266,35 @@ void main() {
     expect(resolved.store, same(durable));
     expect(resolved.storeMode, AuthStoreMode.durable);
   });
+
+  test('WebAuthn requires only its optional persistence capability', () {
+    final store = _DurableAuthStore();
+    final provider = WebAuthnProvider(
+      getUserInfo: (_, _, _) => null,
+      getRelyingParty: (_, _) => const WebAuthnRelyingParty(
+        id: 'example.com',
+        name: 'Example',
+        origin: 'https://example.com',
+      ),
+    );
+
+    expect(
+      () => AuthRuntime<Object>(
+        options: AuthOptions<Object>(
+          providers: [provider],
+          store: store,
+          plugins: [WebAuthnPlugin<Object>(provider: provider)],
+        ),
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('AuthWebAuthnStoreCapabilities'),
+        ),
+      ),
+    );
+  });
 }
 
 final class _DurableAuthStore implements AuthStore {
@@ -300,14 +329,6 @@ final class _DurableAuthStore implements AuthStore {
   @override
   AuthVerificationTokenStore get verificationTokens =>
       _delegate.verificationTokens;
-
-  @override
-  AuthWebAuthnChallengeStore get webAuthnChallenges =>
-      _delegate.webAuthnChallenges;
-
-  @override
-  AuthWebAuthnAuthenticatorStore get webAuthnAuthenticators =>
-      _delegate.webAuthnAuthenticators;
 
   @override
   AuthDeviceAuthorizationStore get deviceAuthorizations =>

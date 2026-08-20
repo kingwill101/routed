@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
 import 'exceptions.dart';
 import 'organization_models.dart';
 import 'users.dart' show normalizeAuthEmail;
@@ -181,7 +182,10 @@ abstract interface class AuthOrganizationUserDeletionStore {
 
 /// Serialized, process-local organization store for tests and development.
 final class InMemoryAuthOrganizationStore
-    implements AuthOrganizationStore, AuthOrganizationUserDeletionStore {
+    implements
+        AuthOrganizationStore,
+        AuthOrganizationUserDeletionStore,
+        AuthInMemoryTransactionParticipant {
   final Map<String, AuthOrganization> _organizations = {};
   final Map<String, AuthOrganizationMember> _members = {};
   final Map<String, AuthOrganizationInvitation> _invitations = {};
@@ -189,6 +193,39 @@ final class InMemoryAuthOrganizationStore
   final Map<String, AuthOrganizationTeam> _teams = {};
   final Map<String, AuthOrganizationTeamMember> _teamMembers = {};
   Future<void> _tail = Future<void>.value();
+
+  @override
+  Object createInMemoryCheckpoint() => (
+    organizations: Map<String, AuthOrganization>.of(_organizations),
+    members: Map<String, AuthOrganizationMember>.of(_members),
+    invitations: Map<String, AuthOrganizationInvitation>.of(_invitations),
+    roles: Map<String, AuthOrganizationRole>.of(_roles),
+    teams: Map<String, AuthOrganizationTeam>.of(_teams),
+    teamMembers: Map<String, AuthOrganizationTeamMember>.of(_teamMembers),
+  );
+
+  @override
+  void restoreInMemoryCheckpoint(Object checkpoint) {
+    final value = checkpoint as _AuthOrganizationStoreCheckpoint;
+    _organizations
+      ..clear()
+      ..addAll(value.organizations);
+    _members
+      ..clear()
+      ..addAll(value.members);
+    _invitations
+      ..clear()
+      ..addAll(value.invitations);
+    _roles
+      ..clear()
+      ..addAll(value.roles);
+    _teams
+      ..clear()
+      ..addAll(value.teams);
+    _teamMembers
+      ..clear()
+      ..addAll(value.teamMembers);
+  }
 
   Future<T> _atomic<T>(FutureOr<T> Function() action) {
     final completer = Completer<T>();
@@ -853,6 +890,15 @@ final class InMemoryAuthOrganizationStore
       )
       .length;
 }
+
+typedef _AuthOrganizationStoreCheckpoint = ({
+  Map<String, AuthOrganization> organizations,
+  Map<String, AuthOrganizationMember> members,
+  Map<String, AuthOrganizationInvitation> invitations,
+  Map<String, AuthOrganizationRole> roles,
+  Map<String, AuthOrganizationTeam> teams,
+  Map<String, AuthOrganizationTeamMember> teamMembers,
+});
 
 String _memberKey(String organizationId, String userId) =>
     '${organizationId.trim()}\u0000${userId.trim()}';

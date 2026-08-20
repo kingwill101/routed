@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
 import 'models.dart';
 import 'password_hasher.dart';
 import 'password_policy.dart';
@@ -94,6 +95,13 @@ abstract interface class AuthUserDataDeletionContributor {
   String get userDataNamespace;
   FutureOr<void> validateUserDeletion(String userId);
   FutureOr<void> deleteUserData(String userId);
+}
+
+/// A plugin contributor whose local stores can be restored if hard deletion
+/// fails before the in-memory Admin transaction commits.
+abstract interface class AuthReversibleUserDataDeletionContributor
+    implements AuthUserDataDeletionContributor {
+  FutureOr<AuthUserDataDeletionCheckpoint> checkpointUserData(String userId);
 }
 
 /// Optional second-pass composition after every plugin has been registered.

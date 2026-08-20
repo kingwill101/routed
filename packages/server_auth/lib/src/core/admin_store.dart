@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'admin_models.dart';
+import 'deletion_transaction.dart';
 import 'exceptions.dart';
 import 'plugin.dart';
 import 'models.dart';
@@ -56,7 +57,14 @@ abstract interface class AuthAdminStore {
 final class InMemoryAuthAdminStore implements AuthAdminStore {
   InMemoryAuthAdminStore(AuthStore coreStore)
     : _core = coreStore,
-      _capabilities = _requireCapabilities(coreStore);
+      _capabilities = _requireCapabilities(coreStore) {
+    if (coreStore is! InMemoryAuthStore) {
+      throw ArgumentError(
+        'InMemoryAuthAdminStore requires InMemoryAuthStore so core deletion '
+        'can participate in its local transaction.',
+      );
+    }
+  }
 
   final AuthStore _core;
   final AuthAdminStoreCapabilities _capabilities;
@@ -283,13 +291,27 @@ final class InMemoryAuthAdminStore implements AuthAdminStore {
     for (final contributor in _userDataContributors) {
       await contributor.validateUserDeletion(user.id);
     }
+    final checkpoints = <AuthUserDataDeletionCheckpoint>[];
     for (final contributor in _userDataContributors) {
-      await contributor.deleteUserData(user.id);
+      checkpoints.add(
+        await (contributor as AuthReversibleUserDataDeletionContributor)
+            .checkpointUserData(user.id),
+      );
     }
-    await _revoke(user.id);
-    final deleted = await _capabilities.deleteUserForAdministration(user.id);
-    if (deleted) _states.remove(user.id);
-    return deleted;
+    try {
+      for (final contributor in _userDataContributors) {
+        await contributor.deleteUserData(user.id);
+      }
+      await _revoke(user.id);
+      final deleted = await _capabilities.deleteUserForAdministration(user.id);
+      if (deleted) _states.remove(user.id);
+      return deleted;
+    } catch (error, stackTrace) {
+      for (final checkpoint in checkpoints.reversed) {
+        await checkpoint.restore();
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
   });
 
   Future<void> _revoke(String userId) async {

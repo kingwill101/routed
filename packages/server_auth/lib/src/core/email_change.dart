@@ -115,4 +115,3 @@ Future<void> requireAuthPasswordForUser({
     throw AuthFlowException('reauthentication_required');
   }
 }
-

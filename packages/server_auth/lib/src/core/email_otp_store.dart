@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
 import 'tokens.dart' show hashOpaqueToken;
 
 /// Supported one-time-password purposes.
@@ -87,11 +88,23 @@ abstract interface class AuthEmailOtpStore {
 }
 
 /// In-memory OTP store for tests and local development.
-final class InMemoryAuthEmailOtpStore implements AuthEmailOtpStore {
+final class InMemoryAuthEmailOtpStore
+    implements AuthEmailOtpStore, AuthInMemoryTransactionParticipant {
   InMemoryAuthEmailOtpStore({this.maxEntries = 2048}) : assert(maxEntries > 0);
 
   final int maxEntries;
   final Map<String, AuthEmailOtp> _records = <String, AuthEmailOtp>{};
+
+  @override
+  Object createInMemoryCheckpoint() => Map<String, AuthEmailOtp>.of(_records);
+
+  @override
+  void restoreInMemoryCheckpoint(Object checkpoint) {
+    final records = checkpoint as Map<String, AuthEmailOtp>;
+    _records
+      ..clear()
+      ..addAll(records);
+  }
 
   @override
   Future<void> save(AuthEmailOtp otp) async {

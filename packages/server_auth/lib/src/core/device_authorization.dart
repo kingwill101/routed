@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'deletion_transaction.dart';
 import 'exceptions.dart';
 import 'plugin.dart';
 import 'models.dart';
@@ -90,7 +91,7 @@ final class DeviceAuthorizationPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
-        AuthUserDataDeletionContributor {
+        AuthReversibleUserDataDeletionContributor {
   DeviceAuthorizationPlugin({
     required this.verificationUri,
     required this.validateClient,
@@ -134,6 +135,12 @@ final class DeviceAuthorizationPlugin<TContext>
   @override
   Future<void> deleteUserData(String userId) async {
     await _store.deleteForUser(userId);
+  }
+
+  @override
+  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) {
+    _ensureConfigured();
+    return AuthUserDataDeletionCheckpoint.capture([_store]);
   }
 
   @override

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:hashlib/hashlib.dart';
 
+import 'deletion_transaction.dart';
 import 'exceptions.dart';
 import 'plugin.dart';
 import 'models.dart';
@@ -169,9 +170,22 @@ abstract interface class AuthTwoFactorStore {
 }
 
 /// In-memory two-factor store for tests and local examples.
-final class InMemoryAuthTwoFactorStore implements AuthTwoFactorStore {
+final class InMemoryAuthTwoFactorStore
+    implements AuthTwoFactorStore, AuthInMemoryTransactionParticipant {
   final Map<String, AuthTwoFactorRecord> _records =
       <String, AuthTwoFactorRecord>{};
+
+  @override
+  Object createInMemoryCheckpoint() =>
+      Map<String, AuthTwoFactorRecord>.of(_records);
+
+  @override
+  void restoreInMemoryCheckpoint(Object checkpoint) {
+    final records = checkpoint as Map<String, AuthTwoFactorRecord>;
+    _records
+      ..clear()
+      ..addAll(records);
+  }
 
   @override
   AuthTwoFactorRecord? findByUserId(String userId) => _records[userId];
@@ -437,7 +451,9 @@ abstract interface class AuthTwoFactorTrustedDeviceStore {
 
 /// In-memory trusted-device store for tests and local examples.
 final class InMemoryAuthTwoFactorTrustedDeviceStore
-    implements AuthTwoFactorTrustedDeviceStore {
+    implements
+        AuthTwoFactorTrustedDeviceStore,
+        AuthInMemoryTransactionParticipant {
   InMemoryAuthTwoFactorTrustedDeviceStore({
     DateTime Function()? clock,
     this.maxEntries = 1024,
@@ -450,6 +466,18 @@ final class InMemoryAuthTwoFactorTrustedDeviceStore
   final Map<String, AuthTwoFactorTrustedDeviceRecord> _records =
       <String, AuthTwoFactorTrustedDeviceRecord>{};
   final DateTime Function() _clock;
+
+  @override
+  Object createInMemoryCheckpoint() =>
+      Map<String, AuthTwoFactorTrustedDeviceRecord>.of(_records);
+
+  @override
+  void restoreInMemoryCheckpoint(Object checkpoint) {
+    final records = checkpoint as Map<String, AuthTwoFactorTrustedDeviceRecord>;
+    _records
+      ..clear()
+      ..addAll(records);
+  }
 
   /// Maximum number of trusted-device records retained by this local store.
   ///
@@ -630,7 +658,7 @@ abstract interface class AuthTwoFactorChallengeStore {
 
 /// In-memory pending-challenge store for tests and local examples.
 final class InMemoryAuthTwoFactorChallengeStore
-    implements AuthTwoFactorChallengeStore {
+    implements AuthTwoFactorChallengeStore, AuthInMemoryTransactionParticipant {
   InMemoryAuthTwoFactorChallengeStore({
     DateTime Function()? clock,
     this.maxEntries = 1024,
@@ -643,6 +671,18 @@ final class InMemoryAuthTwoFactorChallengeStore
   final Map<String, AuthTwoFactorChallengeRecord> _records =
       <String, AuthTwoFactorChallengeRecord>{};
   final DateTime Function() _clock;
+
+  @override
+  Object createInMemoryCheckpoint() =>
+      Map<String, AuthTwoFactorChallengeRecord>.of(_records);
+
+  @override
+  void restoreInMemoryCheckpoint(Object checkpoint) {
+    final records = checkpoint as Map<String, AuthTwoFactorChallengeRecord>;
+    _records
+      ..clear()
+      ..addAll(records);
+  }
 
   /// Maximum number of pending challenges retained by this local store.
   ///
@@ -953,7 +993,7 @@ abstract interface class AuthTwoFactorStepUpStore {
 
 /// In-memory step-up store for tests and local examples.
 final class InMemoryAuthTwoFactorStepUpStore
-    implements AuthTwoFactorStepUpStore {
+    implements AuthTwoFactorStepUpStore, AuthInMemoryTransactionParticipant {
   InMemoryAuthTwoFactorStepUpStore({
     DateTime Function()? clock,
     this.maxEntries = 1024,
@@ -966,6 +1006,18 @@ final class InMemoryAuthTwoFactorStepUpStore
   final Map<String, AuthTwoFactorStepUpRecord> _records =
       <String, AuthTwoFactorStepUpRecord>{};
   final DateTime Function() _clock;
+
+  @override
+  Object createInMemoryCheckpoint() =>
+      Map<String, AuthTwoFactorStepUpRecord>.of(_records);
+
+  @override
+  void restoreInMemoryCheckpoint(Object checkpoint) {
+    final records = checkpoint as Map<String, AuthTwoFactorStepUpRecord>;
+    _records
+      ..clear()
+      ..addAll(records);
+  }
 
   /// Maximum number of step-up proofs retained by this local store.
   ///
@@ -1073,7 +1125,9 @@ class AuthTwoFactorStatus {
 /// pending sign-in orchestration is intentionally kept in the adapter so the
 /// plugin remains framework-agnostic.
 final class TwoFactorPlugin<TContext>
-    implements AuthServerPlugin<TContext>, AuthUserDataDeletionContributor {
+    implements
+        AuthServerPlugin<TContext>,
+        AuthReversibleUserDataDeletionContributor {
   TwoFactorPlugin({
     required this.store,
     required this.secretProtector,
@@ -1213,6 +1267,15 @@ final class TwoFactorPlugin<TContext>
     }
     await stepUpStore?.revokeAllForUser(userId);
   }
+
+  @override
+  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) =>
+      AuthUserDataDeletionCheckpoint.capture([
+        store,
+        trustedDeviceStore,
+        challengeStore,
+        ?stepUpStore,
+      ]);
 
   /// Starts a short-lived challenge for a user whose TOTP is enabled.
   Future<AuthTwoFactorSignInChallenge?> beginSignInChallenge(

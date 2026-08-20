@@ -5,6 +5,7 @@ import 'package:cbor/simple.dart' as cbor;
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:pointycastle/export.dart';
 
+import 'deletion_transaction.dart';
 import 'exceptions.dart';
 import 'plugin.dart';
 import 'models.dart';
@@ -130,7 +131,7 @@ final class WebAuthnPlugin<TContext>
         AuthPersistenceContributor,
         AuthClientOperationContributor,
         AuthRateLimitContributor,
-        AuthUserDataDeletionContributor {
+        AuthReversibleUserDataDeletionContributor {
   WebAuthnPlugin({
     required this.provider,
     this.challengeTtl = const Duration(minutes: 5),
@@ -167,9 +168,25 @@ final class WebAuthnPlugin<TContext>
   }
 
   @override
+  AuthUserDataDeletionCheckpoint checkpointUserData(String userId) {
+    _ensureConfigured();
+    return AuthUserDataDeletionCheckpoint.capture([
+      _challengeStore,
+      _authenticatorStore,
+    ]);
+  }
+
+  @override
   void configure(AuthServerPluginContext<TContext> context) {
-    _challengeStore = context.store.webAuthnChallenges;
-    _authenticatorStore = context.store.webAuthnAuthenticators;
+    final store = context.store;
+    if (store is! AuthWebAuthnStoreCapabilities) {
+      throw StateError(
+        'WebAuthnPlugin requires AuthWebAuthnStoreCapabilities.',
+      );
+    }
+    final capabilities = store as AuthWebAuthnStoreCapabilities;
+    _challengeStore = capabilities.webAuthnChallenges;
+    _authenticatorStore = capabilities.webAuthnAuthenticators;
     _userStore = context.store.users;
     _configured = true;
   }
