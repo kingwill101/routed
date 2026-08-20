@@ -1,5 +1,9 @@
 ## 0.2.0 - 2026-08-20
 
+- Add the protected JWT `auth_time` claim and preserve it across automatic
+  refreshes and application claim callbacks. Sensitive-action policy now uses
+  the original authentication time instead of refreshable JWT `iat`; legacy
+  tokens fall back to their original `iat` until first refresh.
 - Breaking: replace callback-style SCIM identity, lifecycle, and role
   projection seams with `AuthScimApplicationProjectionStore`. Projection keys
   now contain only the exact connection/tenant/organization/provisioning-domain

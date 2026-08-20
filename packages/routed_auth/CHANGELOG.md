@@ -1,5 +1,8 @@
 ## 0.2.0 - 2026-08-20
 
+- Authorize passwordless linked-account removal from the protected JWT
+  `auth_time` claim, not the automatically refreshed `iat`. Token refresh and
+  JWT callbacks cannot silently renew the recent-authentication window.
 - Mount phone issue/verification operations only when the root auth store
   provides `AuthPhoneNumberBackend`, preserving atomic digest-only challenge,
   attempt/lockout, one-time consumption, user creation/projection, and phone

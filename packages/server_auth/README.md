@@ -1281,6 +1281,13 @@ final resolvedSession = await resolveAuthJwtSessionWithRefresh(
 print(resolvedSession?.refreshCookie != null); // refreshed or not
 ```
 
+Auth JWTs include the standard numeric `auth_time` claim. Automatic refresh
+changes `iat` and expiry but preserves `auth_time`, including after a JWT
+callback changes application claims. Sensitive actions must use
+`jwtAuthenticationTimeUtc(payload.claims)` rather than `iat`; malformed
+`auth_time` fails closed, while tokens issued before this claim existed fall
+back to their original `iat` until first refresh.
+
 ## Bearer validation helpers for adapters
 
 Use `verifyJwtBearerAuthorizationAndWriteAttributes` in framework middleware to
