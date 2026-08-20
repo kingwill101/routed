@@ -3,6 +3,9 @@
 - Generate auth paths and path parameters from typed `AuthRoutePath`
   declarations and explicit root/auth mounts, keeping path fields out of query
   and request-body schemas.
+- Generate phone issue and verification operations with exact backend-atomic
+  persistence references, repeatable issuance, single-use verification,
+  digest-only schema metadata, and host-owned session response contracts.
 - Generate managed SCIM connection and credential operations with session
   security, CSRF headers, bounded request/response schemas, one-time secret
   marking, and exact durable atomic-operation and replay-safety metadata.

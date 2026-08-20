@@ -240,8 +240,14 @@ account, session, client, and plugin contracts above:
   consumption, and user transitions behind required typed backend commands;
   persist only digests, publish durable-adapter conformance, and keep delivery
   plus host session/cookie issuance as explicit postcommit boundaries.
-- [x] Add phone-number authentication with provider-owned delivery and
-  verification boundaries.
+- [x] Add phone-number authentication with provider-owned delivery and a
+  required root `AuthPhoneNumberBackend`. Digest-only issuance, bounded
+  attempts/lockout, expiry, one-time verification, user/phone binding,
+  sign-up projection, rollback, replay, contention, and hard deletion are one
+  typed backend transaction contract with public adapter conformance and
+  hostile state-sequence properties. SMS, callbacks, and host session/cookie
+  issuance remain explicit postcommit boundaries. D1 fails closed until it
+  implements these commands.
 - [x] Add username-first authentication and explicit identifier policy.
   Registration, rename, and safe removal reserve normalized identifiers through
   a root store-owned atomic capability, with public adapter conformance,

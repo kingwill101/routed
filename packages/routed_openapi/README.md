@@ -66,6 +66,14 @@ metadata in `x-routed-auth-operation-semantics`. The generator reads the
 frozen plugin topology directly, including host-owned endpoints, so no separate
 route catalogue or hand-maintained mutation documentation is required.
 
+For example, composing `PhoneNumberPlugin` publishes repeatable atomic
+`phoneNumber.issueCode` persistence for `/phone-number/send-code` and
+single-use atomic `phoneNumber.verifyCode` persistence for verification. The
+document describes only the public request/response and security contract:
+raw SMS codes and backend storage records are never emitted. The root
+`AuthStore` must implement `AuthPhoneNumberBackend`; OpenAPI generation does
+not install a side store or runtime fallback.
+
 ## Testing
 
 ```bash

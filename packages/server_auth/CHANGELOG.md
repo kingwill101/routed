@@ -6,6 +6,18 @@
   old process-local callback path.
 - Export `AuthApiKeyStoreConformanceSuite` for reusable lifecycle, capacity,
   contention, single-use rotation, ownership, expiry, and rollback validation.
+- Breaking: replace the phone plugin's split challenge/user/identity stores
+  with a required root `AuthPhoneNumberBackend`. Digest-only issuance,
+  bounded attempts and lockout, expiry, one-time consumption, sign-up,
+  verified-user projection, unique phone ownership, and deletion cleanup are
+  now backend-owned atomic commands with no fallback bridge.
+- Add in-memory rollback/fault injection, replay and contention coverage,
+  hostile property-based phone/code/state sequences, and a public durable
+  adapter conformance suite. SMS delivery, verification callbacks, and host
+  session/cookie issuance are documented postcommit boundaries.
+- Serialize in-memory phone commands with coordinated hard deletion so a
+  deletion rollback cannot overwrite a concurrently committed issuance or
+  verification mutation.
 - Breaking: move anonymous creation, authenticated deletion, and account-
   upgrade finalization behind `AuthAnonymousAccountMutationStore`. Remove the
   arbitrary link callback; durable adapters now fail configuration unless they

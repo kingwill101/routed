@@ -116,7 +116,6 @@ AuthDeployment<EngineContext> buildAuth({
   required AuthBreachedPasswordLookup<EngineContext> breachedPasswordLookup,
 }) {
   final phone = PhoneNumberPlugin<EngineContext>(
-    store: InMemoryAuthPhoneNumberStore(), // use a durable store in production
     sendCode: sendPhoneCode,
     codeHashKey: phoneCodeHashKey,
     allowSignUp: true,
@@ -166,6 +165,11 @@ await authClient.plugins.use(phoneClient).sendCode(
   phoneNumber: '+18765551234',
 );
 
+final phoneSession = await authClient.plugins.use(phoneClient).verifyCode(
+  phoneNumber: '+18765551234',
+  code: deliveredCode,
+);
+
 await authClient.plugins.use(captchaClient).signIn(
   email: 'ada@example.com',
   password: password,
@@ -175,6 +179,14 @@ await authClient.plugins.use(captchaClient).signIn(
 
 Installing a server plugin does not add unrelated client methods, and omitting
 a server plugin means its routes are not mounted.
+
+`PhoneNumberPlugin` requires the deployment's root store to implement
+`AuthPhoneNumberBackend`. `InMemoryAuthStore` does so for local development.
+A production adapter must atomically own challenge attempts/lockout,
+single-use consumption, user creation/projection, phone binding, and hard
+deletion; the plugin never installs a process-local fallback. SMS delivery and
+Routed's session/cookie response happen after that transaction commits. If
+either delivery boundary fails, the committed OTP state is not compensated.
 
 Anonymous auth follows the same composition rule:
 

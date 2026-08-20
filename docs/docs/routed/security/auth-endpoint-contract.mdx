@@ -111,8 +111,8 @@ server route.
 
 | Operations | Authentication | Browser / CSRF | Rate-limit namespace and key | Result |
 | --- | --- | --- | --- | --- |
-| `POST /phone-number/send-code` | Public | Browser Origin; no CSRF | `phone_number.send_code`; keyed digest of the canonical E.164 number | Returns only delivery status and expiry. |
-| `POST /phone-number/verify-code` | Public; one-time code | Browser Origin; no CSRF | `phone_number.verify_code`; keyed digest of the canonical E.164 number | Consumes the code and issues the configured identity. |
+| `POST /phone-number/send-code` | Public | Browser Origin; no CSRF | `phone_number.send_code`; keyed digest of the canonical E.164 number | Atomically installs digest-only state, then delivers SMS postcommit. Returns only delivery status and expiry. |
+| `POST /phone-number/verify-code` | Public; one-time code | Browser Origin; no CSRF | `phone_number.verify_code`; keyed digest of the canonical E.164 number | Atomically enforces attempts/lockout and consumes, creates/resolves, binds, and projects the identity; Routed issues the session/cookie postcommit. |
 
 ### Username
 
@@ -273,7 +273,6 @@ the client APIs each frontend or service uses:
 
 ```dart
 final phone = PhoneNumberPlugin<EngineContext>(
-  store: phoneStore,
   sendCode: sendPhoneCode,
   codeHashKey: phoneCodeHashKey,
 );
@@ -301,7 +300,19 @@ final client = AuthClient(
   plugins: const [phoneClientPlugin],
 );
 final phoneClient = client.plugins.use(phoneClientPlugin);
+await phoneClient.sendCode(phoneNumber: '+18765551234');
+final session = await phoneClient.verifyCode(
+  phoneNumber: '+18765551234',
+  code: codeFromSms,
+);
 ```
+
+The deployment's `authStore` must implement `AuthPhoneNumberBackend`; the
+plugin does not accept a side store. Its transaction persists only keyed code
+digests and owns issuance replay binding, bounded attempts/lockout, expiry,
+one-time consumption, user/phone binding, and deletion cleanup. SMS delivery,
+callbacks, and Routed session/cookie issuance are explicit postcommit
+boundaries.
 
 Installing `WebAuthnPlugin` on the server does not add passkey methods to this
 phone-only client. Add `AuthWebAuthnClientPlugin` only to clients that perform

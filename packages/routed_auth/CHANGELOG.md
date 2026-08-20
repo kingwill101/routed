@@ -1,5 +1,11 @@
 ## 0.2.0 - 2026-08-20
 
+- Mount phone issue/verification operations only when the root auth store
+  provides `AuthPhoneNumberBackend`, preserving atomic digest-only challenge,
+  attempt/lockout, one-time consumption, user creation/projection, and phone
+  binding semantics. Routed session/cookie issuance remains postcommit, and
+  durable stores without the commands fail closed instead of using a side
+  in-memory store.
 - Finalize anonymous-account upgrades through the plugin's typed backend
   transaction only after Routed has issued the authenticated target session.
   Remove callback-based migration orchestration and keep failed session

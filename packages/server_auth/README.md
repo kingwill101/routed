@@ -300,6 +300,41 @@ CSRF, rate-limit keys, redirects, session/JWT projection, and generic public
 errors. `server_auth` defines the portable descriptors; a framework adapter is
 responsible for enforcing that contract.
 
+## Phone-number authentication
+
+Phone sign-in is an opt-in server plugin backed by one required root-store
+transaction capability:
+
+```dart
+final store = MyDurableAuthStore(database); // implements AuthPhoneNumberBackend
+final phone = PhoneNumberPlugin<MyRequestContext>(
+  sendCode: sendPhoneCode,
+  codeHashKey: phoneCodeHashKey,
+  allowSignUp: true,
+);
+
+final options = AuthOptions<MyRequestContext>(
+  providers: const [],
+  store: store,
+  plugins: [phone],
+);
+```
+
+`AuthPhoneNumberBackend` accepts digest-only issue and verification commands.
+The verification transaction owns bounded attempts and lockout, expiry,
+one-time challenge consumption, user availability, optional user creation,
+unique E.164 ownership, the verified-phone user projection, and hard-deletion
+cleanup. Durable adapters can run
+`AuthPhoneNumberBackendConformanceSuite` from `package:server_auth/testing.dart`
+against their real database and fault injection.
+
+`InMemoryAuthStore` implements the same commands for tests and local
+development. A durable store without the capability fails plugin
+configuration; no compatibility store or process-local fallback is used.
+The raw code exists only in `AuthPhoneNumberCodeDelivery`. SMS delivery,
+`onVerified`, and framework session/cookie issuance happen after the backend
+transaction commits, so failures at those boundaries do not roll it back.
+
 ## Anonymous accounts
 
 Anonymous authentication is an explicit server plugin. The root store must
