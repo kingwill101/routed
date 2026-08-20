@@ -170,6 +170,38 @@ await authClient.plugins.use(captchaClient).signIn(
 Installing a server plugin does not add unrelated client methods, and omitting
 a server plugin means its routes are not mounted.
 
+SAML follows the same composition rule. Add `AuthSamlPlugin<EngineContext>` to
+the deployment's `plugins` list after supplying an application-owned
+connection catalog, durable replay store, assertion verifier, identity
+resolver, and a browser binding derived from the Routed session:
+
+```dart
+final saml = AuthSamlPlugin<EngineContext>(
+  connections: samlConnections,
+  replayStore: durableSamlReplayStore,
+  assertionVerifier: samlAssertionVerifier,
+  identityResolver: samlIdentityResolver,
+  browserBindingResolver: (context) => context.sessionId,
+);
+
+final auth = AuthDeploymentPresets.secureSessionProduction(
+  store: authStore,
+  providers: const [],
+  boundary: productionBoundary,
+  lifecycleDelivery: const AuthLifecycleDelivery.disabled(),
+  rateLimiter: authRateLimiter,
+  requireVerifiedEmail: true,
+  plugins: [saml],
+);
+```
+
+Routed mounts `/auth/sso/saml/metadata/{providerId}`,
+`/auth/sso/saml/sign-in`, and `/auth/sso/saml/acs/{providerId}` only when that
+plugin is present. ACS form posts flow through the same host-owned account
+policy, session or JWT issuance, callback, lifecycle, and safe-redirect path as
+other plugin authentication. Client applications independently install
+`AuthSamlClientPlugin`; no SAML operations appear on clients that omit it.
+
 To let a browser-facing sign-in screen read only the most recently successful
 method, compose the portable plugin with Routed's cookie adapter and install
 its client plugin separately:

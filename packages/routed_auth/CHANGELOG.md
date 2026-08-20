@@ -9,6 +9,10 @@
 - Require bounded idempotency keys on Routed organization create/invite/add
   routes and preserve the server plugin's atomic snapshot, capacity, cascade,
   and deterministic replay contract through portable endpoint metadata.
+- Mount opt-in SAML metadata, sign-in, and form-encoded ACS routes, preserve
+  dynamic provider path parameters, emit protocol content types, and complete
+  verified identities through Routed's host-owned session/JWT and redirect
+  boundary.
 - Derive Routed auth runtime durability from typed `AuthOptions` posture,
   removing the independently configurable provider durability flag, and
   require production options to boot through one typed deployment so proxy,

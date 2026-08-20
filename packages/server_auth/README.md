@@ -347,6 +347,78 @@ delivery/result reference in their own token service. Routed guarantees that
 retry before completion uses the same authorization ID; it does not claim
 exactly-once token delivery.
 
+## Optional SAML SSO plugin
+
+SAML is opt-in on both sides. The application owns the immutable connection
+catalog, durable replay transaction, XMLDSig implementation, and the mapping
+from a signed external account key to an application user:
+
+```dart
+final saml = AuthSamlPlugin<MyRequestContext>(
+  connections: mySamlConnectionCatalog,
+  replayStore: myDurableSamlReplayStore,
+  assertionVerifier: myXmlSignatureVerifier,
+  identityResolver: mySamlIdentityResolver,
+  browserBindingResolver: (context) => context.browserSessionId,
+  options: AuthSamlOptions(
+    redirectPolicy: AuthSamlRedirectPolicy(
+      trustedOrigins: {Uri.parse('https://app.example.com')},
+    ),
+  ),
+);
+
+final options = AuthOptions<MyRequestContext>(
+  providers: const [],
+  store: authStore,
+  storeMode: AuthStoreMode.durable,
+  productionBoundary: productionBoundary,
+  plugins: [saml],
+);
+```
+
+Each `AuthSamlConnection` pins the provider ID, IdP entity ID and signing
+certificate, SP entity ID, HTTPS SSO and ACS endpoints, NameID format,
+verified domains, and optional organization slug. Domain selection uses only
+the catalog's verified-domain index. Authentication identity is always the
+signed NameID plus pinned IdP entity and provider IDs; an email attribute is
+never an implicit account-link key. `AuthSamlIdentityResolver` is the explicit
+application seam for resolving or provisioning users and can later share an
+identity mapping with SCIM without coupling the plugins.
+
+The server emits SP metadata and HTTP-POST AuthnRequests, then accepts
+HTTP-POST ACS responses. AuthnRequest, RelayState, browser binding, provider
+binding, and assertion replay are consumed by one durable atomic store
+operation. IdP-initiated SSO is disabled unless a fixed callback is selected.
+Final sessions or JWTs, callbacks, lifecycle events, and redirects remain
+host-owned.
+
+The client adds only SAML operations:
+
+```dart
+const samlClientPlugin = AuthSamlClientPlugin();
+final auth = AuthClient(
+  baseUrl: Uri.parse('https://api.example.com'),
+  plugins: const [samlClientPlugin],
+);
+final form = await auth.plugins.use(samlClientPlugin).signIn(
+  AuthSamlSignInRequest(
+    providerId: 'acme',
+    callbackUrl: Uri(path: '/dashboard'),
+  ),
+);
+// Submit form.fields to form.destination using an HTML POST form.
+```
+
+Routed intentionally does not include a built-in XMLDSig verifier yet. The
+maintained Dart `xml_crypto` package supports useful primitives, but its public
+API leaves exact signed-node binding to callers, defaults to SHA-1, and does
+not advertise browser support. Production applications must provide
+`AuthSamlAssertionVerifier` and run
+`AuthSamlVerifierConformanceSuite` with real signed and hostile fixtures.
+Dynamic connection administration, OIDC enterprise connections, encrypted
+assertions, single logout, and group or role provisioning are not in this
+slice.
+
 ## Optional last-authentication-method plugin
 
 Install this plugin only when the sign-in UI needs to remember which method a

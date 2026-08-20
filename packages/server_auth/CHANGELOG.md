@@ -20,6 +20,14 @@
 - Require bounded caller idempotency keys in typed organization clients and
   document lifecycle hooks, delivery, audit, and event sinks as post-commit
   host boundaries.
+- Add optional typed SAML server/client plugins with immutable application-owned
+  connections, signed NameID identity resolution, SP metadata, HTTP-POST
+  AuthnRequest/ACS flows, browser-bound one-time RelayState, durable atomic
+  request/assertion replay contracts, bounded hostile XML handling, strict
+  assertion validation, and host-owned session issuance.
+- Require an application-owned `AuthSamlAssertionVerifier` until portable
+  XMLDSig reference binding is proven, and publish a verifier conformance
+  runner instead of presenting synthetic test signatures as production SAML.
 - Require every portable and host-owned endpoint to publish typed read or
   mutation semantics, including persistence boundary, atomicity, replay
   behavior, and validated persistence-schema/atomic-operation references.

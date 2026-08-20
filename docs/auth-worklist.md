@@ -240,9 +240,17 @@ account, session, client, and plugin contracts above:
   provisioning alone.
 - [ ] Add a managed connection and digest-only credential catalog with scoped,
   expiry/revocation-aware one-time issuance and rotation APIs.
-- [ ] Add SSO/SAML after its metadata, certificate rotation, tenant discovery,
-  assertion replay, and account-linking contracts are designed; do not couple
-  it to the SCIM provisioning plugin.
+- [x] Add the first SAML SSO server/client plugin slice with immutable typed
+  connections, exact provider/IdP/NameID identity, SP metadata, HTTP-POST
+  AuthnRequest and ACS flows, durable atomic request/assertion replay state,
+  strict XML bounds and assertion validation, host-owned session issuance,
+  OpenAPI contracts, and an application-owned XMLDSig verifier seam.
+- [ ] Prove live SAML interoperability and add a built-in portable XMLDSig
+  verifier only when exact reference binding, canonicalization, pinned
+  certificates, supported algorithms, and hostile XML vectors pass the public
+  verifier conformance suite. Dynamic SSO administration, OIDC enterprise
+  connections, encrypted assertions, logout, and group/role mapping remain
+  deferred.
 
 ## Active security-audit remediation
 
