@@ -34,6 +34,7 @@ void main() {
         providers: const <AuthProvider>[],
         store: _DurableAuthStore(),
         productionBoundary: boundary,
+        rateLimiter: _AllowAllRateLimiter(),
       );
 
       expect(options.runtimeMode, AuthRuntimeMode.production);
@@ -49,6 +50,17 @@ void main() {
       expect(options.browserProtection.trustedOrigins, [
         'https://app.example.com',
       ]);
+    });
+
+    test('production requires an explicit rate limiter', () {
+      expect(
+        () => AuthOptions<String>(
+          providers: const <AuthProvider>[],
+          store: _DurableAuthStore(),
+          productionBoundary: _productionBoundary(),
+        ),
+        throwsArgumentError,
+      );
     });
 
     test('production rejects insecure browser and cookie overrides', () {
@@ -92,6 +104,7 @@ void main() {
         providers: const <AuthProvider>[],
         store: _DurableAuthStore(),
         productionBoundary: _productionBoundary(),
+        rateLimiter: _AllowAllRateLimiter(),
         browserProtection: const AuthBrowserProtectionOptions(
           allowedOrigins: <String>['https://app.example.com'],
           requireOrigin: true,
@@ -109,6 +122,7 @@ void main() {
           providers: const <AuthProvider>[],
           store: _DurableAuthStore(),
           productionBoundary: _productionBoundary(),
+          rateLimiter: _AllowAllRateLimiter(),
           sessionStrategy: AuthSessionStrategy.jwt,
           jwtOptions: const JwtSessionOptions(secret: 'too-short'),
         ),
@@ -119,6 +133,7 @@ void main() {
           providers: const <AuthProvider>[],
           store: _DurableAuthStore(),
           productionBoundary: _productionBoundary(),
+          rateLimiter: _AllowAllRateLimiter(),
           sessionStrategy: AuthSessionStrategy.jwt,
           jwtOptions: const JwtSessionOptions(
             secret: 'a-production-secret-with-at-least-32-bytes',
@@ -424,6 +439,7 @@ void main() {
           providers: [provider],
           store: store,
           productionBoundary: _productionBoundary(),
+          rateLimiter: _AllowAllObjectRateLimiter(),
           plugins: [WebAuthnPlugin<Object>(provider: provider)],
         ),
       ),
@@ -436,6 +452,18 @@ void main() {
       ),
     );
   });
+}
+
+final class _AllowAllRateLimiter implements AuthRateLimiter<String> {
+  @override
+  AuthRateLimitDecision check(AuthRateLimitRequest<String> request) =>
+      const AuthRateLimitDecision.allow();
+}
+
+final class _AllowAllObjectRateLimiter implements AuthRateLimiter<Object> {
+  @override
+  AuthRateLimitDecision check(AuthRateLimitRequest<Object> request) =>
+      const AuthRateLimitDecision.allow();
 }
 
 AuthProductionBoundary _productionBoundary() => AuthProductionBoundary(

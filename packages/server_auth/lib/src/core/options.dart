@@ -321,6 +321,9 @@ class AuthOptions<TContext> {
         'production cookies must be Secure and HttpOnly',
       );
     }
+    if (rateLimiter == null) {
+      throw ArgumentError.notNull('rateLimiter');
+    }
     if (sessionStrategy == AuthSessionStrategy.jwt) {
       _validateProductionJwt(jwtOptions);
     }

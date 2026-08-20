@@ -208,6 +208,7 @@ void main() {
         providers: [CredentialsProvider()],
         store: _DurableAuthStore(),
         productionBoundary: boundary,
+        rateLimiter: _AllowAllRateLimiter(),
       );
 
       expect(

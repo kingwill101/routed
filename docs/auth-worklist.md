@@ -333,5 +333,9 @@ account, session, client, and plugin contracts above:
   Cloudflare Fetch, and deterministic external-provider callbacks run across
   IO, portable/native Node, and portable/native Cloudflare Fetch, including
   successful browser-shaped WebAuthn ceremonies. A deployed Worker run remains.
-- [ ] Security-sensitive defaults are safe without requiring users to discover
-  undocumented configuration switches.
+- [x] Security-sensitive defaults are safe without requiring users to discover
+  undocumented configuration switches. Durable options fail closed as
+  production posture and require an exact HTTPS origin/proxy boundary, secure
+  browser and cookie policy, production account defaults, an explicit rate
+  limiter, and algorithm-sized JWT secrets; ephemeral local development is an
+  explicit typed posture.

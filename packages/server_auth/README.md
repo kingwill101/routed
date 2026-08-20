@@ -117,8 +117,8 @@ every preset.
 Low-level `AuthOptions` usage carries the same typed runtime posture. Durable
 options are production options: they require an exact HTTPS origin set, an
 explicit direct or trusted-proxy decision, secure browser and cookie policy,
-and an algorithm-sized secret when JWT sessions are enabled. Ephemeral local
-development is an explicit opt-out:
+an explicit rate limiter, and an algorithm-sized secret when JWT sessions are
+enabled. Ephemeral local development is an explicit opt-out:
 
 ```dart
 final productionBoundary = AuthProductionBoundary(
