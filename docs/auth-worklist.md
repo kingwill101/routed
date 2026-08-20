@@ -374,8 +374,12 @@ account, session, client, and plugin contracts above:
   linking, redirect safety, provider failures, and host-owned session/JWT
   issuance across IO, portable/native Node, and portable/native Cloudflare
   Fetch adapters.
-- [ ] Run the D1 conformance harness against a deployed or remote-bound
-  Cloudflare database; compilation and local emulation are not live validation.
+- [x] Run the D1 conformance harness against a deployed or remote-bound
+  Cloudflare database. On 2026-08-20, all 35 core, username, OAuth provider,
+  managed SCIM, rollback, contention, and migration-isolation cases passed
+  against a disposable remote D1 database. The ownership guard deleted the
+  database, and a separate account listing confirmed that no disposable
+  `routed-auth-conformance` database remained.
 - [x] Keep the current auth packages, host adapter integrations, and public
   conformance suites analyzer-clean and passing on `master`.
 
