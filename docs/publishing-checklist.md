@@ -27,12 +27,14 @@ releases while preserving `1.0.0` as the next deliberate breaking boundary;
 
 ### Current hosted-release status
 
-The following snapshot was produced by `dart run tool/pub_release_audit.dart
---json` on 2026-08-19. Keep this list updated after each successful publish.
+The following snapshot was refreshed from the workspace audit and package
+publish dry-runs on 2026-08-20. Keep this list updated after each successful
+publish.
 
 Packages with no release currently visible on pub.dev:
 
 - `routed_auth`
+- `routed_auth_cloudflare`
 - `routed_cache`
 - `routed_observability`
 - `routed_openapi`
@@ -49,21 +51,37 @@ pending publication:
 
 - `routed` `0.5.0` (pub.dev: `0.3.3`)
 - `routed_cli` `0.3.0` (pub.dev: `0.2.1+1`)
+- `routed_core` `0.5.0` (pub.dev: `0.4.0`)
 - `routed_hotwire` `0.1.4` (pub.dev: `0.1.2`)
+- `routed_node` `0.2.0` (pub.dev: `0.1.0`)
+- `server_auth` `0.2.0` (pub.dev: `0.1.0`)
 
 `server_native` is intentionally excluded from this release even though its
 current version is already published; native assets require a separate
 artifact and metadata release.
 
-Packages with an `Unreleased` changelog whose local version still matches the
-published version and therefore need a version decision before release:
+Packages whose publishable contents still match their current pub.dev release
+and do not need a release in this batch:
 
 - `routed_analyzer` `0.1.0`
 - `routed_http` `0.1.0`
-- `routed_node` `0.1.0`
-- `server_auth` `0.1.0`
+- `routed_logging` `0.2.0`
+- `routed_testing` `0.4.0`
+- `server_cache` `0.1.0`
+- `server_contracts` `0.1.0`
 - `server_rate_limit` `0.1.0`
 - `server_sessions` `0.1.0`
+- `server_storage` `0.1.0`
+
+`routed_io` currently differs only in tests, development metadata, ignore
+rules, and its changelog. Leave it out unless those non-library changes are
+intentionally released.
+
+The dependency graph has no workspace cycles. The release audit checked 28
+publishable packages after excluding `server_native`, with satisfiable local
+constraints. After adding the documented `false_secrets` entry for the
+test-only OAuth key fixture, `server_auth 0.2.0` also passes its publish
+dry-run.
 
 The auth implementation roadmap is tracked in
 [`docs/auth-worklist.md`](auth-worklist.md).
