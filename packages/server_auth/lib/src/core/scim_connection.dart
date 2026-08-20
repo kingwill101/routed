@@ -180,7 +180,7 @@ final class AuthScimConnectionPlugin<TContext>
       connection.provisioningDomainId,
       authScimScopeFingerprint(normalizedScopes),
       generated.record.name,
-      generated.record.expiresAt?.toIso8601String(),
+      _expiryFingerprint(expiresAt),
     ]);
     final stored = await store.createConnection(
       AuthScimCreateConnectionTransaction(
@@ -194,7 +194,12 @@ final class AuthScimConnectionPlugin<TContext>
     );
     return AuthScimConnectionCreation(
       connection: stored.connection,
-      issuance: _issuance(stored.credential, stored.replayed, generated.secret),
+      issuance: _issuance(
+        stored.credential,
+        stored.replayed,
+        generated.secret,
+        now,
+      ),
     );
   }
 
@@ -310,12 +315,12 @@ final class AuthScimConnectionPlugin<TContext>
             connection.id,
             generated.record.name,
             authScimScopeFingerprint(normalizedScopes),
-            generated.record.expiresAt?.toIso8601String(),
+            _expiryFingerprint(expiresAt),
           ]),
         ),
       ),
     );
-    return _issuance(stored.credential, stored.replayed, generated.secret);
+    return _issuance(stored.credential, stored.replayed, generated.secret, now);
   }
 
   Future<AuthScimCredentialIssuance?> rotateCredential({
@@ -358,13 +363,13 @@ final class AuthScimConnectionPlugin<TContext>
             credentialId.trim(),
             generated.record.name,
             authScimScopeFingerprint(normalizedScopes),
-            generated.record.expiresAt?.toIso8601String(),
+            _expiryFingerprint(expiresAt),
           ]),
         ),
       ),
     );
     if (stored == null) return null;
-    return _issuance(stored.credential, stored.replayed, generated.secret);
+    return _issuance(stored.credential, stored.replayed, generated.secret, now);
   }
 
   Future<AuthScimCredential?> revokeCredential({
@@ -787,6 +792,10 @@ final class AuthScimConnectionPlugin<TContext>
     }
     return value;
   }
+
+  String _expiryFingerprint(DateTime? requested) => requested == null
+      ? 'default:${defaultCredentialLifetime.inSeconds}'
+      : requested.toUtc().toIso8601String();
 }
 
 final class _GeneratedCredential {
@@ -800,8 +809,9 @@ AuthScimCredentialIssuance _issuance(
   AuthScimCredentialRecord record,
   bool replayed,
   String generatedSecret,
+  DateTime now,
 ) => AuthScimCredentialIssuance(
-  credential: record.toPublic(now: DateTime.now().toUtc()),
+  credential: record.toPublic(now: now),
   replayed: replayed,
   secret: replayed ? null : generatedSecret,
 );

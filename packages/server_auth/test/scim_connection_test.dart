@@ -163,6 +163,16 @@ void main() {
       );
       expect(replay?.secret, isNull);
       expect(replay?.credential.id, rotated.credential.id);
+      final createReplay = await plugin.create(
+        principal: _principal,
+        name: 'Directory',
+        provisioningDomainId: 'employees',
+        scopes: const <AuthScimScope>{AuthScimScope.usersWrite},
+        credentialName: 'Primary',
+        idempotencyKey: 'create',
+      );
+      expect(createReplay.issuance.secret, isNull);
+      expect(createReplay.issuance.credential.active, isFalse);
     });
   });
 

@@ -280,13 +280,10 @@ final class InMemoryAuthScimConnectionStore
       connection.createdAt,
     );
     if (replay != null) {
-      final storedConnection = _connections[replay.connectionId];
-      final storedCredential = _credentials[replay.credentialId];
-      if (storedConnection == null || storedCredential == null) {
-        throw const AuthScimConnectionStoreException(
-          AuthScimConnectionStoreFailure.replayMismatch,
-        );
-      }
+      final storedConnection =
+          _connections[replay.connectionId] ?? replay.connection;
+      final storedCredential =
+          _credentials[replay.credentialId] ?? replay.credential;
       return AuthScimStoredConnectionCreation(
         connection: storedConnection,
         credential: storedCredential,
@@ -429,8 +426,8 @@ final class InMemoryAuthScimConnectionStore
       credential.createdAt,
     );
     if (replay != null) {
-      final stored = _credentials[replay.credentialId];
-      if (stored == null || stored.connectionId != connection.id) {
+      final stored = _credentials[replay.credentialId] ?? replay.credential;
+      if (stored.connectionId != connection.id) {
         throw const AuthScimConnectionStoreException(
           AuthScimConnectionStoreFailure.replayMismatch,
         );
@@ -480,8 +477,8 @@ final class InMemoryAuthScimConnectionStore
       transaction.revokedAt,
     );
     if (replay != null) {
-      final stored = _credentials[replay.credentialId];
-      if (stored == null || stored.connectionId != connection.id) {
+      final stored = _credentials[replay.credentialId] ?? replay.credential;
+      if (stored.connectionId != connection.id) {
         throw const AuthScimConnectionStoreException(
           AuthScimConnectionStoreFailure.replayMismatch,
         );
@@ -691,7 +688,13 @@ final class InMemoryAuthScimConnectionStore
     while ((_credentials.length >= maxCredentials ||
             _connectionOverCapacity()) &&
         inactive.isNotEmpty) {
-      _credentials.remove(inactive.removeAt(0).id);
+      final removed = inactive.removeAt(0);
+      for (final entry in _replays.entries.toList(growable: false)) {
+        if (entry.value.credentialId == removed.id) {
+          _replays[entry.key] = entry.value.copyWith(credential: removed);
+        }
+      }
+      _credentials.remove(removed.id);
     }
   }
 
@@ -769,6 +772,8 @@ final class InMemoryAuthScimConnectionStore
       fingerprint: binding.fingerprint,
       connectionId: connectionId,
       credentialId: credentialId,
+      connection: _connections[connectionId]!,
+      credential: _credentials[credentialId]!,
       expiresAt: now.toUtc().add(replayTtl),
     );
   }
@@ -801,13 +806,27 @@ final class _ReplayRecord {
     required this.fingerprint,
     required this.connectionId,
     required this.credentialId,
+    required this.connection,
+    required this.credential,
     required this.expiresAt,
   });
 
   final String fingerprint;
   final String connectionId;
   final String credentialId;
+  final AuthScimManagedConnection connection;
+  final AuthScimCredentialRecord credential;
   final DateTime expiresAt;
+
+  _ReplayRecord copyWith({AuthScimCredentialRecord? credential}) =>
+      _ReplayRecord(
+        fingerprint: fingerprint,
+        connectionId: connectionId,
+        credentialId: credentialId,
+        connection: connection,
+        credential: credential ?? this.credential,
+        expiresAt: expiresAt,
+      );
 }
 
 final class _Snapshot {
