@@ -117,10 +117,10 @@ The work is intentionally split between framework-agnostic capabilities in
   validation.
 - [x] Expose the registration, assertion, listing, and deletion contracts
   through the typed plugin registry, Routed routes, and `AuthClient`.
-- [ ] Finish the broader WebAuthn subsystem. Session issuance and passkey rename
-  are implemented, but EdDSA and the remaining attestation formats are still
-  pending. Attestation-root trust and FIDO metadata require an explicit policy
-  before Routed can make hardware-provenance claims.
+- [ ] Finish the broader WebAuthn subsystem. Session issuance, passkey rename,
+  and an explicit accept/reject/downgrade attestation-root trust policy are
+  implemented, but EdDSA, FIDO metadata, and the remaining attestation formats
+  are still pending.
 - [x] Add an optional native `TwoFactorPlugin` with TOTP enrollment
   verification, protected-secret and typed-store boundaries, recovery-code
   hashing and atomic one-time consumption, lockout handling, disablement, and
@@ -195,7 +195,7 @@ These capabilities are useful product benchmarks, but should follow the core
 account, session, client, and plugin contracts above:
 
 - [x] Add email OTP as a separate one-time-code flow alongside magic links.
-- [ ] Add phone-number authentication with provider-owned delivery and
+- [x] Add phone-number authentication with provider-owned delivery and
   verification boundaries.
 - [ ] Add username-first authentication and explicit identifier policy.
 - [x] Add anonymous/guest sessions with safe account upgrade/linking rules.
@@ -274,8 +274,9 @@ native auth model.
 
 ## Definition of done
 
-- [ ] Audit every production path to ensure plaintext passwords are neither
-  persisted nor compared directly. The built-in credential path uses the
+- [x] Audit every production path to ensure plaintext passwords are neither
+  persisted nor compared directly. Built-in registration, sign-in, reset,
+  change, administration, email-change, and deletion paths all use the
   configured password hasher.
 - [ ] Every state-changing auth operation has an explicit persistence and
   replay-safety story.
