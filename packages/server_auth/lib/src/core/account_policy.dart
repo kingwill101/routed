@@ -200,6 +200,9 @@ abstract interface class AuthAccountStateStore {
   /// Finds account state by user ID.
   FutureOr<AuthAccountState?> find(String userId);
 
+  /// Removes all policy state belonging to [userId].
+  FutureOr<void> delete(String userId);
+
   /// Creates or updates account state.
   FutureOr<AuthAccountState> upsert(AuthAccountState state);
 
@@ -255,6 +258,11 @@ class InMemoryAuthAccountStateStore implements AuthAccountStateStore {
   @override
   Future<AuthAccountState?> find(String userId) async {
     return _states[userId.trim()];
+  }
+
+  @override
+  Future<void> delete(String userId) async {
+    _states.remove(userId.trim());
   }
 
   @override

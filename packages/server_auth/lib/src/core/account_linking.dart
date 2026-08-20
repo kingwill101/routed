@@ -299,7 +299,12 @@ Future<AuthAccountLinked> linkProviderAccount({
     metadata: {...?metadata, 'linkedAt': linkedAt.toIso8601String()},
   );
 
-  await Future.sync(() => store.accounts.link(account));
+  final canonical = await Future.sync(() => store.accounts.link(account));
+  if (canonical.providerId != normalizedProviderId ||
+      canonical.providerAccountId != normalizedProviderAccountId ||
+      canonical.userId != normalizedUserId) {
+    throw AuthFlowException('provider_account_already_linked');
+  }
 
   return AuthAccountLinked(
     providerId: normalizedProviderId,
@@ -354,29 +359,22 @@ Future<AuthAccountUnlinked> unlinkProviderAccount({
     throw AuthFlowException('linked_account_not_found');
   }
 
-  final canUnlink = await canUnlinkProvider(
-    store: store,
-    userId: normalizedUserId,
-    providerId: normalizedProviderId,
-    providerAccountId: normalizedProviderAccountId,
-  );
-  if (!canUnlink) {
-    throw AuthFlowException('last_authentication_method');
-  }
-
-  // Remove the exact user-owned link using the store's ownership-checked
-  // operation. The record is deleted so the provider identity can be linked
-  // again later.
-  final unlinked = await Future.sync(
-    () => store.accounts.unlinkForUser(
+  final credential = await findAuthCredentialForUser(store, normalizedUserId);
+  final result = await Future.sync(
+    () => store.accounts.unlinkForUserIfSafe(
       normalizedUserId,
       normalizedProviderId,
       normalizedProviderAccountId,
+      hasEnabledPasswordCredential: credential?.enabled == true,
     ),
   );
-
-  if (!unlinked) {
-    throw AuthFlowException('linked_account_not_found');
+  switch (result) {
+    case AuthAccountUnlinkResult.unlinked:
+      break;
+    case AuthAccountUnlinkResult.notFound:
+      throw AuthFlowException('linked_account_not_found');
+    case AuthAccountUnlinkResult.lastAuthenticationMethod:
+      throw AuthFlowException('last_authentication_method');
   }
 
   return AuthAccountUnlinked(

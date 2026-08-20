@@ -82,15 +82,28 @@ void main() {
         (await store.accounts.find('github', 'account-1'))?.userId,
         equals(user.id),
       );
-      expect((await store.accounts.listForUser(user.id)).single.providerId, 'github');
       expect(
-        await store.accounts.unlinkForUser(user.id, 'github', 'account-1'),
-        isTrue,
+        (await store.accounts.listForUser(user.id)).single.providerId,
+        'github',
+      );
+      expect(
+        await store.accounts.unlinkForUserIfSafe(
+          user.id,
+          'github',
+          'account-1',
+          hasEnabledPasswordCredential: true,
+        ),
+        AuthAccountUnlinkResult.unlinked,
       );
       expect(await store.accounts.listForUser(user.id), isEmpty);
       expect(
-        await store.accounts.unlinkForUser(user.id, 'github', 'account-1'),
-        isFalse,
+        await store.accounts.unlinkForUserIfSafe(
+          user.id,
+          'github',
+          'account-1',
+          hasEnabledPasswordCredential: true,
+        ),
+        AuthAccountUnlinkResult.notFound,
       );
 
       final now = DateTime.now().toUtc();

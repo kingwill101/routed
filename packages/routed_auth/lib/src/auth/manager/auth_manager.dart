@@ -80,7 +80,7 @@ import 'package:server_auth/server_auth.dart'
         changeAuthPasswordForUser,
         issueAuthEmailChangeTokenForUser,
         confirmAuthEmailChange,
-        canUnlinkProvider,
+        unlinkProviderAccount,
         findAuthCredentialForUser,
         initiateAccountDeletion,
         verifyOAuthProviderAccount,
@@ -842,20 +842,12 @@ class AuthManager {
       identifier: user.id,
     );
     await _requireCurrentPassword(user, currentPassword);
-    if (!await canUnlinkProvider(
+    await unlinkProviderAccount(
       store: store,
       userId: user.id,
       providerId: providerId,
       providerAccountId: providerAccountId,
-    )) {
-      throw AuthFlowException('last_authentication_method');
-    }
-    final removed = await store.accounts.unlinkForUser(
-      user.id,
-      providerId,
-      providerAccountId,
     );
-    if (!removed) throw AuthFlowException('account_not_found');
   }
 
   /// Reauthenticates and tombstones the current account.

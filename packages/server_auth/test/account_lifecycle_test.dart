@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:server_auth/server_auth.dart';
@@ -358,6 +359,51 @@ void main() {
       final accounts = await store.accounts.listForUser('u1');
       expect(accounts, isEmpty);
     });
+
+    test('confirmed deletion clears account policy state', () async {
+      await store.upsert(
+        const AuthAccountState(
+          userId: 'u1',
+          disabled: true,
+          failedLoginAttempts: 4,
+        ),
+      );
+      await store.verificationTokens.save(
+        AuthVerificationToken(
+          identifier: 'account_deletion:u1',
+          token: 'delete-token',
+          expiresAt: DateTime.now().toUtc().add(const Duration(hours: 1)),
+        ),
+      );
+
+      final deleted = await store.confirmAndDeleteUser(
+        userId: 'u1',
+        token: 'delete-token',
+      );
+
+      expect(deleted, isTrue);
+      expect(await store.find('u1'), isNull);
+    });
+
+    test(
+      'administrative deletion and purge clear account policy state',
+      () async {
+        await store.upsert(
+          const AuthAccountState(userId: 'u1', disabled: true),
+        );
+        expect(await store.deleteUserForAdministration('u1'), isTrue);
+        expect(await store.find('u1'), isNull);
+
+        await _seedUser(store, 'u2', 'two@example.com');
+        await store.upsert(
+          const AuthAccountState(userId: 'u2', failedLoginAttempts: 3),
+        );
+        expect(await store.tombstoneUserForAdministration('u2'), isTrue);
+        expect(await store.find('u2'), isNotNull);
+        expect(await store.purgeTombstonedUserForAdministration('u2'), isTrue);
+        expect(await store.find('u2'), isNull);
+      },
+    );
   });
 
   group('Account linking', () {
@@ -483,6 +529,98 @@ void main() {
       final relinked = await store.accounts.find('github', 'gh-123');
       expect(relinked?.userId, equals('u1'));
     });
+
+    test(
+      'concurrent links report only the canonical owner as successful',
+      () async {
+        final bothLookedUp = Completer<void>();
+        var lookupCount = 0;
+        AuthAccount? canonical;
+        final concurrentStore = CallbackAuthStore(
+          onFindUserById: (id) => AuthUser(id: id),
+          onFindAccount: (_, _) async {
+            lookupCount += 1;
+            if (lookupCount == 2) bothLookedUp.complete();
+            await bothLookedUp.future;
+            return null;
+          },
+          onLinkAccount: (account) => canonical ??= account,
+        );
+
+        Future<Object> attempt(String userId) async {
+          try {
+            return await linkProviderAccount(
+              store: concurrentStore,
+              userId: userId,
+              providerId: 'github',
+              providerAccountId: 'shared-account',
+            );
+          } catch (error) {
+            return error;
+          }
+        }
+
+        final results = await Future.wait([attempt('u1'), attempt('u2')]);
+        expect(results.whereType<AuthAccountLinked>(), hasLength(1));
+        expect(
+          results.whereType<AuthFlowException>().single.code,
+          'provider_account_already_linked',
+        );
+        expect(
+          (results.whereType<AuthAccountLinked>().single).isNewLink,
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'concurrent unlinks preserve one provider authentication method',
+      () async {
+        final oauthOnlyStore = InMemoryAuthStore();
+        await oauthOnlyStore.users.create(AuthUser(id: 'oauth-user'));
+        await oauthOnlyStore.accounts.link(
+          AuthAccount(
+            providerId: 'github',
+            providerAccountId: 'github-account',
+            userId: 'oauth-user',
+          ),
+        );
+        await oauthOnlyStore.accounts.link(
+          AuthAccount(
+            providerId: 'google',
+            providerAccountId: 'google-account',
+            userId: 'oauth-user',
+          ),
+        );
+
+        Future<Object> attempt(String provider, String accountId) async {
+          try {
+            return await unlinkProviderAccount(
+              store: oauthOnlyStore,
+              userId: 'oauth-user',
+              providerId: provider,
+              providerAccountId: accountId,
+            );
+          } catch (error) {
+            return error;
+          }
+        }
+
+        final results = await Future.wait([
+          attempt('github', 'github-account'),
+          attempt('google', 'google-account'),
+        ]);
+        expect(results.whereType<AuthAccountUnlinked>(), hasLength(1));
+        expect(
+          results.whereType<AuthFlowException>().single.code,
+          'last_authentication_method',
+        );
+        expect(
+          await oauthOnlyStore.accounts.listForUser('oauth-user'),
+          hasLength(1),
+        );
+      },
+    );
 
     test('canUnlinkProvider returns true when user has password', () async {
       // _seedUser already creates a credential for u1, so canUnlink should
@@ -957,12 +1095,13 @@ void main() {
         ),
       );
 
-      final unlinked = await store.accounts.unlinkForUser(
+      final unlinked = await store.accounts.unlinkForUserIfSafe(
         'u1',
         'github',
         'gh-1',
+        hasEnabledPasswordCredential: true,
       );
-      expect(unlinked, isTrue);
+      expect(unlinked, AuthAccountUnlinkResult.unlinked);
 
       // Record should be gone, not just nullified
       final found = await store.accounts.find('github', 'gh-1');

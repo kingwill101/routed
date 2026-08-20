@@ -212,16 +212,26 @@ abstract interface class AuthAccountStore {
   /// Links [account], which must contain non-empty provider and user IDs.
   FutureOr<AuthAccount> link(AuthAccount account);
 
-  /// Removes one external identity only when it belongs to [userId].
-  FutureOr<bool> unlinkForUser(
+  /// Atomically removes one user-owned identity only when another
+  /// authentication method remains available.
+  ///
+  /// The enabled-password flag is resolved immediately before this call. The
+  /// account-store transaction must still count the user's remaining provider
+  /// identities while removing the requested record so concurrent unlinks
+  /// cannot both remove the last provider method.
+  FutureOr<AuthAccountUnlinkResult> unlinkForUserIfSafe(
     String userId,
     String providerId,
-    String providerAccountId,
-  );
+    String providerAccountId, {
+    required bool hasEnabledPasswordCredential,
+  });
 
   /// Removes every external identity owned by [userId].
   FutureOr<void> deleteForUser(String userId);
 }
+
+/// Result of an ownership-checked, last-method-safe account unlink.
+enum AuthAccountUnlinkResult { unlinked, notFound, lastAuthenticationMethod }
 
 /// Persistence contract for one-time email-change confirmations.
 abstract interface class AuthEmailChangeTokenStore {
@@ -441,6 +451,9 @@ class InMemoryAuthStore
   Future<AuthAccountState?> find(String userId) => _accountStates.find(userId);
 
   @override
+  Future<void> delete(String userId) => _accountStates.delete(userId);
+
+  @override
   Future<AuthAccountState> upsert(AuthAccountState state) =>
       _accountStates.upsert(state);
 
@@ -517,6 +530,7 @@ class InMemoryAuthStore
     await passwordResetTokens.deleteForUser(id);
     await emailChangeTokens.deleteForUser(id);
     await deviceAuthorizations.deleteForUser(id);
+    await _accountStates.delete(id);
     if (user.email != null) {
       await emailOtps.deleteForEmail(user.email!);
       await verificationTokens.delete(user.email!);
@@ -567,6 +581,7 @@ class InMemoryAuthStore
     await verificationTokens.delete(id);
     await emailChangeTokens.deleteForUser(id);
     await deviceAuthorizations.deleteForUser(id);
+    await _accountStates.delete(id);
     if (user.email != null) await emailOtps.deleteForEmail(user.email!);
     if (user.email != null) await verificationTokens.delete(user.email!);
     _users.delete(id);
@@ -601,6 +616,7 @@ class InMemoryAuthStore
     final user = await users.findById(id);
     if (user == null || !authUserIsDisabled(user)) return false;
     _users.delete(id);
+    await _accountStates.delete(id);
     return true;
   }
 }
@@ -648,12 +664,13 @@ class CallbackAuthStore implements AuthStore {
     onFindAccount,
     FutureOr<List<AuthAccount>> Function(String userId)? onListAccountsForUser,
     FutureOr<AuthAccount> Function(AuthAccount account)? onLinkAccount,
-    FutureOr<bool> Function(
+    FutureOr<AuthAccountUnlinkResult> Function(
       String userId,
       String providerId,
-      String providerAccountId,
-    )?
-    onUnlinkAccountForUser,
+      String providerAccountId, {
+      required bool hasEnabledPasswordCredential,
+    })?
+    onUnlinkAccountForUserIfSafe,
     FutureOr<void> Function(String userId)? onDeleteAccountsForUser,
     FutureOr<AuthSessionRecord?> Function(String tokenHash)? onFindSession,
     FutureOr<AuthSessionRecord> Function(AuthSessionRecord session)?
@@ -745,7 +762,7 @@ class CallbackAuthStore implements AuthStore {
          onFind: onFindAccount,
          onListForUser: onListAccountsForUser,
          onLink: onLinkAccount,
-         onUnlinkForUser: onUnlinkAccountForUser,
+         onUnlinkForUserIfSafe: onUnlinkAccountForUserIfSafe,
          onDeleteForUser: onDeleteAccountsForUser,
        ),
        sessions = _CallbackSessionStore(
@@ -1210,16 +1227,26 @@ class _InMemoryAccountStore implements AuthAccountStore {
   }
 
   @override
-  Future<bool> unlinkForUser(
+  Future<AuthAccountUnlinkResult> unlinkForUserIfSafe(
     String userId,
     String providerId,
-    String providerAccountId,
-  ) async {
+    String providerAccountId, {
+    required bool hasEnabledPasswordCredential,
+  }) async {
     final key = (providerId.trim(), providerAccountId.trim());
     final account = _accounts[key];
-    if (account?.userId != userId.trim()) return false;
+    final normalizedUserId = userId.trim();
+    if (account?.userId != normalizedUserId) {
+      return AuthAccountUnlinkResult.notFound;
+    }
+    final hasAnotherProvider = _accounts.entries.any(
+      (entry) => entry.key != key && entry.value.userId == normalizedUserId,
+    );
+    if (!hasEnabledPasswordCredential && !hasAnotherProvider) {
+      return AuthAccountUnlinkResult.lastAuthenticationMethod;
+    }
     _accounts.remove(key);
-    return true;
+    return AuthAccountUnlinkResult.unlinked;
   }
 }
 
@@ -1517,7 +1544,7 @@ class _CallbackAccountStore implements AuthAccountStore {
     this.onFind,
     this.onListForUser,
     this.onLink,
-    this.onUnlinkForUser,
+    this.onUnlinkForUserIfSafe,
     this.onDeleteForUser,
   });
 
@@ -1528,12 +1555,13 @@ class _CallbackAccountStore implements AuthAccountStore {
   onFind;
   final FutureOr<List<AuthAccount>> Function(String userId)? onListForUser;
   final FutureOr<AuthAccount> Function(AuthAccount account)? onLink;
-  final FutureOr<bool> Function(
+  final FutureOr<AuthAccountUnlinkResult> Function(
     String userId,
     String providerId,
-    String providerAccountId,
-  )?
-  onUnlinkForUser;
+    String providerAccountId, {
+    required bool hasEnabledPasswordCredential,
+  })?
+  onUnlinkForUserIfSafe;
   final FutureOr<void> Function(String userId)? onDeleteForUser;
 
   @override
@@ -1549,11 +1577,19 @@ class _CallbackAccountStore implements AuthAccountStore {
       onLink?.call(account) ?? account;
 
   @override
-  FutureOr<bool> unlinkForUser(
+  FutureOr<AuthAccountUnlinkResult> unlinkForUserIfSafe(
     String userId,
     String providerId,
-    String providerAccountId,
-  ) => onUnlinkForUser?.call(userId, providerId, providerAccountId) ?? false;
+    String providerAccountId, {
+    required bool hasEnabledPasswordCredential,
+  }) =>
+      onUnlinkForUserIfSafe?.call(
+        userId,
+        providerId,
+        providerAccountId,
+        hasEnabledPasswordCredential: hasEnabledPasswordCredential,
+      ) ??
+      AuthAccountUnlinkResult.notFound;
 
   @override
   FutureOr<void> deleteForUser(String userId) => onDeleteForUser?.call(userId);
