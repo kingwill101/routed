@@ -464,6 +464,237 @@ void main() {
     );
 
     test(
+      'registers browser-shaped TPM ES256 attestation through trust policy',
+      () async {
+        WebAuthnAttestationMetadata? observed;
+        final fixture = _Fixture(
+          attestationTrustPolicy: WebAuthnAttestationTrustPolicy(
+            evaluateCertificate: (metadata) {
+              observed = metadata;
+              return WebAuthnAttestationTrustDecision.accept;
+            },
+          ),
+        );
+        await fixture.store.users.create(fixture.user);
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        final saved = await fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: _tpmEs256RegistrationCredential(
+            challenge: registration.challenge,
+            keyPair: fixture.keyPair,
+          ),
+        );
+
+        expect(saved.name, 'TPM passkey');
+        expect(observed?.format, 'tpm');
+        expect(observed?.kind, WebAuthnAttestationKind.certificate);
+        expect(observed?.certificateTrustPath, hasLength(2));
+      },
+    );
+
+    test('registers browser-shaped TPM RS256 attestation', () async {
+      final fixture = _Fixture(
+        attestationTrustPolicy: const WebAuthnAttestationTrustPolicy(
+          certificate: WebAuthnAttestationTrustDecision.accept,
+        ),
+      );
+      final credentialKey = _RsaKeyPair.create();
+      final registration = await fixture.feature.beginRegistration(
+        context: fixture.context,
+        user: fixture.user,
+      );
+      final saved = await fixture.feature.finishRegistration(
+        context: fixture.context,
+        user: fixture.user,
+        credential: _tpmRs256RegistrationCredential(
+          challenge: registration.challenge,
+          credentialKey: credentialKey,
+        ),
+      );
+
+      expect(saved.name, 'TPM RSA passkey');
+    });
+
+    test('rejects malformed TPM statements and ECDAA', () async {
+      final cases = <Map<String, dynamic> Function(String, _KeyPair)>[
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          version: '1.2',
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          statementAlgorithm: -8,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          includeEcdaa: true,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          unexpectedStatementField: true,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          duplicateStatementField: true,
+        ),
+      ];
+      for (final credential in cases) {
+        await _expectInvalidTpm(credential);
+      }
+    });
+
+    test('rejects TPM certInfo and pubArea binding failures', () async {
+      final cases = <Map<String, dynamic> Function(String, _KeyPair)>[
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          wrongCredentialKey: true,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          wrongExtraData: true,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          magic: 0xff544346,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          attestationType: 0x8018,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          wrongAttestedName: true,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          trailingPubArea: true,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          trailingCertInfo: true,
+        ),
+      ];
+      for (final credential in cases) {
+        await _expectInvalidTpm(credential);
+      }
+    });
+
+    test('rejects forged TPM signatures and certificate chains', () async {
+      final cases = <Map<String, dynamic> Function(String, _KeyPair)>[
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          corruptStatementSignature: true,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          forgedCertificateChain: true,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          certificateChain: <Object?>[List<int>.filled(16385, 0)],
+        ),
+      ];
+      for (final credential in cases) {
+        await _expectInvalidTpm(credential);
+      }
+    });
+
+    test('rejects unsafe TPM attestation certificate semantics', () async {
+      final cases = <Map<String, dynamic> Function(String, _KeyPair)>[
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          emptyLeafSubject: false,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          includeSubjectAlternativeName: false,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          criticalSubjectAlternativeName: false,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          duplicateSubjectAlternativeName: true,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          includeAikExtendedKeyUsage: false,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          includeBasicConstraints: false,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          leafIsCertificateAuthority: true,
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          certificateAaguid: List<int>.filled(16, 1),
+        ),
+      ];
+      for (final credential in cases) {
+        await _expectInvalidTpm(credential);
+      }
+    });
+
+    test('rejects malformed and oversized TPM binary structures', () async {
+      final cases = <Map<String, dynamic> Function(String, _KeyPair)>[
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          publicAreaOverride: <int>[0, 0x23, 0, 0x0b],
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          certInfoOverride: <int>[0xff, 0x54, 0x43, 0x47],
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          publicAreaOverride: List<int>.filled(16385, 0),
+        ),
+        (challenge, keyPair) => _tpmEs256RegistrationCredential(
+          challenge: challenge,
+          keyPair: keyPair,
+          certInfoOverride: List<int>.filled(16385, 0),
+        ),
+      ];
+      for (final credential in cases) {
+        await _expectInvalidTpm(credential);
+      }
+    });
+
+    test(
       'registers browser-shaped Android Key attestation through trust policy',
       () async {
         WebAuthnAttestationMetadata? observed;
@@ -2265,6 +2496,367 @@ Future<Map<String, dynamic>> _ed25519RegistrationCredential({
   };
 }
 
+Future<void> _expectInvalidTpm(
+  Map<String, dynamic> Function(String challenge, _KeyPair keyPair) credential,
+) async {
+  final fixture = _Fixture();
+  final registration = await fixture.feature.beginRegistration(
+    context: fixture.context,
+    user: fixture.user,
+  );
+  await expectLater(
+    () => fixture.feature.finishRegistration(
+      context: fixture.context,
+      user: fixture.user,
+      credential: credential(registration.challenge, fixture.keyPair),
+    ),
+    throwsA(
+      isA<AuthFlowException>()
+          .having(
+            (error) => error.code,
+            'code',
+            anyOf(
+              'webauthn_attestation_invalid',
+              'webauthn_attestation_unsupported',
+            ),
+          )
+          .having(
+            (error) => error.toString(),
+            'public representation',
+            isNot(
+              anyOf(
+                contains('certInfo'),
+                contains('pubArea'),
+                contains('certificate'),
+              ),
+            ),
+          ),
+    ),
+  );
+}
+
+Map<String, dynamic> _tpmEs256RegistrationCredential({
+  required String challenge,
+  required _KeyPair keyPair,
+  String version = '2.0',
+  int statementAlgorithm = -7,
+  bool includeEcdaa = false,
+  bool unexpectedStatementField = false,
+  bool duplicateStatementField = false,
+  bool wrongCredentialKey = false,
+  bool wrongExtraData = false,
+  int magic = 0xff544347,
+  int attestationType = 0x8017,
+  bool wrongAttestedName = false,
+  bool trailingPubArea = false,
+  bool trailingCertInfo = false,
+  bool corruptStatementSignature = false,
+  bool forgedCertificateChain = false,
+  bool emptyLeafSubject = true,
+  bool includeSubjectAlternativeName = true,
+  bool criticalSubjectAlternativeName = true,
+  bool duplicateSubjectAlternativeName = false,
+  bool includeAikExtendedKeyUsage = true,
+  bool includeBasicConstraints = true,
+  bool leafIsCertificateAuthority = false,
+  List<int>? certificateAaguid,
+  List<int>? publicAreaOverride,
+  List<int>? certInfoOverride,
+  List<Object?>? certificateChain,
+}) {
+  final credentialId = Uint8List.fromList(
+    List<int>.generate(16, (index) => index + 1),
+  );
+  final coseKey = cbor.cbor.encode(<Object?, Object?>{
+    1: 2,
+    3: -7,
+    -1: 1,
+    -2: keyPair.x,
+    -3: keyPair.y,
+  });
+  final authData = <int>[
+    ...crypto.sha256.convert(utf8.encode('example.com')).bytes,
+    0x41,
+    0,
+    0,
+    0,
+    0,
+    ...List<int>.filled(16, 0),
+    credentialId.length >> 8,
+    credentialId.length & 0xff,
+    ...credentialId,
+    ...coseKey,
+  ];
+  final clientDataJson = _clientData(
+    type: 'webauthn.create',
+    challenge: challenge,
+    origin: 'https://example.com',
+  );
+  final clientDataHash = crypto.sha256.convert(clientDataJson).bytes;
+  final publicAreaKey = wrongCredentialKey
+      ? _KeyPair.create(privateValue: BigInt.from(0x45))
+      : keyPair;
+  var pubArea = Uint8List.fromList(
+    publicAreaOverride ?? _tpmEcPublicArea(publicAreaKey),
+  );
+  if (trailingPubArea) {
+    pubArea = Uint8List.fromList(<int>[...pubArea, 0]);
+  }
+  final extraData = wrongExtraData
+      ? List<int>.filled(32, 0)
+      : crypto.sha256.convert(<int>[...authData, ...clientDataHash]).bytes;
+  var certInfo = Uint8List.fromList(
+    certInfoOverride ??
+        _tpmCertInfo(
+          publicArea: pubArea,
+          extraData: extraData,
+          magic: magic,
+          type: attestationType,
+          wrongName: wrongAttestedName,
+        ),
+  );
+  if (trailingCertInfo) {
+    certInfo = Uint8List.fromList(<int>[...certInfo, 0]);
+  }
+
+  final rootKey = _KeyPair.create(privateValue: BigInt.from(0x41));
+  final aikKey = _KeyPair.create(privateValue: BigInt.from(0x42));
+  final rootName = _certificateName('TPM Attestation Root');
+  final rootCertificate = _tpmEcCertificate(
+    subjectKey: rootKey,
+    issuerKey: rootKey,
+    subject: rootName,
+    issuer: rootName,
+    isCertificateAuthority: true,
+  );
+  final leafCertificate = _tpmEcCertificate(
+    subjectKey: aikKey,
+    issuerKey: forgedCertificateChain
+        ? _KeyPair.create(privateValue: BigInt.from(0x43))
+        : rootKey,
+    subject: emptyLeafSubject
+        ? ASN1Sequence()
+        : _certificateName('TPM Attestation Key'),
+    issuer: rootName,
+    includeTpmSubjectAlternativeName: includeSubjectAlternativeName,
+    criticalTpmSubjectAlternativeName: criticalSubjectAlternativeName,
+    duplicateTpmSubjectAlternativeName: duplicateSubjectAlternativeName,
+    includeTpmAikExtendedKeyUsage: includeAikExtendedKeyUsage,
+    includeBasicConstraints: includeBasicConstraints,
+    isCertificateAuthority: leafIsCertificateAuthority,
+    aaguid: certificateAaguid,
+  );
+  final signature = _signEs256(aikKey, certInfo);
+  if (corruptStatementSignature) signature[signature.length - 1] ^= 1;
+  final chain = certificateChain ?? <Object?>[leafCertificate, rootCertificate];
+  final statement = <String, Object?>{
+    'ver': version,
+    'alg': statementAlgorithm,
+    'x5c': chain,
+    'sig': signature,
+    'certInfo': certInfo,
+    'pubArea': pubArea,
+    if (includeEcdaa) 'ecdaaKeyId': <int>[1],
+    if (unexpectedStatementField) 'unexpected': true,
+  };
+  final attestationObject = duplicateStatementField
+      ? Uint8List.fromList(<int>[
+          0xa3,
+          ...cbor.cbor.encode('fmt'),
+          ...cbor.cbor.encode('tpm'),
+          ...cbor.cbor.encode('authData'),
+          ...cbor.cbor.encode(authData),
+          ...cbor.cbor.encode('attStmt'),
+          0xa7,
+          ...cbor.cbor.encode('ver'),
+          ...cbor.cbor.encode(version),
+          ...cbor.cbor.encode('alg'),
+          ...cbor.cbor.encode(statementAlgorithm),
+          ...cbor.cbor.encode('alg'),
+          ...cbor.cbor.encode(statementAlgorithm),
+          ...cbor.cbor.encode('x5c'),
+          ...cbor.cbor.encode(chain),
+          ...cbor.cbor.encode('sig'),
+          ...cbor.cbor.encode(signature),
+          ...cbor.cbor.encode('certInfo'),
+          ...cbor.cbor.encode(certInfo),
+          ...cbor.cbor.encode('pubArea'),
+          ...cbor.cbor.encode(pubArea),
+        ])
+      : Uint8List.fromList(
+          cbor.cbor.encode(<String, Object?>{
+            'fmt': 'tpm',
+            'authData': authData,
+            'attStmt': statement,
+          }),
+        );
+  final encodedId = base64UrlNoPadding(credentialId);
+  return <String, dynamic>{
+    'id': encodedId,
+    'rawId': encodedId,
+    'type': 'public-key',
+    'response': <String, dynamic>{
+      'clientDataJSON': base64UrlNoPadding(clientDataJson),
+      'attestationObject': base64UrlNoPadding(attestationObject),
+      'transports': <String>['internal'],
+    },
+    'name': 'TPM passkey',
+  };
+}
+
+Map<String, dynamic> _tpmRs256RegistrationCredential({
+  required String challenge,
+  required _RsaKeyPair credentialKey,
+}) {
+  final credentialId = Uint8List.fromList(
+    List<int>.generate(16, (index) => 0x20 + index),
+  );
+  final authData = <int>[
+    ...crypto.sha256.convert(utf8.encode('example.com')).bytes,
+    0x41,
+    0,
+    0,
+    0,
+    0,
+    ...List<int>.filled(16, 0),
+    credentialId.length >> 8,
+    credentialId.length & 0xff,
+    ...credentialId,
+    ...credentialKey.cosePublicKey,
+  ];
+  final clientDataJson = _clientData(
+    type: 'webauthn.create',
+    challenge: challenge,
+    origin: 'https://example.com',
+  );
+  final clientDataHash = crypto.sha256.convert(clientDataJson).bytes;
+  final pubArea = _tpmRsaPublicArea(credentialKey);
+  final certInfo = _tpmCertInfo(
+    publicArea: pubArea,
+    extraData: crypto.sha256.convert(<int>[
+      ...authData,
+      ...clientDataHash,
+    ]).bytes,
+  );
+  final rootKey = _RsaKeyPair.create();
+  final aikKey = _RsaKeyPair.create();
+  final rootName = _certificateName('TPM RSA Attestation Root');
+  final rootCertificate = _tpmRsaCertificate(
+    subjectKey: rootKey,
+    issuerKey: rootKey,
+    subject: rootName,
+    issuer: rootName,
+    isCertificateAuthority: true,
+  );
+  final leafCertificate = _tpmRsaCertificate(
+    subjectKey: aikKey,
+    issuerKey: rootKey,
+    subject: ASN1Sequence(),
+    issuer: rootName,
+    includeTpmSubjectAlternativeName: true,
+    includeTpmAikExtendedKeyUsage: true,
+  );
+  final statement = <String, Object?>{
+    'ver': '2.0',
+    'alg': -257,
+    'x5c': <Object?>[leafCertificate, rootCertificate],
+    'sig': _signRs256(aikKey, certInfo),
+    'certInfo': certInfo,
+    'pubArea': pubArea,
+  };
+  final attestationObject = cbor.cbor.encode(<String, Object?>{
+    'fmt': 'tpm',
+    'authData': authData,
+    'attStmt': statement,
+  });
+  final encodedId = base64UrlNoPadding(credentialId);
+  return <String, dynamic>{
+    'id': encodedId,
+    'rawId': encodedId,
+    'type': 'public-key',
+    'response': <String, dynamic>{
+      'clientDataJSON': base64UrlNoPadding(clientDataJson),
+      'attestationObject': base64UrlNoPadding(attestationObject),
+      'transports': <String>['internal'],
+    },
+    'name': 'TPM RSA passkey',
+  };
+}
+
+Uint8List _tpmEcPublicArea(_KeyPair keyPair) => Uint8List.fromList(<int>[
+  ..._tpmUint16(0x0023),
+  ..._tpmUint16(0x000b),
+  ..._tpmUint32(0x00040072),
+  ..._tpmSized(const <int>[]),
+  ..._tpmUint16(0x0010),
+  ..._tpmUint16(0x0018),
+  ..._tpmUint16(0x000b),
+  ..._tpmUint16(0x0003),
+  ..._tpmUint16(0x0010),
+  ..._tpmSized(keyPair.x),
+  ..._tpmSized(keyPair.y),
+]);
+
+Uint8List _tpmRsaPublicArea(_RsaKeyPair keyPair) {
+  final modulus = _bigIntBytes(
+    keyPair.publicKey.modulus!,
+    (keyPair.publicKey.modulus!.bitLength + 7) ~/ 8,
+  );
+  return Uint8List.fromList(<int>[
+    ..._tpmUint16(0x0001),
+    ..._tpmUint16(0x000b),
+    ..._tpmUint32(0x00040072),
+    ..._tpmSized(const <int>[]),
+    ..._tpmUint16(0x0010),
+    ..._tpmUint16(0x0014),
+    ..._tpmUint16(0x000b),
+    ..._tpmUint16(2048),
+    ..._tpmUint32(0),
+    ..._tpmSized(modulus),
+  ]);
+}
+
+Uint8List _tpmCertInfo({
+  required List<int> publicArea,
+  required List<int> extraData,
+  int magic = 0xff544347,
+  int type = 0x8017,
+  bool wrongName = false,
+}) {
+  final nameDigest = crypto.sha256.convert(publicArea).bytes;
+  final name = <int>[
+    ..._tpmUint16(0x000b),
+    ...(wrongName ? List<int>.filled(32, 0) : nameDigest),
+  ];
+  return Uint8List.fromList(<int>[
+    ..._tpmUint32(magic),
+    ..._tpmUint16(type),
+    ..._tpmSized(const <int>[]),
+    ..._tpmSized(extraData),
+    ...List<int>.filled(8, 0),
+    ..._tpmUint32(0),
+    ..._tpmUint32(0),
+    1,
+    ...List<int>.filled(8, 0),
+    ..._tpmSized(name),
+    ..._tpmSized(const <int>[]),
+  ]);
+}
+
+List<int> _tpmUint16(int value) => <int>[(value >> 8) & 0xff, value & 0xff];
+
+List<int> _tpmUint32(int value) => <int>[
+  (value >> 24) & 0xff,
+  (value >> 16) & 0xff,
+  (value >> 8) & 0xff,
+  value & 0xff,
+];
+
+List<int> _tpmSized(List<int> value) => <int>[
+  ..._tpmUint16(value.length),
+  ...value,
+];
+
 Future<Map<String, dynamic>> _ed25519AssertionCredential({
   required String challenge,
   required String credentialId,
@@ -2945,6 +3537,187 @@ Uint8List _packedAttestationCertificate(
         .encode(),
   );
 }
+
+Uint8List _tpmEcCertificate({
+  required _KeyPair subjectKey,
+  required _KeyPair issuerKey,
+  required ASN1Sequence subject,
+  required ASN1Sequence issuer,
+  bool isCertificateAuthority = false,
+  bool includeBasicConstraints = true,
+  bool includeTpmSubjectAlternativeName = false,
+  bool criticalTpmSubjectAlternativeName = true,
+  bool duplicateTpmSubjectAlternativeName = false,
+  bool includeTpmAikExtendedKeyUsage = false,
+  List<int>? aaguid,
+}) {
+  final signatureAlgorithm = ASN1Sequence()
+    ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.10045.4.3.2'));
+  final publicKeyAlgorithm = ASN1Sequence()
+    ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.10045.2.1'))
+    ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.10045.3.1.7'));
+  final subjectPublicKeyInfo = ASN1Sequence()
+    ..add(publicKeyAlgorithm)
+    ..add(
+      ASN1BitString(
+        stringValues: <int>[0x04, ...subjectKey.x, ...subjectKey.y],
+      ),
+    );
+  final extensions = _tpmCertificateExtensions(
+    isCertificateAuthority: isCertificateAuthority,
+    includeBasicConstraints: includeBasicConstraints,
+    includeSubjectAlternativeName: includeTpmSubjectAlternativeName,
+    criticalSubjectAlternativeName: criticalTpmSubjectAlternativeName,
+    duplicateSubjectAlternativeName: duplicateTpmSubjectAlternativeName,
+    includeAikExtendedKeyUsage: includeTpmAikExtendedKeyUsage,
+    aaguid: aaguid,
+  );
+  final tbsCertificate = ASN1Sequence()
+    ..add(_explicitAsn1(0xa0, ASN1Integer(BigInt.two).encode()))
+    ..add(ASN1Integer(BigInt.from(80)))
+    ..add(signatureAlgorithm)
+    ..add(issuer)
+    ..add(
+      ASN1Sequence()
+        ..add(ASN1UtcTime(DateTime.utc(2020, 1, 1)))
+        ..add(ASN1UtcTime(DateTime.utc(2040, 1, 1))),
+    )
+    ..add(subject)
+    ..add(subjectPublicKeyInfo)
+    ..add(_explicitAsn1(0xa3, extensions.encode()));
+  final signature = _signEs256(issuerKey, tbsCertificate.encode());
+  return Uint8List.fromList(
+    (ASN1Sequence()
+          ..add(tbsCertificate)
+          ..add(signatureAlgorithm)
+          ..add(ASN1BitString(stringValues: signature)))
+        .encode(),
+  );
+}
+
+Uint8List _tpmRsaCertificate({
+  required _RsaKeyPair subjectKey,
+  required _RsaKeyPair issuerKey,
+  required ASN1Sequence subject,
+  required ASN1Sequence issuer,
+  bool isCertificateAuthority = false,
+  bool includeBasicConstraints = true,
+  bool includeTpmSubjectAlternativeName = false,
+  bool includeTpmAikExtendedKeyUsage = false,
+}) {
+  final signatureAlgorithm = ASN1Sequence()
+    ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.113549.1.1.11'))
+    ..add(ASN1Null());
+  final publicKeyAlgorithm = ASN1Sequence()
+    ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.113549.1.1.1'))
+    ..add(ASN1Null());
+  final rsaPublicKey = ASN1Sequence()
+    ..add(ASN1Integer(subjectKey.publicKey.modulus!))
+    ..add(ASN1Integer(subjectKey.publicKey.publicExponent!));
+  final subjectPublicKeyInfo = ASN1Sequence()
+    ..add(publicKeyAlgorithm)
+    ..add(ASN1BitString(stringValues: rsaPublicKey.encode()));
+  final extensions = _tpmCertificateExtensions(
+    isCertificateAuthority: isCertificateAuthority,
+    includeBasicConstraints: includeBasicConstraints,
+    includeSubjectAlternativeName: includeTpmSubjectAlternativeName,
+    criticalSubjectAlternativeName: true,
+    duplicateSubjectAlternativeName: false,
+    includeAikExtendedKeyUsage: includeTpmAikExtendedKeyUsage,
+  );
+  final tbsCertificate = ASN1Sequence()
+    ..add(_explicitAsn1(0xa0, ASN1Integer(BigInt.two).encode()))
+    ..add(ASN1Integer(BigInt.from(81)))
+    ..add(signatureAlgorithm)
+    ..add(issuer)
+    ..add(
+      ASN1Sequence()
+        ..add(ASN1UtcTime(DateTime.utc(2020, 1, 1)))
+        ..add(ASN1UtcTime(DateTime.utc(2040, 1, 1))),
+    )
+    ..add(subject)
+    ..add(subjectPublicKeyInfo)
+    ..add(_explicitAsn1(0xa3, extensions.encode()));
+  final signature = _signRs256(issuerKey, tbsCertificate.encode());
+  return Uint8List.fromList(
+    (ASN1Sequence()
+          ..add(tbsCertificate)
+          ..add(signatureAlgorithm)
+          ..add(ASN1BitString(stringValues: signature)))
+        .encode(),
+  );
+}
+
+ASN1Sequence _tpmCertificateExtensions({
+  required bool isCertificateAuthority,
+  required bool includeBasicConstraints,
+  required bool includeSubjectAlternativeName,
+  required bool criticalSubjectAlternativeName,
+  required bool duplicateSubjectAlternativeName,
+  required bool includeAikExtendedKeyUsage,
+  List<int>? aaguid,
+}) {
+  final extensions = ASN1Sequence();
+  if (includeBasicConstraints) {
+    final basicConstraints = ASN1Sequence();
+    if (isCertificateAuthority) basicConstraints.add(ASN1Boolean(true));
+    extensions.add(
+      ASN1Sequence()
+        ..add(ASN1ObjectIdentifier.fromIdentifierString('2.5.29.19'))
+        ..add(ASN1Boolean(true))
+        ..add(ASN1OctetString(octets: basicConstraints.encode())),
+    );
+  }
+  if (includeSubjectAlternativeName) {
+    ASN1Sequence extension() {
+      final directoryName = ASN1Sequence()
+        ..add(_tpmNameAttribute('2.23.133.2.1', 'id:4D534654'))
+        ..add(_tpmNameAttribute('2.23.133.2.2', 'Routed TPM'))
+        ..add(_tpmNameAttribute('2.23.133.2.3', 'id:00010001'));
+      final generalNames = ASN1Sequence()
+        ..add(_explicitAsn1(0xa4, directoryName.encode()));
+      return ASN1Sequence()
+        ..add(ASN1ObjectIdentifier.fromIdentifierString('2.5.29.17'))
+        ..add(ASN1Boolean(criticalSubjectAlternativeName))
+        ..add(ASN1OctetString(octets: generalNames.encode()));
+    }
+
+    extensions.add(extension());
+    if (duplicateSubjectAlternativeName) extensions.add(extension());
+  }
+  if (includeAikExtendedKeyUsage) {
+    final usage = ASN1Sequence()
+      ..add(ASN1ObjectIdentifier.fromIdentifierString('2.23.133.8.3'));
+    extensions.add(
+      ASN1Sequence()
+        ..add(ASN1ObjectIdentifier.fromIdentifierString('2.5.29.37'))
+        ..add(ASN1OctetString(octets: usage.encode())),
+    );
+  }
+  if (aaguid != null) {
+    extensions.add(
+      ASN1Sequence()
+        ..add(
+          ASN1ObjectIdentifier.fromIdentifierString('1.3.6.1.4.1.45724.1.1.4'),
+        )
+        ..add(
+          ASN1OctetString(
+            octets: ASN1OctetString(
+              octets: Uint8List.fromList(aaguid),
+            ).encode(),
+          ),
+        ),
+    );
+  }
+  return extensions;
+}
+
+ASN1Set _tpmNameAttribute(String identifier, String value) => ASN1Set()
+  ..add(
+    ASN1Sequence()
+      ..add(ASN1ObjectIdentifier.fromIdentifierString(identifier))
+      ..add(ASN1UTF8String(utf8StringValue: value)),
+  );
 
 Uint8List _androidKeyDescription({
   required List<int> challenge,

@@ -1139,6 +1139,14 @@ final class WebAuthnPlugin<TContext>
         clientDataHash: clientDataHash,
         credentialPublicKey: parsed.publicKeyCose!,
       );
+    } else if (format == 'tpm') {
+      verifiedStatement = await _verifyTpmAttestation(
+        statement: statement,
+        authenticatorData: authDataBytes,
+        clientDataHash: clientDataHash,
+        credentialPublicKey: parsed.publicKeyCose!,
+        aaguid: parsed.aaguid!,
+      );
     } else {
       throw AuthFlowException('webauthn_attestation_unsupported');
     }
@@ -1423,6 +1431,254 @@ final class WebAuthnPlugin<TContext>
           .toList(growable: false),
     );
   }
+
+  Future<_VerifiedAttestationStatement> _verifyTpmAttestation({
+    required Map statement,
+    required Uint8List authenticatorData,
+    required Uint8List clientDataHash,
+    required Uint8List credentialPublicKey,
+    required Uint8List aaguid,
+  }) async {
+    if (statement.containsKey('ecdaaKeyId')) {
+      throw AuthFlowException('webauthn_attestation_unsupported');
+    }
+    if (statement.length != 6 ||
+        statement['ver'] != '2.0' ||
+        !statement.containsKey('alg') ||
+        !statement.containsKey('sig') ||
+        !statement.containsKey('certInfo') ||
+        !statement.containsKey('pubArea') ||
+        !statement.containsKey('x5c')) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    final algorithm = statement['alg'];
+    if (algorithm is! int || (algorithm != -7 && algorithm != -257)) {
+      throw AuthFlowException('webauthn_attestation_unsupported');
+    }
+    final signature = _boundedByteString(statement['sig'], maximum: 1024);
+    final certInfo = _boundedByteString(statement['certInfo'], maximum: 16384);
+    final pubArea = _boundedByteString(statement['pubArea'], maximum: 16384);
+
+    try {
+      final credentialKey = _decodeCosePublicKey(credentialPublicKey);
+      final parsedPublicArea = _parseTpmPublicArea(pubArea);
+      if (!_cosePublicKeysEqual(parsedPublicArea.publicKey, credentialKey)) {
+        throw const FormatException();
+      }
+
+      final certificates = _parseTpmCertificateChain(
+        statement['x5c'],
+        aaguid: aaguid,
+      );
+      final leaf = certificates.first;
+      if (leaf.publicKey.algorithm != algorithm) {
+        throw const FormatException();
+      }
+      for (var index = 0; index + 1 < certificates.length; index++) {
+        final certificate = certificates[index];
+        final issuer = certificates[index + 1];
+        if (!_constantTimeBytesEqual(certificate.issuer, issuer.subject) ||
+            !issuer.hasBasicConstraints ||
+            !issuer.isCertificateAuthority ||
+            !await _verifyCertificateSignature(certificate, issuer.publicKey)) {
+          throw const FormatException();
+        }
+      }
+      if (!await _verifySignatureWithKey(
+        key: leaf.publicKey,
+        algorithm: algorithm,
+        message: certInfo,
+        signature: signature,
+        derOnly: algorithm == -7,
+      )) {
+        throw const FormatException();
+      }
+
+      final parsedCertInfo = _parseTpmCertInfo(certInfo);
+      final expectedExtraData = Uint8List.fromList(
+        crypto.sha256.convert(<int>[
+          ...authenticatorData,
+          ...clientDataHash,
+        ]).bytes,
+      );
+      if (!_constantTimeBytesEqual(
+        parsedCertInfo.extraData,
+        expectedExtraData,
+      )) {
+        throw const FormatException();
+      }
+      final expectedName = Uint8List.fromList(<int>[
+        (parsedPublicArea.nameAlgorithm >> 8) & 0xff,
+        parsedPublicArea.nameAlgorithm & 0xff,
+        ..._tpmDigest(parsedPublicArea.nameAlgorithm, pubArea),
+      ]);
+      if (!_constantTimeBytesEqual(parsedCertInfo.name, expectedName)) {
+        throw const FormatException();
+      }
+
+      return _VerifiedAttestationStatement(
+        kind: WebAuthnAttestationKind.certificate,
+        certificateTrustPath: certificates
+            .map((certificate) => certificate.derBytes)
+            .toList(growable: false),
+      );
+    } on AuthFlowException catch (error) {
+      if (error.code == 'webauthn_attestation_unsupported') rethrow;
+      throw AuthFlowException('webauthn_attestation_invalid');
+    } catch (_) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+  }
+
+  Uint8List _boundedByteString(Object? value, {required int maximum}) {
+    if (value is! List ||
+        value.isEmpty ||
+        value.length > maximum ||
+        value.any((byte) => byte is! int || byte < 0 || byte > 255)) {
+      throw AuthFlowException('webauthn_attestation_invalid');
+    }
+    return Uint8List.fromList(value.cast<int>());
+  }
+
+  _TpmPublicArea _parseTpmPublicArea(Uint8List bytes) {
+    final reader = _TpmReader(bytes);
+    final type = reader.uint16();
+    final nameAlgorithm = reader.uint16();
+    _tpmDigest(nameAlgorithm, const <int>[]);
+    reader.uint32(); // objectAttributes
+    reader.sized(maximum: 1024); // authPolicy
+
+    late final _CosePublicKey publicKey;
+    switch (type) {
+      case 0x0001: // TPM_ALG_RSA
+        _readTpmNullSymmetricDefinition(reader);
+        _readTpmScheme(reader, expected: 0x0014); // TPM_ALG_RSASSA
+        final keyBits = reader.uint16();
+        final encodedExponent = reader.uint32();
+        final modulus = reader.sized(maximum: 1024);
+        final exponent = encodedExponent == 0 ? 65537 : encodedExponent;
+        if (keyBits < 2048 ||
+            keyBits > 8192 ||
+            modulus.length != (keyBits + 7) ~/ 8 ||
+            exponent < 3 ||
+            exponent.isEven) {
+          throw const FormatException();
+        }
+        publicKey = _CosePublicKey(
+          algorithm: -257,
+          modulus: modulus,
+          exponent: _unsignedIntBytes(exponent),
+        );
+      case 0x0023: // TPM_ALG_ECC
+        _readTpmNullSymmetricDefinition(reader);
+        _readTpmScheme(reader, expected: 0x0018); // TPM_ALG_ECDSA
+        if (reader.uint16() != 0x0003) throw const FormatException();
+        if (reader.uint16() != 0x0010) throw const FormatException();
+        final x = reader.sized(maximum: 66);
+        final y = reader.sized(maximum: 66);
+        if (x.length != 32 || y.length != 32) {
+          throw const FormatException();
+        }
+        publicKey = _CosePublicKey(algorithm: -7, x: x, y: y);
+      default:
+        throw AuthFlowException('webauthn_attestation_unsupported');
+    }
+    reader.requireEnd();
+    return _TpmPublicArea(nameAlgorithm: nameAlgorithm, publicKey: publicKey);
+  }
+
+  void _readTpmNullSymmetricDefinition(_TpmReader reader) {
+    if (reader.uint16() != 0x0010) throw const FormatException();
+  }
+
+  void _readTpmScheme(_TpmReader reader, {required int expected}) {
+    final scheme = reader.uint16();
+    if (scheme == 0x0010) return;
+    if (scheme != expected || reader.uint16() != 0x000b) {
+      throw const FormatException();
+    }
+  }
+
+  _TpmCertInfo _parseTpmCertInfo(Uint8List bytes) {
+    final reader = _TpmReader(bytes);
+    if (reader.uint32() != 0xff544347 || reader.uint16() != 0x8017) {
+      throw const FormatException();
+    }
+    reader.sized(maximum: 1024); // qualifiedSigner
+    final extraData = reader.sized(maximum: 64);
+    reader.uint64(); // clock
+    reader.uint32(); // resetCount
+    reader.uint32(); // restartCount
+    final safe = reader.uint8();
+    if (safe != 0 && safe != 1) throw const FormatException();
+    reader.uint64(); // firmwareVersion
+    final name = reader.sized(maximum: 128);
+    reader.sized(maximum: 128); // qualifiedName
+    reader.requireEnd();
+    if (extraData.length != 32 || name.length < 22 || name.length > 66) {
+      throw const FormatException();
+    }
+    return _TpmCertInfo(extraData: extraData, name: name);
+  }
+
+  List<_PackedAttestationCertificate> _parseTpmCertificateChain(
+    Object? value, {
+    required Uint8List aaguid,
+  }) {
+    if (value is! List || value.isEmpty || value.length > 8) {
+      throw const FormatException();
+    }
+    final certificates = <_PackedAttestationCertificate>[];
+    for (final item in value) {
+      certificates.add(
+        _parsePackedCertificate(_boundedByteString(item, maximum: 16384)),
+      );
+    }
+    final leaf = certificates.first;
+    if (!leaf.isVersion3 ||
+        !_isEmptyX509Name(leaf.subject) ||
+        !leaf.hasTpmSubjectAlternativeName ||
+        !leaf.hasTpmAikExtendedKeyUsage ||
+        !leaf.hasBasicConstraints ||
+        leaf.isCertificateAuthority ||
+        (leaf.aaguid != null &&
+            !_constantTimeBytesEqual(leaf.aaguid!, aaguid))) {
+      throw const FormatException();
+    }
+    return certificates;
+  }
+
+  bool _isEmptyX509Name(Uint8List encodedName) {
+    try {
+      final parser = ASN1Parser(encodedName);
+      final name = parser.nextObject();
+      return !parser.hasNext() &&
+          name is ASN1Sequence &&
+          (name.elements?.isEmpty ?? true);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Uint8List _unsignedIntBytes(int value) {
+    if (value <= 0) throw const FormatException();
+    final bytes = <int>[];
+    var remaining = value;
+    while (remaining != 0) {
+      bytes.insert(0, remaining & 0xff);
+      remaining >>= 8;
+    }
+    return Uint8List.fromList(bytes);
+  }
+
+  Uint8List _tpmDigest(int algorithm, List<int> bytes) =>
+      Uint8List.fromList(switch (algorithm) {
+        0x0004 => crypto.sha1.convert(bytes).bytes,
+        0x000b => crypto.sha256.convert(bytes).bytes,
+        0x000c => crypto.sha384.convert(bytes).bytes,
+        0x000d => crypto.sha512.convert(bytes).bytes,
+        _ => throw const FormatException(),
+      });
 
   List<_PackedAttestationCertificate> _parseAppleCertificateChain(
     Object? value,
@@ -1748,6 +2004,8 @@ final class WebAuthnPlugin<TContext>
       final names = _certificateNames(subject);
       var hasBasicConstraints = false;
       var isCertificateAuthority = false;
+      var hasTpmSubjectAlternativeName = false;
+      var hasTpmAikExtendedKeyUsage = false;
       Uint8List? certificateAaguid;
       Uint8List? androidKeyAttestationExtension;
       Uint8List? appleNonceExtension;
@@ -1804,6 +2062,15 @@ final class WebAuthnPlugin<TContext>
                 throw const FormatException();
               }
             }
+          } else if (extensionIdentifier == '2.5.29.17') {
+            hasTpmSubjectAlternativeName =
+                isCritical &&
+                (extensionElements[1] as ASN1Boolean).boolValue == true &&
+                _hasTpmSubjectAlternativeName(value.octets);
+          } else if (extensionIdentifier == '2.5.29.37') {
+            hasTpmAikExtendedKeyUsage = _hasTpmAikExtendedKeyUsage(
+              value.octets,
+            );
           } else if (extensionIdentifier == '1.3.6.1.4.1.45724.1.1.4') {
             if (isCritical &&
                 (extensionElements[1] as ASN1Boolean).boolValue == true) {
@@ -1844,6 +2111,8 @@ final class WebAuthnPlugin<TContext>
         isVersion3: isVersion3,
         hasBasicConstraints: hasBasicConstraints,
         isCertificateAuthority: isCertificateAuthority,
+        hasTpmSubjectAlternativeName: hasTpmSubjectAlternativeName,
+        hasTpmAikExtendedKeyUsage: hasTpmAikExtendedKeyUsage,
         country: names['2.5.4.6'],
         organization: names['2.5.4.10'],
         organizationalUnit: names['2.5.4.11'],
@@ -1855,6 +2124,90 @@ final class WebAuthnPlugin<TContext>
     } catch (_) {
       throw AuthFlowException('webauthn_attestation_invalid');
     }
+  }
+
+  bool _hasTpmSubjectAlternativeName(Uint8List? bytes) {
+    try {
+      if (bytes == null || bytes.isEmpty || bytes.length > 4096) {
+        return false;
+      }
+      final parser = ASN1Parser(bytes);
+      final generalNames = parser.nextObject();
+      if (parser.hasNext() || generalNames is! ASN1Sequence) return false;
+      var validDirectoryName = false;
+      for (final generalName in generalNames.elements ?? const <ASN1Object>[]) {
+        if (generalName.tag != 0xa4 || generalName.valueBytes == null) continue;
+        final nameParser = ASN1Parser(generalName.valueBytes);
+        final name = nameParser.nextObject();
+        if (nameParser.hasNext() || name is! ASN1Sequence) return false;
+        final attributes = <String, String>{};
+        for (final relativeName in name.elements ?? const <ASN1Object>[]) {
+          if (relativeName is! ASN1Set) return false;
+          for (final attribute
+              in relativeName.elements ?? const <ASN1Object>[]) {
+            if (attribute is! ASN1Sequence || attribute.elements?.length != 2) {
+              return false;
+            }
+            final identifier = attribute.elements![0];
+            final value = attribute.elements![1];
+            if (identifier is! ASN1ObjectIdentifier ||
+                value is! ASN1UTF8String ||
+                value.valueBytes == null ||
+                value.valueBytes!.isEmpty ||
+                value.valueBytes!.length > 256) {
+              return false;
+            }
+            final oid = identifier.objectIdentifierAsString;
+            if (oid == null || attributes.containsKey(oid)) return false;
+            attributes[oid] = utf8.decode(
+              value.valueBytes!,
+              allowMalformed: false,
+            );
+          }
+        }
+        if (_isTpmHexIdentifier(attributes['2.23.133.2.1']) &&
+            attributes['2.23.133.2.2']?.trim().isNotEmpty == true &&
+            _isTpmHexIdentifier(attributes['2.23.133.2.3'])) {
+          validDirectoryName = true;
+        }
+      }
+      return validDirectoryName;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool _isTpmHexIdentifier(String? value) {
+    if (value == null || value.length != 11 || !value.startsWith('id:')) {
+      return false;
+    }
+    for (final codeUnit in value.codeUnits.skip(3)) {
+      final decimal = codeUnit >= 0x30 && codeUnit <= 0x39;
+      final uppercase = codeUnit >= 0x41 && codeUnit <= 0x46;
+      final lowercase = codeUnit >= 0x61 && codeUnit <= 0x66;
+      if (!decimal && !uppercase && !lowercase) return false;
+    }
+    return true;
+  }
+
+  bool _hasTpmAikExtendedKeyUsage(Uint8List? bytes) {
+    if (bytes == null || bytes.isEmpty || bytes.length > 4096) {
+      throw const FormatException();
+    }
+    final parser = ASN1Parser(bytes);
+    final sequence = parser.nextObject();
+    if (parser.hasNext() || sequence is! ASN1Sequence) {
+      throw const FormatException();
+    }
+    final identifiers = <String>{};
+    for (final value in sequence.elements ?? const <ASN1Object>[]) {
+      if (value is! ASN1ObjectIdentifier) throw const FormatException();
+      final identifier = value.objectIdentifierAsString;
+      if (identifier == null || !identifiers.add(identifier)) {
+        throw const FormatException();
+      }
+    }
+    return identifiers.contains('2.23.133.8.3');
   }
 
   void _validateCertificateValidity(ASN1Sequence validity) {
@@ -2507,6 +2860,8 @@ final class _PackedAttestationCertificate {
     required this.isVersion3,
     required this.hasBasicConstraints,
     required this.isCertificateAuthority,
+    required this.hasTpmSubjectAlternativeName,
+    required this.hasTpmAikExtendedKeyUsage,
     this.country,
     this.organization,
     this.organizationalUnit,
@@ -2526,6 +2881,8 @@ final class _PackedAttestationCertificate {
   final bool isVersion3;
   final bool hasBasicConstraints;
   final bool isCertificateAuthority;
+  final bool hasTpmSubjectAlternativeName;
+  final bool hasTpmAikExtendedKeyUsage;
   final String? country;
   final String? organization;
   final String? organizationalUnit;
@@ -2533,6 +2890,67 @@ final class _PackedAttestationCertificate {
   final Uint8List? aaguid;
   final Uint8List? androidKeyAttestationExtension;
   final Uint8List? appleNonceExtension;
+}
+
+final class _TpmPublicArea {
+  const _TpmPublicArea({required this.nameAlgorithm, required this.publicKey});
+
+  final int nameAlgorithm;
+  final _CosePublicKey publicKey;
+}
+
+final class _TpmCertInfo {
+  const _TpmCertInfo({required this.extraData, required this.name});
+
+  final Uint8List extraData;
+  final Uint8List name;
+}
+
+final class _TpmReader {
+  _TpmReader(this._bytes);
+
+  final Uint8List _bytes;
+  var _offset = 0;
+
+  int uint8() => _take(1).single;
+
+  int uint16() {
+    final bytes = _take(2);
+    return (bytes[0] << 8) | bytes[1];
+  }
+
+  int uint32() {
+    final bytes = _take(4);
+    return (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
+  }
+
+  BigInt uint64() {
+    final bytes = _take(8);
+    var value = BigInt.zero;
+    for (final byte in bytes) {
+      value = (value << 8) | BigInt.from(byte);
+    }
+    return value;
+  }
+
+  Uint8List sized({required int maximum}) {
+    final length = uint16();
+    if (length > maximum) throw const FormatException();
+    return Uint8List.fromList(_take(length));
+  }
+
+  void requireEnd() {
+    if (_offset != _bytes.length) throw const FormatException();
+  }
+
+  Uint8List _take(int length) {
+    if (length < 0 || _offset + length > _bytes.length) {
+      throw const FormatException();
+    }
+    final value = Uint8List.sublistView(_bytes, _offset, _offset + length);
+    _offset += length;
+    return value;
+  }
 }
 
 final class _AndroidAuthorizationList {
