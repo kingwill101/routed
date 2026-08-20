@@ -265,6 +265,7 @@ final class AuthClientDeviceAuthorization {
     required this.expiresIn,
     required this.interval,
     this.verificationUriComplete,
+    this.receivedAt,
   });
 
   final String deviceCode;
@@ -274,7 +275,14 @@ final class AuthClientDeviceAuthorization {
   final Duration interval;
   final String? verificationUriComplete;
 
-  factory AuthClientDeviceAuthorization.fromJson(Map<String, dynamic> json) {
+  /// When the client received this response, used to enforce [expiresIn]
+  /// locally while polling.
+  final DateTime? receivedAt;
+
+  factory AuthClientDeviceAuthorization.fromJson(
+    Map<String, dynamic> json, {
+    DateTime? receivedAt,
+  }) {
     return AuthClientDeviceAuthorization(
       deviceCode: _requiredString(json, 'device_code'),
       userCode: _requiredString(json, 'user_code'),
@@ -282,9 +290,113 @@ final class AuthClientDeviceAuthorization {
       expiresIn: _requiredSeconds(json, 'expires_in'),
       interval: _requiredSeconds(json, 'interval'),
       verificationUriComplete: json['verification_uri_complete']?.toString(),
+      receivedAt: receivedAt?.toUtc(),
     );
   }
 }
+
+/// Supplies the current time to device-authorization polling.
+typedef AuthDeviceAuthorizationClock = DateTime Function();
+
+/// Waits before the next device-token request.
+typedef AuthDeviceAuthorizationDelay = Future<void> Function(Duration delay);
+
+/// Decides whether an automatic device-authorization poll should continue.
+typedef AuthDeviceAuthorizationShouldContinue =
+    FutureOr<bool> Function(AuthDeviceAuthorizationPollingContext context);
+
+/// State supplied before each wait in an automatic device-token poll.
+final class AuthDeviceAuthorizationPollingContext {
+  const AuthDeviceAuthorizationPollingContext({
+    required this.attempts,
+    required this.interval,
+    required this.deadline,
+    this.lastError,
+  });
+
+  /// Number of token requests already completed.
+  final int attempts;
+
+  /// Minimum delay before the next token request.
+  final Duration interval;
+
+  /// Effective local deadline for the polling operation.
+  final DateTime deadline;
+
+  /// Most recent retryable RFC 8628 response, if any.
+  final AuthClientException? lastError;
+}
+
+/// Allows a caller to interrupt an automatic device-authorization poll.
+final class AuthDeviceAuthorizationPollingController {
+  final Completer<void> _cancelled = Completer<void>();
+
+  bool get isCancelled => _cancelled.isCompleted;
+
+  Future<void> get whenCancelled => _cancelled.future;
+
+  void cancel() {
+    if (!_cancelled.isCompleted) _cancelled.complete();
+  }
+}
+
+/// Why automatic device-authorization polling stopped locally.
+enum AuthDeviceAuthorizationPollingStopReason {
+  cancelled,
+  stoppedByCaller,
+  authorizationExpired,
+  deadlineReached,
+}
+
+/// Indicates that automatic polling stopped before receiving a token.
+final class AuthDeviceAuthorizationPollingStoppedException
+    implements Exception {
+  const AuthDeviceAuthorizationPollingStoppedException({
+    required this.reason,
+    required this.attempts,
+  });
+
+  final AuthDeviceAuthorizationPollingStopReason reason;
+  final int attempts;
+
+  @override
+  String toString() =>
+      'AuthDeviceAuthorizationPollingStoppedException($reason, attempts: '
+      '$attempts)';
+}
+
+/// Controls a high-level RFC 8628 device-token polling operation.
+final class AuthDeviceAuthorizationPollingOptions {
+  AuthDeviceAuthorizationPollingOptions({
+    this.deadline,
+    this.controller,
+    this.shouldContinue,
+    AuthDeviceAuthorizationClock? clock,
+    AuthDeviceAuthorizationDelay? delay,
+  }) : clock = clock ?? _deviceAuthorizationClock,
+       delay = delay ?? _deviceAuthorizationDelay;
+
+  /// Optional caller deadline. The authorization expiry still takes priority
+  /// when it occurs sooner.
+  final DateTime? deadline;
+
+  /// Optional controller that can interrupt a pending wait.
+  final AuthDeviceAuthorizationPollingController? controller;
+
+  /// Optional callback evaluated before every wait.
+  final AuthDeviceAuthorizationShouldContinue? shouldContinue;
+
+  /// Clock hook. Applications normally use the system-clock default.
+  final AuthDeviceAuthorizationClock clock;
+
+  /// Delay hook. Applications normally use the timer-backed default.
+  final AuthDeviceAuthorizationDelay delay;
+}
+
+DateTime _deviceAuthorizationClock() => DateTime.now().toUtc();
+
+Future<void> _deviceAuthorizationDelay(Duration delay) =>
+    Future<void>.delayed(delay);
 
 /// Access-token response returned after a device has been approved.
 final class AuthClientDeviceAccessToken {
@@ -981,7 +1093,10 @@ class AuthClientCore {
       '/oauth/device/authorize',
       body: {'client_id': clientId, 'scope': scopes.join(' ')},
     );
-    return AuthClientDeviceAuthorization.fromJson(_mapBody(response.body));
+    return AuthClientDeviceAuthorization.fromJson(
+      _mapBody(response.body),
+      receivedAt: DateTime.now().toUtc(),
+    );
   }
 
   /// Polls the device token endpoint.

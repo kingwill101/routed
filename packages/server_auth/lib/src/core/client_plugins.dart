@@ -161,11 +161,138 @@ final class AuthDeviceAuthorizationClient {
     required String deviceCode,
   }) => _core.pollDeviceToken(clientId: clientId, deviceCode: deviceCode);
 
+  /// Polls until the device authorization succeeds or reaches a terminal
+  /// server or local state.
+  ///
+  /// The first request waits for the server-issued [authorization] interval.
+  /// Retryable `authorization_pending` and `slow_down` responses are handled
+  /// according to RFC 8628. Other [AuthClientException] values are terminal and
+  /// are rethrown. Local cancellation, caller stopping, and deadlines throw
+  /// [AuthDeviceAuthorizationPollingStoppedException].
+  Future<AuthClientDeviceAccessToken> pollUntilComplete({
+    required String clientId,
+    required AuthClientDeviceAuthorization authorization,
+    AuthDeviceAuthorizationPollingOptions? options,
+  }) async {
+    final settings = options ?? AuthDeviceAuthorizationPollingOptions();
+    final startedAt = settings.clock().toUtc();
+    final authorizationDeadline = (authorization.receivedAt ?? startedAt).add(
+      authorization.expiresIn,
+    );
+    final callerDeadline = settings.deadline?.toUtc();
+    final effectiveDeadline =
+        callerDeadline != null && callerDeadline.isBefore(authorizationDeadline)
+        ? callerDeadline
+        : authorizationDeadline;
+    final deadlineReason = effectiveDeadline == authorizationDeadline
+        ? AuthDeviceAuthorizationPollingStopReason.authorizationExpired
+        : AuthDeviceAuthorizationPollingStopReason.deadlineReached;
+
+    var attempts = 0;
+    var interval = authorization.interval;
+    AuthClientException? lastError;
+
+    while (true) {
+      _throwIfDevicePollingCancelled(settings.controller, attempts);
+      final context = AuthDeviceAuthorizationPollingContext(
+        attempts: attempts,
+        interval: interval,
+        deadline: effectiveDeadline,
+        lastError: lastError,
+      );
+      final shouldContinue = settings.shouldContinue;
+      if (shouldContinue != null &&
+          !await Future<bool>.value(shouldContinue(context))) {
+        throw AuthDeviceAuthorizationPollingStoppedException(
+          reason: AuthDeviceAuthorizationPollingStopReason.stoppedByCaller,
+          attempts: attempts,
+        );
+      }
+
+      await _waitForDevicePoll(
+        interval: interval,
+        deadline: effectiveDeadline,
+        deadlineReason: deadlineReason,
+        attempts: attempts,
+        settings: settings,
+      );
+      attempts += 1;
+
+      try {
+        return await poll(
+          clientId: clientId,
+          deviceCode: authorization.deviceCode,
+        );
+      } on AuthClientException catch (error) {
+        if (error.code != 'authorization_pending' &&
+            error.code != 'slow_down') {
+          rethrow;
+        }
+        if (error.code == 'slow_down') {
+          interval += const Duration(seconds: 5);
+        }
+        final retryAfter = error.retryAfter;
+        if (retryAfter != null && retryAfter > interval) {
+          interval = retryAfter;
+        }
+        lastError = error;
+      }
+    }
+  }
+
   Future<void> approve({required String userCode}) =>
       _core.approveDeviceAuthorization(userCode: userCode);
 
   Future<void> deny({required String userCode}) =>
       _core.denyDeviceAuthorization(userCode: userCode);
+}
+
+Future<void> _waitForDevicePoll({
+  required Duration interval,
+  required DateTime deadline,
+  required AuthDeviceAuthorizationPollingStopReason deadlineReason,
+  required int attempts,
+  required AuthDeviceAuthorizationPollingOptions settings,
+}) async {
+  final now = settings.clock().toUtc();
+  final remaining = deadline.difference(now);
+  if (remaining <= Duration.zero) {
+    throw AuthDeviceAuthorizationPollingStoppedException(
+      reason: deadlineReason,
+      attempts: attempts,
+    );
+  }
+
+  final delay = interval < remaining ? interval : remaining;
+  final controller = settings.controller;
+  if (controller == null) {
+    await settings.delay(delay);
+  } else {
+    await Future.any<void>(<Future<void>>[
+      settings.delay(delay),
+      controller.whenCancelled,
+    ]);
+    _throwIfDevicePollingCancelled(controller, attempts);
+  }
+
+  if (!settings.clock().toUtc().isBefore(deadline)) {
+    throw AuthDeviceAuthorizationPollingStoppedException(
+      reason: deadlineReason,
+      attempts: attempts,
+    );
+  }
+}
+
+void _throwIfDevicePollingCancelled(
+  AuthDeviceAuthorizationPollingController? controller,
+  int attempts,
+) {
+  if (controller?.isCancelled ?? false) {
+    throw AuthDeviceAuthorizationPollingStoppedException(
+      reason: AuthDeviceAuthorizationPollingStopReason.cancelled,
+      attempts: attempts,
+    );
+  }
 }
 
 final class AuthApiKeyClientPlugin

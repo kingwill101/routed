@@ -128,4 +128,262 @@ void main() {
       ),
     );
   });
+
+  test(
+    'automatic polling honors interval, pending, slow_down, and Retry-After',
+    () async {
+      final time = _FakePollingTime(DateTime.utc(2026, 1, 1));
+      var polls = 0;
+      final plugin = const AuthDeviceAuthorizationClientPlugin();
+      final auth = AuthClient(
+        baseUrl: Uri.parse('https://example.test'),
+        plugins: [plugin],
+        httpClient: MockClient((_) async {
+          polls += 1;
+          if (polls == 1) {
+            return http.Response(
+              jsonEncode({'error': 'authorization_pending'}),
+              400,
+              headers: {'retry-after': '7'},
+            );
+          }
+          if (polls == 2) {
+            return http.Response(
+              jsonEncode({'error': 'slow_down'}),
+              400,
+              headers: {'retry-after': '8'},
+            );
+          }
+          return http.Response(
+            jsonEncode({
+              'access_token': 'access-1',
+              'token_type': 'Bearer',
+              'expires_in': 300,
+              'scope': 'openid',
+            }),
+            200,
+          );
+        }),
+      );
+      final client = auth.plugins.use(plugin);
+
+      final token = await client.pollUntilComplete(
+        clientId: 'cli-1',
+        authorization: _authorization(receivedAt: time.now()),
+        options: AuthDeviceAuthorizationPollingOptions(
+          clock: time.now,
+          delay: time.delay,
+        ),
+      );
+
+      expect(token.accessToken, 'access-1');
+      expect(polls, 3);
+      expect(time.delays, const [
+        Duration(seconds: 5),
+        Duration(seconds: 7),
+        Duration(seconds: 12),
+      ]);
+    },
+  );
+
+  test('automatic polling stops at authorization expiry', () async {
+    final time = _FakePollingTime(DateTime.utc(2026, 1, 1));
+    var polls = 0;
+    final plugin = const AuthDeviceAuthorizationClientPlugin();
+    final auth = AuthClient(
+      baseUrl: Uri.parse('https://example.test'),
+      plugins: [plugin],
+      httpClient: MockClient((_) async {
+        polls += 1;
+        return http.Response(
+          jsonEncode({'error': 'authorization_pending'}),
+          400,
+        );
+      }),
+    );
+    final client = auth.plugins.use(plugin);
+
+    await expectLater(
+      client.pollUntilComplete(
+        clientId: 'cli-1',
+        authorization: _authorization(
+          receivedAt: time.now(),
+          expiresIn: const Duration(seconds: 11),
+        ),
+        options: AuthDeviceAuthorizationPollingOptions(
+          clock: time.now,
+          delay: time.delay,
+        ),
+      ),
+      throwsA(
+        isA<AuthDeviceAuthorizationPollingStoppedException>()
+            .having(
+              (error) => error.reason,
+              'reason',
+              AuthDeviceAuthorizationPollingStopReason.authorizationExpired,
+            )
+            .having((error) => error.attempts, 'attempts', 2),
+      ),
+    );
+
+    expect(polls, 2);
+    expect(time.delays, const [
+      Duration(seconds: 5),
+      Duration(seconds: 5),
+      Duration(seconds: 1),
+    ]);
+  });
+
+  test('automatic polling honors a caller deadline before expiry', () async {
+    final time = _FakePollingTime(DateTime.utc(2026, 1, 1));
+    var polls = 0;
+    final plugin = const AuthDeviceAuthorizationClientPlugin();
+    final auth = AuthClient(
+      baseUrl: Uri.parse('https://example.test'),
+      plugins: [plugin],
+      httpClient: MockClient((_) async {
+        polls += 1;
+        return http.Response('{}', 500);
+      }),
+    );
+    final client = auth.plugins.use(plugin);
+
+    await expectLater(
+      client.pollUntilComplete(
+        clientId: 'cli-1',
+        authorization: _authorization(receivedAt: time.now()),
+        options: AuthDeviceAuthorizationPollingOptions(
+          deadline: time.now().add(const Duration(seconds: 3)),
+          clock: time.now,
+          delay: time.delay,
+        ),
+      ),
+      throwsA(
+        isA<AuthDeviceAuthorizationPollingStoppedException>().having(
+          (error) => error.reason,
+          'reason',
+          AuthDeviceAuthorizationPollingStopReason.deadlineReached,
+        ),
+      ),
+    );
+
+    expect(polls, 0);
+    expect(time.delays, const [Duration(seconds: 3)]);
+  });
+
+  test('automatic polling can be cancelled during a wait', () async {
+    final time = _FakePollingTime(DateTime.utc(2026, 1, 1));
+    final controller = AuthDeviceAuthorizationPollingController();
+    var polls = 0;
+    final plugin = const AuthDeviceAuthorizationClientPlugin();
+    final auth = AuthClient(
+      baseUrl: Uri.parse('https://example.test'),
+      plugins: [plugin],
+      httpClient: MockClient((_) async {
+        polls += 1;
+        return http.Response('{}', 500);
+      }),
+    );
+    final client = auth.plugins.use(plugin);
+
+    await expectLater(
+      client.pollUntilComplete(
+        clientId: 'cli-1',
+        authorization: _authorization(receivedAt: time.now()),
+        options: AuthDeviceAuthorizationPollingOptions(
+          controller: controller,
+          clock: time.now,
+          delay: (duration) async {
+            await time.delay(duration);
+            controller.cancel();
+          },
+        ),
+      ),
+      throwsA(
+        isA<AuthDeviceAuthorizationPollingStoppedException>().having(
+          (error) => error.reason,
+          'reason',
+          AuthDeviceAuthorizationPollingStopReason.cancelled,
+        ),
+      ),
+    );
+
+    expect(polls, 0);
+    expect(time.delays, const [Duration(seconds: 5)]);
+  });
+
+  test('automatic polling supports caller-controlled stopping', () async {
+    final time = _FakePollingTime(DateTime.utc(2026, 1, 1));
+    final contexts = <AuthDeviceAuthorizationPollingContext>[];
+    var polls = 0;
+    final plugin = const AuthDeviceAuthorizationClientPlugin();
+    final auth = AuthClient(
+      baseUrl: Uri.parse('https://example.test'),
+      plugins: [plugin],
+      httpClient: MockClient((_) async {
+        polls += 1;
+        return http.Response(
+          jsonEncode({'error': 'authorization_pending'}),
+          400,
+        );
+      }),
+    );
+    final client = auth.plugins.use(plugin);
+
+    await expectLater(
+      client.pollUntilComplete(
+        clientId: 'cli-1',
+        authorization: _authorization(receivedAt: time.now()),
+        options: AuthDeviceAuthorizationPollingOptions(
+          clock: time.now,
+          delay: time.delay,
+          shouldContinue: (context) {
+            contexts.add(context);
+            return context.attempts == 0;
+          },
+        ),
+      ),
+      throwsA(
+        isA<AuthDeviceAuthorizationPollingStoppedException>().having(
+          (error) => error.reason,
+          'reason',
+          AuthDeviceAuthorizationPollingStopReason.stoppedByCaller,
+        ),
+      ),
+    );
+
+    expect(polls, 1);
+    expect(time.delays, const [Duration(seconds: 5)]);
+    expect(contexts, hasLength(2));
+    expect(contexts.last.lastError?.code, 'authorization_pending');
+  });
+}
+
+AuthClientDeviceAuthorization _authorization({
+  required DateTime receivedAt,
+  Duration expiresIn = const Duration(minutes: 10),
+  Duration interval = const Duration(seconds: 5),
+}) {
+  return AuthClientDeviceAuthorization(
+    deviceCode: 'device-raw',
+    userCode: 'ABCD-2345',
+    verificationUri: 'https://example.test/device',
+    expiresIn: expiresIn,
+    interval: interval,
+    receivedAt: receivedAt,
+  );
+}
+
+final class _FakePollingTime {
+  _FakePollingTime(this._now);
+
+  DateTime _now;
+  final List<Duration> delays = <Duration>[];
+
+  DateTime now() => _now;
+
+  Future<void> delay(Duration duration) async {
+    delays.add(duration);
+    _now = _now.add(duration);
+  }
 }
