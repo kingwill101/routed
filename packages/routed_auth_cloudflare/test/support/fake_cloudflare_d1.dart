@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:routed_node/cloudflare.dart';
@@ -32,6 +33,10 @@ final class FakeCloudflareD1Database implements CloudflareD1Database {
   }
 
   FakeCloudflareD1BatchFaultInjector? batchFaultInjector;
+
+  /// Optional deterministic test barrier after commit but before `batch`
+  /// completes for its caller.
+  FutureOr<void> Function()? afterBatchCommit;
 
   void close() => _database.close();
 
@@ -70,6 +75,7 @@ final class FakeCloudflareD1Database implements CloudflareD1Database {
         }
       }
       _database.execute('COMMIT');
+      await afterBatchCommit?.call();
       return results;
     } catch (_) {
       _database.execute('ROLLBACK');

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:routed_auth_cloudflare/routed_auth_cloudflare.dart';
 import 'package:server_auth/testing.dart';
 import 'package:test/test.dart';
@@ -162,6 +164,53 @@ void main() {
       before,
     );
   });
+
+  test(
+    'concurrent hard deletion cannot leave a late creation receipt',
+    () async {
+      final database = FakeCloudflareD1Database();
+      addTearDown(database.close);
+      const schema = CloudflareD1AuthSchema();
+      final store = await CloudflareD1AuthStore.open(database, schema: schema);
+      _bindAnonymousPlugin(store);
+      final createCommitted = Completer<void>();
+      final returnCreate = Completer<void>();
+      database.afterBatchCommit = () async {
+        createCommitted.complete();
+        await returnCreate.future;
+      };
+      final command = AuthAnonymousCreateAccountCommand(
+        operationId: 'concurrent-hard-delete-create',
+        user: AuthUser(id: 'concurrent-hard-delete-user', isAnonymous: true),
+      );
+
+      final creation = store.createAnonymousAccount(command);
+      await createCommitted.future;
+      database.afterBatchCommit = null;
+      expect(
+        await store.userDeletionCoordinator.deleteUser(command.user.id),
+        isTrue,
+      );
+      returnCreate.complete();
+
+      expect(
+        (await creation).status,
+        AuthAnonymousMutationStatus.applied,
+        reason: 'the D1 create batch linearized before hard deletion',
+      );
+      expect(await store.users.findById(command.user.id), isNull);
+      expect(
+        database.select(
+          'SELECT * FROM ${schema.table('anonymous_mutation_receipts')}',
+        ),
+        isEmpty,
+      );
+      await expectLater(
+        store.createAnonymousAccount(command),
+        throwsStateError,
+      );
+    },
+  );
 
   test(
     'contended operation-ID mismatch rolls back the losing subject',
