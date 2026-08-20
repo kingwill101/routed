@@ -2,14 +2,16 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:server_auth/src/core/client.dart' show AuthClientCore;
+import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('AuthClient exposes typed WebAuthn ceremony helpers', () async {
+  test('WebAuthn plugin exposes typed ceremony helpers', () async {
     final requests = <http.BaseRequest>[];
-    final client = AuthClientCore(
+    final plugin = const AuthWebAuthnClientPlugin();
+    final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
+      plugins: [plugin],
       httpClient: MockClient((request) async {
         requests.add(request);
         if (request.url.path == '/auth/csrf') {
@@ -159,38 +161,37 @@ void main() {
         return http.Response('{}', 200);
       }),
     );
+    final client = auth.plugins.use(plugin);
 
-    final registration = await client.beginWebAuthnRegistration();
+    final registration = await client.beginRegistration();
     expect(registration.challenge, 'registration-challenge');
     expect(registration.relyingPartyId, 'example.test');
     expect(registration.publicKey['pubKeyCredParams'], isNotEmpty);
 
-    final saved = await client.completeWebAuthnRegistration(
+    final saved = await client.completeRegistration(
       credential: <String, dynamic>{'id': 'credential-1'},
       name: 'Laptop',
     );
     expect(saved.credentialId, 'credential-1');
     expect(saved.transports, ['internal']);
 
-    final authentication = await client.beginWebAuthnAuthentication(
-      userId: 'user-1',
-    );
+    final authentication = await client.beginAuthentication(userId: 'user-1');
     expect(authentication.allowCredentials, ['credential-1']);
-    final result = await client.completeWebAuthnAuthentication(
+    final result = await client.completeAuthentication(
       credential: <String, dynamic>{'id': 'credential-1'},
       userId: 'user-1',
     );
     expect(result.user.id, 'user-1');
     expect(result.credential.counter, 1);
 
-    final credentials = await client.getWebAuthnCredentials();
+    final credentials = await client.list();
     expect(credentials.single.name, 'Laptop');
-    final renamed = await client.renameWebAuthnCredential(
+    final renamed = await client.rename(
       credentialId: 'credential-1',
       name: 'Desktop',
     );
     expect(renamed.name, 'Desktop');
-    await client.deleteWebAuthnCredential(credentialId: 'credential-1');
+    await client.delete(credentialId: 'credential-1');
     expect(
       requests.map((request) => request.url.path),
       contains('/auth/webauthn/authenticate/verify'),

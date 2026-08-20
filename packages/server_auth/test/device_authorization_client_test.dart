@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:server_auth/server_auth.dart';
-import 'package:server_auth/src/core/client.dart' show AuthClientCore;
 import 'package:test/test.dart';
 
 void main() {
@@ -11,8 +10,10 @@ void main() {
     'device client uses unconstrained endpoints and parses RFC 8628 data',
     () async {
       final requests = <http.BaseRequest>[];
-      final client = AuthClientCore(
+      final plugin = const AuthDeviceAuthorizationClientPlugin();
+      final auth = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
+        plugins: [plugin],
         httpClient: MockClient((request) async {
           requests.add(request);
           if (request.url.path == '/auth/oauth/device/authorize') {
@@ -53,12 +54,13 @@ void main() {
           );
         }),
       );
+      final client = auth.plugins.use(plugin);
 
-      final authorization = await client.requestDeviceAuthorization(
+      final authorization = await client.authorize(
         clientId: 'cli-1',
         scopes: const ['openid', 'profile'],
       );
-      final token = await client.pollDeviceToken(
+      final token = await client.poll(
         clientId: 'cli-1',
         deviceCode: authorization.deviceCode,
       );
@@ -76,37 +78,47 @@ void main() {
     },
   );
 
-  test('device approval uses the normal CSRF mutation contract', () async {
-    final client = AuthClientCore(
+  test('device approval and denial use the CSRF mutation contract', () async {
+    final plugin = const AuthDeviceAuthorizationClientPlugin();
+    final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
+      plugins: [plugin],
       httpClient: MockClient((request) async {
         if (request.url.path == '/auth/csrf') {
           return http.Response(jsonEncode({'csrfToken': 'csrf-1'}), 200);
         }
-        expect(request.url.path, '/auth/oauth/device/approve');
         expect(request.headers['x-csrf-token'], 'csrf-1');
         expect(jsonDecode(request.body), {
           'user_code': 'ABCD-2345',
           '_csrf': 'csrf-1',
         });
+        expect(
+          request.url.path,
+          anyOf('/auth/oauth/device/approve', '/auth/oauth/device/deny'),
+        );
         return http.Response('{}', 200);
       }),
     );
+    final client = auth.plugins.use(plugin);
 
-    await client.approveDeviceAuthorization(userCode: 'ABCD-2345');
+    await client.approve(userCode: 'ABCD-2345');
+    await client.deny(userCode: 'ABCD-2345');
   });
 
   test('device client preserves RFC error codes', () async {
-    final client = AuthClientCore(
+    final plugin = const AuthDeviceAuthorizationClientPlugin();
+    final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
+      plugins: [plugin],
       httpClient: MockClient(
         (_) async =>
             http.Response(jsonEncode({'error': 'authorization_pending'}), 400),
       ),
     );
+    final client = auth.plugins.use(plugin);
 
     await expectLater(
-      client.pollDeviceToken(clientId: 'cli-1', deviceCode: 'device-raw'),
+      client.poll(clientId: 'cli-1', deviceCode: 'device-raw'),
       throwsA(
         isA<AuthClientException>().having(
           (error) => error.code,
