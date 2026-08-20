@@ -156,6 +156,63 @@ void main() {
       _expectGeneratedClientCompatible(withMagicLink);
     });
 
+    test('publishes SAML metadata, sign-in, ACS, and replay semantics', () {
+      final registry = _registry(<AuthServerPlugin<Object>>[
+        AuthSamlPlugin<Object>(
+          connections: _SamlCatalog(),
+          replayStore: InMemoryAuthSamlReplayStore(),
+          assertionVerifier: const _SamlVerifier(),
+          identityResolver: const _SamlResolver(),
+          browserBindingResolver: (_) => 'browser-binding-value',
+          options: const AuthSamlOptions(allowInMemoryStoreForTesting: true),
+        ),
+      ]);
+      final spec = registry.toOpenApi31(info: _info);
+
+      expect(
+        spec.paths.keys,
+        containsAll(<String>[
+          '/auth/sso/saml/metadata/{providerId}',
+          '/auth/sso/saml/sign-in',
+          '/auth/sso/saml/acs/{providerId}',
+        ]),
+      );
+      final signIn = spec.paths['/auth/sso/saml/sign-in']!.post!;
+      expect(
+        signIn.extensions[AuthPluginOpenApiGenerator
+            .operationSemanticsExtension],
+        <String, Object?>{
+          'effect': 'mutation',
+          'persistence': 'durable',
+          'atomicity': 'atomic',
+          'replaySafety': 'repeatable',
+          'persistenceReference': <String, Object?>{
+            'schemaId': 'saml_sso',
+            'atomicOperationId': 'create-authentication-attempt',
+          },
+        },
+      );
+      expect(
+        spec
+            .paths['/auth/sso/saml/acs/{providerId}']!
+            .post!
+            .requestBody!
+            .content
+            .keys,
+        contains('application/x-www-form-urlencoded'),
+      );
+      expect(
+        spec
+            .paths['/auth/sso/saml/metadata/{providerId}']!
+            .get!
+            .responses['200']!
+            .content!
+            .keys,
+        contains('application/samlmetadata+xml'),
+      );
+      _expectGeneratedClientCompatible(spec);
+    });
+
     test('turns typed GET contracts into path and query parameters', () {
       final registry = _registry(<AuthServerPlugin<Object>>[
         const _ContractPlugin(
@@ -713,4 +770,45 @@ final class _AllowedBreachedPasswordLookup
   Future<AuthBreachedPasswordCheckResult> check(
     AuthBreachedPasswordCheckRequest<Object> request,
   ) async => const AuthBreachedPasswordCheckResult.allowed();
+}
+
+final class _SamlCatalog implements AuthSamlConnectionCatalog {
+  final connection = AuthSamlConnection(
+    providerId: 'enterprise',
+    idpEntityId: 'https://idp.example.test/entity',
+    idpSsoUrl: Uri.parse('https://idp.example.test/sso'),
+    idpSigningCertificate: 'PINNED CERTIFICATE',
+    spEntityId: 'https://sp.example.test/entity',
+    assertionConsumerServiceUrl: Uri.parse(
+      'https://sp.example.test/auth/sso/saml/acs/enterprise',
+    ),
+  );
+
+  @override
+  AuthSamlConnection? findByProviderId(String providerId) =>
+      providerId == connection.providerId ? connection : null;
+  @override
+  AuthSamlConnection? findByVerifiedDomain(String domain) => null;
+  @override
+  AuthSamlConnection? findByOrganizationSlug(String slug) => null;
+}
+
+final class _SamlVerifier implements AuthSamlAssertionVerifier {
+  const _SamlVerifier();
+  @override
+  AuthSamlSignatureProof verify(AuthSamlVerificationInput input) =>
+      AuthSamlSignatureProof(
+        signedResponseId: null,
+        signedAssertionId: input.assertionId,
+        signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+        digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
+        canonicalizationAlgorithm: 'http://www.w3.org/2001/10/xml-exc-c14n#',
+      );
+}
+
+final class _SamlResolver implements AuthSamlIdentityResolver<Object> {
+  const _SamlResolver();
+  @override
+  AuthUser resolveOrProvision(AuthSamlIdentityInput<Object> input) =>
+      AuthUser(id: input.identity.stableKey);
 }
