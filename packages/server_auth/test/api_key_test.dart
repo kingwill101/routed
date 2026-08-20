@@ -86,6 +86,23 @@ void main() {
       expect((await feature.list('user-1')), hasLength(2));
     });
 
+    test('rotation never exceeds the configured record bound', () async {
+      final store = InMemoryAuthApiKeyStore(maxRecords: 1);
+      final feature = AuthApiKeyPlugin<Never>(
+        store: store,
+        keyIdGenerator: _queuedGenerator(['old-id', 'new-id']),
+        secretGenerator: _queuedGenerator(['old-secret', 'new-secret']),
+      );
+      final issued = await feature.issue(userId: 'user-1', name: 'worker');
+
+      final rotated = await feature.rotate('user-1', issued.apiKey.id);
+
+      expect(rotated, isNotNull);
+      expect(await feature.authenticate(issued.key), isNull);
+      expect(await feature.authenticate(rotated!.key), isNotNull);
+      expect(await feature.list('user-1'), hasLength(1));
+    });
+
     test('rejects unsafe scopes and excessive expiry', () async {
       final feature = AuthApiKeyPlugin<Never>(
         store: InMemoryAuthApiKeyStore(),

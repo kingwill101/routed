@@ -300,7 +300,12 @@ final class InMemoryAuthApiKeyStore implements AuthApiKeyStore {
       return null;
     }
     _validateRecord(replacement);
-    _records[current.id] = current.copyWith(revokedAt: now, updatedAt: now);
+    _prune(now);
+    if (_records.length < maxRecords) {
+      _records[current.id] = current.copyWith(revokedAt: now, updatedAt: now);
+    } else {
+      _records.remove(current.id);
+    }
     _records[replacement.id] = replacement;
     return replacement;
   }
