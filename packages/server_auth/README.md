@@ -247,9 +247,9 @@ before upgrade finalization; the plugin never creates or serializes sessions.
 
 `InMemoryAuthStore` implements the contract for tests and local development.
 A durable adapter that does not implement it fails during plugin
-configuration. In particular, selecting `AnonymousPlugin` with the current D1
-adapter is unsupported until D1 adds these transactions; there is no
-process-local fallback.
+configuration. `package:routed_auth_cloudflare` implements the contract with D1
+transactions and digest-only bounded replay receipts; adapters that have not
+implemented it still fail closed without a process-local fallback.
 
 ## Optional SCIM 2.0 provisioning plugin
 

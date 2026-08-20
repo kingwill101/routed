@@ -183,14 +183,15 @@ The work is intentionally split between framework-agnostic capabilities in
 - [ ] Complete typed persistence adapters for the supported Routed storage
   paths. `routed_auth_cloudflare` now supplies a typed, migrated D1 `AuthStore`
   and a backend-owned deletion coordinator that pass local conformance,
-  rollback, contention, and fault tests. A deployed live-D1 run, broader SQL
-  adapters, and D1 plans for plugins beyond device authorization and email OTP
-  remain open. D1 does not yet own OAuth provider-mode code/token tables and
-  cannot configure authorization-code grants until it implements the typed
-  atomic exchange capability. D1's authentication-method coordinator accepts
-  its own users, credentials, accounts, and email-OTP stores; external method
-  stores require a future backend-bound plan. Mixed topologies remain usable
-  but account unlink fails closed. Removed external plugins are not
+  rollback, contention, and fault tests. It now owns OAuth provider-mode
+  code/token exchange, managed SCIM connections, username mutations, and the
+  typed anonymous create/delete/upgrade contract through append-only migration
+  version 7. A fresh live-D1 run for the anonymous v7 cases, broader SQL
+  adapters, and D1 plans for external plugin stores remain open. D1's
+  authentication-method coordinator accepts its own users, credentials,
+  accounts, and email-OTP stores; external method stores require a future
+  backend-bound plan. Mixed topologies remain usable but account unlink fails
+  closed. Removed external plugins are not
   discoverable automatically:
   durable adapters must retain a historical namespace inventory or reject
   deletion until that namespace has backend-owned cleanup.
@@ -296,9 +297,11 @@ account, session, client, and plugin contracts above:
   topology covers Admin, anonymous, email OTP, API keys, WebAuthn, two-factor,
   organizations, device authorization, phone number, and OAuth provider mode;
   incomplete, duplicate, unsupported, and foreign-domain plans fail before
-  mutation, with reusable rollback, contention, and fault tests. D1 currently
-  supplies native device-authorization and email-OTP plans, always cleans those
-  backend-owned tables, and fails closed for active plugins without a D1 plan.
+  mutation, with reusable rollback, contention, and fault tests. D1 supplies
+  native device-authorization and email-OTP plans, owns anonymous mutation and
+  receipt cleanup inside its core transaction, always cleans those
+  backend-owned tables, and fails closed for active external plugins without a
+  D1 plan.
 - [x] Make organization last-owner checks transactional across removal,
   demotion, role replacement, leave, and user-deletion paths, with reusable
   durable-store conformance and contention coverage.
@@ -379,7 +382,8 @@ account, session, client, and plugin contracts above:
   managed SCIM, rollback, contention, and migration-isolation cases passed
   against a disposable remote D1 database. The ownership guard deleted the
   database, and a separate account listing confirmed that no disposable
-  `routed-auth-conformance` database remained.
+  `routed-auth-conformance` database remained. The later anonymous migration v7
+  cases are wired into the opt-in harness but have not been run live.
 - [x] Keep the current auth packages, host adapter integrations, and public
   conformance suites analyzer-clean and passing on `master`.
 

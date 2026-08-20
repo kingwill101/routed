@@ -1,5 +1,16 @@
 ## 0.1.0
 
+- Implement `AuthAnonymousAccountMutationStore` on the root D1 adapter. Create,
+  delete, and upgrade mutations now use backend transactions and fail closed
+  without any process-local fallback.
+- Add append-only schema migration version 7 for transient creation guards and
+  bounded digest-only operation receipts. Generic and typed hard deletion scrub
+  subject receipts in the same rollback boundary; retained completion receipts
+  never store an `AuthUser` payload.
+- Run the public anonymous-store conformance suite against the local D1 fake,
+  including contention, replay mismatch, target binding, hard-deletion scrub,
+  and injected rollback coverage. Add the non-fault cases to the opt-in live D1
+  executor without running or creating live Cloudflare resources.
 - Add a plugin-scoped D1 managed-SCIM connection store with exact tenant and
   organization lookup, digest-only bearer credentials, database-constrained
   issuance replay identity, atomic rotation and disablement, and typed replay

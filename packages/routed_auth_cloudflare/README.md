@@ -24,6 +24,26 @@ Future<CloudflareD1AuthStore> authStore(CloudflareEnvironment env) {
 YAML configuration and application code does not import `package:web` or use
 `dart:js_interop`.
 
+Anonymous authentication is selected like any other server plugin; the root D1
+adapter itself supplies the required mutation capability:
+
+```dart
+final store = await authStore(env);
+final options = AuthOptions<MyRequestContext>(
+  store: store,
+  plugins: [AnonymousPlugin<MyRequestContext>()],
+);
+```
+
+Creation, authenticated deletion, and upgrade finalization execute as D1
+transactions. Operation IDs, user bindings, and target bindings are persisted
+only as non-reversible digests. Creation receipts are scrubbed by typed or
+generic hard deletion; retained delete/upgrade receipts never contain an
+`AuthUser` payload. Replay retention defaults to one day and 10,000 records and
+is configured with the typed `anonymousReplayTtl` and `anonymousMaxReceipts`
+arguments to `CloudflareD1AuthStore.open`. Once a receipt expires or is evicted,
+the operation is no longer replayable; hard-deleted user IDs remain unavailable.
+
 Provider mode must use all three OAuth stores from the same opened adapter:
 
 ```dart
@@ -83,11 +103,12 @@ batch, so a committed retry returns metadata without reconstructing the raw
 secret. The default replay lifetime is one day and can be changed with the
 typed `scimReplayTtl` argument to `CloudflareD1AuthStore.open`.
 
-The local tests run `AuthStoreConformanceSuite` and
+The local tests run `AuthStoreConformanceSuite`,
+`AuthAnonymousStoreConformanceSuite`, and
 `verifyOAuthAuthorizationCodeExchangeStoreConformance` against a deterministic
 SQLite-backed implementation of the public `CloudflareD1Database` API. They
-also inject a mid-batch fault and prove that code consumption and token
-persistence roll back together. The separate
+inject mid-batch faults to prove that anonymous identities, replay receipts,
+OAuth code consumption, and token persistence roll back with their transaction.
 
 The root adapter implements `AuthUsernameStore`: normalized username
 registration and rename commit the user projection and password credential in
@@ -98,8 +119,9 @@ and fails closed for mixed or unsupported authentication-method stores.
 The local tests also run `verifyAuthUsernameStoreConformance` against that
 deterministic public D1 fake. The separate
 [live harness](test/live/README.md) is intentionally not part of the default
-test command and must be deployed to a real D1 database before it can be
-claimed as live validation.
+test command. Anonymous non-fault cases are included in that harness, but this
+release does not claim that migration v7 or those cases ran against live
+Cloudflare D1.
 
 The independent
 [deployed Worker auth harness](tool/deployed_worker/README.md) verifies Routed's
