@@ -1,5 +1,13 @@
 ## 0.2.0 - 2026-08-20
 
+- Add offline FIDO Metadata Service 3.1.1 blob parsing and WebAuthn trust
+  evaluation with bounded inputs, monotonic update checks, optional freshness
+  enforcement, typed provenance, and an explicit application-owned JWS/PKIX
+  verification boundary.
+- Add an opt-in last-authentication-method server/client plugin with a bounded
+  allowlist, HMAC-protected expiring browser state, and lifecycle hooks that
+  update only after successful host session issuance and clear on sign-out or
+  account deletion.
 - Add opt-in phone-number authentication with strict E.164 identifiers,
   digest-at-rest one-time codes, bounded replay attempts, provider-owned
   delivery, session issuance, lifecycle deletion, and a typed client plugin.

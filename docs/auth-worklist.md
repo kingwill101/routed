@@ -121,9 +121,10 @@ The work is intentionally split between framework-agnostic capabilities in
 - [x] Expose the registration, assertion, listing, and deletion contracts
   through the typed plugin registry, Routed routes, and `AuthClient`.
 - [ ] Finish the broader WebAuthn subsystem. Session issuance, passkey rename,
-  Ed25519, Android Key, Apple Anonymous, TPM 2.0, and an explicit
-  accept/reject/downgrade attestation-root trust policy are implemented, but
-  FIDO metadata and deprecated attestation formats are still pending.
+  Ed25519, Android Key, Apple Anonymous, TPM 2.0, an explicit
+  accept/reject/downgrade attestation-root trust policy, and offline FIDO MDS
+  3.1.1 evaluation are implemented; deprecated attestation formats and a
+  built-in MDS downloader/JWS-PKIX verifier remain out of scope or pending.
 - [x] Add an optional native `TwoFactorPlugin` with TOTP enrollment
   verification, protected-secret and typed-store boundaries, recovery-code
   hashing and atomic one-time consumption, lockout handling, disablement, and
@@ -206,7 +207,8 @@ account, session, client, and plugin contracts above:
   verification boundaries.
 - [x] Add username-first authentication and explicit identifier policy.
 - [x] Add anonymous/guest sessions with safe account upgrade/linking rules.
-- [ ] Track the last successful authentication method without storing secrets.
+- [x] Track the last successful authentication method through independent
+  server/client plugins without storing identities, credentials, or secrets.
 - [x] Add captcha and breached-password checks as opt-in security plugins.
 - [ ] Add SSO/SAML and SCIM integrations when enterprise tenancy requirements
   justify them.

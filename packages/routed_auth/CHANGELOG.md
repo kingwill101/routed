@@ -1,5 +1,8 @@
 ## 0.2.0 - 2026-08-20
 
+- Add the Routed browser adapter for the opt-in last-authentication-method
+  plugin, using a Secure, HttpOnly, SameSite cookie and host-owned successful
+  authentication/sign-out/account-deletion lifecycle events.
 - Mount phone-number send/verify operations from the opt-in server plugin and
   issue normal Routed sessions after successful verification.
 - Mount opt-in username registration and sign-in operations with typed
