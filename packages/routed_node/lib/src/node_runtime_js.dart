@@ -323,6 +323,7 @@ Future<ServerHandle> bindNodeHttp(
   }
 
   final completer = Completer<void>();
+  var boundPort = options.port;
 
   final created = (createServer as JSFunction).callAsFunction(
     mod,
@@ -332,7 +333,7 @@ Future<ServerHandle> bindNodeHttp(
       final base = Uri(
         scheme: 'http',
         host: options.host,
-        port: options.port == 0 ? null : options.port,
+        port: boundPort == 0 ? null : boundPort,
       );
       final hostContext = RoutedNodeContext(
         info: const RoutedNodeRuntimeInfo(
@@ -405,7 +406,7 @@ Future<ServerHandle> bindNodeHttp(
         final base = Uri(
           scheme: 'http',
           host: options.host,
-          port: options.port == 0 ? null : options.port,
+          port: boundPort == 0 ? null : boundPort,
         );
         final protocols = _header(rawHeaders, 'sec-websocket-protocol')
             ?.split(',')
@@ -463,7 +464,6 @@ Future<ServerHandle> bindNodeHttp(
   await completer.future;
 
   // Resolve actual bound port (important when port == 0).
-  var boundPort = options.port;
   final addressFn = serverObj.getProperty('address'.toJS);
   if (addressFn != null && addressFn.isA<JSFunction>()) {
     final addr = (addressFn as JSFunction).callAsFunction(serverObj);

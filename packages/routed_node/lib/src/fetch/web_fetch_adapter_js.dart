@@ -41,9 +41,34 @@ final class WebFetchRequest implements FetchRequestView {
   String get url => request.url;
 
   @override
-  Map<String, Object?> get rawHeaders {
+  Map<String, Object?> get rawHeaders => _readHeaders(request.headers);
+
+  static Map<String, Object?> _readHeaders(web.Headers source) {
     final headers = <String, Object?>{};
+    final forEach = source.getProperty('forEach'.toJS);
+    if (forEach != null && forEach.isA<JSFunction>()) {
+      (forEach as JSFunction).callAsFunction(
+        source,
+        ((JSString value, JSString name, JSObject _) {
+          headers[name.toDart] = value.toDart;
+        }).toJS,
+      );
+      return headers;
+    }
+
+    // All standards-compliant Fetch implementations expose Headers.forEach.
+    // Keep a conservative fallback for partial host shims so authentication,
+    // browser protections, and WebSocket upgrades do not silently lose their
+    // protocol headers.
     for (final name in const [
+      'authorization',
+      'cookie',
+      'origin',
+      'x-csrf-token',
+      'x-api-key',
+      'sec-fetch-site',
+      'sec-fetch-mode',
+      'sec-fetch-dest',
       'upgrade',
       'connection',
       'sec-websocket-version',
@@ -54,7 +79,7 @@ final class WebFetchRequest implements FetchRequestView {
       'accept',
       'host',
     ]) {
-      final value = request.headers.get(name);
+      final value = source.get(name);
       if (value != null) headers[name] = value;
     }
     return headers;
