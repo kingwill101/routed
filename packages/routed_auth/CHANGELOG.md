@@ -25,6 +25,10 @@
   safe-removal operations, preserving generic failures, idempotent replay,
   store-owned atomicity metadata, and the separately selected typed username
   client surface.
+- Compose magic-link authentication through `MagicLinkPlugin`, resolve plugin
+  providers through the runtime, reject hostile one-time email identifiers as
+  public auth errors, and preserve browser binding while durable consumption
+  commits before non-replayable host session/JWT and cookie issuance.
 - Route device-token polling through the bounded issuance-lease protocol so
   issuer failures can retry with the same stable authorization ID while
   concurrent, stale, disabled-account, and consumed grants fail generically.

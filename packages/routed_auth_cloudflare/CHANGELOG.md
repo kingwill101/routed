@@ -39,6 +39,9 @@
   normalized registration, rename, and supported safe removal. Add public
   username adapter conformance, contention, rollback injection, replay, and
   hard-deletion coverage; mixed authentication-method stores fail closed.
+- Add D1-backed typed magic-link and email-OTP command transactions, a
+  digest-only magic-link migration, exactly-one-winner adapter conformance, and
+  per-statement rollback fault coverage for consume-plus-user transitions.
 - Add exact owner-checked OAuth account unlinking by provider ID and provider
   account ID. D1 binds an authoritative topology backed by its own users,
   credentials, accounts, and email-OTP stores, rechecks a usable fallback in

@@ -196,8 +196,64 @@ final deployment = AuthDeploymentPresets.secureSessionProduction<EngineContext>(
 Routed issues the normal session or JWT. When an authenticated anonymous user
 signs in as a permanent identity, Routed issues the replacement session first
 and then submits the typed replay-bound upgrade finalizer. Stores lacking
-`AuthAnonymousAccountMutationStore` fail at boot, including the current D1
-adapter; Routed never substitutes `InMemoryAuthStore` for a durable topology.
+`AuthAnonymousAccountMutationStore` fail at boot. The Cloudflare D1 adapter
+implements that capability through its append-only v7 migration; Routed never
+substitutes `InMemoryAuthStore` for a durable topology.
+
+Magic links and email OTP follow the same plugin-first composition. Their
+durable state transitions are owned by the configured auth store; Routed owns
+only HTTP validation and the later session or JWT response:
+
+```dart
+final magicLink = MagicLinkPlugin<EngineContext>(
+  sendMagicLink: (delivery) => mailer.sendMagicLink(
+    email: delivery.email,
+    token: delivery.token,
+    callbackUrl: delivery.callbackUrl,
+  ),
+);
+final emailOtp = EmailOtpPlugin<EngineContext>(
+  secret: environment.emailOtpDigestSecret,
+  sendCode: (delivery) => mailer.sendOtp(
+    email: delivery.email,
+    code: delivery.code,
+  ),
+);
+
+final auth = AuthDeploymentPresets.secureSessionProduction(
+  store: durableAuthStore,
+  providers: const [],
+  plugins: [magicLink, emailOtp],
+  boundary: productionBoundary,
+  lifecycleDelivery: lifecycleDelivery,
+  rateLimiter: authRateLimiter,
+  requireVerifiedEmail: true,
+);
+```
+
+The store commits a digest-only issuance record before calling the mailer, and
+atomically consumes the credential with user creation or email verification.
+Routed issues the host session/JWT and response cookie only after that commit.
+A mail failure does not roll back issuance; a session/cookie failure does not
+make a consumed token or OTP replayable. Retry delivery by issuing a fresh
+credential. Never log or persist `delivery.token` or `delivery.code`.
+
+Clients opt into the matching APIs independently:
+
+```dart
+const magicLinkClient = AuthMagicLinkClientPlugin();
+const emailOtpClient = AuthEmailOtpClientPlugin();
+final client = AuthClient(
+  baseUrl: Uri.parse('https://app.example.com'),
+  plugins: const [magicLinkClient, emailOtpClient],
+);
+
+await client.plugins.use(magicLinkClient).send(email: 'ada@example.com');
+await client.plugins.use(emailOtpClient).signIn(
+  email: 'ada@example.com',
+  otp: codeFromUser,
+);
+```
 
 SAML follows the same composition rule. Add `AuthSamlPlugin<EngineContext>` to
 the deployment's `plugins` list after supplying an application-owned

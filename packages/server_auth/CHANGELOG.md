@@ -48,6 +48,12 @@
   adapter conformance, fault injection, contention, and hostile-identifier
   property coverage. This is a breaking adapter API with no compatibility
   bridge.
+- Replace the legacy magic-link provider with opt-in `MagicLinkPlugin` server
+  composition and require typed `AuthMagicLinkBackend` and
+  `AuthEmailOtpBackend` commands for one-time email state transitions. Persist
+  only SHA-256 magic-link digests and keyed, domain-separated OTP digests;
+  include hostile-input/state-machine properties, exactly-one-winner replay
+  conformance, rollback tests, and explicit postcommit delivery/session limits.
 - Replace pre-issuance device-grant consumption with bounded digest-only
   issuance leases and a typed authorization-ID-idempotent application token
   issuer. Matching completion/release transitions make ambiguous failures and

@@ -234,6 +234,10 @@ These capabilities are useful product benchmarks, but should follow the core
 account, session, client, and plugin contracts above:
 
 - [x] Add email OTP as a separate one-time-code flow alongside magic links.
+- [x] Move magic-link and email-OTP issuance, attempt accounting, one-time
+  consumption, and user transitions behind required typed backend commands;
+  persist only digests, publish durable-adapter conformance, and keep delivery
+  plus host session/cookie issuance as explicit postcommit boundaries.
 - [x] Add phone-number authentication with provider-owned delivery and
   verification boundaries.
 - [x] Add username-first authentication and explicit identifier policy.

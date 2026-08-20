@@ -28,19 +28,17 @@ Future<Engine> createJwtEngine() async {
     providers: Engine.defaultProviders,
     options: [
       (engine) {
-        final providers = <AuthProvider>[
-          CredentialsProvider(),
-          EmailProvider(
-            sendVerificationRequest: (ctx, provider, request) async {
-              final callbackUrl = request.callbackUrl.isEmpty
-                  ? 'http://localhost:8080/auth/callback/email'
-                  : request.callbackUrl;
-              final link =
-                  '$callbackUrl?token=${request.token}&email=${request.email}';
-              stdout.writeln('Magic link: $link');
-            },
-          ),
-        ];
+        final providers = <AuthProvider>[CredentialsProvider()];
+        final magicLink = MagicLinkPlugin<EngineContext>(
+          sendMagicLink: (delivery) async {
+            final callbackUrl = delivery.callbackUrl.isEmpty
+                ? 'http://localhost:8080/auth/callback/email'
+                : delivery.callbackUrl;
+            final link =
+                '$callbackUrl?token=${delivery.token}&email=${delivery.email}';
+            stdout.writeln('Magic link: $link');
+          },
+        );
 
         final githubClientId = Platform.environment['GITHUB_CLIENT_ID'];
         final githubClientSecret = Platform.environment['GITHUB_CLIENT_SECRET'];
@@ -62,6 +60,7 @@ Future<Engine> createJwtEngine() async {
         engine.container.instance<AuthOptions>(
           AuthOptions(
             providers: providers,
+            plugins: [magicLink],
             store: InMemoryAuthStore(),
             storeMode: AuthStoreMode.ephemeral,
             sessionStrategy: AuthSessionStrategy.jwt,

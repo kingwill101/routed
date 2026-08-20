@@ -194,6 +194,65 @@ final localOptions = AuthOptions<MyRequestContext>(
 must apply `AuthProductionBoundary.proxyPolicy` at their HTTP boundary; Routed
 does this through `AuthDeployment.engineConfig()`.
 
+## Magic link and email OTP plugins
+
+One-time email authentication is opt-in. Select only the server plugins the
+application exposes, and supply an auth store whose durable adapter implements
+the typed email command backends:
+
+```dart
+import 'package:server_auth/server_auth.dart';
+
+final magicLink = MagicLinkPlugin<MyRequestContext>(
+  sendMagicLink: (delivery) async {
+    await mailer.sendMagicLink(
+      to: delivery.email,
+      token: delivery.token,
+      callbackUrl: delivery.callbackUrl,
+      expiresAt: delivery.expiresAt,
+    );
+  },
+);
+
+final emailOtp = EmailOtpPlugin<MyRequestContext>(
+  secret: environment.emailOtpDigestSecret,
+  sendCode: (delivery) async {
+    await mailer.sendOtp(
+      to: delivery.email,
+      code: delivery.code,
+      expiresAt: delivery.expiresAt,
+    );
+  },
+);
+
+final options = AuthOptions<MyRequestContext>(
+  store: durableAuthStore,
+  providers: const [],
+  plugins: [magicLink, emailOtp],
+  productionBoundary: productionBoundary,
+  rateLimiter: authRateLimiter,
+);
+```
+
+`MagicLinkPlugin` requires `AuthMagicLinkBackend`; `EmailOtpPlugin` requires
+`AuthEmailOtpBackend`. Those typed commands make replacement, attempt
+accounting, one-time consumption, and user creation or verification one
+backend-owned transaction. Magic-link tokens are stored only as SHA-256
+digests. Low-entropy OTPs are stored only as domain-separated HMAC-SHA-256
+digests using the application secret. The raw token or code exists only in its
+delivery callback and must not be logged or persisted.
+
+Delivery is deliberately postcommit: if the mail provider fails, the newly
+committed digest remains authoritative and a retry should issue a replacement.
+Likewise, a successful consume/user transition commits before a framework host
+issues its session or cookie. If that host step fails, the credential remains
+consumed and cannot be replayed. Email delivery and host session issuance
+therefore cannot honestly be part of the database transaction.
+
+Durable adapters should run both `AuthStoreConformanceSuite` and
+`verifyAuthEmailBackendConformance` from `package:server_auth/testing.dart`,
+plus adapter-native fault injection at every transaction statement.
+
 ## Typed Dart client
 
 `AuthClient` owns the shared transport and installs only the optional client
@@ -201,17 +260,23 @@ plugins selected by the application:
 
 ```dart
 final magicLinkPlugin = AuthMagicLinkClientPlugin();
+final emailOtpPlugin = AuthEmailOtpClientPlugin();
 final organizationPlugin = AuthOrganizationClientPlugin();
 final auth = AuthClient(
   baseUrl: Uri.parse('https://example.com'),
   cookieStore: myPersistentCookieStore, // Optional for mobile persistence.
-  plugins: [magicLinkPlugin, organizationPlugin],
+  plugins: [magicLinkPlugin, emailOtpPlugin, organizationPlugin],
 );
 
 final magicLink = auth.plugins.use(magicLinkPlugin);
 await magicLink.send(
   email: 'ada@example.com',
   callbackUrl: 'https://example.com/welcome',
+);
+final emailOtp = auth.plugins.use(emailOtpPlugin);
+await emailOtp.sendVerificationOtp(
+  email: 'ada@example.com',
+  type: AuthEmailOtpType.signIn,
 );
 final organizations = auth.plugins.use(organizationPlugin);
 final values = await organizations.list();

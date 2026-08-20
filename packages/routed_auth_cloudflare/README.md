@@ -125,6 +125,15 @@ managed-SCIM, username, OAuth-exchange, rollback, and prefix-isolation cases.
 Fault-injection cases remain local-only. The harness deleted its owned database,
 and a separate Wrangler listing confirmed that no matching resource remained.
 
+The adapter also implements `AuthMagicLinkBackend` and `AuthEmailOtpBackend`.
+Magic-link replacement and consume-plus-user resolution, and OTP attempt/
+consume-plus-user transitions, execute in guarded D1 batches. Only token
+digests and keyed OTP digests cross the persistence boundary. Adapter tests run
+`verifyAuthEmailBackendConformance` from `package:server_auth/testing.dart` and
+inject a failure at every statement in each consume batch to prove rollback.
+Email delivery and Routed session/cookie issuance remain postcommit host
+boundaries and are not represented as D1 transactions.
+
 The independent
 [deployed Worker auth harness](tool/deployed_worker/README.md) verifies Routed's
 session, JWT, plugin, external-provider, and browser-shaped WebAuthn contracts
