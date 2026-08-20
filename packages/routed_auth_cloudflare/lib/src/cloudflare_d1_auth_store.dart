@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:routed_node/cloudflare.dart';
@@ -10,7 +11,8 @@ import 'cloudflare_d1_auth_schema.dart';
 /// Construct the adapter from the host-neutral binding exported by
 /// `package:routed_node/cloudflare.dart`; callers never handle JavaScript or
 /// `package:web` values.
-final class CloudflareD1AuthStore implements AuthStore {
+final class CloudflareD1AuthStore
+    implements AuthStore, AuthUserDeletionCoordinatorHost {
   CloudflareD1AuthStore(
     CloudflareD1Database database, {
     this.schema = const CloudflareD1AuthSchema(),
@@ -29,6 +31,12 @@ final class CloudflareD1AuthStore implements AuthStore {
     emailChangeTokens = _D1EmailChangeTokens(sql, schema, _clock);
     deviceAuthorizations = _D1DeviceAuthorizations(sql, schema, _clock);
     emailOtps = _D1EmailOtps(sql, schema, _clock);
+    _deletionCoordinator = CloudflareD1UserDeletionCoordinator._(
+      database: database,
+      sql: sql,
+      schema: schema,
+      clock: _clock,
+    );
   }
 
   /// Creates an adapter and applies all pending typed migrations.
@@ -44,6 +52,16 @@ final class CloudflareD1AuthStore implements AuthStore {
   final CloudflareD1Database _database;
   final DateTime Function() _clock;
   final CloudflareD1AuthSchema schema;
+  late final CloudflareD1UserDeletionCoordinator _deletionCoordinator;
+
+  @override
+  AuthUserDeletionCoordinator get userDeletionCoordinator =>
+      _deletionCoordinator;
+
+  @override
+  void bindUserDeletionPlanContributors(
+    Iterable<AuthUserDeletionPlanContributor> contributors,
+  ) => _deletionCoordinator.bind(contributors);
 
   @override
   late final AuthUserStore users;
@@ -70,6 +88,284 @@ final class CloudflareD1AuthStore implements AuthStore {
 
   /// Applies all pending schema migrations.
   Future<void> migrate() => schema.migrate(_database);
+}
+
+/// Exact D1 database and schema identity accepted by a deletion coordinator.
+final class CloudflareD1UserDeletionDomain implements AuthUserDeletionDomain {
+  CloudflareD1UserDeletionDomain._(this.database, this.schema);
+
+  final CloudflareD1Database database;
+  final CloudflareD1AuthSchema schema;
+}
+
+/// One immutable D1 mutation containing a mandatory coordinator guard.
+///
+/// [sql] must contain exactly one `{{guard}}` marker after all statement-local
+/// placeholders. The coordinator replaces it with its token/user guard and
+/// appends the guard parameters before preparing the batch.
+final class CloudflareD1UserDeletionStatement {
+  CloudflareD1UserDeletionStatement({
+    required String sql,
+    Iterable<Object?> parameters = const [],
+  }) : sql = _validateGuardedSql(sql),
+       parameters = List<Object?>.unmodifiable(parameters);
+
+  final String sql;
+  final List<Object?> parameters;
+}
+
+/// Immutable plugin-owned D1 deletion plan.
+final class CloudflareD1UserDeletionPlan implements AuthUserDeletionPlan {
+  CloudflareD1UserDeletionPlan({
+    required this.domain,
+    required String userId,
+    required String namespace,
+    required Iterable<CloudflareD1UserDeletionStatement> statements,
+  }) : userId = _required(userId, 'userId'),
+       namespace = _required(namespace, 'namespace').toLowerCase(),
+       statements = List<CloudflareD1UserDeletionStatement>.unmodifiable(
+         statements,
+       );
+
+  @override
+  final CloudflareD1UserDeletionDomain domain;
+
+  @override
+  final String userId;
+
+  @override
+  final String namespace;
+
+  final List<CloudflareD1UserDeletionStatement> statements;
+}
+
+/// D1-owned coordinator for atomic core and plugin user deletion.
+final class CloudflareD1UserDeletionCoordinator
+    implements AuthUserDeletionCoordinator {
+  CloudflareD1UserDeletionCoordinator._({
+    required CloudflareD1Database database,
+    required _D1 sql,
+    required this.schema,
+    required DateTime Function() clock,
+  }) : domain = CloudflareD1UserDeletionDomain._(database, schema),
+       _sql = sql,
+       _clock = clock;
+
+  final _D1 _sql;
+  final CloudflareD1AuthSchema schema;
+  final DateTime Function() _clock;
+  List<AuthUserDeletionPlanContributor> _contributors = const [];
+  bool _bound = false;
+
+  @override
+  final CloudflareD1UserDeletionDomain domain;
+
+  void bind(Iterable<AuthUserDeletionPlanContributor> contributors) {
+    if (_bound) {
+      throw StateError('Auth deletion contributors are already bound.');
+    }
+    final values = contributors.toList(growable: false);
+    final namespaces = <String>{};
+    for (final contributor in values) {
+      final namespace = _required(
+        contributor.userDataNamespace,
+        'userDataNamespace',
+      ).toLowerCase();
+      if (namespace != contributor.userDataNamespace ||
+          !namespaces.add(namespace)) {
+        throw StateError(
+          'Auth deletion contributor namespaces must be unique and normalized.',
+        );
+      }
+    }
+    _contributors = List<AuthUserDeletionPlanContributor>.unmodifiable(values);
+    _bound = true;
+  }
+
+  @override
+  Set<String> get requiredUserDeletionNamespaces => Set<String>.unmodifiable({
+    for (final contributor in _contributors) contributor.userDataNamespace,
+  });
+
+  @override
+  Future<List<AuthUserDeletionPlan>> plansForUser(AuthUser user) async =>
+      _plansForBoundUser(user);
+
+  Future<List<AuthUserDeletionPlan>> _plansForBoundUser(AuthUser user) async {
+    _ensureBound();
+    return List<AuthUserDeletionPlan>.unmodifiable([
+      for (final contributor in _contributors)
+        await contributor.createUserDeletionPlan(user),
+    ]);
+  }
+
+  @override
+  Future<bool> deleteUser(
+    String userId, {
+    Iterable<AuthUserDeletionPlan>? plans,
+  }) => _delete(userId: userId, plans: plans, confirmationToken: null);
+
+  @override
+  Future<bool> confirmAndDeleteUser({
+    required String userId,
+    required String token,
+    Iterable<AuthUserDeletionPlan>? plans,
+    DateTime? now,
+  }) {
+    if (token.trim().isEmpty) return Future<bool>.value(false);
+    return _delete(
+      userId: userId,
+      plans: plans,
+      confirmationToken: token,
+      now: now,
+    );
+  }
+
+  Future<bool> _delete({
+    required String userId,
+    required Iterable<AuthUserDeletionPlan>? plans,
+    required String? confirmationToken,
+    DateTime? now,
+  }) async {
+    final id = _required(userId, 'userId');
+    _ensureBound();
+    final user = await _sql.first(
+      'SELECT payload FROM ${schema.table('users')} WHERE id = ?',
+      [id],
+      _decodeUser,
+    );
+    if (user == null) return false;
+    final validated = AuthUserDeletionPreflight.validate(
+      userId: id,
+      plans: plans ?? await plansForUser(user),
+      requiredNamespaces: requiredUserDeletionNamespaces,
+      domain: domain,
+      isSupported: (plan) =>
+          plan is CloudflareD1UserDeletionPlan ||
+          plan is AuthNoopUserDeletionPlan,
+    );
+
+    final statements = <CloudflareD1UserDeletionStatement>[
+      for (final plan in validated.whereType<CloudflareD1UserDeletionPlan>())
+        ...plan.statements,
+    ];
+    final users = schema.table('users');
+    final verification = schema.table('verification_tokens');
+    final current = (now ?? _clock()).toUtc();
+    final marker = secureRandomToken(length: 24);
+    late final String guard;
+    late final List<Object?> guardValues;
+    final batch = <CloudflareD1PreparedStatement>[];
+
+    if (confirmationToken == null) {
+      guard = 'EXISTS (SELECT 1 FROM $users WHERE id = ?)';
+      guardValues = [id];
+    } else {
+      final identifier = 'account_deletion:$id';
+      final tokenHash = hashOpaqueToken(confirmationToken);
+      final timestamp = _date(current);
+      batch.add(
+        _sql.database
+            .prepare('''UPDATE $verification
+                 SET metadata = json_set(metadata, '\$.__deletion_marker', ?)
+                 WHERE identifier = ? AND token_hash = ? AND expires_at > ?
+                   AND json_extract(metadata, '\$.__deletion_marker') IS NULL
+                   AND EXISTS (SELECT 1 FROM $users WHERE id = ?)''')
+            .bind([marker, identifier, tokenHash, timestamp, id]),
+      );
+      guard = '''EXISTS (SELECT 1 FROM $verification
+          WHERE identifier = ? AND token_hash = ? AND expires_at > ?
+            AND json_extract(metadata, '\$.__deletion_marker') = ?)''';
+      guardValues = [identifier, tokenHash, timestamp, marker];
+    }
+
+    for (final statement in statements) {
+      batch.add(_prepareGuarded(statement, guard, guardValues));
+    }
+    batch.addAll(_coreDeletionStatements(user, guard, guardValues));
+    final userDeleteIndex = batch.length;
+    batch.add(
+      _sql.database.prepare('DELETE FROM $users WHERE id = ? AND $guard').bind([
+        id,
+        ...guardValues,
+      ]),
+    );
+    if (confirmationToken != null) {
+      batch.add(
+        _sql.database
+            .prepare('DELETE FROM $verification WHERE $guard')
+            .bind(guardValues),
+      );
+    }
+    final results = await _sql.batch(batch);
+    return (results[userDeleteIndex].meta?.changes ?? 0) == 1;
+  }
+
+  void _ensureBound() {
+    if (!_bound) {
+      throw StateError('Auth deletion contributor topology is not bound.');
+    }
+  }
+
+  Iterable<CloudflareD1PreparedStatement> _coreDeletionStatements(
+    AuthUser user,
+    String guard,
+    List<Object?> guardValues,
+  ) sync* {
+    final id = user.id;
+    for (final entry in <(String, String)>[
+      (schema.table('credentials'), 'user_id'),
+      (schema.table('accounts'), 'user_id'),
+      (schema.table('sessions'), 'user_id'),
+      (schema.table('password_reset_tokens'), 'user_id'),
+      (schema.table('email_change_tokens'), 'user_id'),
+    ]) {
+      yield _sql.database
+          .prepare('DELETE FROM ${entry.$1} WHERE ${entry.$2} = ? AND $guard')
+          .bind([id, ...guardValues]);
+    }
+    final verification = schema.table('verification_tokens');
+    yield _sql.database
+        .prepare('DELETE FROM $verification WHERE identifier = ? AND $guard')
+        .bind([id, ...guardValues]);
+    if (user.email case final email?) {
+      yield _sql.database
+          .prepare('DELETE FROM $verification WHERE identifier = ? AND $guard')
+          .bind([email, ...guardValues]);
+    }
+    final jwtVersions = schema.table('jwt_versions');
+    yield _sql.database
+        .prepare('''INSERT INTO $jwtVersions (user_id, version)
+             SELECT ?, 1 WHERE $guard
+             ON CONFLICT(user_id) DO UPDATE SET version = version + 1''')
+        .bind([id, ...guardValues]);
+  }
+
+  CloudflareD1PreparedStatement _prepareGuarded(
+    CloudflareD1UserDeletionStatement statement,
+    String guard,
+    List<Object?> guardValues,
+  ) => _sql.database
+      .prepare(statement.sql.replaceFirst('{{guard}}', guard))
+      .bind([...statement.parameters, ...guardValues]);
+}
+
+String _validateGuardedSql(String value) {
+  final sql = value.trim();
+  final guardIndex = sql.indexOf('{{guard}}');
+  if (sql.isEmpty ||
+      guardIndex < 0 ||
+      guardIndex != sql.lastIndexOf('{{guard}}') ||
+      sql.lastIndexOf('?') > guardIndex ||
+      sql.contains(';')) {
+    throw ArgumentError.value(
+      value,
+      'sql',
+      'must contain exactly one trailing {{guard}} marker after local '
+          'placeholders and no semicolon',
+    );
+  }
+  return sql;
 }
 
 final class _D1 {
@@ -835,12 +1131,35 @@ final class _D1OAuthChallenges implements AuthOAuthChallengeStore {
   }
 }
 
-final class _D1DeviceAuthorizations implements AuthDeviceAuthorizationStore {
+final class _D1DeviceAuthorizations
+    implements AuthDeviceAuthorizationStore, AuthUserDeletionPlanFactory {
   _D1DeviceAuthorizations(this.sql, this.schema, this.clock);
   final _D1 sql;
   final CloudflareD1AuthSchema schema;
   final DateTime Function() clock;
   String get table => schema.table('device_authorizations');
+
+  @override
+  AuthUserDeletionPlan createDeletionPlan({
+    required AuthUserDeletionDomain domain,
+    required AuthUser user,
+    required String namespace,
+  }) {
+    if (domain is! CloudflareD1UserDeletionDomain) {
+      throw StateError('Device authorization received a foreign D1 domain.');
+    }
+    return CloudflareD1UserDeletionPlan(
+      domain: domain,
+      userId: user.id,
+      namespace: namespace,
+      statements: [
+        CloudflareD1UserDeletionStatement(
+          sql: 'DELETE FROM $table WHERE user_id = ? AND {{guard}}',
+          parameters: [user.id],
+        ),
+      ],
+    );
+  }
 
   @override
   Future<AuthDeviceAuthorization> create(
@@ -1022,12 +1341,43 @@ final class _D1DeviceAuthorizations implements AuthDeviceAuthorizationStore {
   }
 }
 
-final class _D1EmailOtps implements AuthEmailOtpStore {
+final class _D1EmailOtps
+    implements AuthEmailOtpStore, AuthUserDeletionPlanFactory {
   _D1EmailOtps(this.sql, this.schema, this.clock);
   final _D1 sql;
   final CloudflareD1AuthSchema schema;
   final DateTime Function() clock;
   String get table => schema.table('email_otps');
+
+  @override
+  AuthUserDeletionPlan createDeletionPlan({
+    required AuthUserDeletionDomain domain,
+    required AuthUser user,
+    required String namespace,
+  }) {
+    if (domain is! CloudflareD1UserDeletionDomain) {
+      throw StateError('Email OTP received a foreign D1 domain.');
+    }
+    final email = user.email;
+    if (email == null || email.trim().isEmpty) {
+      return AuthNoopUserDeletionPlan(
+        domain: domain,
+        userId: user.id,
+        namespace: namespace,
+      );
+    }
+    return CloudflareD1UserDeletionPlan(
+      domain: domain,
+      userId: user.id,
+      namespace: namespace,
+      statements: [
+        CloudflareD1UserDeletionStatement(
+          sql: 'DELETE FROM $table WHERE email = ? AND {{guard}}',
+          parameters: [email],
+        ),
+      ],
+    );
+  }
 
   @override
   Future<void> save(AuthEmailOtp otp) async {

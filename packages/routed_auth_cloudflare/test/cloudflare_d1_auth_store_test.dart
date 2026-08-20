@@ -5,6 +5,18 @@ import 'package:test/test.dart';
 import 'support/fake_cloudflare_d1.dart';
 
 void main() {
+  group('CloudflareD1UserDeletionStatement', () {
+    test('rejects local placeholders after the coordinator guard', () {
+      expect(
+        () => CloudflareD1UserDeletionStatement(
+          sql: 'DELETE FROM records WHERE {{guard}} AND user_id = ?',
+          parameters: const ['user-1'],
+        ),
+        throwsArgumentError,
+      );
+    });
+  });
+
   group('CloudflareD1AuthStore conformance', () {
     final suite = AuthStoreConformanceSuite(
       createFixture: () async {
@@ -20,13 +32,7 @@ void main() {
     for (final conformanceCase in suite.cases) {
       test(conformanceCase.description, () async {
         final result = await conformanceCase.run();
-        if (conformanceCase.optionalCapability ==
-            AuthStoreConformanceCapability.accountDeletion) {
-          expect(result.isSkipped, isTrue);
-          expect(result.skippedReason, contains('accountDeletion'));
-        } else {
-          expect(result.isSkipped, isFalse, reason: result.skippedReason);
-        }
+        expect(result.isSkipped, isFalse, reason: result.skippedReason);
       });
     }
   });
@@ -61,12 +67,167 @@ void main() {
     );
   });
 
-  test('fails closed for callback-spanning account deletion', () async {
+  test('exposes a backend-bound deletion coordinator', () async {
     final database = FakeCloudflareD1Database();
     addTearDown(database.close);
     final store = await CloudflareD1AuthStore.open(database);
 
-    expect(store, isNot(isA<AuthAccountDeletionStore>()));
+    expect(store, isA<AuthUserDeletionCoordinatorHost>());
+    expect(
+      store.userDeletionCoordinator.domain,
+      isA<CloudflareD1UserDeletionDomain>(),
+    );
+  });
+
+  test('D1 deletion rolls back faults and retries the same token', () async {
+    final database = FakeCloudflareD1Database();
+    addTearDown(database.close);
+    final now = DateTime.utc(2026, 8, 20, 12);
+    final store = await CloudflareD1AuthStore.open(database, clock: () => now);
+    final coordinator = store.userDeletionCoordinator;
+    final domain = coordinator.domain as CloudflareD1UserDeletionDomain;
+    await database.exec(
+      'CREATE TABLE plugin_data (user_id TEXT PRIMARY KEY, value TEXT)',
+    );
+    await store.users.create(AuthUser(id: 'delete-me'));
+    await database
+        .prepare('INSERT INTO plugin_data (user_id, value) VALUES (?, ?)')
+        .bind(['delete-me', 'retained-on-fault'])
+        .run();
+    await store.verificationTokens.save(
+      AuthVerificationToken(
+        identifier: 'account_deletion:delete-me',
+        token: 'delete-token',
+        expiresAt: now.add(const Duration(minutes: 5)),
+      ),
+    );
+    store.bindUserDeletionPlanContributors([
+      _D1DeletionContributor(domain: domain, injectFaultOnce: true),
+    ]);
+
+    await expectLater(
+      coordinator.confirmAndDeleteUser(
+        userId: 'delete-me',
+        token: 'delete-token',
+        now: now,
+      ),
+      throwsA(anything),
+    );
+    expect(await store.users.findById('delete-me'), isNotNull);
+    expect(database.select('SELECT * FROM plugin_data'), hasLength(1));
+
+    final results = await Future.wait([
+      coordinator.confirmAndDeleteUser(
+        userId: 'delete-me',
+        token: 'delete-token',
+        now: now,
+      ),
+      coordinator.confirmAndDeleteUser(
+        userId: 'delete-me',
+        token: 'delete-token',
+        now: now,
+      ),
+    ]);
+    expect(results.where((value) => value), hasLength(1));
+    expect(await store.users.findById('delete-me'), isNull);
+    expect(database.select('SELECT * FROM plugin_data'), isEmpty);
+  });
+
+  test('D1 rejects a foreign deletion domain before mutation', () async {
+    final firstDatabase = FakeCloudflareD1Database();
+    final secondDatabase = FakeCloudflareD1Database();
+    addTearDown(firstDatabase.close);
+    addTearDown(secondDatabase.close);
+    final first = await CloudflareD1AuthStore.open(firstDatabase);
+    final second = await CloudflareD1AuthStore.open(secondDatabase);
+    first.bindUserDeletionPlanContributors(const []);
+    await first.users.create(AuthUser(id: 'user-1'));
+    final foreign = CloudflareD1UserDeletionPlan(
+      domain:
+          second.userDeletionCoordinator.domain
+              as CloudflareD1UserDeletionDomain,
+      userId: 'user-1',
+      namespace: 'foreign',
+      statements: const [],
+    );
+
+    await expectLater(
+      first.userDeletionCoordinator.deleteUser('user-1', plans: [foreign]),
+      throwsA(isA<AuthUserDeletionPreflightException>()),
+    );
+    expect(await first.users.findById('user-1'), isNotNull);
+  });
+
+  test('D1 plugin plans delete device and email OTP namespaces', () async {
+    final database = FakeCloudflareD1Database();
+    addTearDown(database.close);
+    final now = DateTime.utc(2026, 8, 20, 12);
+    const schema = CloudflareD1AuthSchema();
+    final store = await CloudflareD1AuthStore.open(
+      database,
+      schema: schema,
+      clock: () => now,
+    );
+    final user = AuthUser(id: 'user-1', email: 'user@example.com');
+    await store.users.create(user);
+    final device = DeviceAuthorizationPlugin<Object>(
+      verificationUri: 'https://auth.example.com/device',
+      validateClient: (_, _, _) => true,
+      issueToken:
+          ({
+            required context,
+            required user,
+            required clientId,
+            required scopes,
+            required authorizationId,
+          }) => const AuthDeviceAccessToken(
+            accessToken: 'unused',
+            expiresIn: Duration(minutes: 5),
+          ),
+    );
+    final emailOtp = EmailOtpPlugin<Object>(
+      sendCode: (_) {},
+      rateLimitHashKey: '0123456789abcdef0123456789abcdef',
+    );
+    device.configure(AuthServerPluginContext<Object>(store: store));
+    emailOtp.configure(AuthServerPluginContext<Object>(store: store));
+    store.bindUserDeletionPlanContributors([device, emailOtp]);
+
+    final authorization = AuthDeviceAuthorization(
+      id: 'device-1',
+      deviceCodeHash: 'device-hash',
+      userCodeHash: 'user-hash',
+      clientId: 'client-1',
+      scopes: const ['openid'],
+      createdAt: now,
+      expiresAt: now.add(const Duration(minutes: 10)),
+      interval: const Duration(seconds: 5),
+      userId: user.id,
+      status: AuthDeviceAuthorizationStatus.approved,
+      approvedAt: now,
+    );
+    await store.deviceAuthorizations.create(authorization);
+    await store.emailOtps.save(
+      AuthEmailOtp(
+        id: 'otp-1',
+        email: user.email!,
+        codeHash: hashAuthEmailOtpCode('123456'),
+        type: AuthEmailOtpType.signIn,
+        createdAt: now,
+        expiresAt: now.add(const Duration(minutes: 5)),
+        maxAttempts: 3,
+      ),
+    );
+
+    expect(await store.userDeletionCoordinator.deleteUser(user.id), isTrue);
+    expect(
+      database.select('SELECT * FROM ${schema.table('device_authorizations')}'),
+      isEmpty,
+    );
+    expect(
+      database.select('SELECT * FROM ${schema.table('email_otps')}'),
+      isEmpty,
+    );
   });
 
   test('persists digests rather than raw one-time tokens', () async {
@@ -235,4 +396,38 @@ void main() {
       hasLength(1),
     );
   });
+}
+
+final class _D1DeletionContributor implements AuthUserDeletionPlanContributor {
+  _D1DeletionContributor({required this.domain, this.injectFaultOnce = false});
+
+  final CloudflareD1UserDeletionDomain domain;
+  final bool injectFaultOnce;
+  bool _faultIssued = false;
+
+  @override
+  String get userDataNamespace => 'plugin_data';
+
+  @override
+  AuthUserDeletionPlan createUserDeletionPlan(AuthUser user) {
+    final injectFault = injectFaultOnce && !_faultIssued;
+    _faultIssued = _faultIssued || injectFault;
+    return CloudflareD1UserDeletionPlan(
+      domain: domain,
+      userId: user.id,
+      namespace: userDataNamespace,
+      statements: [
+        CloudflareD1UserDeletionStatement(
+          sql: 'DELETE FROM plugin_data WHERE user_id = ? AND {{guard}}',
+          parameters: [user.id],
+        ),
+        if (injectFault)
+          CloudflareD1UserDeletionStatement(
+            sql:
+                'DELETE FROM missing_plugin_data WHERE user_id = ? AND {{guard}}',
+            parameters: [user.id],
+          ),
+      ],
+    );
+  }
 }
