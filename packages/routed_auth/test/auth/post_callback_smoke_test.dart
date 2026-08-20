@@ -86,7 +86,6 @@ void main() {
           'Content-Type': ['application/x-www-form-urlencoded'],
         },
       );
-      print('BODY1: ${response.body}');
       if (!(response.statusCode == HttpStatus.ok)) {
         fail('POST callback failed: ${response.statusCode} ${response.body}');
       }
@@ -128,7 +127,6 @@ void main() {
       final response = await client.get(
         '/auth/callback/custom?code=code123&state=state123&email=get%40example.com',
       );
-      print('BODY2: ${response.body}');
       if (!(response.statusCode == HttpStatus.ok)) {
         fail('GET callback failed: ${response.statusCode} ${response.body}');
       }
