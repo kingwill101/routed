@@ -59,18 +59,20 @@ void main() {
           _invocation('browser-binding-value-0001'),
           const {'providerId': 'enterprise'},
         );
-        expect(response, isA<AuthEndpointProtocolResponse>());
-        final metadata = response as AuthEndpointProtocolResponse;
+        expect(response, isA<AuthEndpointHttpResponse>());
+        final metadata = response as AuthEndpointHttpResponse;
         expect(
-          metadata.contentType,
+          metadata.headers['content-type'],
           startsWith('application/samlmetadata+xml'),
         );
-        expect(metadata.body, contains('WantAssertionsSigned="true"'));
+        expect(metadata.body, isA<String>());
+        final body = metadata.body! as String;
+        expect(body, contains('WantAssertionsSigned="true"'));
         expect(
-          metadata.body,
+          body,
           contains('https://sp.example.test/auth/sso/saml/acs/enterprise'),
         );
-        expect(metadata.body, isNot(contains('PINNED CERTIFICATE')));
+        expect(body, isNot(contains('PINNED CERTIFICATE')));
       },
     );
 

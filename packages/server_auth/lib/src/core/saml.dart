@@ -138,6 +138,7 @@ final class AuthSamlPlugin<TContext>
       id: 'saml.acs',
       method: AuthOperationMethod.post,
       path: '/sso/saml/acs/{providerId}',
+      serverOnly: true,
       semantics: const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
           atomicity: AuthMutationAtomicity.atomic,
@@ -165,6 +166,7 @@ final class AuthSamlPlugin<TContext>
     )
     handler,
     AuthRateLimitOperation? rateLimitOperation,
+    bool serverOnly = false,
   }) => TypedAuthEndpointDescriptor(
     id: id,
     method: method,
@@ -195,6 +197,7 @@ final class AuthSamlPlugin<TContext>
         ? AuthOperationCsrfPolicy.required
         : AuthOperationCsrfPolicy.none,
     rateLimitOperation: rateLimitOperation,
+    serverOnly: serverOnly,
   );
 
   Future<Object?> _metadata(
@@ -208,10 +211,13 @@ final class AuthSamlPlugin<TContext>
     if (utf8.encode(document).length > options.limits.maxMetadataBytes) {
       throw AuthFlowException('saml_authentication_failed');
     }
-    return AuthEndpointProtocolResponse(
+    return AuthEndpointHttpResponse(
+      statusCode: 200,
       body: document,
-      contentType: 'application/samlmetadata+xml; charset=utf-8',
-      headers: const {'cache-control': 'no-store'},
+      headers: const {
+        'content-type': 'application/samlmetadata+xml; charset=utf-8',
+        'cache-control': 'no-store',
+      },
     );
   }
 

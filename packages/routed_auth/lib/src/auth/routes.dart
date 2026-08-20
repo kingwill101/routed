@@ -360,7 +360,20 @@ class AuthRoutes {
           result.session,
           provider: response.provider,
         );
-        return ctx.json(await response.projectResponse(sessionPayload));
+        final projected = await response.projectResponse(sessionPayload);
+        if (projected is AuthEndpointRedirect) {
+          projected.headers.forEach(
+            (key, value) => ctx.response.headers.set(key, value),
+          );
+          return await ctx.redirect(
+            projected.location.toString(),
+            statusCode: projected.statusCode,
+          );
+        }
+        if (projected is AuthEndpointHttpResponse) {
+          return _pluginHttpResponse(ctx, projected);
+        }
+        return ctx.json(projected);
       }
       return ctx.json(response);
     } on AuthTwoFactorRequiredException catch (error) {
@@ -421,6 +434,9 @@ class AuthRoutes {
         .firstOrNull;
     if (contentType != null &&
         !contentType.toLowerCase().startsWith('application/json')) {
+      if (response.body case final String body) {
+        return ctx.string(body, statusCode: response.statusCode);
+      }
       return ctx.string(
         jsonEncode(response.body),
         statusCode: response.statusCode,
