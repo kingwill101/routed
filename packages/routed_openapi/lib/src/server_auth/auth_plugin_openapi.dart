@@ -2,6 +2,13 @@ import 'package:server_auth/server_auth.dart';
 
 import '../openapi/openapi_spec.dart';
 
+bool _hasJsonRequestBody(AuthOperationMethod method) => switch (method) {
+  AuthOperationMethod.post ||
+  AuthOperationMethod.put ||
+  AuthOperationMethod.patch => true,
+  AuthOperationMethod.get || AuthOperationMethod.delete => false,
+};
+
 /// Transport advertised for session-authenticated plugin operations.
 ///
 /// Combined values are OpenAPI security alternatives (logical OR), not a
@@ -119,6 +126,7 @@ final class AuthPluginOpenApiGenerator<TContext> {
     final routeKeys = <String>{};
     final pluginIds = <String>{};
     var requiresSession = false;
+    var requiresBearer = false;
     var hasTwoFactorChallenge = false;
 
     final captchaPlugin = registry.find(authCaptchaPluginId);
@@ -215,8 +223,16 @@ final class AuthPluginOpenApiGenerator<TContext> {
           endpoint.authentication == AuthOperationAuthentication.session;
       final apiKeyRequired =
           endpoint.authentication == AuthOperationAuthentication.apiKey;
+      final bearerRequired =
+          endpoint.authentication == AuthOperationAuthentication.bearer;
       requiresSession |= sessionRequired;
-      final responses = <String, OpenApiResponse>{
+      requiresBearer |= bearerRequired;
+      final explicitResponseContracts = switch (endpoint) {
+        AuthEndpointResponseContractDescriptor(:final responseContracts) =>
+          responseContracts.toList(growable: false),
+        _ => const <AuthEndpointResponseContract>[],
+      };
+      final defaultResponses = <String, OpenApiResponse>{
         '200': OpenApiResponse(
           description: 'Successful response.',
           content: <String, OpenApiMediaType>{
@@ -258,6 +274,23 @@ final class AuthPluginOpenApiGenerator<TContext> {
             },
           ),
       };
+      final responses = explicitResponseContracts.isEmpty
+          ? defaultResponses
+          : <String, OpenApiResponse>{
+              for (final response in explicitResponseContracts)
+                response.statusCode.toString(): OpenApiResponse(
+                  description: response.description,
+                  content: response.contract == null
+                      ? null
+                      : <String, OpenApiMediaType>{
+                          response.contract!.contentType: OpenApiMediaType(
+                            schema: Map<String, Object?>.from(
+                              response.contract!.schema,
+                            ),
+                          ),
+                        },
+                ),
+            };
 
       final extensions = <String, Object?>{
         pluginExtension: pluginId,
@@ -281,7 +314,7 @@ final class AuthPluginOpenApiGenerator<TContext> {
         operationId: operationId,
         tags: <String>[pluginId],
         parameters: parameters,
-        requestBody: endpoint.method == AuthOperationMethod.post
+        requestBody: _hasJsonRequestBody(endpoint.method)
             ? OpenApiRequestBody(
                 required: contracts.request.required,
                 description: request.policyExtensions.isEmpty
@@ -303,6 +336,10 @@ final class AuthPluginOpenApiGenerator<TContext> {
             : apiKeyRequired
             ? const <Map<String, List<String>>>[
                 <String, List<String>>{apiKeySecurityScheme: <String>[]},
+              ]
+            : bearerRequired
+            ? const <Map<String, List<String>>>[
+                <String, List<String>>{bearerSecurityScheme: <String>[]},
               ]
             : const [],
         extensions: extensions,
@@ -336,8 +373,11 @@ final class AuthPluginOpenApiGenerator<TContext> {
           .toList(growable: false),
       components: OpenApiComponents(
         schemas: schemas,
-        securitySchemes: requiresSession || hasApiKeyPlugin
-            ? _securitySchemes(hasApiKeyPlugin: hasApiKeyPlugin)
+        securitySchemes: requiresSession || requiresBearer || hasApiKeyPlugin
+            ? _securitySchemes(
+                hasApiKeyPlugin: hasApiKeyPlugin,
+                forceBearer: requiresBearer,
+              )
             : const {},
       ),
     );
@@ -425,6 +465,7 @@ final class AuthPluginOpenApiGenerator<TContext> {
 
   Map<String, OpenApiSecurityScheme> _securitySchemes({
     required bool hasApiKeyPlugin,
+    bool forceBearer = false,
   }) {
     final schemes = <String, OpenApiSecurityScheme>{};
     final sessionSecurity = config.sessionSecurity;
@@ -438,14 +479,14 @@ final class AuthPluginOpenApiGenerator<TContext> {
         description: 'Routed auth session cookie.',
       );
     }
-    if (sessionSecurity != AuthOpenApiSessionSecurity.cookie &&
-        sessionSecurity != AuthOpenApiSessionSecurity.apiKey &&
-        sessionSecurity != AuthOpenApiSessionSecurity.cookieOrApiKey) {
+    if (forceBearer ||
+        sessionSecurity != AuthOpenApiSessionSecurity.cookie &&
+            sessionSecurity != AuthOpenApiSessionSecurity.apiKey &&
+            sessionSecurity != AuthOpenApiSessionSecurity.cookieOrApiKey) {
       schemes[bearerSecurityScheme] = const OpenApiSecurityScheme(
         type: 'http',
         scheme: 'bearer',
-        bearerFormat: 'JWT',
-        description: 'Routed auth bearer token.',
+        description: 'Bearer token accepted by the selected auth plugin.',
       );
     }
     final hasApiKeySecurity =

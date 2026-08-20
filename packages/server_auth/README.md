@@ -221,6 +221,66 @@ CSRF, rate-limit keys, redirects, session/JWT projection, and generic public
 errors. `server_auth` defines the portable descriptors; a framework adapter is
 responsible for enforcing that contract.
 
+## Optional SCIM 2.0 provisioning plugin
+
+SCIM is a server-to-server protocol, so selecting the server plugin does not
+add anything to `AuthClient`. The application owns both bearer-token
+verification and durable provisioning storage:
+
+```dart
+import 'package:server_auth/server_auth.dart';
+
+final scim = ScimPlugin<MyRequestContext>(
+  tokenResolver: MyScimTokenResolver(connectionStore),
+  store: MyScimProvisioningStore(database),
+  options: AuthScimOptions(
+    defaultPageSize: 50,
+    maximumPageSize: 200,
+    maximumPatchOperations: 16,
+  ),
+);
+
+final options = AuthOptions<MyRequestContext>(
+  providers: const [],
+  store: authStore,
+  storeMode: AuthStoreMode.durable,
+  plugins: [scim],
+);
+```
+
+The resolver must digest the presented token immediately and atomically return
+one immutable `AuthScimConnectionIdentity`: connection ID, credential ID,
+tenant ID, organization ID, provisioning-domain ID, subject, expiry, and exact
+User scopes. It must reject revoked or expired credentials and must never
+persist, log, or return a raw token. This plugin does not issue tokens; if an
+application adds issuance later, the raw value may be displayed only once.
+
+Each provisioning-store call receives the resolved connection context and must
+enforce the exact connection, tenant, organization, and provisioning domain in
+persistence. Create, replace, patch, uniqueness checks, and tombstoning each
+require a real atomic store mutation. Do not advertise an adapter as SCIM-safe
+when its backend cannot provide those semantics; in particular, this package
+does not claim interactive multi-step transaction support for Cloudflare D1.
+
+SCIM Users are directory resources, not authentication users. The plugin never
+creates a sign-in method, grants application access, or links an existing auth
+user by email. Directory lifecycle is explicit (`active`, `inactive`, or
+`tombstoned`). Applications that need a stable link can implement
+`AuthScimApplicationIdentityResolver`, whose lookup intentionally exposes only
+the connection-bound resource ID and optional immutable `externalId`. Profile
+projection, access changes, or session revocation belong in an application-owned
+`AuthScimLifecycleCapability`, composed by the provisioning store within the
+same backend transaction when rollback is required.
+
+The selected framework adapter mounts Bearer-authenticated
+`ServiceProviderConfig`, `ResourceTypes`, `Schemas`, and bounded User
+list/get/create/replace/patch/delete operations under its auth base path (for
+Routed, `/auth/scim/v2`). Public failures use generic SCIM error documents and
+never include bearer tokens or persistence exception details. This bounded
+foundation is Users-only. Groups, application projection orchestration, and a
+managed connection/credential catalog remain explicitly deferred; there is no
+SCIM client plugin because directories consume the protocol directly.
+
 ## Optional last-authentication-method plugin
 
 Install this plugin only when the sign-in UI needs to remember which method a

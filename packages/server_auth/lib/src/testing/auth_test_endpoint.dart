@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../core/exceptions.dart';
 import '../core/models.dart';
 import '../core/plugin.dart';
@@ -47,19 +49,27 @@ final class AuthPluginEndpointFixture<TContext> {
       return AuthTestHttpResponse.error('not_found', statusCode: 404);
     }
     final path = request.uri.path.substring(prefix.length);
-    final endpoint = _endpoints.where((candidate) {
-      return candidate.path == path &&
-          candidate.method.name.toUpperCase() == request.method;
-    }).firstOrNull;
-    if (endpoint == null) {
+    final match = _endpoints
+        .map((candidate) => (candidate, _matchPath(candidate.path, path)))
+        .where(
+          (entry) =>
+              entry.$2 != null &&
+              entry.$1.method.name.toUpperCase() == request.method,
+        )
+        .firstOrNull;
+    if (match == null) {
       return AuthTestHttpResponse.error('not_found', statusCode: 404);
     }
+    final endpoint = match.$1;
     try {
       final endpointInvocation = invocation(request);
-      final result = await endpoint.invoke(
-        endpointInvocation,
-        request.jsonObject(),
-      );
+      final result = await endpoint
+          .invoke(endpointInvocation, <String, dynamic>{
+            ...request.uri.queryParameters,
+            ...request.jsonObject(),
+            ...match.$2!,
+            '_authorization': ?request.headers['authorization'],
+          });
       if (result is AuthEndpointRedirect) {
         return AuthTestHttpResponse(
           statusCode: result.statusCode,
@@ -80,13 +90,61 @@ final class AuthPluginEndpointFixture<TContext> {
           await result.projectResponse(session.redacted().toJson()),
         );
       }
+      if (result is AuthEndpointHttpResponse) {
+        return AuthTestHttpResponse(
+          statusCode: result.statusCode,
+          body: result.body == null ? '' : jsonEncode(result.body),
+          headers: <String, String>{
+            if (result.body != null) 'content-type': 'application/json',
+            ...result.headers,
+          },
+        );
+      }
       return AuthTestHttpResponse.json(result);
     } on AuthFlowException catch (error) {
       return AuthTestHttpResponse.error(error.code);
     } on FormatException {
+      final errorEndpoint =
+          endpoint is AuthEndpointPublicErrorResponseDescriptor
+          ? endpoint as AuthEndpointPublicErrorResponseDescriptor
+          : null;
+      if (errorEndpoint != null) {
+        final response = errorEndpoint.createPublicErrorResponse(
+          AuthEndpointPublicErrorKind.invalidRequest,
+        );
+        if (response != null) {
+          return AuthTestHttpResponse(
+            statusCode: response.statusCode,
+            body: response.body == null ? '' : jsonEncode(response.body),
+            headers: <String, String>{
+              if (response.body != null) 'content-type': 'application/json',
+              ...response.headers,
+            },
+          );
+        }
+      }
       return AuthTestHttpResponse.error('invalid_request');
     }
   }
+}
+
+Map<String, String>? _matchPath(String template, String actual) {
+  final templateParts = template.split('/');
+  final actualParts = actual.split('/');
+  if (templateParts.length != actualParts.length) return null;
+  final parameters = <String, String>{};
+  for (var index = 0; index < templateParts.length; index++) {
+    final expected = templateParts[index];
+    final value = actualParts[index];
+    if (expected.startsWith('{') && expected.endsWith('}')) {
+      final name = expected.substring(1, expected.length - 1).trim();
+      if (name.isEmpty || value.isEmpty) return null;
+      parameters[name] = Uri.decodeComponent(value);
+    } else if (expected != value) {
+      return null;
+    }
+  }
+  return parameters;
 }
 
 /// Session control with deterministic timestamps for portable plugin tests.

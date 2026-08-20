@@ -140,6 +140,32 @@ void main() {
       await _expectCaseFailure(malformedSuite, 'endpoints.typed-contracts');
     });
 
+    test('rejects duplicate explicit HTTP response contracts', () async {
+      final suite = _suite(
+        _FixturePlugin(
+          endpoints: <AuthEndpointDescriptor<Object>>[
+            _endpoint(
+              id: 'sample.protocol',
+              method: AuthOperationMethod.get,
+              path: '/sample/protocol',
+              responseContracts: const <AuthEndpointResponseContract>[
+                AuthEndpointResponseContract(
+                  statusCode: 200,
+                  description: 'First response.',
+                ),
+                AuthEndpointResponseContract(
+                  statusCode: 200,
+                  description: 'Duplicate response.',
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+
+      await _expectCaseFailure(suite, 'endpoints.typed-contracts');
+    });
+
     test('matches rate-limit declarations and endpoint references', () async {
       const missing = AuthRateLimitOperation('sample', 'missing');
       final undeclaredSuite = _suite(
@@ -471,6 +497,8 @@ TypedAuthEndpointDescriptor<Object, Map<String, dynamic>, Object?> _endpoint({
   AuthOperationCsrfPolicy csrfPolicy = AuthOperationCsrfPolicy.none,
   AuthRateLimitOperation? rateLimitOperation,
   AuthOperationSemantics? semantics,
+  Iterable<AuthEndpointResponseContract> responseContracts =
+      const <AuthEndpointResponseContract>[],
   Map<String, Object?> requestSchema = const <String, Object?>{
     'type': 'object',
   },
@@ -501,6 +529,7 @@ TypedAuthEndpointDescriptor<Object, Map<String, dynamic>, Object?> _endpoint({
     originPolicy: originPolicy,
     csrfPolicy: csrfPolicy,
     rateLimitOperation: rateLimitOperation,
+    responseContracts: responseContracts,
     handler: (invocation, request) => const <String, Object?>{'ok': true},
   );
 }

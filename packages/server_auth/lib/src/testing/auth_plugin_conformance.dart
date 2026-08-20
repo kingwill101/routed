@@ -316,6 +316,28 @@ final class AuthPluginConformanceSuite<TContext> {
       }
       _verifyContract(contract.requestCodec, '${endpoint.id} request');
       _verifyContract(contract.responseCodec, '${endpoint.id} response');
+      if (endpoint case AuthEndpointResponseContractDescriptor(
+        :final responseContracts,
+      )) {
+        final statuses = <int>{};
+        for (final response in responseContracts) {
+          if (response.statusCode < 100 ||
+              response.statusCode > 599 ||
+              !statuses.add(response.statusCode) ||
+              response.description.trim().isEmpty) {
+            _fail(
+              'Endpoint "${endpoint.id}" has an invalid explicit response '
+              'contract.',
+            );
+          }
+          if (response.contract case final responseContract?) {
+            _verifyContract(
+              responseContract,
+              '${endpoint.id} ${response.statusCode} response',
+            );
+          }
+        }
+      }
     }
   }
 
@@ -521,7 +543,8 @@ final class AuthPluginConformanceSuite<TContext> {
           !isRateLimitedAnonymousBrowserMutation &&
           !isNonBrowserMutation) {
         _fail(
-          'POST endpoint "${endpoint.id}" has inconsistent origin and CSRF '
+          '${endpoint.method.name.toUpperCase()} endpoint "${endpoint.id}" '
+          'has inconsistent origin and CSRF '
           'metadata.',
         );
       }
@@ -762,9 +785,7 @@ void _verifyObservedRequest<TContext>(
   AuthEndpointContractDescriptor serverContract,
   http.Request request,
 ) {
-  final expectedMethod = endpoint.method == AuthOperationMethod.get
-      ? 'GET'
-      : 'POST';
+  final expectedMethod = endpoint.method.name.toUpperCase();
   if (request.method != expectedMethod) {
     _fail(
       'Installed client operation "${endpoint.id}" uses ${request.method}, '

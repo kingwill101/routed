@@ -4,6 +4,10 @@
   removing the independently configurable provider durability flag, and
   require production options to boot through one typed deployment so proxy,
   browser, cookie, and store guarantees cannot drift apart.
+- Mount the opt-in SCIM 2.0 server plugin across GET, POST, PUT, PATCH, and
+  DELETE while forwarding its bearer credential only to the application-owned
+  atomic connection resolver,
+  preserving SCIM media types/status codes, and never creating a user session.
 - Add a public deterministic external-provider runtime conformance fixture for
   OAuth/OIDC and custom callback providers, covering state, PKCE, nonce,
   browser binding, replay, account linking, redirect safety, bounded failures,

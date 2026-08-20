@@ -20,6 +20,16 @@
   verification over exact pinned RFC 5280 paths with strict certificate
   constraints and fail-closed application-owned revocation for every non-anchor
   certificate.
+- Add an opt-in, server-only SCIM 2.0 plugin with application-owned bearer
+  resolution and atomic provisioning persistence, immutable connection/tenant/
+  organization/provisioning-domain isolation, digest-only scoped credential
+  contracts, strict typed discovery and User schemas, bounded equality
+  filters/pagination/patches, explicit directory lifecycle and tombstones, and
+  generic protocol errors. SCIM Users remain separate from auth users and
+  application access; no SCIM client plugin is installed implicitly.
+- Extend portable plugin contracts with PUT, PATCH, DELETE, plugin-owned bearer
+  authentication, explicit HTTP status/media-type responses, path parameters,
+  and conformance validation for duplicate or malformed response contracts.
 - Replace callback-based hard deletion with immutable, backend-bound plugin
   plans executed alongside core deletion by one storage coordinator. Freeze
   the deletion topology, reject incomplete or foreign-domain plans before

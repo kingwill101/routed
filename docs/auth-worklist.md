@@ -212,8 +212,21 @@ account, session, client, and plugin contracts above:
 - [x] Track the last successful authentication method through independent
   server/client plugins without storing identities, credentials, or secrets.
 - [x] Add captcha and breached-password checks as opt-in security plugins.
-- [ ] Add SSO/SAML and SCIM integrations when enterprise tenancy requirements
-  justify them.
+- [x] Add a bounded SCIM 2.0 server plugin with application-owned token and
+  atomic provisioning boundaries, immutable connection/tenant/organization/
+  provisioning-domain isolation, strict User CRUD/patch/filter/page contracts,
+  explicit inactive/tombstoned lifecycle, generic errors, and OpenAPI metadata.
+  Keep directory truth separate from auth users and keep SCIM server-only.
+- [ ] Add SCIM Groups and direct membership resources with bounded filters and
+  an application-owned role projection capability.
+- [ ] Add explicit application identity projection/reconciliation around stable
+  directory subjects; never infer links from email or grant sign-in access from
+  provisioning alone.
+- [ ] Add a managed connection and digest-only credential catalog with scoped,
+  expiry/revocation-aware one-time issuance and rotation APIs.
+- [ ] Add SSO/SAML after its metadata, certificate rotation, tenant discovery,
+  assertion replay, and account-linking contracts are designed; do not couple
+  it to the SCIM provisioning plugin.
 
 ## Active security-audit remediation
 

@@ -8,9 +8,15 @@ import 'providers.dart';
 import 'rate_limit.dart';
 import 'store.dart';
 
-enum AuthOperationMethod { get, post }
+/// HTTP method exposed by a portable auth plugin operation.
+enum AuthOperationMethod { get, post, put, patch, delete }
 
-enum AuthOperationAuthentication { none, session, apiKey }
+/// Authentication boundary enforced for a portable auth plugin operation.
+///
+/// [bearer] identifies service-protocol endpoints whose plugin owns token
+/// verification. The framework host forwards the Authorization header but
+/// does not interpret or turn that credential into an application session.
+enum AuthOperationAuthentication { none, session, apiKey, bearer }
 
 enum AuthOperationOriginPolicy { none, browser }
 
@@ -198,6 +204,31 @@ final class AuthEndpointRedirect {
 
   final Uri location;
   final int statusCode;
+  final Map<String, String> headers;
+}
+
+/// An explicit HTTP response returned by a portable plugin endpoint.
+///
+/// Most auth operations return JSON with status 200. Protocol plugins that
+/// require another success status, response headers, or an empty body can use
+/// this value without coupling themselves to a framework response class.
+final class AuthEndpointHttpResponse {
+  AuthEndpointHttpResponse({
+    required this.statusCode,
+    this.body,
+    Map<String, String> headers = const <String, String>{},
+  }) : headers = Map<String, String>.unmodifiable(headers) {
+    if (statusCode < 100 || statusCode > 599) {
+      throw ArgumentError.value(
+        statusCode,
+        'statusCode',
+        'must be a valid HTTP status code',
+      );
+    }
+  }
+
+  final int statusCode;
+  final Object? body;
   final Map<String, String> headers;
 }
 
@@ -467,10 +498,47 @@ abstract interface class AuthEndpointContractDescriptor {
   AuthOperationContract get responseCodec;
 }
 
+/// One explicit HTTP response advertised by a portable plugin operation.
+///
+/// Protocol plugins use this to publish non-200 success responses, empty
+/// responses, and protocol-specific error media types without coupling their
+/// implementation to an OpenAPI package.
+final class AuthEndpointResponseContract {
+  const AuthEndpointResponseContract({
+    required this.statusCode,
+    required this.description,
+    this.contract,
+  }) : assert(statusCode >= 100 && statusCode <= 599);
+
+  final int statusCode;
+  final String description;
+  final AuthOperationContract? contract;
+}
+
+/// Optional complete HTTP response contract for an endpoint.
+abstract interface class AuthEndpointResponseContractDescriptor {
+  Iterable<AuthEndpointResponseContract> get responseContracts;
+}
+
+/// Host-level failure that happened outside a plugin handler.
+enum AuthEndpointPublicErrorKind { invalidRequest, internalFailure }
+
+typedef AuthEndpointPublicErrorResponseFactory =
+    AuthEndpointHttpResponse Function(AuthEndpointPublicErrorKind kind);
+
+/// Optional protocol-specific public errors for failures owned by the host.
+abstract interface class AuthEndpointPublicErrorResponseDescriptor {
+  AuthEndpointHttpResponse? createPublicErrorResponse(
+    AuthEndpointPublicErrorKind kind,
+  );
+}
+
 final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
     implements
         AuthEndpointDescriptor<TContext>,
         AuthEndpointContractDescriptor,
+        AuthEndpointResponseContractDescriptor,
+        AuthEndpointPublicErrorResponseDescriptor,
         AuthEndpointRateLimitIdentifierDescriptor {
   const TypedAuthEndpointDescriptor({
     required this.id,
@@ -485,6 +553,8 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
     this.csrfPolicy = AuthOperationCsrfPolicy.none,
     this.rateLimitOperation,
     this.rateLimitIdentifier,
+    this.responseContracts = const <AuthEndpointResponseContract>[],
+    this.publicErrorResponse,
     this.serverOnly = false,
   });
 
@@ -515,7 +585,15 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
   final AuthRateLimitOperation? rateLimitOperation;
   final AuthEndpointRateLimitIdentifierResolver<TRequest>? rateLimitIdentifier;
   @override
+  final Iterable<AuthEndpointResponseContract> responseContracts;
+  final AuthEndpointPublicErrorResponseFactory? publicErrorResponse;
+  @override
   final bool serverOnly;
+
+  @override
+  AuthEndpointHttpResponse? createPublicErrorResponse(
+    AuthEndpointPublicErrorKind kind,
+  ) => publicErrorResponse?.call(kind);
 
   @override
   String? resolveRateLimitIdentifier(Map<String, dynamic> input) {

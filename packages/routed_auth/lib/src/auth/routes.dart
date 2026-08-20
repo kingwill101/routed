@@ -1,4 +1,5 @@
 // ignore_for_file: implementation_imports
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:routed_auth/src/auth/manager/auth_manager.dart';
@@ -8,6 +9,9 @@ import 'package:server_auth/server_auth.dart'
         AuthEndpointDescriptor,
         AuthEndpointRateLimitIdentifierDescriptor,
         AuthEndpointAuthenticationIntent,
+        AuthEndpointHttpResponse,
+        AuthEndpointPublicErrorKind,
+        AuthEndpointPublicErrorResponseDescriptor,
         AuthEndpointRedirect,
         AuthOperationAuthentication,
         AuthOperationCsrfPolicy,
@@ -154,9 +158,7 @@ class AuthRoutes {
     for (final endpoint in rootPluginEndpoints) {
       Future<Response> handler(EngineContext ctx) =>
           _pluginOperation(ctx, endpoint.id);
-      if (endpoint.method == AuthOperationMethod.get) {
-        router.get(endpoint.path, handler);
-      }
+      _registerPluginRoute(router, endpoint, handler);
     }
     router.group(
       path: root,
@@ -222,14 +224,7 @@ class AuthRoutes {
         for (final endpoint in pluginEndpoints) {
           Future<Response> handler(EngineContext ctx) =>
               _pluginOperation(ctx, endpoint.id);
-          switch (endpoint.method) {
-            case AuthOperationMethod.get:
-              auth.get(endpoint.path, handler);
-              break;
-            case AuthOperationMethod.post:
-              auth.post(endpoint.path, handler);
-              break;
-          }
+          _registerPluginRoute(auth, endpoint, handler);
         }
       },
     );
@@ -250,13 +245,22 @@ class AuthRoutes {
     if (endpoint == null) return _errorResponse(ctx, 'operation_not_found');
     Map<String, dynamic> payload;
     try {
-      payload = await _payload(ctx);
+      payload = <String, dynamic>{
+        ...await _payload(ctx),
+        ...ctx.queryCache,
+        ...ctx.params,
+      };
       final authorization = ctx.request.headers.value('authorization');
       if (authorization != null) {
         payload = {...payload, '_authorization': authorization};
       }
     } catch (_) {
-      return _errorResponse(ctx, 'invalid_request');
+      return _pluginPublicError(
+        ctx,
+        endpoint,
+        AuthEndpointPublicErrorKind.invalidRequest,
+        fallbackCode: 'invalid_request',
+      );
     }
     if (endpoint.originPolicy == AuthOperationOriginPolicy.browser) {
       final browserError = liveManager.validateBrowserRequest(ctx);
@@ -271,9 +275,9 @@ class AuthRoutes {
 
     try {
       final session =
-          endpoint.authentication == AuthOperationAuthentication.none
-          ? null
-          : await liveManager.resolveSession(ctx);
+          endpoint.authentication == AuthOperationAuthentication.session
+          ? await liveManager.resolveSession(ctx)
+          : null;
       if (endpoint.authentication == AuthOperationAuthentication.session &&
           session == null) {
         throw AuthFlowException('unauthorized');
@@ -343,6 +347,9 @@ class AuthRoutes {
           statusCode: response.statusCode,
         );
       }
+      if (response is AuthEndpointHttpResponse) {
+        return _pluginHttpResponse(ctx, response);
+      }
       if (response is AuthEndpointAuthenticationIntent) {
         final result = await liveManager.completePluginAuthentication(
           ctx,
@@ -373,7 +380,71 @@ class AuthRoutes {
       }
       return _flowErrorResponse(ctx, error);
     } catch (_) {
-      return _errorResponse(ctx, 'auth_request_failed');
+      return _pluginPublicError(
+        ctx,
+        endpoint,
+        AuthEndpointPublicErrorKind.internalFailure,
+        fallbackCode: 'auth_request_failed',
+      );
+    }
+  }
+
+  Future<Response> _pluginPublicError(
+    EngineContext ctx,
+    AuthEndpointDescriptor<EngineContext> endpoint,
+    AuthEndpointPublicErrorKind kind, {
+    required String fallbackCode,
+  }) async {
+    final errorEndpoint = endpoint is AuthEndpointPublicErrorResponseDescriptor
+        ? endpoint as AuthEndpointPublicErrorResponseDescriptor
+        : null;
+    if (errorEndpoint != null) {
+      final response = errorEndpoint.createPublicErrorResponse(kind);
+      if (response != null) return _pluginHttpResponse(ctx, response);
+    }
+    return _errorResponse(ctx, fallbackCode);
+  }
+
+  Response _pluginHttpResponse(
+    EngineContext ctx,
+    AuthEndpointHttpResponse response,
+  ) {
+    response.headers.forEach(
+      (key, value) => ctx.response.headers.set(key, value),
+    );
+    if (response.statusCode == HttpStatus.noContent || response.body == null) {
+      return ctx.string('', statusCode: response.statusCode);
+    }
+    final contentType = response.headers.entries
+        .where((entry) => entry.key.toLowerCase() == 'content-type')
+        .map((entry) => entry.value)
+        .firstOrNull;
+    if (contentType != null &&
+        !contentType.toLowerCase().startsWith('application/json')) {
+      return ctx.string(
+        jsonEncode(response.body),
+        statusCode: response.statusCode,
+      );
+    }
+    return ctx.json(response.body, statusCode: response.statusCode);
+  }
+
+  void _registerPluginRoute(
+    Router router,
+    AuthEndpointDescriptor<EngineContext> endpoint,
+    Future<Response> Function(EngineContext context) handler,
+  ) {
+    switch (endpoint.method) {
+      case AuthOperationMethod.get:
+        router.get(endpoint.path, handler);
+      case AuthOperationMethod.post:
+        router.post(endpoint.path, handler);
+      case AuthOperationMethod.put:
+        router.put(endpoint.path, handler);
+      case AuthOperationMethod.patch:
+        router.patch(endpoint.path, handler);
+      case AuthOperationMethod.delete:
+        router.delete(endpoint.path, handler);
     }
   }
 
