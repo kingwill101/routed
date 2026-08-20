@@ -20,7 +20,7 @@ const String authOAuthProviderModePluginId = 'oauth_provider_mode';
 
 /// Plugin that enables the application to act as an OAuth/OIDC provider.
 ///
-/// This feature allows Routed applications to:
+/// This plugin allows Routed applications to:
 /// - Register OAuth clients
 /// - Issue authorization codes
 /// - Exchange codes for access tokens
