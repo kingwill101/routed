@@ -18,14 +18,15 @@ node tool/generate_routed_skills.mjs --check
 | [`routed`](./routed/SKILL.md) | `routed` | `0.5.0` | [package](../packages/routed) |
 | [`routed_analyzer`](./routed_analyzer/SKILL.md) | `routed-analyzer` | `0.1.0` | [package](../packages/routed_analyzer) |
 | [`routed_auth`](./routed_auth/SKILL.md) | `routed-auth` | `0.2.0` | [package](../packages/routed_auth) |
+| [`routed_auth_cloudflare`](./routed_auth_cloudflare/SKILL.md) | `routed-auth-cloudflare` | `0.1.0` | [package](../packages/routed_auth_cloudflare) |
 | [`routed_cache`](./routed_cache/SKILL.md) | `routed-cache` | `0.2.0` | [package](../packages/routed_cache) |
 | [`routed_cli`](./routed_cli/SKILL.md) | `routed-cli` | `0.3.0` | [package](../packages/routed_cli) |
-| [`routed_core`](./routed_core/SKILL.md) | `routed-core` | `0.4.0` | [package](../packages/routed_core) |
+| [`routed_core`](./routed_core/SKILL.md) | `routed-core` | `0.5.0` | [package](../packages/routed_core) |
 | [`routed_hotwire`](./routed_hotwire/SKILL.md) | `routed-hotwire` | `0.1.4` | [package](../packages/routed_hotwire) |
 | [`routed_http`](./routed_http/SKILL.md) | `routed-http` | `0.1.0` | [package](../packages/routed_http) |
 | [`routed_io`](./routed_io/SKILL.md) | `routed-io` | `0.1.0` | [package](../packages/routed_io) |
 | [`routed_logging`](./routed_logging/SKILL.md) | `routed-logging` | `0.2.0` | [package](../packages/routed_logging) |
-| [`routed_node`](./routed_node/SKILL.md) | `routed-node` | `0.1.0` | [package](../packages/routed_node) |
+| [`routed_node`](./routed_node/SKILL.md) | `routed-node` | `0.2.0` | [package](../packages/routed_node) |
 | [`routed_observability`](./routed_observability/SKILL.md) | `routed-observability` | `0.1.0` | [package](../packages/routed_observability) |
 | [`routed_openapi`](./routed_openapi/SKILL.md) | `routed-openapi` | `0.1.0` | [package](../packages/routed_openapi) |
 | [`routed_openapi_builder`](./routed_openapi_builder/SKILL.md) | `routed-openapi-builder` | `0.1.0` | [package](../packages/routed_openapi_builder) |

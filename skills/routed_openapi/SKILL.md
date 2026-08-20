@@ -14,7 +14,7 @@ without loading another document.
 - **Package:** `routed_openapi`
 - **Directory:** `packages/routed_openapi`
 - **Version in this checkout:** `0.1.0`
-- **Role:** OpenAPI route metadata and manifest generation
+- **Role:** OpenAPI route manifests plus OpenAPI 3.1 generation from composed auth plugins
 - **Purpose:** Portable OpenAPI metadata extraction and generation for Routed routes. It enriches RouteBuilder metadata, extracts manifests, and converts them into OpenAPI specs without registering a runtime provider.
 
 ### Public API
@@ -28,11 +28,13 @@ without loading another document.
 ### Public imports
 
 - `package:routed_openapi/routed_openapi.dart`
+- `package:routed_openapi/server_auth.dart`
 
 ### Runtime package dependencies
 
 - `routed_core`
 - `routed_validation`
+- `server_auth`
 
 ### Composition rules
 

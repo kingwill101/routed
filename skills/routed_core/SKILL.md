@@ -13,7 +13,7 @@ without loading another document.
 
 - **Package:** `routed_core`
 - **Directory:** `packages/routed_core`
-- **Version in this checkout:** `0.4.0`
+- **Version in this checkout:** `0.5.0`
 - **Role:** Slim engine, routing, contexts, configuration, and lifecycle
 - **Purpose:** The slim HTTP engine foundation: Engine, EngineContext, Router, request/response values, DI/container, lifecycle, providers, middleware, route metadata, and portable transport contracts.
 

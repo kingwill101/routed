@@ -14,7 +14,7 @@ without loading another document.
 - **Package:** `routed_auth`
 - **Directory:** `packages/routed_auth`
 - **Version in this checkout:** `0.2.0`
-- **Role:** Routed authentication and authorization integration
+- **Role:** Routed auth plugin mounting, typed deployment binding, and runtime conformance support
 - **Purpose:** Routed HTTP, session, and router integration on top of server_auth. It supplies auth routes, middleware, runtime wiring, and a typed auth store boundary.
 
 ### Public API
@@ -29,6 +29,7 @@ without loading another document.
 ### Public imports
 
 - `package:routed_auth/routed_auth.dart`
+- `package:routed_auth/testing.dart`
 
 ### Runtime package dependencies
 
