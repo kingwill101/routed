@@ -285,6 +285,37 @@ final class DefaultLiveD1ConformanceExecutor
         }
       }
 
+      final anonymousSuite = AuthAnonymousStoreConformanceSuite(() async {
+        final schema = await newSchema();
+        final store = CloudflareD1AuthStore(database, schema: schema);
+        final plugin = AnonymousPlugin<Object>();
+        plugin.configure(AuthServerPluginContext<Object>(store: store));
+        store.bindUserDeletionPlanContributors([plugin]);
+        return AuthAnonymousStoreConformanceFixture(
+          store: store,
+          mutations: store,
+          faults: const _LiveD1AnonymousFaultController(),
+          dispose: () => disposeSchema(schema),
+        );
+      });
+      for (final conformanceCase in anonymousSuite.cases.where(
+        (candidate) => !candidate.id.endsWith('_rollback'),
+      )) {
+        final id = 'anonymous.${conformanceCase.id}';
+        try {
+          await conformanceCase.run();
+          results.add(LiveD1ConformanceCaseResult(id: id, passed: true));
+        } catch (error) {
+          results.add(
+            LiveD1ConformanceCaseResult(
+              id: id,
+              passed: false,
+              error: _safeError(error),
+            ),
+          );
+        }
+      }
+
       results.add(
         await _runAdapterCase('username.atomic', () async {
           final schema = await newSchema();
@@ -430,6 +461,16 @@ final class DefaultLiveD1ConformanceExecutor
       await disposeSchema(second);
       await disposeSchema(first);
     }
+  }
+}
+
+final class _LiveD1AnonymousFaultController
+    implements AuthAnonymousStoreConformanceFaultController {
+  const _LiveD1AnonymousFaultController();
+
+  @override
+  void failNext(AuthAnonymousStoreConformanceFaultPoint point) {
+    throw StateError('Live D1 rollback fault injection is not configured.');
   }
 }
 
