@@ -152,6 +152,29 @@ Future<void> verifyAuthPluginRuntimeConformance({
   await _verifyTwoFactorGating(send, sendWithoutTwoFactor);
 }
 
+/// Verifies only the browser-shaped WebAuthn/passkey plugin flow.
+///
+/// The [send] target must be an engine created by
+/// [createAuthPluginRuntimeConformanceEngine]. The helper first establishes a
+/// deterministic username-backed user and then runs registration,
+/// authentication, challenge-replay, counter-replay, and error-sanitization
+/// checks using browser-shaped ASN.1 DER ES256 assertions.
+Future<void> verifyAuthWebAuthnPluginRuntimeConformance({
+  required Uri origin,
+  required AuthRuntimeConformanceSend send,
+}) async {
+  final session = await _verifyUsername(send, origin.toString());
+  final csrf = await _issueCsrf(send, cookie: session);
+  await verifyAuthWebAuthnBrowserRuntimeConformance(
+    transportOrigin: origin,
+    send: send,
+    sessionCookie: csrf.cookie,
+    sessionCookieName: authPluginRuntimeConformanceCookieName,
+    csrfToken: csrf.token,
+    expectedUserEmail: authPluginRuntimeConformanceUsernameEmail,
+  );
+}
+
 Future<void> _verifyEmailOtp(
   AuthRuntimeConformanceSend send,
   String origin,

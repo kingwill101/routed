@@ -39,6 +39,9 @@
   for anonymous-account deletion, and preserve keyed email-OTP limiter IDs.
 - Publish `package:routed_auth/testing.dart` with a framework-neutral auth
   runtime conformance contract shared by IO, Node, and Fetch host tests.
+- Export the browser-shaped WebAuthn conformance contract and add a focused
+  plugin helper for independently exercising passkey registration,
+  authentication, replay defenses, and sanitized failures.
 - Use plugin terminology consistently across Routed auth endpoint mounting and
   management internals, and update public examples to compose typed client
   plugins through `AuthClient`.
