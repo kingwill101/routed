@@ -16,6 +16,7 @@ export 'breached_password.dart';
 export 'bearer.dart';
 export 'callbacks.dart';
 export 'captcha.dart';
+export 'captcha_client.dart';
 export 'callback_provider_normalization.dart';
 export 'client.dart' hide AuthClientCore;
 export 'client_plugins.dart';

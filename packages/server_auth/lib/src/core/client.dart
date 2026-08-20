@@ -1511,6 +1511,7 @@ class AuthClientCore {
     String? username,
     required String password,
     Map<String, dynamic>? attributes,
+    String? captchaToken,
   }) async {
     final response = await _mutatingRequest(
       'POST',
@@ -1520,6 +1521,7 @@ class AuthClientCore {
         'email': ?email,
         'username': ?username,
         'password': password,
+        'captchaToken': ?captchaToken,
       },
     );
     final body = _mapBody(response.body);
@@ -1543,6 +1545,7 @@ class AuthClientCore {
     String? username,
     required String password,
     Map<String, dynamic>? attributes,
+    String? captchaToken,
   }) async {
     final response = await _mutatingRequest(
       'POST',
@@ -1552,6 +1555,7 @@ class AuthClientCore {
         'email': ?email,
         'username': ?username,
         'password': password,
+        'captchaToken': ?captchaToken,
       },
     );
     return _sessionFromBody(response.body);
