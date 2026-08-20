@@ -165,11 +165,12 @@ The work is intentionally split between framework-agnostic capabilities in
 
 - [ ] Complete typed persistence adapters for the supported Routed storage
   paths. `routed_auth_cloudflare` now supplies a typed, migrated D1 `AuthStore`
-  and passes local conformance/contention tests; a deployed live-D1 run, broader
-  SQL adapters, and a D1-compatible plugin-deletion transaction remain open.
-  The deletion redesign will replace callback-based mutation with immutable,
-  backend-bound plugin deletion plans executed with core deletion by one
-  transaction coordinator; foreign persistence domains must fail closed.
+  and a backend-owned deletion coordinator that pass local conformance,
+  rollback, contention, and fault tests. A deployed live-D1 run, broader SQL
+  adapters, and D1 plans for plugins beyond device authorization and email OTP
+  remain open. Removed external plugins are not discoverable automatically:
+  durable adapters must retain a historical namespace inventory or reject
+  deletion until that namespace has backend-owned cleanup.
 - [x] Define a stable public adapter conformance suite that can run against
   every persistence implementation through `package:server_auth/testing.dart`.
 - [x] Add a small, typed Dart client contract for browser/mobile auth calls
@@ -233,15 +234,20 @@ account, session, client, and plugin contracts above:
   codec contracts instead of comparing only server-declared descriptors.
 - [x] Constrain Routed auth deployment binding to `EngineContext` and reject an
   incompatible context at startup instead of silently omitting auth routes.
-- [ ] Replace callback-based hard deletion with backend-bound deletion plans
-  executed with core deletion by one storage transaction. Include anonymous,
-  email-OTP, API-key, WebAuthn, two-factor, and organization-owned state, and
-  fail closed when contributors use another persistence domain.
+- [x] Replace callback-based hard deletion with immutable backend-bound plans
+  executed with core deletion by one storage coordinator. The in-memory
+  topology covers Admin, anonymous, email OTP, API keys, WebAuthn, two-factor,
+  organizations, device authorization, phone number, and OAuth provider mode;
+  incomplete, duplicate, unsupported, and foreign-domain plans fail before
+  mutation, with reusable rollback, contention, and fault tests. D1 currently
+  supplies native device-authorization and email-OTP plans, always cleans those
+  backend-owned tables, and fails closed for active plugins without a D1 plan.
 - [x] Make organization last-owner checks transactional across removal,
   demotion, role replacement, leave, and user-deletion paths, with reusable
   durable-store conformance and contention coverage.
-- [ ] Retain a non-personal revocation receipt so explicit user-ID reuse cannot
-  reactivate credentials or JWTs after hard deletion.
+- [x] Retain a one-way user-ID digest receipt so explicit user-ID reuse cannot
+  reactivate credentials or JWTs after hard deletion. In-memory and D1 receipt
+  writes participate in the same rollback boundary as core deletion.
 
 ## Required test coverage
 

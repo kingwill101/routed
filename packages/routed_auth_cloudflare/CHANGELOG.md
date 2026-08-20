@@ -13,5 +13,8 @@
   ownership checks, exact cleanup, external-database no-delete mode, secret
   redaction, bounded safe retries, and local control-plane tests. No live run is
   claimed until the CLI is invoked against Cloudflare.
-- Fail closed for callback-spanning account deletion until D1 can provide the
-  required cross-plugin transaction boundary.
+- Add a D1-owned hard-deletion coordinator that validates immutable plugin
+  plans before mutation and executes guarded plugin, core, token-consumption,
+  deletion-receipt, and user deletion statements in one atomic batch. Core D1
+  cleanup removes device authorization and email-OTP state even after those
+  plugins are removed; unsupported active plugin adapters fail closed.

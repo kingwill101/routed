@@ -1,5 +1,11 @@
 ## 0.2.0 - 2026-08-20
 
+- Replace callback-based hard deletion with immutable, backend-bound plugin
+  plans executed alongside core deletion by one storage coordinator. Freeze
+  the deletion topology, reject incomplete or foreign-domain plans before
+  mutation, clean backend-owned optional substores even after their plugin is
+  removed, retain a user-ID digest receipt against credential reactivation,
+  and add reusable rollback, contention, and fault conformance.
 - Reject ASCII control characters in callback redirects before URI parsing so
   header-injection payloads cannot reach host response adapters.
 - Add deterministic browser-shaped WebAuthn test ceremonies with real ES256
@@ -33,9 +39,8 @@
 - Add strict Android Key, Apple Anonymous, and TPM 2.0 WebAuthn attestation
   verification with browser-shaped fixtures, certificate-chain validation,
   public-key binding, and fail-closed malformed-input handling.
-- Include pending two-factor recovery challenges in plugin-owned hard deletion
-  and rollback checkpoints so account removal cannot leave reusable recovery
-  state behind.
+- Include pending two-factor recovery challenges in plugin-owned deletion
+  plans so account removal cannot leave reusable recovery state behind.
 - Require browser-origin validation for anonymous and email-OTP sign-in, and
   begin captcha replay retention only after provider verification succeeds.
 - Make public WebAuthn authentication options enrollment-indistinguishable and
