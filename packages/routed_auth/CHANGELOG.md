@@ -3,6 +3,9 @@
 - Route device-token polling through the bounded issuance-lease protocol so
   issuer failures can retry with the same stable authorization ID while
   concurrent, stale, disabled-account, and consumed grants fail generically.
+- Mount the opt-in SCIM Groups collection and resource operations across
+  GET, POST, PUT, PATCH, and DELETE while preserving Group scopes, SCIM media
+  types/status codes, and host-owned session isolation.
 - Derive Routed auth runtime durability from typed `AuthOptions` posture,
   removing the independently configurable provider durability flag, and
   require production options to boot through one typed deployment so proxy,

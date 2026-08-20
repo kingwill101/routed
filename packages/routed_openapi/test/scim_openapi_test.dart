@@ -30,16 +30,26 @@ void main() {
         '/auth/scim/v2/Schemas',
         '/auth/scim/v2/Users',
         '/auth/scim/v2/Users/{id}',
+        '/auth/scim/v2/Groups',
+        '/auth/scim/v2/Groups/{id}',
       ]),
     );
     final users = spec.paths['/auth/scim/v2/Users']!;
     final byId = spec.paths['/auth/scim/v2/Users/{id}']!;
+    final groups = spec.paths['/auth/scim/v2/Groups']!;
+    final groupById = spec.paths['/auth/scim/v2/Groups/{id}']!;
     expect(users.get, isNotNull);
     expect(users.post, isNotNull);
     expect(byId.get, isNotNull);
     expect(byId.put, isNotNull);
     expect(byId.patch, isNotNull);
     expect(byId.delete, isNotNull);
+    expect(groups.get, isNotNull);
+    expect(groups.post, isNotNull);
+    expect(groupById.get, isNotNull);
+    expect(groupById.put, isNotNull);
+    expect(groupById.patch, isNotNull);
+    expect(groupById.delete, isNotNull);
 
     for (final operation in <OpenApiOperation>[
       users.get!,
@@ -48,6 +58,12 @@ void main() {
       byId.put!,
       byId.patch!,
       byId.delete!,
+      groups.get!,
+      groups.post!,
+      groupById.get!,
+      groupById.put!,
+      groupById.patch!,
+      groupById.delete!,
     ]) {
       expect(operation.security, <Map<String, List<String>>>[
         <String, List<String>>{
@@ -68,6 +84,11 @@ void main() {
     expect(byId.patch!.requestBody!.content, contains(authScimMediaType));
     expect(byId.delete!.requestBody, isNull);
     expect(byId.delete!.responses['204']!.content, isNull);
+    expect(groups.post!.responses, contains('201'));
+    expect(groups.post!.requestBody!.content, contains(authScimMediaType));
+    expect(groupById.put!.requestBody!.content, contains(authScimMediaType));
+    expect(groupById.patch!.requestBody!.content, contains(authScimMediaType));
+    expect(groupById.delete!.responses['204']!.content, isNull);
     expect(
       byId.get!.parameters.singleWhere((value) => value.name == 'id').location,
       'path',
@@ -90,6 +111,16 @@ void main() {
     );
     expect(
       ((properties['emails']! as Map<String, Object?>)['items']!
+          as Map<String, Object?>)['additionalProperties'],
+      isFalse,
+    );
+    final groupCreateSchema =
+        spec.components!.schemas['AuthScimGroupsCreateRequest']!;
+    expect(groupCreateSchema['additionalProperties'], isFalse);
+    final groupProperties =
+        groupCreateSchema['properties']! as Map<String, Object?>;
+    expect(
+      ((groupProperties['members']! as Map<String, Object?>)['items']!
           as Map<String, Object?>)['additionalProperties'],
       isFalse,
     );
@@ -143,6 +174,50 @@ final class _NoopScimStore implements AuthScimProvisioningStore {
 
   @override
   AuthScimUser? tombstoneUser(
+    AuthScimProvisioningContext context,
+    String resourceId,
+  ) => null;
+
+  @override
+  AuthScimGroupPage listGroups(
+    AuthScimProvisioningContext context,
+    AuthScimListGroupsQuery query,
+  ) => AuthScimGroupPage(resources: const <AuthScimGroup>[], totalResults: 0);
+
+  @override
+  AuthScimGroup? findGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+  ) => null;
+
+  @override
+  AuthScimGroup createGroup(
+    AuthScimProvisioningContext context,
+    AuthScimGroupData group,
+  ) => throw const AuthScimConflictException();
+
+  @override
+  AuthScimGroup? replaceGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+    AuthScimGroupData group,
+  ) => null;
+
+  @override
+  AuthScimGroup? patchGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+    AuthScimGroupPatchDocument patch,
+  ) => null;
+
+  @override
+  AuthScimGroup? mutateGroupMembership(
+    AuthScimProvisioningContext context,
+    AuthScimGroupMembershipMutation mutation,
+  ) => null;
+
+  @override
+  AuthScimGroup? tombstoneGroup(
     AuthScimProvisioningContext context,
     String resourceId,
   ) => null;

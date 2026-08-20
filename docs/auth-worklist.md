@@ -230,8 +230,11 @@ account, session, client, and plugin contracts above:
   provisioning-domain isolation, strict User CRUD/patch/filter/page contracts,
   explicit inactive/tombstoned lifecycle, generic errors, and OpenAPI metadata.
   Keep directory truth separate from auth users and keep SCIM server-only.
-- [ ] Add SCIM Groups and direct membership resources with bounded filters and
-  an application-owned role projection capability.
+- [x] Add connection-owned SCIM Groups and direct User/Group membership
+  resources with bounded equality filters/pages/members, exact Group scopes,
+  atomic store mutation boundaries, tombstones, generic errors, Routed/OpenAPI
+  transport, and a stable-resource-ID-only application role/membership
+  projection capability. Keep the real projection transaction application-owned.
 - [ ] Add explicit application identity projection/reconciliation around stable
   directory subjects; never infer links from email or grant sign-in access from
   provisioning alone.

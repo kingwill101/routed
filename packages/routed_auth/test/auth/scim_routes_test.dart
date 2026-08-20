@@ -92,6 +92,52 @@ void main() {
     );
     deleted.assertStatus(404);
 
+    final groups = await client.get(
+      '/auth/scim/v2/Groups?count=1',
+      headers: headers,
+    );
+    groups.assertStatus(200);
+    expect(groups.json()['totalResults'], 0);
+
+    final groupCreated = await client.postJson(
+      '/auth/scim/v2/Groups',
+      const <String, Object?>{},
+      headers: headers,
+    );
+    groupCreated.assertStatus(400);
+
+    final groupReplaced = await client.putJson(
+      '/auth/scim/v2/Groups/missing',
+      const <String, Object?>{
+        'schemas': <String>[authScimGroupSchema],
+        'displayName': 'Missing',
+      },
+      headers: headers,
+    );
+    groupReplaced.assertStatus(404);
+
+    final groupPatched = await client.patchJson(
+      '/auth/scim/v2/Groups/missing',
+      const <String, Object?>{
+        'schemas': <String>[authScimPatchOperationSchema],
+        'Operations': <Object?>[
+          <String, Object?>{
+            'op': 'replace',
+            'path': 'displayName',
+            'value': 'Missing',
+          },
+        ],
+      },
+      headers: headers,
+    );
+    groupPatched.assertStatus(404);
+
+    final groupDeleted = await client.delete(
+      '/auth/scim/v2/Groups/missing',
+      headers: headers,
+    );
+    groupDeleted.assertStatus(404);
+
     for (final response in <TestResponse>[
       discovery,
       listed,
@@ -100,6 +146,11 @@ void main() {
       replaced,
       patched,
       deleted,
+      groups,
+      groupCreated,
+      groupReplaced,
+      groupPatched,
+      groupDeleted,
     ]) {
       expect(response.headerValue('content-type'), contains(authScimMediaType));
     }
@@ -218,7 +269,10 @@ final class _RouteTokenResolver
           organizationId: 'organization-route',
           provisioningDomainId: 'domain-route',
           subjectId: 'route-test',
-          scopes: const <AuthScimScope>[AuthScimScope.usersWrite],
+          scopes: const <AuthScimScope>[
+            AuthScimScope.usersWrite,
+            AuthScimScope.groupsWrite,
+          ],
           expiresAt: DateTime.utc(2030),
         )
       : null;
@@ -315,4 +369,48 @@ final class _EmptyScimStore implements AuthScimProvisioningStore {
     }
     return current;
   }
+
+  @override
+  AuthScimGroupPage listGroups(
+    AuthScimProvisioningContext context,
+    AuthScimListGroupsQuery query,
+  ) => AuthScimGroupPage(resources: const <AuthScimGroup>[], totalResults: 0);
+
+  @override
+  AuthScimGroup? findGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+  ) => null;
+
+  @override
+  AuthScimGroup createGroup(
+    AuthScimProvisioningContext context,
+    AuthScimGroupData group,
+  ) => throw const AuthScimConflictException();
+
+  @override
+  AuthScimGroup? replaceGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+    AuthScimGroupData group,
+  ) => null;
+
+  @override
+  AuthScimGroup? patchGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+    AuthScimGroupPatchDocument patch,
+  ) => null;
+
+  @override
+  AuthScimGroup? mutateGroupMembership(
+    AuthScimProvisioningContext context,
+    AuthScimGroupMembershipMutation mutation,
+  ) => null;
+
+  @override
+  AuthScimGroup? tombstoneGroup(
+    AuthScimProvisioningContext context,
+    String resourceId,
+  ) => null;
 }
