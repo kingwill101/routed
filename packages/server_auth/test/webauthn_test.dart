@@ -217,46 +217,49 @@ void main() {
   });
 
   group('WebAuthn ceremonies', () {
-    test('registers an ES256 passkey and authenticates it', () async {
-      final fixture = _Fixture();
-      await fixture.store.users.create(fixture.user);
-      final registration = await fixture.feature.beginRegistration(
-        context: fixture.context,
-        user: fixture.user,
-      );
-      final registrationResponse = _registrationCredential(
-        challenge: registration.challenge,
-        keyPair: fixture.keyPair,
-      );
+    test(
+      'registers an ES256 passkey and authenticates a browser DER signature',
+      () async {
+        final fixture = _Fixture();
+        await fixture.store.users.create(fixture.user);
+        final registration = await fixture.feature.beginRegistration(
+          context: fixture.context,
+          user: fixture.user,
+        );
+        final registrationResponse = _registrationCredential(
+          challenge: registration.challenge,
+          keyPair: fixture.keyPair,
+        );
 
-      final saved = await fixture.feature.finishRegistration(
-        context: fixture.context,
-        user: fixture.user,
-        credential: registrationResponse,
-      );
-      expect(saved.userId, fixture.user.id);
-      expect(saved.counter, 0);
-      expect(saved.credentialId, isNotEmpty);
+        final saved = await fixture.feature.finishRegistration(
+          context: fixture.context,
+          user: fixture.user,
+          credential: registrationResponse,
+        );
+        expect(saved.userId, fixture.user.id);
+        expect(saved.counter, 0);
+        expect(saved.credentialId, isNotEmpty);
 
-      final authentication = await fixture.feature.beginAuthentication(
-        context: fixture.context,
-        userId: fixture.user.id,
-      );
-      expect(authentication.allowCredentials, contains(saved.credentialId));
-      final assertion = _assertionCredential(
-        challenge: authentication.challenge,
-        credentialId: saved.credentialId,
-        keyPair: fixture.keyPair,
-        counter: 1,
-      );
-      final result = await fixture.feature.finishAuthentication(
-        context: fixture.context,
-        credential: assertion,
-        userId: fixture.user.id,
-      );
-      expect(result.user.id, fixture.user.id);
-      expect(result.authenticator.counter, 1);
-    });
+        final authentication = await fixture.feature.beginAuthentication(
+          context: fixture.context,
+          userId: fixture.user.id,
+        );
+        expect(authentication.allowCredentials, contains(saved.credentialId));
+        final assertion = _assertionCredential(
+          challenge: authentication.challenge,
+          credentialId: saved.credentialId,
+          keyPair: fixture.keyPair,
+          counter: 1,
+        );
+        final result = await fixture.feature.finishAuthentication(
+          context: fixture.context,
+          credential: assertion,
+          userId: fixture.user.id,
+        );
+        expect(result.user.id, fixture.user.id);
+        expect(result.authenticator.counter, 1);
+      },
+    );
 
     test('authenticates an RS256 passkey', () async {
       final fixture = _Fixture();
@@ -723,10 +726,18 @@ Uint8List _signEs256(_KeyPair keyPair, List<int> message) {
     );
   final signature = signer.generateSignature(Uint8List.fromList(message));
   if (signature is! ECSignature) throw StateError('Expected ECDSA signature');
-  return Uint8List.fromList(<int>[
-    ..._bigIntBytes(signature.r, 32),
-    ..._bigIntBytes(signature.s, 32),
-  ]);
+  final r = _derInteger(signature.r);
+  final s = _derInteger(signature.s);
+  return Uint8List.fromList(<int>[0x30, r.length + s.length, ...r, ...s]);
+}
+
+List<int> _derInteger(BigInt value) {
+  var bytes = _bigIntBytes(value, 32);
+  while (bytes.length > 1 && bytes.first == 0) {
+    bytes = bytes.sublist(1);
+  }
+  if (bytes.first & 0x80 != 0) bytes = <int>[0, ...bytes];
+  return <int>[0x02, bytes.length, ...bytes];
 }
 
 Map<String, dynamic> _rsaAssertionCredential({

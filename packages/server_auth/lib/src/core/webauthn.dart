@@ -955,7 +955,7 @@ final class WebAuthnPlugin<TContext>
       final key = _decodeCosePublicKey(coseKey);
       switch (key.algorithm) {
         case -7:
-          if (signature.length != 64 || key.x == null || key.y == null) {
+          if (key.x == null || key.y == null) {
             return false;
           }
           final parameters = ECDomainParameters('secp256r1');
@@ -964,10 +964,8 @@ final class WebAuthnPlugin<TContext>
             _bytesToBigInt(key.y!),
           );
           if (point.isInfinity) return false;
-          final parsedSignature = ECSignature(
-            _bytesToBigInt(signature.sublist(0, 32)),
-            _bytesToBigInt(signature.sublist(32)),
-          );
+          final parsedSignature = _decodeEs256Signature(signature, parameters);
+          if (parsedSignature == null) return false;
           final verifier = ECDSASigner(SHA256Digest())
             ..init(
               false,
@@ -997,6 +995,56 @@ final class WebAuthnPlugin<TContext>
     } catch (_) {
       return false;
     }
+  }
+
+  ECSignature? _decodeEs256Signature(
+    Uint8List bytes,
+    ECDomainParameters parameters,
+  ) {
+    BigInt? r;
+    BigInt? s;
+    if (bytes.length == 64) {
+      r = _bytesToBigInt(bytes.sublist(0, 32));
+      s = _bytesToBigInt(bytes.sublist(32));
+    } else {
+      // WebAuthn authenticators encode ECDSA signatures as an ASN.1 DER
+      // sequence of two positive INTEGER values. P-256 values fit in at most
+      // 33 encoded bytes each, including an optional sign-padding byte.
+      if (bytes.length < 8 ||
+          bytes.length > 72 ||
+          bytes[0] != 0x30 ||
+          bytes[1] != bytes.length - 2) {
+        return null;
+      }
+      var offset = 2;
+      BigInt? readInteger() {
+        if (offset + 2 > bytes.length || bytes[offset] != 0x02) return null;
+        final length = bytes[offset + 1];
+        offset += 2;
+        if (length < 1 || length > 33 || offset + length > bytes.length) {
+          return null;
+        }
+        final first = bytes[offset];
+        if (first & 0x80 != 0 ||
+            (length > 1 && first == 0 && bytes[offset + 1] & 0x80 == 0)) {
+          return null;
+        }
+        final value = _bytesToBigInt(bytes.sublist(offset, offset + length));
+        offset += length;
+        return value;
+      }
+
+      r = readInteger();
+      s = readInteger();
+      if (r == null || s == null || offset != bytes.length) return null;
+    }
+    if (r <= BigInt.zero ||
+        s <= BigInt.zero ||
+        r >= parameters.n ||
+        s >= parameters.n) {
+      return null;
+    }
+    return ECSignature(r, s);
   }
 
   _CosePublicKey _decodeCosePublicKey(Uint8List bytes) {
