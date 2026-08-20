@@ -10,9 +10,11 @@ void main() {
     'admin client shares transport, CSRF state, bearer auth, and warnings',
     () async {
       final requests = <http.Request>[];
-      final transport = AuthClientTransport(
+      final plugin = const AuthAdminClientPlugin();
+      final auth = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
         bearerToken: 'jwt-1',
+        plugins: [plugin],
         httpClient: MockClient((request) async {
           requests.add(request);
           switch (request.url.path) {
@@ -54,7 +56,7 @@ void main() {
           }
         }),
       );
-      final client = AuthAdminClient(transport: transport);
+      final client = auth.plugins.use(plugin);
 
       final created = await client.createUser(
         email: 'user@example.com',

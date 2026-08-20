@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:server_auth/server_auth.dart';
-import 'package:server_auth/src/core/client.dart' show AuthClientCore;
 import 'package:test/test.dart';
 
 void main() {
@@ -11,9 +10,11 @@ void main() {
     'organization client shares transport and sends explicit active IDs',
     () async {
       final requests = <http.Request>[];
-      final transport = AuthClientTransport(
+      final plugin = const AuthOrganizationClientPlugin();
+      final auth = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
         bearerToken: 'jwt-1',
+        plugins: [plugin],
         httpClient: MockClient((request) async {
           requests.add(request);
           switch (request.url.path) {
@@ -51,11 +52,7 @@ void main() {
           }
         }),
       );
-      final core = AuthClientCore(
-        baseUrl: Uri.parse('https://ignored.test'),
-        transport: transport,
-      );
-      final organizations = AuthOrganizationClient(transport: core.transport);
+      final organizations = auth.plugins.use(plugin);
 
       final created = await organizations.create(name: 'Acme', slug: 'acme');
       expect(created.data.id, 'org-1');
@@ -118,8 +115,10 @@ void main() {
   test(
     'leaving and removing a team clear matching active selections',
     () async {
-      final transport = AuthClientTransport(
+      final plugin = const AuthOrganizationClientPlugin();
+      final auth = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
+        plugins: [plugin],
         httpClient: MockClient((request) async {
           switch (request.url.path) {
             case '/auth/csrf':
@@ -141,7 +140,7 @@ void main() {
           }
         }),
       );
-      final organizations = AuthOrganizationClient(transport: transport)
+      final organizations = auth.plugins.use(plugin)
         ..activeOrganizationId = 'org-1'
         ..activeTeamId = 'team-1';
 
