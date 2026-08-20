@@ -108,7 +108,7 @@ final rotateEndpoint = TypedAuthEndpointDescriptor<
 >(
   id: 'keys.rotate',
   method: AuthOperationMethod.post,
-  path: '/keys/rotate',
+  path: const AuthRoutePath('/keys/rotate'),
   semantics: const AuthOperationSemantics.mutation(
     persistence: AuthMutationPersistence.durable(
       atomicity: AuthMutationAtomicity.atomic,
@@ -123,6 +123,20 @@ final rotateEndpoint = TypedAuthEndpointDescriptor<
   responseCodec: responseCodec,
   handler: rotateKey,
 );
+```
+
+Dynamic segments are declared once and stay separate from query and body
+input. Framework adapters bind them and clients encode each value as one path
+segment:
+
+```dart
+const keyId = AuthRouteParameterKey('keyId');
+const keyRoute = AuthRoutePath(
+  '/keys/{keyId}',
+  parameters: [keyId],
+);
+
+final id = invocation.request.requirePath(keyId);
 ```
 
 Conformance resolves both reference IDs against the frozen plugin topology. A
