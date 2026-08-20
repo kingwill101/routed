@@ -20,6 +20,7 @@ workspace:
   - packages/routed_node/example/api
   - packages/server_native
   - packages/routed_auth
+  - packages/routed_auth_cloudflare
   - packages/routed_hotwire
   - packages/routed_views
   - packages/routed_openapi
