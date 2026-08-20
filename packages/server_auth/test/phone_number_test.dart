@@ -43,6 +43,13 @@ void main() {
       attempts: attempts,
     );
 
+    test('rejects non-positive storage bounds at runtime', () {
+      expect(
+        () => InMemoryAuthPhoneNumberStore(maxVerifications: 0),
+        throwsArgumentError,
+      );
+    });
+
     test('atomically consumes a challenge once', () async {
       final store = InMemoryAuthPhoneNumberStore();
       await store.saveVerification(verification());
@@ -166,6 +173,23 @@ void main() {
   });
 
   group('PhoneNumberPlugin', () {
+    test('verification responses never serialize session tokens', () {
+      final response = AuthPhoneNumberVerifyResponse(
+        phoneNumber: '+18765551234',
+        user: AuthUser(id: 'user-1'),
+        session: AuthSession(
+          user: AuthUser(id: 'user-1'),
+          expiresAt: DateTime.utc(2030),
+          strategy: AuthSessionStrategy.jwt,
+          token: 'secret-jwt',
+        ),
+      ).toJson();
+
+      expect(response['user'], isNotNull);
+      expect(response, isNot(contains('token')));
+      expect(response.toString(), isNot(contains('secret-jwt')));
+    });
+
     test('requires a production-strength code digest key', () {
       expect(
         () => PhoneNumberPlugin<Object>(

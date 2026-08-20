@@ -175,7 +175,7 @@ final class AuthPhoneNumberVerifyResponse {
       'status': 'authenticated',
       'phoneNumber': phoneNumber,
       if (safeSession != null)
-        ...safeSession.toJson(includeToken: true)
+        ...safeSession.toJson()
       else
         'user': user.redacted().toJson(),
     };
@@ -461,6 +461,9 @@ final class PhoneNumberPlugin<TContext>
     if (user == null) {
       if (!allowSignUp) throw AuthFlowException('user_not_found');
       final requestedName = name?.trim();
+      if (requestedName != null && requestedName.length > 256) {
+        throw AuthFlowException('invalid_request');
+      }
       final candidate = await Future.sync(
         () =>
             createUser?.call(

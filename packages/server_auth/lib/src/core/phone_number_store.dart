@@ -126,8 +126,15 @@ abstract interface class AuthPhoneNumberStore {
 /// Bounded process-local phone store for tests and local development.
 final class InMemoryAuthPhoneNumberStore
     implements AuthPhoneNumberStore, AuthInMemoryTransactionParticipant {
-  InMemoryAuthPhoneNumberStore({this.maxVerifications = 2048})
-    : assert(maxVerifications > 0);
+  InMemoryAuthPhoneNumberStore({this.maxVerifications = 2048}) {
+    if (maxVerifications <= 0) {
+      throw ArgumentError.value(
+        maxVerifications,
+        'maxVerifications',
+        'must be greater than zero',
+      );
+    }
+  }
 
   final int maxVerifications;
   final Map<String, AuthPhoneNumberVerification> _verifications =
