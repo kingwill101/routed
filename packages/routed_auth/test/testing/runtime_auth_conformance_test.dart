@@ -39,6 +39,7 @@ void main() {
     });
 
     test('plugin support reports a stable flow identifier', () {
+      final phoneDeliveries = AuthPluginRuntimePhoneDeliveryRecorder();
       Future<AuthRuntimeConformanceResponse> unavailable(
         AuthRuntimeConformanceRequest _,
       ) async => const AuthRuntimeConformanceResponse(
@@ -52,10 +53,15 @@ void main() {
           origin: Uri.parse('https://runtime.example'),
           send: unavailable,
           sendWithoutTwoFactor: unavailable,
+          phoneDeliveryRecorder: phoneDeliveries,
         ),
         throwsA(
           isA<AuthRuntimeConformanceFailure>()
-              .having((failure) => failure.caseId, 'caseId', 'email-otp.send')
+              .having(
+                (failure) => failure.caseId,
+                'caseId',
+                'magic-link.server-plugin',
+              )
               .having((failure) => failure.message, 'message', contains('503')),
         ),
       );

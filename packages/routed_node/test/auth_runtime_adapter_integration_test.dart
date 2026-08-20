@@ -138,7 +138,10 @@ void main() {
   });
 
   test('Node portable adapter satisfies the auth plugin contract', () async {
-    final engine = createAuthPluginRuntimeConformanceEngine();
+    final phoneDeliveries = AuthPluginRuntimePhoneDeliveryRecorder();
+    final engine = createAuthPluginRuntimeConformanceEngine(
+      phoneDeliveryRecorder: phoneDeliveries,
+    );
     final engineWithoutTwoFactor = createAuthPluginRuntimeConformanceEngine(
       includeTwoFactor: false,
     );
@@ -154,13 +157,17 @@ void main() {
       send: (source) => _dispatchNode(engine, source),
       sendWithoutTwoFactor: (source) =>
           _dispatchNode(engineWithoutTwoFactor, source),
+      phoneDeliveryRecorder: phoneDeliveries,
     );
   });
 
   test(
     'mocked Cloudflare Fetch edge satisfies the auth plugin contract',
     () async {
-      final engine = createAuthPluginRuntimeConformanceEngine();
+      final phoneDeliveries = AuthPluginRuntimePhoneDeliveryRecorder();
+      final engine = createAuthPluginRuntimeConformanceEngine(
+        phoneDeliveryRecorder: phoneDeliveries,
+      );
       final engineWithoutTwoFactor = createAuthPluginRuntimeConformanceEngine(
         includeTwoFactor: false,
       );
@@ -176,6 +183,7 @@ void main() {
         send: (source) => _dispatchFetch(engine, source),
         sendWithoutTwoFactor: (source) =>
             _dispatchFetch(engineWithoutTwoFactor, source),
+        phoneDeliveryRecorder: phoneDeliveries,
       );
     },
   );

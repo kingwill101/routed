@@ -34,7 +34,10 @@ void runNativeAuthRuntimeTests() {
   });
 
   test('native Node listener satisfies the auth plugin contract', () async {
-    final engine = createAuthPluginRuntimeConformanceEngine();
+    final phoneDeliveries = AuthPluginRuntimePhoneDeliveryRecorder();
+    final engine = createAuthPluginRuntimeConformanceEngine(
+      phoneDeliveryRecorder: phoneDeliveries,
+    );
     final engineWithoutTwoFactor = createAuthPluginRuntimeConformanceEngine(
       includeTwoFactor: false,
     );
@@ -62,6 +65,7 @@ void runNativeAuthRuntimeTests() {
         send: (request) => _sendWithFetch(origin, request),
         sendWithoutTwoFactor: (request) =>
             _sendWithFetch(originWithoutTwoFactor, request),
+        phoneDeliveryRecorder: phoneDeliveries,
       );
     } finally {
       await handle.close(force: true);
@@ -91,7 +95,10 @@ void runNativeAuthRuntimeTests() {
   test(
     'native Cloudflare Fetch export satisfies the auth plugin contract',
     () async {
-      final engine = createAuthPluginRuntimeConformanceEngine();
+      final phoneDeliveries = AuthPluginRuntimePhoneDeliveryRecorder();
+      final engine = createAuthPluginRuntimeConformanceEngine(
+        phoneDeliveryRecorder: phoneDeliveries,
+      );
       final engineWithoutTwoFactor = createAuthPluginRuntimeConformanceEngine(
         includeTwoFactor: false,
       );
@@ -108,6 +115,7 @@ void runNativeAuthRuntimeTests() {
             defineCloudflareFetch(engineWithoutTwoFactor);
             return _sendToCloudflareExport(request);
           },
+          phoneDeliveryRecorder: phoneDeliveries,
         );
       } finally {
         await engine.close();

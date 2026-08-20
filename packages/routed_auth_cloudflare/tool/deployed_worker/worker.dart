@@ -176,7 +176,10 @@ Future<void> _runSession(Uri origin) async {
 }
 
 Future<void> _runPlugins(Uri origin) async {
-  final engine = createAuthPluginRuntimeConformanceEngine();
+  final phoneDeliveries = AuthPluginRuntimePhoneDeliveryRecorder();
+  final engine = createAuthPluginRuntimeConformanceEngine(
+    phoneDeliveryRecorder: phoneDeliveries,
+  );
   final engineWithoutTwoFactor = createAuthPluginRuntimeConformanceEngine(
     includeTwoFactor: false,
   );
@@ -188,6 +191,7 @@ Future<void> _runPlugins(Uri origin) async {
       send: (request) => _dispatch(engine, origin, request),
       sendWithoutTwoFactor: (request) =>
           _dispatch(engineWithoutTwoFactor, origin, request),
+      phoneDeliveryRecorder: phoneDeliveries,
     );
   } finally {
     await engine.close();

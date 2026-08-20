@@ -30,7 +30,10 @@ void main() {
   });
 
   test('dart:io listener satisfies the auth plugin runtime contract', () async {
-    final engine = createAuthPluginRuntimeConformanceEngine();
+    final phoneDeliveries = AuthPluginRuntimePhoneDeliveryRecorder();
+    final engine = createAuthPluginRuntimeConformanceEngine(
+      phoneDeliveryRecorder: phoneDeliveries,
+    );
     final engineWithoutTwoFactor = createAuthPluginRuntimeConformanceEngine(
       includeTwoFactor: false,
     );
@@ -66,6 +69,7 @@ void main() {
       send: (request) => _send(client, origin, request),
       sendWithoutTwoFactor: (request) =>
           _send(client, originWithoutTwoFactor, request),
+      phoneDeliveryRecorder: phoneDeliveries,
     );
   });
 

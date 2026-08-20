@@ -30,6 +30,60 @@ const authPluginRuntimeConformanceMagicLinkEmail =
 const _authPluginRuntimeConformanceMagicLinkToken =
     'runtime-magic-link-token-7f8c2b';
 
+/// Canonical number used by the phone-number client/runtime conformance flow.
+const authPluginRuntimeConformancePhoneNumber = '+18765550101';
+
+/// One-time raw code exposed only to the phone delivery fixture.
+const _authPluginRuntimeConformancePhoneCode = '739251';
+
+const _authPluginRuntimePhoneDeliveryFailureNumber = '+18765550102';
+const _authPluginRuntimePhoneDeliveryFailureMarker =
+    '/srv/secrets/runtime-sms-provider.key';
+
+/// A copy of one provider-owned phone-code delivery.
+final class AuthPluginRuntimePhoneDelivery {
+  const AuthPluginRuntimePhoneDelivery({
+    required this.phoneNumber,
+    required this.code,
+    required this.expiresAt,
+  });
+
+  final String phoneNumber;
+  final String code;
+  final DateTime expiresAt;
+}
+
+/// Records the provider boundary used by the cross-host phone flow.
+///
+/// A recorder belongs to one engine fixture. This keeps raw test codes scoped
+/// to the host test that owns them and avoids shared mutable state when several
+/// runtime matrices execute concurrently.
+final class AuthPluginRuntimePhoneDeliveryRecorder {
+  final List<AuthPluginRuntimePhoneDelivery> _deliveries =
+      <AuthPluginRuntimePhoneDelivery>[];
+
+  List<AuthPluginRuntimePhoneDelivery> get deliveries =>
+      List<AuthPluginRuntimePhoneDelivery>.unmodifiable(_deliveries);
+
+  Iterable<AuthPluginRuntimePhoneDelivery> forPhone(String phoneNumber) =>
+      _deliveries.where((delivery) => delivery.phoneNumber == phoneNumber);
+
+  void _record(AuthPhoneNumberCodeDelivery<EngineContext> delivery) {
+    _deliveries.add(
+      AuthPluginRuntimePhoneDelivery(
+        phoneNumber: delivery.phoneNumber,
+        code: delivery.code,
+        expiresAt: delivery.expiresAt,
+      ),
+    );
+    if (delivery.phoneNumber == _authPluginRuntimePhoneDeliveryFailureNumber) {
+      throw StateError(
+        '$_authPluginRuntimePhoneDeliveryFailureMarker raw=${delivery.code}',
+      );
+    }
+  }
+}
+
 /// Username registered by the plugin conformance flow.
 const authPluginRuntimeConformanceUsername = 'runtime.user';
 
@@ -48,8 +102,11 @@ const authPluginRuntimeConformancePassword = 'runtime-plugin-password-123';
 /// are absent when the plugin is not installed.
 Engine createAuthPluginRuntimeConformanceEngine({
   bool includeTwoFactor = true,
+  AuthPluginRuntimePhoneDeliveryRecorder? phoneDeliveryRecorder,
 }) {
   final store = InMemoryAuthStore();
+  final phoneDeliveries =
+      phoneDeliveryRecorder ?? AuthPluginRuntimePhoneDeliveryRecorder();
   final webAuthnProvider = WebAuthnProvider(
     getUserInfo: (_, _, _) => null,
     getRelyingParty: (_, _) => const WebAuthnRelyingParty(
@@ -63,6 +120,13 @@ Engine createAuthPluginRuntimeConformanceEngine({
       id: authPluginRuntimeConformanceMagicLinkProviderId,
       tokenGenerator: () => _authPluginRuntimeConformanceMagicLinkToken,
       sendMagicLink: (_) {},
+    ),
+    PhoneNumberPlugin<EngineContext>(
+      sendCode: phoneDeliveries._record,
+      codeHashKey: 'runtime-phone-code-hash-key-32-bytes',
+      allowSignUp: true,
+      allowedAttempts: 3,
+      generateCode: (_) => _authPluginRuntimeConformancePhoneCode,
     ),
     EmailOtpPlugin<EngineContext>(
       secret: 'runtime-email-otp-rate-limit-key',
@@ -137,10 +201,12 @@ Future<void> verifyAuthPluginRuntimeConformance({
   required Uri origin,
   required AuthRuntimeConformanceSend send,
   required AuthRuntimeConformanceSend sendWithoutTwoFactor,
+  required AuthPluginRuntimePhoneDeliveryRecorder phoneDeliveryRecorder,
 }) async {
   final originHeader = origin.toString();
 
   await _verifyMagicLink(send, origin);
+  await _verifyPhoneNumber(send, origin, phoneDeliveryRecorder);
   await _verifyEmailOtp(send, originHeader);
   final usernameSession = await _verifyUsername(send, originHeader);
   final csrf = await _issueCsrf(send, cookie: usernameSession);
@@ -215,7 +281,10 @@ Future<void> _verifyMagicLink(
     ],
   );
   final magicLink = client.plugins.use(magicLinkPlugin);
-  final providers = await client.plugins.use(providerPlugin).list();
+  final providers = await _clientOperation(
+    () => client.plugins.use(providerPlugin).list(),
+    caseId: 'magic-link.server-plugin',
+  );
   _check(
     providers.any(
       (provider) =>
@@ -367,6 +436,20 @@ Future<void> _verifyMagicLink(
   }
 }
 
+Future<T> _clientOperation<T>(
+  Future<T> Function() operation, {
+  required String caseId,
+}) async {
+  try {
+    return await operation();
+  } on AuthClientException catch (exception) {
+    throw AuthRuntimeConformanceFailure(
+      caseId: caseId,
+      message: 'The host returned ${exception.statusCode}/${exception.code}.',
+    );
+  }
+}
+
 Future<void> _expectMagicLinkClientError(
   Future<Object?> Function() operation, {
   required String caseId,
@@ -388,6 +471,284 @@ Future<void> _expectMagicLinkClientError(
     caseId: caseId,
     message: 'The typed client unexpectedly accepted the request.',
   );
+}
+
+Future<void> _verifyPhoneNumber(
+  AuthRuntimeConformanceSend send,
+  Uri origin,
+  AuthPluginRuntimePhoneDeliveryRecorder deliveryRecorder,
+) async {
+  const phonePlugin = AuthPhoneNumberClientPlugin();
+  const sessionPlugin = AuthSessionClientPlugin();
+  final transport = _AuthRuntimeConformanceHttpClient(send);
+  final client = AuthClient(
+    baseUrl: origin,
+    httpClient: transport,
+    headers: <String, String>{
+      'origin': origin.toString(),
+      'sec-fetch-site': 'same-origin',
+    },
+    plugins: const <AuthClientPlugin<dynamic>>[phonePlugin, sessionPlugin],
+  );
+  final phone = client.plugins.use(phonePlugin);
+
+  final deliveriesBefore = deliveryRecorder.deliveries.length;
+  final issued = await phone.sendCode(
+    phoneNumber: authPluginRuntimeConformancePhoneNumber,
+  );
+  final deliveries = deliveryRecorder
+      .forPhone(authPluginRuntimeConformancePhoneNumber)
+      .toList(growable: false);
+  _check(
+    deliveryRecorder.deliveries.length == deliveriesBefore + 1 &&
+        deliveries.length == 1 &&
+        deliveries.single.code == _authPluginRuntimeConformancePhoneCode &&
+        deliveries.single.expiresAt == issued.expiresAt,
+    'phone.delivery',
+    'The server plugin did not invoke its provider-owned delivery callback.',
+  );
+  _check(
+    transport.requestPaths.contains('/auth/phone-number/send-code'),
+    'phone.send.path',
+    'The typed phone client did not use the exact send-code route.',
+  );
+  _check(
+    !transport.requestPaths.contains('/auth/csrf'),
+    'phone.csrf',
+    'The CSRF-exempt phone operation unexpectedly requested a CSRF token.',
+  );
+  _assertPhoneCodeSecret(transport.responses, 'phone.send.secret');
+
+  final crossOrigin = await send(
+    AuthRuntimeConformanceRequest(
+      method: 'POST',
+      path: '/auth/phone-number/send-code',
+      headers: _jsonHeaders(origin: 'https://attacker.runtime.test'),
+      body: jsonEncode(<String, Object?>{'phoneNumber': '+18765550106'}),
+    ),
+  );
+  _expectError(
+    crossOrigin,
+    caseId: 'phone.origin',
+    statusCode: 403,
+    error: 'invalid_origin',
+  );
+
+  for (final hostilePhone in _hostilePhoneNumbers()) {
+    final response = await send(
+      AuthRuntimeConformanceRequest(
+        method: 'POST',
+        path: '/auth/phone-number/send-code',
+        headers: _jsonHeaders(origin: origin.toString()),
+        body: jsonEncode(<String, Object?>{'phoneNumber': hostilePhone}),
+      ),
+    );
+    _expectError(
+      response,
+      caseId: 'phone.hostile-number',
+      statusCode: 400,
+      error: 'invalid_phone_number',
+    );
+    _check(
+      !response.body.contains(hostilePhone) &&
+          !response.body.contains('StateError') &&
+          !response.body.contains('/src/'),
+      'phone.hostile-number',
+      'A hostile phone number reached the public error response.',
+    );
+  }
+
+  final providerFailure = await send(
+    AuthRuntimeConformanceRequest(
+      method: 'POST',
+      path: '/auth/phone-number/send-code',
+      headers: _jsonHeaders(origin: origin.toString()),
+      body: jsonEncode(<String, Object?>{
+        'phoneNumber': _authPluginRuntimePhoneDeliveryFailureNumber,
+      }),
+    ),
+  );
+  _expectError(
+    providerFailure,
+    caseId: 'phone.delivery-failure',
+    statusCode: 400,
+    error: 'auth_request_failed',
+  );
+  _check(
+    !providerFailure.body.contains(
+          _authPluginRuntimePhoneDeliveryFailureMarker,
+        ) &&
+        !providerFailure.body.contains(_authPluginRuntimeConformancePhoneCode),
+    'phone.delivery-failure',
+    'Provider diagnostics or the raw code leaked into the public response.',
+  );
+
+  const hostileCodePhone = '+18765550103';
+  await phone.sendCode(phoneNumber: hostileCodePhone);
+  for (final hostileCode in _hostilePhoneCodes()) {
+    await _expectAuthClientError(
+      () => phone.verifyCode(phoneNumber: hostileCodePhone, code: hostileCode),
+      caseId: 'phone.hostile-code',
+      statusCode: 401,
+      error: 'invalid_phone_code',
+    );
+    _check(
+      transport.responses.last.body.contains(hostileCode) == false,
+      'phone.hostile-code',
+      'A hostile verification code reached the public error response.',
+    );
+  }
+
+  const lockoutPhone = '+18765550104';
+  await phone.sendCode(phoneNumber: lockoutPhone);
+  for (var attempt = 0; attempt < 3; attempt++) {
+    await _expectAuthClientError(
+      () => phone.verifyCode(phoneNumber: lockoutPhone, code: '000000'),
+      caseId: 'phone.lockout',
+      statusCode: attempt < 2 ? 401 : 403,
+      error: attempt < 2
+          ? 'invalid_phone_code'
+          : 'phone_code_too_many_attempts',
+    );
+  }
+
+  final verified = await phone.verifyCode(
+    phoneNumber: authPluginRuntimeConformancePhoneNumber,
+    code: _authPluginRuntimeConformancePhoneCode,
+    name: 'Runtime Phone User',
+  );
+  _check(
+    verified.phoneNumber == authPluginRuntimeConformancePhoneNumber &&
+        verified.session.user.attributes['phoneNumber'] ==
+            authPluginRuntimeConformancePhoneNumber &&
+        verified.session.user.attributes['phoneNumberVerified'] == true,
+    'phone.verify',
+    'The typed phone client did not return the verified phone session.',
+  );
+  _check(
+    transport.requestPaths.contains('/auth/phone-number/verify-code'),
+    'phone.verify.path',
+    'The typed phone client did not use the exact verify-code route.',
+  );
+  final current = await client.plugins.use(sessionPlugin).current();
+  _check(
+    current?.user.id == verified.session.user.id &&
+        current?.user.attributes['phoneNumber'] ==
+            authPluginRuntimeConformancePhoneNumber,
+    'phone.session',
+    'The host-issued cookie was not readable through the session client.',
+  );
+  await _expectAuthClientError(
+    () => phone.verifyCode(
+      phoneNumber: authPluginRuntimeConformancePhoneNumber,
+      code: _authPluginRuntimeConformancePhoneCode,
+    ),
+    caseId: 'phone.replay',
+    statusCode: 401,
+    error: 'invalid_phone_code',
+  );
+
+  const concurrentPhone = '+18765550105';
+  await phone.sendCode(phoneNumber: concurrentPhone);
+  final concurrent = await Future.wait(
+    List<Future<AuthRuntimeConformanceResponse>>.generate(
+      8,
+      (_) => send(
+        AuthRuntimeConformanceRequest(
+          method: 'POST',
+          path: '/auth/phone-number/verify-code',
+          headers: _jsonHeaders(origin: origin.toString()),
+          body: jsonEncode(<String, Object?>{
+            'phoneNumber': concurrentPhone,
+            'code': _authPluginRuntimeConformancePhoneCode,
+          }),
+        ),
+      ),
+    ),
+  );
+  _check(
+    concurrent.where((response) => response.statusCode == 200).length == 1,
+    'phone.concurrent-replay',
+    'Concurrent verification attempts did not have exactly one winner.',
+  );
+  for (final response in concurrent.where(
+    (response) => response.statusCode != 200,
+  )) {
+    _expectError(
+      response,
+      caseId: 'phone.concurrent-replay',
+      statusCode: 401,
+      error: 'invalid_phone_code',
+    );
+  }
+  _assertPhoneCodeSecret(<AuthRuntimeConformanceResponse>[
+    ...transport.responses,
+    ...concurrent,
+  ], 'phone.response-secrecy');
+}
+
+Future<void> _expectAuthClientError(
+  Future<Object?> Function() operation, {
+  required String caseId,
+  required int statusCode,
+  required String error,
+}) async {
+  try {
+    await operation();
+  } on AuthClientException catch (exception) {
+    _check(
+      exception.statusCode == statusCode && exception.code == error,
+      caseId,
+      'Expected $statusCode/$error, received '
+      '${exception.statusCode}/${exception.code}.',
+    );
+    return;
+  }
+  throw AuthRuntimeConformanceFailure(
+    caseId: caseId,
+    message: 'The typed client unexpectedly accepted the request.',
+  );
+}
+
+void _assertPhoneCodeSecret(
+  Iterable<AuthRuntimeConformanceResponse> responses,
+  String caseId,
+) {
+  _check(
+    responses.every(
+      (response) =>
+          !response.body.contains(_authPluginRuntimeConformancePhoneCode),
+    ),
+    caseId,
+    'The raw provider-delivered phone code leaked into an HTTP response.',
+  );
+}
+
+Iterable<String> _hostilePhoneNumbers() sync* {
+  yield '18765550101';
+  yield '+08765550101';
+  yield '+1 876 555 0101';
+  yield '+1-876-555-0101';
+  yield '+1\r\nSet-Cookie: owned=true';
+  yield '+1\u0000Authorization: Bearer secret';
+  yield '+١٨٧٦٥٥٥٠١٠١';
+  yield '<script>alert(1)</script>';
+  yield "' OR '1'='1";
+  yield '+${List<String>.filled(256, '9').join()}';
+}
+
+Iterable<String> _hostilePhoneCodes() sync* {
+  yield 'wrong-code';
+  yield '12345';
+  yield '1234567';
+  yield '１２３４５６';
+  yield '123 456';
+  yield '123-456';
+  yield '\r\nSet-Cookie: owned=true';
+  yield '\u0000authorization: bearer secret';
+  yield '<script>alert(1)</script>';
+  yield "' OR '1'='1";
+  yield List<String>.filled(256, '9').join();
 }
 
 Future<String> _authClientCookieHeader(AuthClientCookieStore store) async {
