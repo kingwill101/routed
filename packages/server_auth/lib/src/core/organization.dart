@@ -1311,10 +1311,14 @@ final class OrganizationPlugin<TContext>
       throw AuthFlowException('member_not_found');
     }
     _requireCreatorAuthorityForRoles(auth.membership, transformedMember.roles);
-    final removed = await store.removeMember(
-      organizationId,
-      transformedMember.userId,
-      creatorRole: _creatorRole,
+    final mutationStore = _membershipMutationStore();
+    final removed = await mutationStore.mutateOrganizationMembership(
+      AuthOrganizationMembershipMutation(
+        kind: AuthOrganizationMembershipMutationKind.remove,
+        actorMembership: auth.membership,
+        targetMembership: transformedMember,
+        creatorRole: _creatorRole,
+      ),
     );
     final warnings = await _afterMember(
       context,
@@ -1370,11 +1374,15 @@ final class OrganizationPlugin<TContext>
       ...existing.roles,
       ...draft.roles,
     ]);
-    final updated = await store.replaceMemberRoles(
-      auth.organization.id,
-      userId,
-      draft.roles,
-      creatorRole: _creatorRole,
+    final mutationStore = _membershipMutationStore();
+    final updated = await mutationStore.mutateOrganizationMembership(
+      AuthOrganizationMembershipMutation(
+        kind: AuthOrganizationMembershipMutationKind.replaceRoles,
+        actorMembership: auth.membership,
+        targetMembership: existing,
+        creatorRole: _creatorRole,
+        replacementRoles: draft.roles,
+      ),
     );
     final warnings = await _afterMember(
       context,
@@ -1777,7 +1785,11 @@ final class OrganizationPlugin<TContext>
       updatedAt: DateTime.now().toUtc(),
     );
     role = await _beforeRole(context, 'update', user, role, auth.organization);
-    role = await store.updateRole(role, previousName: previousName);
+    role = await store.updateRole(
+      role,
+      previousName: previousName,
+      creatorRole: _creatorRole,
+    );
     final warnings = await _afterRole(
       context,
       'update',
@@ -1822,6 +1834,7 @@ final class OrganizationPlugin<TContext>
     final deleted = await store.deleteRole(
       auth.organization.id,
       transformed.name,
+      creatorRole: _creatorRole,
     );
     final warnings = await _afterRole(
       context,
@@ -2175,6 +2188,17 @@ final class OrganizationPlugin<TContext>
     if (normalizeAuthOrganizationRoles(affectedRoles).contains(_creatorRole)) {
       _requireCreatorAuthority(actorMembership);
     }
+  }
+
+  AuthOrganizationMembershipMutationStore _membershipMutationStore() {
+    final target = store;
+    if (target is! AuthOrganizationMembershipMutationStore) {
+      throw StateError(
+        'The organization store cannot atomically authorize membership '
+        'mutations while preserving an owner.',
+      );
+    }
+    return target as AuthOrganizationMembershipMutationStore;
   }
 
   Future<void> _validateInvitationTeam(

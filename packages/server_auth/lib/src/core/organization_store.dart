@@ -65,6 +65,39 @@ final class AuthOrganizationInvitationAcceptanceResult {
   final AuthOrganizationTeamMember? teamMembership;
 }
 
+/// The ownership-bearing membership change performed by an organization
+/// store.
+enum AuthOrganizationMembershipMutationKind {
+  /// Replace the target membership's complete role set.
+  replaceRoles,
+
+  /// Remove the target membership and its team memberships.
+  remove,
+}
+
+/// One authorization-checked organization membership mutation.
+///
+/// Stores must compare both membership snapshots and apply the mutation in a
+/// single transaction. A mismatch must fail closed; callers must not retry the
+/// write with a newly read snapshot without repeating authorization.
+final class AuthOrganizationMembershipMutation {
+  AuthOrganizationMembershipMutation({
+    required this.kind,
+    required this.actorMembership,
+    required this.targetMembership,
+    required this.creatorRole,
+    Iterable<String>? replacementRoles,
+  }) : replacementRoles = replacementRoles == null
+           ? null
+           : normalizeAuthOrganizationRoles(replacementRoles);
+
+  final AuthOrganizationMembershipMutationKind kind;
+  final AuthOrganizationMember actorMembership;
+  final AuthOrganizationMember targetMembership;
+  final String creatorRole;
+  final List<String>? replacementRoles;
+}
+
 /// Plugin-owned persistence contract. Implementations must preserve the
 /// documented atomicity of every mutating method.
 abstract interface class AuthOrganizationStore {
@@ -86,18 +119,6 @@ abstract interface class AuthOrganizationStore {
     AuthOrganizationMember member, {
     int? membershipLimit,
   });
-  FutureOr<AuthOrganizationMember> replaceMemberRoles(
-    String organizationId,
-    String userId,
-    Iterable<String> roles, {
-    required String creatorRole,
-  });
-  FutureOr<AuthOrganizationMember> removeMember(
-    String organizationId,
-    String userId, {
-    required String creatorRole,
-  });
-
   FutureOr<AuthOrganizationInvitation?> findInvitation(String invitationId);
   FutureOr<List<AuthOrganizationInvitation>> listInvitations(
     String organizationId,
@@ -131,11 +152,16 @@ abstract interface class AuthOrganizationStore {
   FutureOr<AuthOrganizationRole> updateRole(
     AuthOrganizationRole role, {
     required String previousName,
+    required String creatorRole,
   });
 
   /// Deletes an unreferenced dynamic role. Member and pending invitation
   /// references must both be treated as active assignments.
-  FutureOr<AuthOrganizationRole> deleteRole(String organizationId, String name);
+  FutureOr<AuthOrganizationRole> deleteRole(
+    String organizationId,
+    String name, {
+    required String creatorRole,
+  });
 
   FutureOr<AuthOrganizationTeam?> findTeam(String teamId);
   FutureOr<List<AuthOrganizationTeam>> listTeams(String organizationId);
@@ -167,6 +193,18 @@ abstract interface class AuthOrganizationStore {
   );
 }
 
+/// Required capability for ownership-bearing membership writes.
+///
+/// Organization plugins fail closed when a durable adapter does not implement
+/// this capability. Implementations must validate the actor and target
+/// snapshots, preserve at least one [AuthOrganizationMembershipMutation.creatorRole]
+/// member, and apply the write atomically.
+abstract interface class AuthOrganizationMembershipMutationStore {
+  FutureOr<AuthOrganizationMember> mutateOrganizationMembership(
+    AuthOrganizationMembershipMutation mutation,
+  );
+}
+
 /// Optional organization namespace support for atomic administrative deletion.
 abstract interface class AuthOrganizationUserDeletionStore {
   FutureOr<void> validateUserDeletion(
@@ -184,6 +222,7 @@ abstract interface class AuthOrganizationUserDeletionStore {
 final class InMemoryAuthOrganizationStore
     implements
         AuthOrganizationStore,
+        AuthOrganizationMembershipMutationStore,
         AuthOrganizationUserDeletionStore,
         AuthInMemoryTransactionParticipant {
   final Map<String, AuthOrganization> _organizations = {};
@@ -392,56 +431,75 @@ final class InMemoryAuthOrganizationStore
   });
 
   @override
-  Future<AuthOrganizationMember> replaceMemberRoles(
-    String organizationId,
-    String userId,
-    Iterable<String> roles, {
-    required String creatorRole,
-  }) => _atomic(() {
-    final key = _memberKey(organizationId, userId);
-    final member = _members[key];
-    _require(member != null, 'member_not_found');
-    final normalized = normalizeAuthOrganizationRoles(roles);
-    final normalizedCreatorRole = _normalizeCreatorRole(creatorRole);
-    _require(normalized.isNotEmpty, 'invalid_role');
-    if (member!.roles.contains(normalizedCreatorRole) &&
-        !normalized.contains(normalizedCreatorRole)) {
-      _require(
-        _creatorCount(organizationId, normalizedCreatorRole) > 1,
-        'last_owner',
-      );
-    }
-    final updated = member.copyWith(roles: normalized);
-    _members[key] = updated;
-    return updated;
-  });
-
-  @override
-  Future<AuthOrganizationMember> removeMember(
-    String organizationId,
-    String userId, {
-    required String creatorRole,
-  }) => _atomic(() {
-    final key = _memberKey(organizationId, userId);
-    final member = _members[key];
-    _require(member != null, 'member_not_found');
-    final normalizedCreatorRole = _normalizeCreatorRole(creatorRole);
-    if (member!.roles.contains(normalizedCreatorRole)) {
-      _require(
-        _creatorCount(organizationId, normalizedCreatorRole) > 1,
-        'last_owner',
-      );
-    }
-    _members.remove(key);
-    final teamIds = _teams.values
-        .where((team) => team.organizationId == organizationId.trim())
-        .map((team) => team.id)
-        .toSet();
-    _teamMembers.removeWhere(
-      (_, value) =>
-          value.userId == userId.trim() && teamIds.contains(value.teamId),
+  Future<AuthOrganizationMember> mutateOrganizationMembership(
+    AuthOrganizationMembershipMutation mutation,
+  ) => _atomic(() {
+    final actorSnapshot = mutation.actorMembership;
+    final targetSnapshot = mutation.targetMembership;
+    final organizationId = actorSnapshot.organizationId.trim();
+    _require(
+      organizationId.isNotEmpty &&
+          targetSnapshot.organizationId.trim() == organizationId,
+      'invalid_organization_member',
     );
-    return member;
+    _require(
+      _organizations.containsKey(organizationId),
+      'organization_not_found',
+    );
+    final actor = _members[_memberKey(organizationId, actorSnapshot.userId)];
+    if (actor == null || !_sameMembershipSnapshot(actor, actorSnapshot)) {
+      throw AuthFlowException('organization_forbidden');
+    }
+    final targetKey = _memberKey(organizationId, targetSnapshot.userId);
+    final target = _members[targetKey];
+    if (target == null) throw AuthFlowException('member_not_found');
+    _require(
+      _sameMembershipSnapshot(target, targetSnapshot),
+      'organization_membership_changed',
+    );
+
+    final creatorRole = _normalizeCreatorRole(mutation.creatorRole);
+    final replacementRoles = mutation.replacementRoles;
+    switch (mutation.kind) {
+      case AuthOrganizationMembershipMutationKind.replaceRoles:
+        _require(replacementRoles != null, 'invalid_role');
+        _require(replacementRoles!.isNotEmpty, 'invalid_role');
+        break;
+      case AuthOrganizationMembershipMutationKind.remove:
+        _require(replacementRoles == null, 'invalid_role');
+        break;
+    }
+    final affectsCreator =
+        target.roles.contains(creatorRole) ||
+        (replacementRoles?.contains(creatorRole) ?? false);
+    if (affectsCreator) {
+      _require(actor.roles.contains(creatorRole), 'organization_forbidden');
+    }
+    final removesCreator =
+        target.roles.contains(creatorRole) &&
+        (mutation.kind == AuthOrganizationMembershipMutationKind.remove ||
+            !replacementRoles!.contains(creatorRole));
+    if (removesCreator) {
+      _require(_creatorCount(organizationId, creatorRole) > 1, 'last_owner');
+    }
+
+    switch (mutation.kind) {
+      case AuthOrganizationMembershipMutationKind.replaceRoles:
+        final updated = target.copyWith(roles: replacementRoles);
+        _members[targetKey] = updated;
+        return updated;
+      case AuthOrganizationMembershipMutationKind.remove:
+        _members.remove(targetKey);
+        final teamIds = _teams.values
+            .where((team) => team.organizationId == organizationId)
+            .map((team) => team.id)
+            .toSet();
+        _teamMembers.removeWhere(
+          (_, value) =>
+              value.userId == target.userId && teamIds.contains(value.teamId),
+        );
+        return target;
+    }
   });
 
   @override
@@ -615,11 +673,18 @@ final class InMemoryAuthOrganizationStore
   Future<AuthOrganizationRole> updateRole(
     AuthOrganizationRole role, {
     required String previousName,
+    required String creatorRole,
   }) => _atomic(() {
     final oldKey = _roleKey(role.organizationId, previousName);
     final existing = _roles[oldKey];
     _require(existing != null, 'role_not_found');
     _require(!existing!.predefined, 'predefined_role');
+    final normalizedCreatorRole = _normalizeCreatorRole(creatorRole);
+    _require(
+      existing.name != normalizedCreatorRole &&
+          role.name != normalizedCreatorRole,
+      'creator_role',
+    );
     final newKey = _roleKey(role.organizationId, role.name);
     _require(oldKey == newKey || !_roles.containsKey(newKey), 'role_exists');
     if (oldKey != newKey) {
@@ -660,32 +725,36 @@ final class InMemoryAuthOrganizationStore
   });
 
   @override
-  Future<AuthOrganizationRole> deleteRole(String organizationId, String name) =>
-      _atomic(() {
-        final key = _roleKey(organizationId, name);
-        final role = _roles[key];
-        _require(role != null, 'role_not_found');
-        _require(!role!.predefined, 'predefined_role');
-        _require(
-          !_members.values.any(
-            (member) =>
-                member.organizationId == organizationId.trim() &&
-                member.roles.contains(role.name),
-          ),
-          'role_in_use',
-        );
-        _require(
-          !_invitations.values.any(
-            (invitation) =>
-                invitation.organizationId == organizationId.trim() &&
-                invitation.status == AuthOrganizationInvitationStatus.pending &&
-                invitation.roles.contains(role.name),
-          ),
-          'role_in_use',
-        );
-        _roles.remove(key);
-        return role;
-      });
+  Future<AuthOrganizationRole> deleteRole(
+    String organizationId,
+    String name, {
+    required String creatorRole,
+  }) => _atomic(() {
+    final key = _roleKey(organizationId, name);
+    final role = _roles[key];
+    _require(role != null, 'role_not_found');
+    _require(!role!.predefined, 'predefined_role');
+    _require(role.name != _normalizeCreatorRole(creatorRole), 'creator_role');
+    _require(
+      !_members.values.any(
+        (member) =>
+            member.organizationId == organizationId.trim() &&
+            member.roles.contains(role.name),
+      ),
+      'role_in_use',
+    );
+    _require(
+      !_invitations.values.any(
+        (invitation) =>
+            invitation.organizationId == organizationId.trim() &&
+            invitation.status == AuthOrganizationInvitationStatus.pending &&
+            invitation.roles.contains(role.name),
+      ),
+      'role_in_use',
+    );
+    _roles.remove(key);
+    return role;
+  });
 
   @override
   Future<AuthOrganizationTeam?> findTeam(String teamId) =>
@@ -906,6 +975,23 @@ String _roleKey(String organizationId, String name) =>
     '${organizationId.trim()}\u0000${name.trim().toLowerCase()}';
 String _teamMemberKey(String teamId, String userId) =>
     '${teamId.trim()}\u0000${userId.trim()}';
+
+bool _sameMembershipSnapshot(
+  AuthOrganizationMember current,
+  AuthOrganizationMember expected,
+) =>
+    current.id == expected.id &&
+    current.organizationId == expected.organizationId &&
+    current.userId == expected.userId &&
+    _sameStrings(current.roles, expected.roles);
+
+bool _sameStrings(List<String> left, List<String> right) {
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) return false;
+  }
+  return true;
+}
 
 String _normalizeCreatorRole(String creatorRole) {
   final normalized = normalizeAuthOrganizationRoles([creatorRole]);

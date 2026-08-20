@@ -187,6 +187,96 @@ void main() {
       );
     });
 
+    test(
+      'membership mutation fails closed without atomic capability',
+      () async {
+        final now = DateTime.utc(2030);
+        final organization = AuthOrganization(
+          id: 'organization',
+          name: 'Acme',
+          slug: 'acme',
+          createdAt: now,
+          updatedAt: now,
+        );
+        final owner = AuthOrganizationMember(
+          id: 'owner-member',
+          organizationId: organization.id,
+          userId: 'owner',
+          roles: const ['owner'],
+          createdAt: now,
+        );
+        final member = AuthOrganizationMember(
+          id: 'regular-member',
+          organizationId: organization.id,
+          userId: 'member',
+          roles: const ['member'],
+          createdAt: now,
+        );
+        final feature = OrganizationPlugin<Object>(
+          store: _OrganizationStoreWithoutOwnershipCapability(organization, [
+            owner,
+            member,
+          ]),
+        );
+
+        await expectLater(
+          _invoke(
+            feature,
+            'organization.removeMember',
+            AuthUser(id: 'owner', email: 'owner@example.com'),
+            {'organizationId': organization.id, 'userId': member.userId},
+          ),
+          throwsA(
+            isA<StateError>().having(
+              (error) => error.message,
+              'message',
+              contains('atomically authorize membership mutations'),
+            ),
+          ),
+        );
+      },
+    );
+
+    test(
+      'creator role definitions are immutable at the store boundary',
+      () async {
+        final store = InMemoryAuthOrganizationStore();
+        final owner = AuthUser(id: 'owner', email: 'owner@example.com');
+        final feature = OrganizationPlugin<Object>(store: store);
+        final organization = (await feature.createOrganization(
+          context: Object(),
+          user: owner,
+          name: 'Acme',
+          slug: 'acme',
+        )).data;
+        final now = DateTime.utc(2030);
+        final role = AuthOrganizationRole(
+          id: 'billing-role',
+          organizationId: organization.id,
+          name: 'billing',
+          permissions: const {
+            'organization': ['read'],
+          },
+          createdAt: now,
+          updatedAt: now,
+        );
+        await store.createRole(role);
+
+        await expectLater(
+          store.updateRole(
+            role.copyWith(name: 'owner'),
+            previousName: role.name,
+            creatorRole: 'owner',
+          ),
+          _flow('creator_role'),
+        );
+        expect(await store.findRole(organization.id, 'billing'), same(role));
+        expect((await store.findMember(organization.id, owner.id))!.roles, [
+          'owner',
+        ]);
+      },
+    );
+
     test('invitation is email-bound and consumed exactly once', () async {
       final feature = OrganizationPlugin<Object>(
         store: InMemoryAuthOrganizationStore(),
@@ -821,4 +911,26 @@ final class _EmptyPlugin implements AuthServerPlugin<Object> {
 
   @override
   void configure(AuthServerPluginContext<Object> context) {}
+}
+
+final class _OrganizationStoreWithoutOwnershipCapability
+    implements AuthOrganizationStore {
+  _OrganizationStoreWithoutOwnershipCapability(
+    this.organization,
+    Iterable<AuthOrganizationMember> members,
+  ) : _members = {for (final member in members) member.userId: member};
+
+  final AuthOrganization organization;
+  final Map<String, AuthOrganizationMember> _members;
+
+  @override
+  AuthOrganization? findOrganization(String organizationId) =>
+      organizationId == organization.id ? organization : null;
+
+  @override
+  AuthOrganizationMember? findMember(String organizationId, String userId) =>
+      organizationId == organization.id ? _members[userId] : null;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
