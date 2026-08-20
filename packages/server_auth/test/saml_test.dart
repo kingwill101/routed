@@ -13,6 +13,14 @@ void main() {
   group('AuthSamlPlugin', () {
     test('requires durable atomic replay persistence by default', () {
       expect(() => _plugin(allowTestStore: false), throwsA(isA<StateError>()));
+      expect(_plugin().validateProductionPosture, throwsA(isA<StateError>()));
+      expect(
+        _plugin(
+          allowTestStore: false,
+          replayStore: _DurableReplayStore(),
+        ).validateProductionPosture,
+        returnsNormally,
+      );
     });
 
     test('satisfies composed plugin conformance', () async {
@@ -144,6 +152,45 @@ void main() {
       );
     });
 
+    test(
+      'permits IdP initiation only with an explicit fixed callback',
+      () async {
+        final xml = _response(
+          requestId: '_unused',
+          assertionId: '_assertion-idp',
+        ).replaceAll(' InResponseTo="_unused"', '');
+        final disabled = _plugin();
+        await expectLater(
+          () => _endpoint(disabled, 'saml.acs')
+              .invoke(_invocation('browser-binding-value-0001'), {
+                'providerId': 'enterprise',
+                'SAMLResponse': base64.encode(utf8.encode(xml)),
+              }),
+          throwsA(isA<AuthFlowException>()),
+        );
+
+        final enabled = _plugin(
+          idpInitiated: AuthSamlIdpInitiatedPolicy.fixedCallback(
+            Uri(path: '/idp-complete'),
+          ),
+        );
+        final intent =
+            await _endpoint(
+                  enabled,
+                  'saml.acs',
+                ).invoke(_invocation('browser-binding-value-0001'), {
+                  'providerId': 'enterprise',
+                  'SAMLResponse': base64.encode(utf8.encode(xml)),
+                })
+                as AuthEndpointAuthenticationIntent;
+        final projected = await intent.projectResponse(const {});
+        expect(
+          (projected as AuthEndpointRedirect).location.path,
+          '/idp-complete',
+        );
+      },
+    );
+
     test('rejects signature wrapping IDs and deprecated algorithms', () async {
       final wrapping = _plugin();
       final started = await _start(wrapping);
@@ -251,16 +298,20 @@ void main() {
 AuthSamlPlugin<String> _plugin({
   bool allowTestStore = true,
   _Verifier verifier = const _Verifier(),
+  AuthSamlReplayStore? replayStore,
+  AuthSamlIdpInitiatedPolicy idpInitiated =
+      const AuthSamlIdpInitiatedPolicy.disabled(),
   void Function(AuthSamlAccountIdentity identity)? onIdentity,
 }) => AuthSamlPlugin<String>(
   connections: _Catalog(),
-  replayStore: InMemoryAuthSamlReplayStore(),
+  replayStore: replayStore ?? InMemoryAuthSamlReplayStore(),
   assertionVerifier: verifier,
   identityResolver: _Resolver(onIdentity),
   browserBindingResolver: (context) => context,
   clock: () => DateTime.parse(_now),
   options: AuthSamlOptions(
     allowInMemoryStoreForTesting: allowTestStore,
+    idpInitiated: idpInitiated,
     redirectPolicy: AuthSamlRedirectPolicy(
       trustedOrigins: {Uri.parse('https://app.example.test')},
     ),
@@ -392,4 +443,44 @@ final class _Resolver implements AuthSamlIdentityResolver<String> {
       email: 'verified-by-application@example.test',
     );
   }
+}
+
+final class _DurableReplayStore implements AuthDurableSamlReplayStore {
+  final _delegate = InMemoryAuthSamlReplayStore();
+
+  @override
+  Future<void> createAttempt(AuthSamlAuthenticationAttempt attempt) =>
+      _delegate.createAttempt(attempt);
+
+  @override
+  Future<AuthSamlConsumptionResult> consumeSpInitiated({
+    required String providerId,
+    required String requestId,
+    required String relayStateHash,
+    required String browserBindingHash,
+    required String assertionId,
+    required DateTime assertionExpiresAt,
+    required DateTime now,
+  }) => _delegate.consumeSpInitiated(
+    providerId: providerId,
+    requestId: requestId,
+    relayStateHash: relayStateHash,
+    browserBindingHash: browserBindingHash,
+    assertionId: assertionId,
+    assertionExpiresAt: assertionExpiresAt,
+    now: now,
+  );
+
+  @override
+  Future<bool> consumeIdpInitiated({
+    required String providerId,
+    required String assertionId,
+    required DateTime assertionExpiresAt,
+    required DateTime now,
+  }) => _delegate.consumeIdpInitiated(
+    providerId: providerId,
+    assertionId: assertionId,
+    assertionExpiresAt: assertionExpiresAt,
+    now: now,
+  );
 }

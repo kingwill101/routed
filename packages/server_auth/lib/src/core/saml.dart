@@ -70,7 +70,8 @@ final class AuthSamlPlugin<TContext>
         AuthEndpointContributor<TContext>,
         AuthPersistenceContributor,
         AuthClientOperationContributor,
-        AuthRateLimitContributor {
+        AuthRateLimitContributor,
+        AuthProductionPostureContributor {
   AuthSamlPlugin({
     required this.connections,
     required this.replayStore,
@@ -107,6 +108,13 @@ final class AuthSamlPlugin<TContext>
 
   @override
   void configure(AuthServerPluginContext<TContext> context) {}
+
+  @override
+  void validateProductionPosture() {
+    if (replayStore is! AuthDurableSamlReplayStore) {
+      throw StateError('Production SAML requires AuthDurableSamlReplayStore.');
+    }
+  }
 
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints => [

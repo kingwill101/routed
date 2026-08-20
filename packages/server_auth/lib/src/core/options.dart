@@ -324,6 +324,10 @@ class AuthOptions<TContext> {
     if (rateLimiter == null) {
       throw ArgumentError.notNull('rateLimiter');
     }
+    for (final plugin
+        in plugins.whereType<AuthProductionPostureContributor>()) {
+      plugin.validateProductionPosture();
+    }
     if (sessionStrategy == AuthSessionStrategy.jwt) {
       _validateProductionJwt(jwtOptions);
     }

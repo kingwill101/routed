@@ -738,6 +738,11 @@ abstract interface class AuthServerPlugin<TContext> {
   void configure(AuthServerPluginContext<TContext> context);
 }
 
+/// Optional plugin check executed whenever auth boots in production posture.
+abstract interface class AuthProductionPostureContributor {
+  void validateProductionPosture();
+}
+
 class AuthServerPluginRegistry<TContext> {
   AuthServerPluginRegistry({
     required AuthStore store,

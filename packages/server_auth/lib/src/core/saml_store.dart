@@ -20,7 +20,11 @@ final class AuthSamlAuthenticationAttempt {
   final DateTime expiresAt;
 }
 
-enum AuthSamlConsumptionFailure { requestNotFound, assertionReplayed }
+enum AuthSamlConsumptionFailure {
+  requestNotFound,
+  assertionReplayed,
+  capacityExceeded,
+}
 
 final class AuthSamlConsumptionResult {
   const AuthSamlConsumptionResult.accepted(this.attempt) : failure = null;
@@ -77,8 +81,8 @@ final class InMemoryAuthSamlReplayStore implements AuthSamlReplayStore {
         if (_attempts.containsKey(attempt.requestId)) {
           throw StateError('SAML request ID already exists');
         }
-        while (_attempts.length >= maxEntries) {
-          _attempts.remove(_attempts.keys.first);
+        if (_attempts.length >= maxEntries) {
+          throw StateError('SAML attempt capacity exceeded');
         }
         _attempts[attempt.requestId] = attempt;
       });
@@ -98,6 +102,11 @@ final class InMemoryAuthSamlReplayStore implements AuthSamlReplayStore {
     if (_assertions.containsKey(assertionKey)) {
       return const AuthSamlConsumptionResult.rejected(
         AuthSamlConsumptionFailure.assertionReplayed,
+      );
+    }
+    if (_assertions.length >= maxEntries) {
+      return const AuthSamlConsumptionResult.rejected(
+        AuthSamlConsumptionFailure.capacityExceeded,
       );
     }
     final attempt = _attempts[requestId];
@@ -125,6 +134,7 @@ final class InMemoryAuthSamlReplayStore implements AuthSamlReplayStore {
     _prune(now);
     final key = '$providerId\u0000$assertionId';
     if (_assertions.containsKey(key)) return false;
+    if (_assertions.length >= maxEntries) return false;
     _assertions[key] = assertionExpiresAt.toUtc();
     return true;
   });
