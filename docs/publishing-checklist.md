@@ -67,7 +67,7 @@ and do not need a release in this batch:
 - `routed_http` `0.1.0`
 - `routed_logging` `0.2.0`
 - `routed_testing` `0.4.0`
-- `server_cache` `0.1.0`
+- `server_cache` `0.2.0`
 - `server_contracts` `0.1.0`
 - `server_rate_limit` `0.1.0`
 - `server_sessions` `0.1.0`
@@ -79,9 +79,10 @@ intentionally released.
 
 The dependency graph has no workspace cycles. The release audit checked 28
 publishable packages after excluding `server_native`, with satisfiable local
-constraints. After adding the documented `false_secrets` entry for the
-test-only OAuth key fixture, `server_auth 0.2.0` also passes its publish
-dry-run.
+constraints. Eighteen packages are unpublished or locally ahead, and all 18
+pass `dart pub publish --dry-run` with zero warnings. The non-blocking pub hints
+are the intentional pre-1.0 version jumps for `routed` and `routed_hotwire`,
+plus the workspace dependency override notice for `routed_cli`.
 
 The auth implementation roadmap is tracked in
 [`docs/auth-worklist.md`](auth-worklist.md).
@@ -97,26 +98,27 @@ dart pub publish --dry-run
 Local packages include the extracted `routed_*` and `server_*` packages. Each
 must be published before a package that declares it as a hosted dependency.
 The external prerequisites (`server_testing`, `server_testing_shelf`, and
-`property_testing`) are published separately. The local packages are ordered
-as follows:
+`property_testing`) are published separately. Filtering the audit's
+dependency order to only unpublished or locally-ahead packages gives:
 
-1. `server_contracts`
-2. `server_auth`, `server_cache`, `server_sessions`, `server_storage`
-3. `server_rate_limit` (after `server_cache`)
-4. `routed_core` (after `server_contracts`)
-5. `routed_testing` (after `routed_core` and external `server_testing`)
-6. `routed_analyzer`, `routed_io`, `routed_node`, `routed_http`,
-   `routed_logging`, `routed_security`, and `routed_observability`
-7. `routed_rate_limit`, `routed_sessions`, `routed_storage`, and
-   `routed_validation`
-8. `routed_views` and `routed_cache`
-9. `routed_auth` (after `server_auth`, `routed_sessions`, `routed_views`,
-   and `routed_http`)
-10. `routed_openapi`
-11. `routed_openapi_builder`
-12. `routed_hotwire`
-13. `routed` (the batteries-included facade)
-14. `routed_cli`
+1. `routed_core`
+2. `server_auth`
+3. `routed_cache`
+4. `routed_node`
+5. `routed_observability`
+6. `routed_rate_limit`
+7. `routed_security`
+8. `routed_sessions`
+9. `routed_storage`
+10. `routed_views`
+11. `routed_auth`
+12. `routed_auth_cloudflare`
+13. `routed_hotwire`
+14. `routed_validation`
+15. `routed_openapi`
+16. `routed`
+17. `routed_openapi_builder`
+18. `routed_cli`
 
 `server_native` is intentionally excluded from this release. Its native
 version, generated metadata, GitHub release assets, and artifact hashes will
@@ -130,32 +132,23 @@ workspace root:
 
 ```bash
 for package in \
-  packages/server_contracts \
-  packages/server_auth \
-  packages/server_cache \
-  packages/server_sessions \
-  packages/server_storage \
-  packages/server_rate_limit \
   packages/routed_core \
-  packages/server_testing/routed_testing \
-  packages/routed_analyzer \
-  packages/routed_io \
+  packages/server_auth \
+  packages/routed_cache \
   packages/routed_node \
-  packages/routed_http \
-  packages/routed_logging \
-  packages/routed_security \
   packages/routed_observability \
   packages/routed_rate_limit \
+  packages/routed_security \
   packages/routed_sessions \
   packages/routed_storage \
-  packages/routed_validation \
   packages/routed_views \
-  packages/routed_cache \
   packages/routed_auth \
-  packages/routed_openapi \
-  packages/routed_openapi_builder \
+  packages/routed_auth_cloudflare \
   packages/routed_hotwire \
+  packages/routed_validation \
+  packages/routed_openapi \
   packages/routed \
+  packages/routed_openapi_builder \
   packages/routed_cli; do
   (cd "$package" && dart pub publish --dry-run) || {
     result=$?
