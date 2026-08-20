@@ -15,6 +15,7 @@ class OpenApiSpec {
     this.servers = const [],
     this.paths = const {},
     this.tags = const [],
+    this.components,
   });
 
   final String openapi;
@@ -22,6 +23,7 @@ class OpenApiSpec {
   final List<OpenApiServer> servers;
   final Map<String, OpenApiPathItem> paths;
   final List<OpenApiTag> tags;
+  final OpenApiComponents? components;
 
   Map<String, Object?> toJson() {
     return {
@@ -32,6 +34,8 @@ class OpenApiSpec {
       if (paths.isNotEmpty)
         'paths': paths.map((k, v) => MapEntry(k, v.toJson())),
       if (tags.isNotEmpty) 'tags': tags.map((t) => t.toJson()).toList(),
+      if (components != null && !components!.isEmpty)
+        'components': components!.toJson(),
     };
   }
 
@@ -68,6 +72,11 @@ class OpenApiSpec {
                 .map(OpenApiTag.fromJson)
                 .toList()
           : const [],
+      components: json['components'] is Map<String, Object?>
+          ? OpenApiComponents.fromJson(
+              json['components'] as Map<String, Object?>,
+            )
+          : null,
     );
   }
 }
@@ -276,6 +285,7 @@ class OpenApiOperation {
     this.parameters = const [],
     this.requestBody,
     this.responses = const {},
+    this.security,
     this.deprecated = false,
   });
 
@@ -286,6 +296,12 @@ class OpenApiOperation {
   final List<OpenApiParameter> parameters;
   final OpenApiRequestBody? requestBody;
   final Map<String, OpenApiResponse> responses;
+
+  /// Per-operation security requirements.
+  ///
+  /// Each map is an alternative (logical OR). An empty list explicitly marks
+  /// an operation as public.
+  final List<Map<String, List<String>>>? security;
   final bool deprecated;
 
   Map<String, Object?> toJson() {
@@ -299,6 +315,14 @@ class OpenApiOperation {
       if (requestBody != null) 'requestBody': requestBody!.toJson(),
       if (responses.isNotEmpty)
         'responses': responses.map((k, v) => MapEntry(k, v.toJson())),
+      if (security != null)
+        'security': security!
+            .map(
+              (requirement) => requirement.map(
+                (name, scopes) => MapEntry(name, List<String>.from(scopes)),
+              ),
+            )
+            .toList(),
       if (deprecated) 'deprecated': true,
     };
   }
@@ -330,7 +354,99 @@ class OpenApiOperation {
               ),
             )
           : const {},
+      security: json['security'] is List
+          ? (json['security'] as List)
+                .whereType<Map<String, Object?>>()
+                .map(
+                  (requirement) => requirement.map(
+                    (name, scopes) => MapEntry(
+                      name,
+                      scopes is List ? scopes.cast<String>() : const <String>[],
+                    ),
+                  ),
+                )
+                .toList()
+          : null,
       deprecated: json['deprecated'] == true,
+    );
+  }
+}
+
+/// Reusable OpenAPI components.
+class OpenApiComponents {
+  const OpenApiComponents({
+    this.schemas = const {},
+    this.securitySchemes = const {},
+  });
+
+  final Map<String, Map<String, Object?>> schemas;
+  final Map<String, OpenApiSecurityScheme> securitySchemes;
+
+  bool get isEmpty => schemas.isEmpty && securitySchemes.isEmpty;
+
+  Map<String, Object?> toJson() => {
+    if (schemas.isNotEmpty) 'schemas': schemas,
+    if (securitySchemes.isNotEmpty)
+      'securitySchemes': securitySchemes.map(
+        (name, scheme) => MapEntry(name, scheme.toJson()),
+      ),
+  };
+
+  factory OpenApiComponents.fromJson(Map<String, Object?> json) {
+    return OpenApiComponents(
+      schemas: json['schemas'] is Map<String, Object?>
+          ? (json['schemas'] as Map<String, Object?>).map(
+              (name, schema) =>
+                  MapEntry(name, Map<String, Object?>.from(schema as Map)),
+            )
+          : const {},
+      securitySchemes: json['securitySchemes'] is Map<String, Object?>
+          ? (json['securitySchemes'] as Map<String, Object?>).map(
+              (name, scheme) => MapEntry(
+                name,
+                OpenApiSecurityScheme.fromJson(scheme as Map<String, Object?>),
+              ),
+            )
+          : const {},
+    );
+  }
+}
+
+/// An OpenAPI security scheme used by operation security requirements.
+class OpenApiSecurityScheme {
+  const OpenApiSecurityScheme({
+    required this.type,
+    this.description,
+    this.name,
+    this.location,
+    this.scheme,
+    this.bearerFormat,
+  });
+
+  final String type;
+  final String? description;
+  final String? name;
+  final String? location;
+  final String? scheme;
+  final String? bearerFormat;
+
+  Map<String, Object?> toJson() => {
+    'type': type,
+    if (description != null) 'description': description,
+    if (name != null) 'name': name,
+    if (location != null) 'in': location,
+    if (scheme != null) 'scheme': scheme,
+    if (bearerFormat != null) 'bearerFormat': bearerFormat,
+  };
+
+  factory OpenApiSecurityScheme.fromJson(Map<String, Object?> json) {
+    return OpenApiSecurityScheme(
+      type: (json['type'] as String?) ?? '',
+      description: json['description'] as String?,
+      name: json['name'] as String?,
+      location: json['in'] as String?,
+      scheme: json['scheme'] as String?,
+      bearerFormat: json['bearerFormat'] as String?,
     );
   }
 }

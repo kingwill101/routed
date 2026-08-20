@@ -1,0 +1,442 @@
+import 'package:routed_openapi/server_auth.dart';
+import 'package:server_auth/server_auth.dart';
+import 'package:test/test.dart';
+
+void main() {
+  group('AuthPluginOpenApiGenerator', () {
+    test('generates built-in plugin operations from the frozen registry', () {
+      final registry = _registry(<AuthServerPlugin<Object>>[
+        AnonymousPlugin<Object>(),
+      ]);
+
+      final spec = registry.toOpenApi31(info: _info);
+
+      expect(spec.openapi, '3.1.0');
+      expect(
+        spec.paths.keys,
+        containsAll(<String>[
+          '/auth/sign-in/anonymous',
+          '/auth/delete-anonymous-user',
+        ]),
+      );
+
+      final signIn = spec.paths['/auth/sign-in/anonymous']!.post!;
+      expect(signIn.operationId, 'authAnonymousSignIn');
+      expect(signIn.tags, <String>['anonymous']);
+      expect(signIn.security, isEmpty);
+      expect(signIn.responses.keys, containsAll(<String>['200', '429']));
+
+      final delete = spec.paths['/auth/delete-anonymous-user']!.post!;
+      expect(delete.operationId, 'authAnonymousDelete');
+      expect(delete.security, const <Map<String, List<String>>>[
+        <String, List<String>>{
+          AuthPluginOpenApiGenerator.sessionCookieSecurityScheme: <String>[],
+        },
+        <String, List<String>>{
+          AuthPluginOpenApiGenerator.bearerSecurityScheme: <String>[],
+        },
+      ]);
+      expect(
+        spec.components!.securitySchemes.keys,
+        containsAll(<String>['authSessionCookie', 'authBearer']),
+      );
+      expect(
+        spec.components!.schemas.keys,
+        containsAll(<String>[
+          'AuthAnonymousSignInRequest',
+          'AuthAnonymousSignInResponse',
+          'AuthAnonymousDeleteRequest',
+          'AuthAnonymousDeleteResponse',
+        ]),
+      );
+      _expectGeneratedClientCompatible(spec);
+    });
+
+    test('composed plugin additions appear without a route catalogue', () {
+      final withoutMagicLink = _registry(<AuthServerPlugin<Object>>[
+        AnonymousPlugin<Object>(),
+      ]).toOpenApi31(info: _info);
+      final withMagicLink = _registry(<AuthServerPlugin<Object>>[
+        AnonymousPlugin<Object>(),
+        const _ContractPlugin(
+          id: 'magic_link',
+          endpoints: <_EndpointContract>[
+            _EndpointContract(
+              id: 'magicLink.send',
+              method: AuthOperationMethod.post,
+              path: '/magic-link/send',
+              requestSchema: <String, Object?>{
+                'type': 'object',
+                'properties': <String, Object?>{
+                  'email': <String, Object?>{
+                    'type': 'string',
+                    'format': 'email',
+                  },
+                },
+                'required': <String>['email'],
+                'additionalProperties': false,
+              },
+              responseSchema: <String, Object?>{
+                'type': 'object',
+                'properties': <String, Object?>{
+                  'accepted': <String, Object?>{'type': 'boolean'},
+                },
+                'required': <String>['accepted'],
+              },
+              requestRequired: true,
+              csrfRequired: true,
+            ),
+          ],
+        ),
+      ]).toOpenApi31(info: _info);
+
+      expect(withoutMagicLink.paths, isNot(contains('/auth/magic-link/send')));
+      final operation = withMagicLink.paths['/auth/magic-link/send']!.post!;
+      expect(operation.operationId, 'authMagicLinkSend');
+      expect(operation.tags, <String>['magic_link']);
+      expect(operation.requestBody!.required, isTrue);
+      expect(operation.parameters.single.name, 'x-csrf-token');
+      expect(operation.responses.keys, containsAll(<String>['200', '403']));
+      expect(
+        withMagicLink.components!.schemas['AuthMagicLinkSendRequest'],
+        containsPair('additionalProperties', false),
+      );
+      _expectGeneratedClientCompatible(withMagicLink);
+    });
+
+    test('turns typed GET contracts into path and query parameters', () {
+      final registry = _registry(<AuthServerPlugin<Object>>[
+        const _ContractPlugin(
+          id: 'tokens',
+          endpoints: <_EndpointContract>[
+            _EndpointContract(
+              id: 'tokens.inspect',
+              method: AuthOperationMethod.get,
+              path: '/tokens/{id}',
+              requestSchema: <String, Object?>{
+                'type': 'object',
+                'properties': <String, Object?>{
+                  'id': <String, Object?>{'type': 'string'},
+                  'expand': <String, Object?>{'type': 'boolean'},
+                },
+                'required': <String>['id'],
+              },
+              responseSchema: <String, Object?>{'type': 'object'},
+            ),
+          ],
+        ),
+      ]);
+
+      final operation = registry
+          .toOpenApi31(info: _info)
+          .paths['/auth/tokens/{id}']!
+          .get!;
+
+      expect(
+        operation.parameters
+            .map((parameter) => '${parameter.location}:${parameter.name}')
+            .toList(),
+        <String>['path:id', 'query:expand'],
+      );
+      expect(operation.parameters.first.isRequired, isTrue);
+      expect(operation.parameters.last.isRequired, isFalse);
+      expect(operation.requestBody, isNull);
+    });
+
+    test('keeps well-known plugin endpoints at the root', () {
+      final registry = _registry(<AuthServerPlugin<Object>>[
+        const _ContractPlugin(
+          id: 'metadata',
+          endpoints: <_EndpointContract>[
+            _EndpointContract(
+              id: 'metadata.discovery',
+              method: AuthOperationMethod.get,
+              path: '/.well-known/auth',
+              requestSchema: <String, Object?>{},
+              responseSchema: <String, Object?>{'type': 'object'},
+            ),
+          ],
+        ),
+      ]);
+
+      final spec = registry.toOpenApi31(info: _info);
+
+      expect(spec.paths, contains('/.well-known/auth'));
+      expect(spec.paths, isNot(contains('/auth/.well-known/auth')));
+    });
+
+    test('can advertise bearer-only session authentication', () {
+      final registry = _registry(<AuthServerPlugin<Object>>[
+        AnonymousPlugin<Object>(),
+      ]);
+
+      final spec = registry.toOpenApi31(
+        info: _info,
+        config: const AuthPluginOpenApiConfig(
+          sessionSecurity: AuthOpenApiSessionSecurity.bearer,
+        ),
+      );
+      final operation = spec.paths['/auth/delete-anonymous-user']!.post!;
+
+      expect(operation.security, const <Map<String, List<String>>>[
+        <String, List<String>>{
+          AuthPluginOpenApiGenerator.bearerSecurityScheme: <String>[],
+        },
+      ]);
+      expect(spec.components!.securitySchemes, contains('authBearer'));
+      expect(
+        spec.components!.securitySchemes,
+        isNot(contains('authSessionCookie')),
+      );
+    });
+
+    test('rejects generated-client operation ID collisions', () {
+      final registry = _registry(<AuthServerPlugin<Object>>[
+        const _ContractPlugin(
+          id: 'collision',
+          endpoints: <_EndpointContract>[
+            _EndpointContract(
+              id: 'magic-link.send',
+              method: AuthOperationMethod.post,
+              path: '/magic-link/send',
+              requestSchema: <String, Object?>{},
+              responseSchema: <String, Object?>{},
+            ),
+            _EndpointContract(
+              id: 'magic_link.send',
+              method: AuthOperationMethod.post,
+              path: '/magic-link/send-again',
+              requestSchema: <String, Object?>{},
+              responseSchema: <String, Object?>{},
+            ),
+          ],
+        ),
+      ]);
+
+      expect(
+        () => registry.toOpenApi31(info: _info),
+        throwsA(
+          isA<AuthOpenApiContractException>().having(
+            (error) => error.message,
+            'message',
+            contains('same operationId "authMagicLinkSend"'),
+          ),
+        ),
+      );
+    });
+
+    test('plugin composition rejects duplicate method and path pairs', () {
+      expect(
+        () => _registry(<AuthServerPlugin<Object>>[
+          const _ContractPlugin(
+            id: 'duplicate_paths',
+            endpoints: <_EndpointContract>[
+              _EndpointContract(
+                id: 'first.send',
+                method: AuthOperationMethod.post,
+                path: '/send',
+                requestSchema: <String, Object?>{},
+                responseSchema: <String, Object?>{},
+              ),
+              _EndpointContract(
+                id: 'second.send',
+                method: AuthOperationMethod.post,
+                path: '/send',
+                requestSchema: <String, Object?>{},
+                responseSchema: <String, Object?>{},
+              ),
+            ],
+          ),
+        ]),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('post:/send'),
+          ),
+        ),
+      );
+    });
+
+    test('server-only plugin operations are opt-in', () {
+      final registry = _registry(<AuthServerPlugin<Object>>[
+        const _ContractPlugin(
+          id: 'internal',
+          endpoints: <_EndpointContract>[
+            _EndpointContract(
+              id: 'internal.rotate',
+              method: AuthOperationMethod.post,
+              path: '/internal/rotate',
+              requestSchema: <String, Object?>{},
+              responseSchema: <String, Object?>{},
+              serverOnly: true,
+            ),
+          ],
+        ),
+      ]);
+
+      expect(registry.toOpenApi31(info: _info).paths, isEmpty);
+      expect(
+        registry
+            .toOpenApi31(
+              info: _info,
+              config: const AuthPluginOpenApiConfig(includeServerOnly: true),
+            )
+            .paths,
+        contains('/auth/internal/rotate'),
+      );
+    });
+
+    test('requires the registry topology to be frozen', () {
+      final registry = AuthServerPluginRegistry<Object>(
+        store: InMemoryAuthStore(),
+      );
+
+      expect(
+        () => registry.toOpenApi31(info: _info),
+        throwsA(isA<AuthOpenApiContractException>()),
+      );
+    });
+  });
+}
+
+const _info = OpenApiInfo(title: 'Auth API', version: '1.0.0');
+
+AuthServerPluginRegistry<Object> _registry(
+  Iterable<AuthServerPlugin<Object>> plugins,
+) {
+  final registry = AuthServerPluginRegistry<Object>(store: InMemoryAuthStore());
+  for (final plugin in plugins) {
+    registry.register(plugin);
+  }
+  registry.freeze();
+  return registry;
+}
+
+void _expectGeneratedClientCompatible(OpenApiSpec spec) {
+  final json = spec.toJson();
+  expect(json['openapi'], '3.1.0');
+  final components = json['components']! as Map<String, Object?>;
+  final schemas = components['schemas']! as Map<String, Object?>;
+  final seenOperationIds = <String>{};
+  final paths = json['paths']! as Map<String, Object?>;
+
+  for (final pathEntry in paths.entries) {
+    final path = pathEntry.value! as Map<String, Object?>;
+    for (final method in <String>['get', 'post']) {
+      final value = path[method];
+      if (value is! Map<String, Object?>) continue;
+      final operationId = value['operationId']! as String;
+      expect(operationId, matches(RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$')));
+      expect(
+        seenOperationIds.add(operationId),
+        isTrue,
+        reason: 'Duplicate operationId $operationId',
+      );
+      expect(value['responses'], isA<Map<String, Object?>>());
+      final responses = value['responses']! as Map<String, Object?>;
+      final success = responses['200']! as Map<String, Object?>;
+      _expectSchemaReferencesResolve(success, schemas);
+      if (value['requestBody'] case final Map<String, Object?> requestBody) {
+        _expectSchemaReferencesResolve(requestBody, schemas);
+      }
+    }
+  }
+
+  expect(OpenApiSpec.fromJson(json).toJson(), json);
+}
+
+void _expectSchemaReferencesResolve(
+  Map<String, Object?> value,
+  Map<String, Object?> schemas,
+) {
+  final references = <String>[];
+  void visit(Object? node) {
+    if (node is Map) {
+      for (final entry in node.entries) {
+        if (entry.key == r'$ref' && entry.value is String) {
+          references.add(entry.value! as String);
+        } else {
+          visit(entry.value);
+        }
+      }
+    } else if (node is Iterable) {
+      for (final child in node) {
+        visit(child);
+      }
+    }
+  }
+
+  visit(value);
+  expect(references, isNotEmpty);
+  for (final reference in references) {
+    const prefix = '#/components/schemas/';
+    expect(reference, startsWith(prefix));
+    expect(schemas, contains(reference.substring(prefix.length)));
+  }
+}
+
+final class _ContractPlugin
+    implements AuthServerPlugin<Object>, AuthEndpointContributor<Object> {
+  const _ContractPlugin({
+    required this.id,
+    required List<_EndpointContract> endpoints,
+  }) : _contracts = endpoints;
+
+  @override
+  final String id;
+  final List<_EndpointContract> _contracts;
+
+  @override
+  void configure(AuthServerPluginContext<Object> context) {}
+
+  @override
+  Iterable<AuthEndpointDescriptor<Object>> get endpoints =>
+      _contracts.map((contract) => contract.descriptor);
+}
+
+final class _EndpointContract {
+  const _EndpointContract({
+    required this.id,
+    required this.method,
+    required this.path,
+    required this.requestSchema,
+    required this.responseSchema,
+    this.requestRequired = false,
+    this.csrfRequired = false,
+    this.serverOnly = false,
+  });
+
+  final String id;
+  final AuthOperationMethod method;
+  final String path;
+  final Map<String, Object?> requestSchema;
+  final Map<String, Object?> responseSchema;
+  final bool requestRequired;
+  final bool csrfRequired;
+  final bool serverOnly;
+
+  AuthEndpointDescriptor<Object> get descriptor =>
+      TypedAuthEndpointDescriptor<Object, Map<String, dynamic>, Object?>(
+        id: id,
+        method: method,
+        path: path,
+        requestCodec: AuthOperationCodec<Map<String, dynamic>>(
+          decode: (value) => value,
+          encode: (value) => value,
+          schema: requestSchema,
+          required: requestRequired,
+        ),
+        responseCodec: AuthOperationCodec<Object?>(
+          decode: (value) => value,
+          encode: (value) => value,
+          schema: responseSchema,
+        ),
+        authentication: AuthOperationAuthentication.none,
+        csrfPolicy: csrfRequired
+            ? AuthOperationCsrfPolicy.required
+            : AuthOperationCsrfPolicy.none,
+        serverOnly: serverOnly,
+        handler: (invocation, request) => <String, Object?>{},
+      );
+}

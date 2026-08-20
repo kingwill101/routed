@@ -527,14 +527,43 @@ void main() {
       );
       final runtime = AuthRuntime<String>(options: options, plugins: [second]);
 
-      expect(runtime.plugins.map((feature) => feature.id), ['first', 'second']);
+      expect(runtime.plugins.map((plugin) => plugin.id), ['first', 'second']);
       expect(runtime.plugin(' first '), same(first));
       expect(runtime.hasPlugin('second'), isTrue);
       expect(first.configuredStore, same(runtime.store));
       expect(second.configuredStore, same(runtime.store));
     });
 
-    test('rejects empty and duplicate feature IDs', () {
+    test('retains typed endpoint contracts and plugin ownership', () {
+      final runtime = AuthRuntime<String>(
+        options: AuthOptions<String>(
+          providers: const <AuthProvider>[],
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
+          plugins: <AuthServerPlugin<String>>[AnonymousPlugin<String>()],
+        ),
+      );
+      final endpoint = runtime.registry.endpoints.first;
+      final contract = endpoint as AuthEndpointContractDescriptor;
+
+      expect(runtime.registry.pluginIdForEndpoint(endpoint.id), 'anonymous');
+      expect(contract.requestCodec.schema, isEmpty);
+      expect(contract.requestCodec.contentType, 'application/json');
+      expect(contract.requestCodec.required, isFalse);
+
+      final codec = AuthOperationCodec<Map<String, dynamic>>(
+        decode: (value) => value,
+        encode: (value) => value,
+        schema: const <String, Object?>{'type': 'object'},
+        contentType: 'application/x-www-form-urlencoded',
+        required: true,
+      );
+      expect(codec.schema, const <String, Object?>{'type': 'object'});
+      expect(codec.contentType, 'application/x-www-form-urlencoded');
+      expect(codec.required, isTrue);
+    });
+
+    test('rejects empty and duplicate plugin IDs', () {
       expect(
         () => AuthRuntime<String>(
           options: AuthOptions<String>(

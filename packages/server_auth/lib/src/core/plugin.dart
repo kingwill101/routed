@@ -15,11 +15,34 @@ enum AuthOperationOriginPolicy { none, browser }
 
 enum AuthOperationCsrfPolicy { none, required }
 
-final class AuthOperationCodec<T> {
-  const AuthOperationCodec({required this.decode, required this.encode});
+/// Serialization contract for one side of an auth operation.
+///
+/// [schema] is JSON Schema Draft 2020-12 metadata. It is optional at runtime,
+/// but integrations such as OpenAPI can use it without depending on a
+/// framework-specific route type.
+abstract interface class AuthOperationContract {
+  Map<String, Object?> get schema;
+  String get contentType;
+  bool get required;
+}
+
+final class AuthOperationCodec<T> implements AuthOperationContract {
+  const AuthOperationCodec({
+    required this.decode,
+    required this.encode,
+    this.schema = const <String, Object?>{},
+    this.contentType = 'application/json',
+    this.required = false,
+  });
 
   final T Function(Map<String, dynamic> json) decode;
   final Object? Function(T value) encode;
+  @override
+  final Map<String, Object?> schema;
+  @override
+  final String contentType;
+  @override
+  final bool required;
 }
 
 final class AuthOperationInvocation<TContext> {
@@ -146,8 +169,20 @@ abstract interface class AuthEndpointDescriptor<TContext> {
   );
 }
 
+/// Optional typed request/response contracts exposed by an auth endpoint.
+///
+/// Keeping this separate from [AuthEndpointDescriptor] preserves custom
+/// untyped endpoint implementations while allowing typed endpoints to drive
+/// documentation and generated clients.
+abstract interface class AuthEndpointContractDescriptor {
+  AuthOperationContract get requestCodec;
+  AuthOperationContract get responseCodec;
+}
+
 final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
-    implements AuthEndpointDescriptor<TContext> {
+    implements
+        AuthEndpointDescriptor<TContext>,
+        AuthEndpointContractDescriptor {
   const TypedAuthEndpointDescriptor({
     required this.id,
     required this.method,
@@ -168,7 +203,9 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
   final AuthOperationMethod method;
   @override
   final String path;
+  @override
   final AuthOperationCodec<TRequest> requestCodec;
+  @override
   final AuthOperationCodec<TResponse> responseCodec;
   final FutureOr<TResponse> Function(
     AuthOperationInvocation<TContext> invocation,
@@ -322,6 +359,7 @@ class AuthServerPluginRegistry<TContext> {
       <String, AuthServerPlugin<TContext>>{};
   final Map<String, AuthEndpointDescriptor<TContext>> _endpoints =
       <String, AuthEndpointDescriptor<TContext>>{};
+  final Map<String, String> _endpointPluginIds = <String, String>{};
   final Set<String> _endpointKeys = <String>{};
   bool _frozen = false;
 
@@ -359,6 +397,7 @@ class AuthServerPluginRegistry<TContext> {
     }
     for (final plugin
         in topology.whereType<AuthEndpointContributor<TContext>>()) {
+      final pluginId = (plugin as AuthServerPlugin<TContext>).id.trim();
       for (final endpoint in plugin.endpoints) {
         final endpointId = endpoint.id.trim();
         final path = _normalizeEndpointPath(endpoint.path);
@@ -378,6 +417,7 @@ class AuthServerPluginRegistry<TContext> {
           throw StateError('Auth endpoint path "$key" is already registered.');
         }
         _endpoints[endpointId] = endpoint;
+        _endpointPluginIds[endpointId] = pluginId;
       }
     }
     _frozen = true;
@@ -392,6 +432,10 @@ class AuthServerPluginRegistry<TContext> {
 
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints =>
       List<AuthEndpointDescriptor<TContext>>.unmodifiable(_endpoints.values);
+
+  /// Returns the plugin that contributed [endpointId], after [freeze].
+  String? pluginIdForEndpoint(String endpointId) =>
+      _endpointPluginIds[endpointId.trim()];
 
   Future<void> enforceAuthenticationPolicy(
     AuthAuthenticationPolicyRequest<TContext> request,
