@@ -1,5 +1,7 @@
 ## 0.2.0 - 2026-08-20
 
+- Reject ASCII control characters in callback redirects before URI parsing so
+  header-injection payloads cannot reach host response adapters.
 - Add deterministic browser-shaped WebAuthn test ceremonies with real ES256
   keys, `none` attestation, and ASN.1 DER assertion signatures for offline host
   conformance suites.

@@ -179,6 +179,58 @@ void main() {
       );
     },
   );
+
+  test('Node portable adapter satisfies external-provider auth', () async {
+    final sessionEngine = createAuthExternalProviderRuntimeConformanceEngine();
+    final jwtEngine = createAuthExternalProviderRuntimeConformanceEngine(
+      sessionStrategy: AuthSessionStrategy.jwt,
+    );
+    await sessionEngine.initialize();
+    await jwtEngine.initialize();
+    addTearDown(() async {
+      await sessionEngine.close();
+      await jwtEngine.close();
+    });
+
+    await verifyAuthExternalProviderRuntimeConformance(
+      origin: Uri.parse(_origin),
+      send: (request) => _dispatchNode(sessionEngine, request),
+      expectJwt: false,
+    );
+    await verifyAuthExternalProviderRuntimeConformance(
+      origin: Uri.parse(_origin),
+      send: (request) => _dispatchNode(jwtEngine, request),
+      expectJwt: true,
+    );
+  });
+
+  test(
+    'mocked Cloudflare Fetch edge satisfies external-provider auth',
+    () async {
+      final sessionEngine =
+          createAuthExternalProviderRuntimeConformanceEngine();
+      final jwtEngine = createAuthExternalProviderRuntimeConformanceEngine(
+        sessionStrategy: AuthSessionStrategy.jwt,
+      );
+      await sessionEngine.initialize();
+      await jwtEngine.initialize();
+      addTearDown(() async {
+        await sessionEngine.close();
+        await jwtEngine.close();
+      });
+
+      await verifyAuthExternalProviderRuntimeConformance(
+        origin: Uri.parse(_origin),
+        send: (request) => _dispatchFetch(sessionEngine, request),
+        expectJwt: false,
+      );
+      await verifyAuthExternalProviderRuntimeConformance(
+        origin: Uri.parse(_origin),
+        send: (request) => _dispatchFetch(jwtEngine, request),
+        expectJwt: true,
+      );
+    },
+  );
 }
 
 Future<AuthRuntimeConformanceResponse> _dispatchNode(

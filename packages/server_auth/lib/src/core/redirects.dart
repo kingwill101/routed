@@ -28,6 +28,9 @@ String? sanitizeRedirectUrl(
   }
 
   final trimmed = value.trim();
+  if (trimmed.codeUnits.any((unit) => unit < 0x20 || unit == 0x7f)) {
+    return null;
+  }
   final uri = Uri.tryParse(trimmed);
   if (uri == null) {
     return null;

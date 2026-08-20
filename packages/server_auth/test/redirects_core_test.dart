@@ -35,6 +35,17 @@ void main() {
     expect(sanitized, isNull);
   });
 
+  test('sanitizeRedirectUrl rejects control-character injection', () {
+    final requestUri = Uri.parse('https://app.test/auth/signin');
+    for (final value in <String>[
+      '/safe\r\nlocation:https://evil.test',
+      '/safe\u0000suffix',
+      '/safe\u007fsuffix',
+    ]) {
+      expect(sanitizeRedirectUrl(value, requestUri: requestUri), isNull);
+    }
+  });
+
   test('sanitizeRedirectUrl allows same-origin absolute URLs', () {
     final sanitized = sanitizeRedirectUrl(
       'https://app.test/profile',

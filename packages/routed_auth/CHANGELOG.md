@@ -1,5 +1,9 @@
 ## 0.2.0 - 2026-08-20
 
+- Add a public deterministic external-provider runtime conformance fixture for
+  OAuth/OIDC and custom callback providers, covering state, PKCE, nonce,
+  browser binding, replay, account linking, redirect safety, bounded failures,
+  and host-owned session/JWT issuance across IO, Node, and Cloudflare Fetch.
 - Publish a framework-neutral plugin runtime conformance fixture covering email
   OTP, username, API-key exchange, successful browser-shaped WebAuthn
   registration and DER-signed authentication, challenge/counter replay,

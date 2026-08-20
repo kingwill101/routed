@@ -116,6 +116,80 @@ void runNativeAuthRuntimeTests() {
     },
   );
 
+  test('native Node listener satisfies external-provider auth', () async {
+    final sessionEngine = createAuthExternalProviderRuntimeConformanceEngine();
+    final jwtEngine = createAuthExternalProviderRuntimeConformanceEngine(
+      sessionStrategy: AuthSessionStrategy.jwt,
+    );
+    await sessionEngine.initialize();
+    await jwtEngine.initialize();
+    final sessionHandle = await serveNode(
+      sessionEngine,
+      host: '127.0.0.1',
+      port: 0,
+      echo: false,
+    );
+    final jwtHandle = await serveNode(
+      jwtEngine,
+      host: '127.0.0.1',
+      port: 0,
+      echo: false,
+    );
+    final sessionOrigin = Uri.parse('$_nodeOrigin:${sessionHandle.port}');
+    final jwtOrigin = Uri.parse('$_nodeOrigin:${jwtHandle.port}');
+    try {
+      await verifyAuthExternalProviderRuntimeConformance(
+        origin: sessionOrigin,
+        send: (request) => _sendWithFetch(sessionOrigin, request),
+        expectJwt: false,
+      );
+      await verifyAuthExternalProviderRuntimeConformance(
+        origin: jwtOrigin,
+        send: (request) => _sendWithFetch(jwtOrigin, request),
+        expectJwt: true,
+      );
+    } finally {
+      await sessionHandle.close(force: true);
+      await jwtHandle.close(force: true);
+      await sessionEngine.close();
+      await jwtEngine.close();
+    }
+  });
+
+  test(
+    'native Cloudflare Fetch export satisfies external-provider auth',
+    () async {
+      final sessionEngine =
+          createAuthExternalProviderRuntimeConformanceEngine();
+      final jwtEngine = createAuthExternalProviderRuntimeConformanceEngine(
+        sessionStrategy: AuthSessionStrategy.jwt,
+      );
+      await sessionEngine.initialize();
+      await jwtEngine.initialize();
+      try {
+        await verifyAuthExternalProviderRuntimeConformance(
+          origin: Uri.parse(_cloudflareOrigin),
+          send: (request) {
+            defineCloudflareFetch(sessionEngine);
+            return _sendToCloudflareExport(request);
+          },
+          expectJwt: false,
+        );
+        await verifyAuthExternalProviderRuntimeConformance(
+          origin: Uri.parse(_cloudflareOrigin),
+          send: (request) {
+            defineCloudflareFetch(jwtEngine);
+            return _sendToCloudflareExport(request);
+          },
+          expectJwt: true,
+        );
+      } finally {
+        await sessionEngine.close();
+        await jwtEngine.close();
+      }
+    },
+  );
+
   test('native Cloudflare Fetch startup errors are generic', () async {
     defineCloudflareFetchAsync(
       Future.error(StateError(authRuntimeConformanceFailureMarker)),
@@ -188,7 +262,8 @@ Future<JSObject> _invokeFetch(
 JSObject _requestInit(AuthRuntimeConformanceRequest request) {
   final init = JSObject()
     ..setProperty('method'.toJS, request.method.toJS)
-    ..setProperty('headers'.toJS, request.headers.jsify());
+    ..setProperty('headers'.toJS, request.headers.jsify())
+    ..setProperty('redirect'.toJS, 'manual'.toJS);
   final body = request.body;
   if (body != null) init.setProperty('body'.toJS, body.toJS);
   return init;
@@ -198,12 +273,28 @@ Future<AuthRuntimeConformanceResponse> _readResponse(JSObject response) async {
   final status = (response.getProperty('status'.toJS) as JSNumber).toDartInt;
   final headersObject = response.getProperty('headers'.toJS) as JSObject;
   final headers = <String, List<String>>{};
-  for (final name in const <String>['content-type', 'set-cookie']) {
+  for (final name in const <String>['content-type', 'location']) {
     final value = headersObject.callMethodVarArgs<JSAny?>('get'.toJS, [
       name.toJS,
     ]);
     if (value != null && value.isA<JSString>()) {
       headers[name] = <String>[(value as JSString).toDart];
+    }
+  }
+  final getSetCookie = headersObject.getProperty<JSAny?>('getSetCookie'.toJS);
+  if (getSetCookie != null && getSetCookie.isA<JSFunction>()) {
+    final values = headersObject
+        .callMethodVarArgs<JSAny?>('getSetCookie'.toJS, const <JSAny?>[])
+        ?.dartify();
+    if (values is List<Object?> && values.isNotEmpty) {
+      headers['set-cookie'] = values.cast<String>();
+    }
+  } else {
+    final value = headersObject.callMethodVarArgs<JSAny?>('get'.toJS, [
+      'set-cookie'.toJS,
+    ]);
+    if (value != null && value.isA<JSString>()) {
+      headers['set-cookie'] = <String>[(value as JSString).toDart];
     }
   }
   final bodyPromise = response.callMethod<JSAny?>('text'.toJS);

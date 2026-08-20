@@ -298,6 +298,11 @@ account, session, client, and plugin contracts above:
   exchange, successful browser-shaped WebAuthn registration and DER-signed
   authentication, challenge/counter replay, sanitized WebAuthn errors,
   anonymous auth, and two-factor route gating on each applicable host.
+  Deterministic OAuth/OIDC and custom callback
+  providers now cover state, PKCE, nonce, browser binding, replay, account
+  linking, redirect safety, provider failures, and host-owned session/JWT
+  issuance across IO, portable/native Node, and portable/native Cloudflare
+  Fetch adapters.
 - [ ] Run the D1 conformance harness against a deployed or remote-bound
   Cloudflare database; compilation and local emulation are not live validation.
 - [x] Keep the current auth packages, host adapter integrations, and public
@@ -319,7 +324,8 @@ account, session, client, and plugin contracts above:
   `routed_io`, native Node, and native Cloudflare Fetch request paths.
 - [ ] Every advertised plugin flow has matching end-to-end coverage across its
   applicable host runtimes. Provider-free flows now run across IO, Node, and
-  Cloudflare Fetch, including successful browser WebAuthn ceremonies;
-  external-provider callbacks and a deployed Worker run remain.
+  Cloudflare Fetch, and deterministic external-provider callbacks run across
+  IO, portable/native Node, and portable/native Cloudflare Fetch, including
+  successful browser-shaped WebAuthn ceremonies. A deployed Worker run remains.
 - [ ] Security-sensitive defaults are safe without requiring users to discover
   undocumented configuration switches.

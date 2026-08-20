@@ -68,6 +68,48 @@ void main() {
           _send(client, originWithoutTwoFactor, request),
     );
   });
+
+  test('dart:io listener satisfies external-provider auth contracts', () async {
+    final sessionEngine = createAuthExternalProviderRuntimeConformanceEngine();
+    final jwtEngine = createAuthExternalProviderRuntimeConformanceEngine(
+      sessionStrategy: AuthSessionStrategy.jwt,
+    );
+    await sessionEngine.initialize();
+    await jwtEngine.initialize();
+    final sessionHandle = await serveIo(
+      sessionEngine,
+      host: '127.0.0.1',
+      port: 0,
+      echo: false,
+    );
+    final jwtHandle = await serveIo(
+      jwtEngine,
+      host: '127.0.0.1',
+      port: 0,
+      echo: false,
+    );
+    final client = HttpClient();
+    addTearDown(() async {
+      client.close(force: true);
+      await sessionHandle.close(force: true);
+      await jwtHandle.close(force: true);
+      await sessionEngine.close();
+      await jwtEngine.close();
+    });
+    final sessionOrigin = Uri.parse('http://127.0.0.1:${sessionHandle.port}');
+    final jwtOrigin = Uri.parse('http://127.0.0.1:${jwtHandle.port}');
+
+    await verifyAuthExternalProviderRuntimeConformance(
+      origin: sessionOrigin,
+      send: (request) => _send(client, sessionOrigin, request),
+      expectJwt: false,
+    );
+    await verifyAuthExternalProviderRuntimeConformance(
+      origin: jwtOrigin,
+      send: (request) => _send(client, jwtOrigin, request),
+      expectJwt: true,
+    );
+  });
 }
 
 Future<AuthRuntimeConformanceResponse> _send(
