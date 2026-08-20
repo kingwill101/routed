@@ -66,7 +66,7 @@ final options = AuthOptions<MyRequestContext>(
 );
 ```
 
-Migration v8 stores only the secret digest and safe key metadata: owner, name,
+Migration v9 stores only the secret digest and safe key metadata: owner, name,
 prefix, scopes, expiry, last-use, and revocation timestamps. The raw key remains
 in the one-time create or rotate result and never enters D1. Issue, touch,
 revoke, rotate, resolve, and list operations are bounded by
@@ -80,6 +80,43 @@ When `countsAsPrimaryAuthenticationMethod` is enabled, safe revocation is
 available only if the exact `store.apiKeys` instance and every fallback method
 belong to the authoritative D1 topology. Mixed or foreign stores fail closed;
 there is no process-local callback transaction or compatibility fallback.
+
+WebAuthn uses the root adapter's optional typed capability. Install only the
+plugin and its provider; application code does not construct D1 substores:
+
+```dart
+final store = await authStore(env);
+final passkeys = WebAuthnPlugin<MyRequestContext>(
+  provider: WebAuthnProvider(
+    getUserInfo: resolvePasskeyUser,
+    getRelyingParty: (_, _) => const WebAuthnRelyingParty(
+      id: 'example.com',
+      name: 'Example',
+      origin: 'https://example.com',
+    ),
+  ),
+);
+
+final options = AuthOptions<MyRequestContext>(
+  store: store,
+  plugins: [passkeys],
+);
+```
+
+Append-only migration v10 adds bounded challenge and authenticator tables.
+Challenges persist only a SHA-256 digest and exact ceremony bindings and are
+deleted by one atomic consume. Credential IDs are globally unique, signature
+counters use compare-and-set updates, and public-key, transport, name, and
+identifier fields are bounded. Configure global limits with
+`webAuthnChallengeMaxRecords` and `webAuthnAuthenticatorMaxRecords` when
+opening the store. Raw challenges and attestation objects are never persisted.
+
+Passkey removal rechecks same-domain password, OAuth, email, API-key, and other
+passkey fallbacks in the conditional D1 mutation. Mixed or future unsupported
+stores fail closed. Hard deletion removes bound challenges and passkeys in the
+root batch, rolls back with the user, and still cleans the backend-owned tables
+after the WebAuthn plugin is removed. A deletion receipt prevents a deleted
+user ID from reactivating retained or concurrently created credentials.
 
 Provider mode must use all three OAuth stores from the same opened adapter:
 
@@ -162,8 +199,9 @@ passed all 41 enabled cases, including six anonymous cases plus the core,
 managed-SCIM, username, OAuth-exchange, rollback, and prefix-isolation cases.
 Fault-injection cases remain local-only. The harness deleted its owned database,
 and a separate Wrangler listing confirmed that no matching resource remained.
-The API-key non-fault cases and migration v9 are included in the harness but
-have not run against live Cloudflare D1.
+The API-key non-fault cases through migration v9 and WebAuthn non-fault cases
+through migration v10 are included in the harness but have not run against
+live Cloudflare D1.
 
 The adapter also implements `AuthMagicLinkBackend` and `AuthEmailOtpBackend`.
 Magic-link replacement and consume-plus-user resolution, and OTP attempt/

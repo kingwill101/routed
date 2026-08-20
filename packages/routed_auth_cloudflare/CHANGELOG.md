@@ -1,5 +1,15 @@
 ## 0.1.0
 
+- Add append-only migration version 10 and typed root-owned D1 WebAuthn
+  challenge and authenticator stores. Challenges are bounded and digest-only;
+  credential IDs are unique and counters use compare-and-set updates.
+- Add exact same-domain passkey removal, backend-owned hard-deletion cleanup
+  that survives plugin removal, deletion receipts against user-ID reuse, and
+  bounded public-key and metadata validation. Mixed stores fail closed.
+- Run reusable WebAuthn conformance, 200 hostile-input property cases,
+  capacity, secret-inspection, contention, rollback, and deletion tests against
+  the local D1 fake. Non-fault cases are wired into the offline/live harness;
+  migration v10 has not run against live Cloudflare D1.
 - Add append-only migration version 9 and a typed `store.apiKeys` D1 adapter.
   API-key issue, lookup, touch, revoke, rotate, list, expiry pruning, and
   user-access revocation persist only secret digests and bounded safe metadata.

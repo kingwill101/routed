@@ -103,11 +103,12 @@ The work is intentionally split between framework-agnostic capabilities in
   atomically per user. D1 binds only its authoritative core method stores,
   atomically rechecks the exact OAuth target and fallback in SQL, and records
   mixed external-store topologies without blocking plugin composition; unlink
-  then fails closed. D1 now owns the exact API-key store, primary-key removal,
-  and hard-deletion plan through migration v9. Backend-bound D1 plans for
-  external passkey, phone, and future plugin stores remain. Passwordless unlinking requires a recent
-  original authentication or explicit step-up proof rather than merely an
-  active session.
+  then fails closed. D1 now owns the exact API-key store through migration v9
+  and bounded WebAuthn challenges, passkeys, counter updates, primary-method
+  removal, and hard-deletion cleanup through migration v10. Backend-bound D1
+  phone and future plugin stores remain. Passwordless unlinking requires a
+  recent original authentication or explicit step-up proof rather than merely
+  an active session.
 - [x] Add a first-class server-session management API: list current sessions
   with device metadata, revoke one session, revoke all other sessions, and
   rotate credentials after sensitive changes. JWT session management remains a
@@ -186,17 +187,18 @@ The work is intentionally split between framework-agnostic capabilities in
   and a backend-owned deletion coordinator that pass local conformance,
   rollback, contention, and fault tests. It now owns OAuth provider-mode
   code/token exchange, managed SCIM connections, username mutations, the typed
-  anonymous create/delete/upgrade contract, and bounded digest-only API keys
-  through append-only migration version 9. A disposable live-D1 run passed all
-  41 cases enabled through migration v7, including the anonymous cases, and its
-  owned database was independently confirmed deleted. The API-key v9 cases are
-  wired into the opt-in harness but have not run against live D1. Broader SQL
-  adapters and D1 plans for external plugin stores remain open. D1's
-  authentication-method coordinator accepts its own users, credentials,
-  accounts, email-OTP, and exact API-key stores; external method stores require
-  a future backend-bound plan. Mixed topologies remain usable but account
-  unlink fails closed. Removed external plugins are not
-  discoverable automatically:
+  anonymous create/delete/upgrade contract, bounded digest-only API keys
+  through append-only migration version 9, and bounded digest-only WebAuthn
+  challenges plus passkeys through version 10. A disposable live-D1 run passed
+  all 41 cases enabled through migration v7, including the anonymous cases,
+  and its owned database was independently confirmed deleted. The API-key v9
+  and WebAuthn v10 cases are wired into the opt-in harness but have not run
+  against live D1. Broader SQL adapters and D1 phone/future-plugin plans remain
+  open. D1's authentication-method coordinator accepts its own users,
+  credentials, accounts, email-OTP, exact API-key, and exact passkey stores;
+  external method stores require a future backend-bound plan. Mixed topologies
+  remain usable but account unlink fails closed. Removed external plugins are
+  not discoverable automatically:
   durable adapters must retain a historical namespace inventory or reject
   deletion until that namespace has backend-owned cleanup.
 - [x] Define a stable public adapter conformance suite that can run against

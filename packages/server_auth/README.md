@@ -848,6 +848,42 @@ trusted-device revocation command can commit separately from credential and
 session changes unless a durable adapter provides a wider store-owned
 transaction; the two-factor plugin does not claim cross-backend atomicity.
 
+## Optional WebAuthn and passkeys
+
+Passkeys are installed as a server plugin. The root store may provide the
+optional typed WebAuthn capability, or the plugin may receive an explicit
+capability owner through `storage`. Durable stores must atomically consume
+challenge digests, enforce globally unique credential IDs, and compare and set
+signature counters.
+
+```dart
+final passkeyProvider = WebAuthnProvider(
+  getUserInfo: resolvePasskeyUser,
+  getRelyingParty: (_, _) => const WebAuthnRelyingParty(
+    id: 'example.com',
+    name: 'Example',
+    origin: 'https://example.com',
+  ),
+);
+
+final passkeys = WebAuthnPlugin<MyRequestContext>(
+  provider: passkeyProvider,
+);
+
+final options = AuthOptions<MyRequestContext>(
+  store: authStore,
+  providers: providers,
+  productionBoundary: productionBoundary,
+  plugins: [passkeys],
+);
+```
+
+The plugin fails configuration when no typed WebAuthn capability exists. Safe
+passkey removal also fails closed unless the backend can recheck every composed
+fallback method inside its own mutation boundary. The Cloudflare adapter
+provides this capability directly on `CloudflareD1AuthStore`; no WebAuthn
+sub-store or JavaScript interop needs to be supplied by application code.
+
 ## Optional FIDO metadata trust evaluation
 
 `FidoMetadataDownloader` is an opt-in MDS 3.1.1 client. It accepts only HTTPS,

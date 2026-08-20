@@ -16,6 +16,11 @@
   conformance and generated property coverage for rollback, contention,
   operation rebinding, scope isolation, hostile identifiers, deletion races,
   and the invariant that projection cannot create a sign-in identity.
+- Add an optional backend-owned WebAuthn deletion-plan capability and exact
+  passkey-removal transaction. Mixed durable stores fail closed, while base
+  `AuthStore` implementations remain source-compatible without WebAuthn.
+- Export reusable WebAuthn challenge, credential-uniqueness, counter-CAS,
+  contention, lifecycle, and passkey-removal conformance/property coverage.
 - Add the exact `AuthApiKeyPrimaryMutationStore` command for durable safe
   primary-key revocation. Adapters recheck supported fallbacks inside their own
   transaction; unsupported and mixed stores fail closed without invoking the
