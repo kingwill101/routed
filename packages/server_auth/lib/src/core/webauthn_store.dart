@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'authentication_methods.dart';
 import 'deletion_transaction.dart';
 import 'providers.dart';
 
@@ -105,6 +106,47 @@ abstract interface class AuthWebAuthnAuthenticatorStore {
   );
 }
 
+/// Complete input to an exact passkey-removal transaction.
+final class AuthWebAuthnCredentialRemovalCommand {
+  AuthWebAuthnCredentialRemovalCommand({
+    required this.userId,
+    required this.credentialId,
+    required this.loadInventory,
+  }) {
+    for (final (name, value) in <(String, String)>[
+      ('userId', userId),
+      ('credentialId', credentialId),
+    ]) {
+      if (value.isEmpty || value.trim() != value) {
+        throw ArgumentError.value(
+          value,
+          name,
+          'must be canonical and non-empty',
+        );
+      }
+    }
+  }
+
+  final String userId;
+  final String credentialId;
+
+  /// Loads the bounded composed topology as evidence for the backend command.
+  ///
+  /// Durable backends must recheck every supported fallback inside their own
+  /// transaction. This callback is not itself a transaction boundary.
+  final AuthAuthenticationMethodInventoryLoader loadInventory;
+}
+
+/// Optional exact transaction for removing a passkey safely.
+///
+/// Stores that cannot join the complete authentication-method topology must
+/// return [AuthAuthenticationMethodMutationResult.atomicityUnavailable].
+abstract interface class AuthWebAuthnAuthenticatorMutationStore {
+  FutureOr<AuthAuthenticationMethodMutationResult> removeCredentialIfSafe(
+    AuthWebAuthnCredentialRemovalCommand command,
+  );
+}
+
 /// Optional persistence capability required by the WebAuthn plugin.
 ///
 /// Keeping these stores outside the base auth store lets existing adapters
@@ -192,9 +234,13 @@ final class InMemoryAuthWebAuthnChallengeStore
 
 /// In-memory registered-passkey store for tests and local development.
 final class InMemoryAuthWebAuthnAuthenticatorStore
-    implements AuthWebAuthnAuthenticatorStore, AuthInMemoryUserDeletionStore {
+    implements
+        AuthWebAuthnAuthenticatorStore,
+        AuthWebAuthnAuthenticatorMutationStore,
+        AuthInMemoryUserDeletionStore {
   final Map<String, WebAuthnAuthenticator> _records =
       <String, WebAuthnAuthenticator>{};
+  Future<void> _mutationTail = Future<void>.value();
 
   @override
   Object captureDeletionState() =>
@@ -278,6 +324,40 @@ final class InMemoryAuthWebAuthnAuthenticatorStore
     }
     _records.remove(normalizedCredentialId);
     return true;
+  }
+
+  @override
+  Future<AuthAuthenticationMethodMutationResult> removeCredentialIfSafe(
+    AuthWebAuthnCredentialRemovalCommand command,
+  ) => _serializeMutation(() async {
+    final snapshot = await command.loadInventory();
+    if (!snapshot.isComplete) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+    final target = AuthAuthenticationMethod.passkey(command.credentialId);
+    if (!snapshot.methods.contains(target)) {
+      return AuthAuthenticationMethodMutationResult.notFound;
+    }
+    if (!snapshot.methods.any(
+      (method) => method.canAuthenticate && method != target,
+    )) {
+      return AuthAuthenticationMethodMutationResult.lastAuthenticationMethod;
+    }
+    return await deleteForUser(command.userId, command.credentialId)
+        ? AuthAuthenticationMethodMutationResult.mutated
+        : AuthAuthenticationMethodMutationResult.notFound;
+  });
+
+  Future<T> _serializeMutation<T>(Future<T> Function() operation) async {
+    final completer = Completer<T>();
+    _mutationTail = _mutationTail.then((_) async {
+      try {
+        completer.complete(await operation());
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    return completer.future;
   }
 
   @override

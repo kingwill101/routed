@@ -1075,11 +1075,17 @@ final class WebAuthnPlugin<TContext>
     if (userId.trim().isEmpty || credentialId.trim().isEmpty) {
       throw AuthFlowException('webauthn_credential_invalid');
     }
-    final result = await _authenticationMethods.removeIfSafe(
-      userId: userId,
-      target: AuthAuthenticationMethod.passkey(credentialId),
-      mutate: () => _authenticatorStore.deleteForUser(userId, credentialId),
-    );
+    final result = switch (_authenticatorStore) {
+      AuthWebAuthnAuthenticatorMutationStore mutationStore =>
+        await mutationStore.removeCredentialIfSafe(
+          AuthWebAuthnCredentialRemovalCommand(
+            userId: userId,
+            credentialId: credentialId,
+            loadInventory: () => _authenticationMethods.snapshotForUser(userId),
+          ),
+        ),
+      _ => AuthAuthenticationMethodMutationResult.atomicityUnavailable,
+    };
     switch (result) {
       case AuthAuthenticationMethodMutationResult.mutated:
         return;
