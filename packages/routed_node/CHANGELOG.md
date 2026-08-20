@@ -1,4 +1,4 @@
-## Unreleased
+## 0.2.0
 
 - Enumerate native Fetch headers at the portable request boundary and retain
   the actual bound Node listener port, including ephemeral-port listeners.
