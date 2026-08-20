@@ -59,7 +59,14 @@ void main() {
       final dependencies = pubspec['dependencies'] as YamlMap;
       expect(dependencies.containsKey('routed'), isTrue);
 
-      expect(_exists(projectDir, 'config'), isFalse);
+      expect(
+        projectDir.fileSystem
+            .directory(memoryFs.path.join(projectDir.path, 'config'))
+            .existsSync(),
+        isFalse,
+      );
+      expect(_exists(projectDir, 'config/storage.yaml'), isFalse);
+      expect(_exists(projectDir, 'config/static.yaml'), isFalse);
       expect(_exists(projectDir, 'lib/config.dart'), isTrue);
 
       expect(_exists(projectDir, 'analysis_options.yaml'), isTrue);
@@ -83,12 +90,27 @@ void main() {
       );
       expect(appContent, contains("import 'config.dart';"));
       expect(appContent, contains('final setup = config();'));
+      expect(appContent, contains('final engine = setup.buildEngine();'));
       expect(appContent, contains('Welcome to Demo App!'));
 
       final configContent = _read(projectDir, 'lib/config.dart');
       expect(configContent, contains('final class AppConfig'));
       expect(configContent, contains('AppConfig config()'));
       expect(configContent, contains('CoreServiceProvider()'));
+      expect(
+        configContent,
+        contains('final AuthDeployment<EngineContext>? auth;'),
+      );
+      expect(
+        configContent,
+        contains('AuthDeploymentPresets.localDevelopment<EngineContext>'),
+      );
+      expect(configContent, contains('authDeployment.serviceProvider()'));
+      expect(configContent, contains('authDeployment?.bindTo(engine)'));
+      expect(configContent, isNot(contains("package:routed/src/")));
+      expect(configContent, isNot(contains('config/')));
+      expect(configContent, isNot(contains('storage.yaml')));
+      expect(configContent, isNot(contains('static.yaml')));
 
       final manifestScript = _read(projectDir, 'tool/spec_manifest.dart');
       expect(manifestScript, contains('buildRouteManifest'));

@@ -150,12 +150,33 @@ import 'package:routed/routed.dart';
 final class AppConfig {
   AppConfig({
     required Iterable<ServiceProvider> providers,
+    this.auth,
+    this.engineConfig,
     RuntimeContext? runtime,
   }) : providers = List<ServiceProvider>.unmodifiable(providers),
        runtime = runtime ?? RuntimeContext();
 
   final List<ServiceProvider> providers;
   final RuntimeContext runtime;
+  final EngineConfig? engineConfig;
+
+  /// Optional typed auth deployment. No auth provider or plugin is enabled
+  /// unless the application supplies one here.
+  final AuthDeployment<EngineContext>? auth;
+
+  Engine buildEngine() {
+    final authDeployment = auth;
+    final engine = Engine(
+      config: authDeployment?.engineConfig(engineConfig) ?? engineConfig,
+      runtime: runtime,
+      providers: [
+        ...providers,
+        if (authDeployment != null) authDeployment.serviceProvider(),
+      ],
+    );
+    authDeployment?.bindTo(engine);
+    return engine;
+  }
 }
 
 AppConfig config() => AppConfig(
@@ -163,15 +184,19 @@ AppConfig config() => AppConfig(
     CoreServiceProvider(),
     RoutingServiceProvider(),
   ],
+
+  // Auth is opt-in. To enable credentials auth, uncomment this typed preset.
+  // Add only the auth plugins this application actually needs via `plugins`.
+  // auth: AuthDeploymentPresets.localDevelopment<EngineContext>(
+  //   providers: [CredentialsProvider()],
+  //   trustedOrigins: [Uri.parse('http://localhost:3000')],
+  // ),
 );
 ''';
 
 String _wireApplicationConfig(String content) {
   const configuredBlock = '''  final setup = config();
-  final engine = Engine(
-    runtime: setup.runtime,
-    providers: setup.providers,
-  );''';
+  final engine = setup.buildEngine();''';
 
   final providerBlock = RegExp(
     r'  final engine = Engine\(\s*'
