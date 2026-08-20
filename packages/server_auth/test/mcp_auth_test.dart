@@ -149,6 +149,11 @@ void main() {
     expect(payload['client_id'], 'client-1');
     expect(payload['redirect_uris'], ['https://client.example/callback']);
     expect(feature.clientOperations.single.serverOnly, isTrue);
+    expect(
+      endpoint.rateLimitOperation,
+      const AuthRateLimitOperation('mcp_auth', 'register_client'),
+    );
+    expect(feature.rateLimitOperations, contains(endpoint.rateLimitOperation));
   });
 
   test('dynamic client registration rejects unsafe clients', () async {

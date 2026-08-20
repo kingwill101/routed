@@ -233,6 +233,12 @@ abstract interface class AuthEmailChangeTokenStore {
   FutureOr<void> deleteForUser(String userId);
 }
 
+/// Optional compare-and-delete capability for failed email-change delivery.
+abstract interface class AuthEmailChangeTokenConditionalDeleteStore {
+  /// Deletes the token only when it is still the active issuance for [userId].
+  FutureOr<bool> deleteTokenForUser(String userId, String token);
+}
+
 /// Persistence contract for server-side sessions.
 abstract interface class AuthSessionStore {
   /// Finds a session by the digest of its client-held token.
@@ -691,6 +697,8 @@ class CallbackAuthStore implements AuthStore {
     onSavePasswordResetToken,
     FutureOr<AuthPasswordResetToken?> Function(String token)?
     onConsumePasswordResetToken,
+    FutureOr<AuthPasswordResetToken?> Function(String token)?
+    onFindPasswordResetToken,
     FutureOr<void> Function(String userId)? onDeletePasswordResetTokens,
     AuthPasswordResetTokenStore? passwordResetTokens,
     FutureOr<int> Function(String userId)? onCurrentJwtVersion,
@@ -700,11 +708,15 @@ class CallbackAuthStore implements AuthStore {
     onSaveVerificationToken,
     FutureOr<AuthVerificationToken?> Function(String identifier, String token)?
     onConsumeVerificationToken,
+    FutureOr<bool> Function(String identifier, String token)?
+    onDeleteVerificationToken,
     FutureOr<void> Function(String identifier)? onDeleteVerificationTokens,
     AuthVerificationTokenStore? verificationTokens,
     FutureOr<void> Function(AuthEmailChangeToken token)? onSaveEmailChangeToken,
     FutureOr<AuthEmailChangeToken?> Function(String token)?
     onConsumeEmailChangeToken,
+    FutureOr<bool> Function(String userId, String token)?
+    onDeleteEmailChangeToken,
     FutureOr<void> Function(String userId)? onDeleteEmailChangeTokens,
     AuthEmailChangeTokenStore? emailChangeTokens,
     AuthWebAuthnChallengeStore? webAuthnChallenges,
@@ -758,6 +770,7 @@ class CallbackAuthStore implements AuthStore {
            _CallbackPasswordResetTokenStore(
              onSave: onSavePasswordResetToken,
              onConsume: onConsumePasswordResetToken,
+             onFindActive: onFindPasswordResetToken,
              onDeleteForUser: onDeletePasswordResetTokens,
            ),
        jwtVersions =
@@ -771,6 +784,7 @@ class CallbackAuthStore implements AuthStore {
            _CallbackVerificationTokenStore(
              onSave: onSaveVerificationToken,
              onConsume: onConsumeVerificationToken,
+             onDeleteToken: onDeleteVerificationToken,
              onDelete: onDeleteVerificationTokens,
            ),
        emailChangeTokens =
@@ -778,6 +792,7 @@ class CallbackAuthStore implements AuthStore {
            _CallbackEmailChangeTokenStore(
              onSave: onSaveEmailChangeToken,
              onConsume: onConsumeEmailChangeToken,
+             onDeleteTokenForUser: onDeleteEmailChangeToken,
              onDeleteForUser: onDeleteEmailChangeTokens,
            ),
        webAuthnChallenges =
@@ -828,15 +843,18 @@ class CallbackAuthStore implements AuthStore {
   final AuthEmailOtpStore emailOtps;
 }
 
-class _CallbackPasswordResetTokenStore implements AuthPasswordResetTokenStore {
+class _CallbackPasswordResetTokenStore
+    implements AuthPasswordResetTokenStore, AuthPasswordResetTokenLookupStore {
   const _CallbackPasswordResetTokenStore({
     this.onSave,
     this.onConsume,
+    this.onFindActive,
     this.onDeleteForUser,
   });
 
   final FutureOr<void> Function(AuthPasswordResetToken token)? onSave;
   final FutureOr<AuthPasswordResetToken?> Function(String token)? onConsume;
+  final FutureOr<AuthPasswordResetToken?> Function(String token)? onFindActive;
   final FutureOr<void> Function(String userId)? onDeleteForUser;
 
   @override
@@ -845,6 +863,10 @@ class _CallbackPasswordResetTokenStore implements AuthPasswordResetTokenStore {
   @override
   FutureOr<AuthPasswordResetToken?> consume(String token) =>
       onConsume?.call(token);
+
+  @override
+  FutureOr<AuthPasswordResetToken?> findActive(String token) =>
+      onFindActive?.call(token);
 
   @override
   FutureOr<void> deleteForUser(String userId) => onDeleteForUser?.call(userId);
@@ -1641,10 +1663,14 @@ class _CallbackSessionStore implements AuthSessionStore {
   );
 }
 
-class _CallbackVerificationTokenStore implements AuthVerificationTokenStore {
+class _CallbackVerificationTokenStore
+    implements
+        AuthVerificationTokenStore,
+        AuthVerificationTokenConditionalDeleteStore {
   const _CallbackVerificationTokenStore({
     this.onSave,
     this.onConsume,
+    this.onDeleteToken,
     this.onDelete,
   });
 
@@ -1654,6 +1680,7 @@ class _CallbackVerificationTokenStore implements AuthVerificationTokenStore {
     String token,
   )?
   onConsume;
+  final FutureOr<bool> Function(String identifier, String token)? onDeleteToken;
   final FutureOr<void> Function(String identifier)? onDelete;
 
   @override
@@ -1664,18 +1691,28 @@ class _CallbackVerificationTokenStore implements AuthVerificationTokenStore {
       onConsume?.call(identifier, token);
 
   @override
+  FutureOr<bool> deleteToken(String identifier, String token) =>
+      onDeleteToken?.call(identifier, token) ?? false;
+
+  @override
   FutureOr<void> delete(String identifier) => onDelete?.call(identifier);
 }
 
-class _CallbackEmailChangeTokenStore implements AuthEmailChangeTokenStore {
+class _CallbackEmailChangeTokenStore
+    implements
+        AuthEmailChangeTokenStore,
+        AuthEmailChangeTokenConditionalDeleteStore {
   const _CallbackEmailChangeTokenStore({
     this.onSave,
     this.onConsume,
+    this.onDeleteTokenForUser,
     this.onDeleteForUser,
   });
 
   final FutureOr<void> Function(AuthEmailChangeToken token)? onSave;
   final FutureOr<AuthEmailChangeToken?> Function(String token)? onConsume;
+  final FutureOr<bool> Function(String userId, String token)?
+  onDeleteTokenForUser;
   final FutureOr<void> Function(String userId)? onDeleteForUser;
 
   @override
@@ -1684,6 +1721,10 @@ class _CallbackEmailChangeTokenStore implements AuthEmailChangeTokenStore {
   @override
   FutureOr<AuthEmailChangeToken?> consume(String token) =>
       onConsume?.call(token);
+
+  @override
+  FutureOr<bool> deleteTokenForUser(String userId, String token) =>
+      onDeleteTokenForUser?.call(userId, token) ?? false;
 
   @override
   FutureOr<void> deleteForUser(String userId) => onDeleteForUser?.call(userId);

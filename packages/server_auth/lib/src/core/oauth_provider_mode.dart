@@ -843,7 +843,8 @@ class OAuthProviderModePlugin<TContext>
   bool validatePkce(String codeChallenge, String codeVerifier, String method) {
     if (method == 'S256') {
       final hash = sha256.convert(utf8.encode(codeVerifier));
-      return base64Url.encode(hash.bytes) == codeChallenge;
+      final encoded = base64Url.encode(hash.bytes).replaceAll('=', '');
+      return encoded == codeChallenge;
     } else if (method == 'plain') {
       return codeVerifier == codeChallenge;
     }

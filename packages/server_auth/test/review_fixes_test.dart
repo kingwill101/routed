@@ -7,6 +7,48 @@ import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('OAuth provider PKCE accepts the unpadded RFC 7636 S256 vector', () {
+    final feature = OAuthProviderModeFeature<Object>(
+      clientStore: InMemoryOAuthClientStore(),
+      authorizationCodeStore: InMemoryOAuthAuthorizationCodeStore(),
+      accessTokenStore: InMemoryOAuthAccessTokenStore(),
+      options: const OAuthProviderModeOptions(),
+    );
+
+    expect(
+      feature.validatePkce(
+        'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
+        'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',
+        'S256',
+      ),
+      isTrue,
+    );
+  });
+
+  test('verification cleanup deletes only the failed issuance', () async {
+    final store = InMemoryAuthVerificationTokenStore();
+    final expiresAt = DateTime.now().toUtc().add(const Duration(minutes: 5));
+    const identifier = 'account_deletion:user-1';
+    await store.save(
+      AuthVerificationToken(
+        identifier: identifier,
+        token: 'first-token',
+        expiresAt: expiresAt,
+      ),
+    );
+    await store.save(
+      AuthVerificationToken(
+        identifier: identifier,
+        token: 'second-token',
+        expiresAt: expiresAt,
+      ),
+    );
+
+    expect(await store.deleteToken(identifier, 'first-token'), isTrue);
+    expect(await store.consume(identifier, 'first-token'), isNull);
+    expect(await store.consume(identifier, 'second-token'), isNotNull);
+  });
+
   group('P1: Reject failed email updates', () {
     late InMemoryAuthStore store;
 
@@ -758,6 +800,13 @@ void main() {
       const policy = AuthCookiePolicy(sameSite: SameSite.lax);
       final copied = policy.copyWith(sameSite: SameSite.strict);
       expect(copied.sameSite, equals(SameSite.strict));
+    });
+
+    test('copyWith preserves and explicitly clears the cookie domain', () {
+      const policy = AuthCookiePolicy(domain: '.example.com');
+
+      expect(policy.copyWith(httpOnly: false).domain, '.example.com');
+      expect(policy.copyWith(clearDomain: true).domain, isNull);
     });
   });
 

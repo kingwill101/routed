@@ -41,9 +41,17 @@ abstract interface class AuthPasswordResetTokenStore {
   FutureOr<void> deleteForUser(String userId);
 }
 
+/// Optional active-token lookup used to enforce account policy before consume.
+///
+/// Implementations return metadata only and must not consume or extend the
+/// token. The raw token must still be hashed before lookup.
+abstract interface class AuthPasswordResetTokenLookupStore {
+  FutureOr<AuthPasswordResetToken?> findActive(String token);
+}
+
 /// In-memory password-reset token store for tests and local development.
 class InMemoryAuthPasswordResetTokenStore
-    implements AuthPasswordResetTokenStore {
+    implements AuthPasswordResetTokenStore, AuthPasswordResetTokenLookupStore {
   InMemoryAuthPasswordResetTokenStore({DateTime Function()? clock})
     : _clock = clock ?? DateTime.now;
 
@@ -62,6 +70,17 @@ class InMemoryAuthPasswordResetTokenStore
   Future<AuthPasswordResetToken?> consume(String token) async {
     if (token.trim().isEmpty) return null;
     final record = _tokens.remove(hashOpaqueToken(token));
+    if (record == null ||
+        !_clock().toUtc().isBefore(record.expiresAt.toUtc())) {
+      return null;
+    }
+    return record;
+  }
+
+  @override
+  Future<AuthPasswordResetToken?> findActive(String token) async {
+    if (token.trim().isEmpty) return null;
+    final record = _tokens[hashOpaqueToken(token)];
     if (record == null ||
         !_clock().toUtc().isBefore(record.expiresAt.toUtc())) {
       return null;

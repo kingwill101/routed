@@ -59,7 +59,7 @@ class AuthCookiePolicy {
       secure: secure ?? this.secure,
       sameSite: sameSite ?? this.sameSite,
       path: path ?? this.path,
-      domain: clearDomain ? null : domain,
+      domain: clearDomain ? null : (domain ?? this.domain),
       maxAge: clearMaxAge ? null : (maxAge ?? this.maxAge),
     );
   }

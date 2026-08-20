@@ -17,8 +17,20 @@ abstract class AuthVerificationTokenStore {
   FutureOr<void> delete(String identifier);
 }
 
+/// Optional compare-and-delete capability for failed token delivery cleanup.
+///
+/// Implementations must delete only the record matching both [identifier] and
+/// [token]. This prevents one failed delivery from invalidating a newer token
+/// issued concurrently for the same identifier.
+abstract interface class AuthVerificationTokenConditionalDeleteStore {
+  FutureOr<bool> deleteToken(String identifier, String token);
+}
+
 /// In-memory token store for development and tests.
-class InMemoryAuthVerificationTokenStore implements AuthVerificationTokenStore {
+class InMemoryAuthVerificationTokenStore
+    implements
+        AuthVerificationTokenStore,
+        AuthVerificationTokenConditionalDeleteStore {
   InMemoryAuthVerificationTokenStore({
     DateTime Function()? clock,
     this.maxTokens = 1024,
@@ -101,6 +113,16 @@ class InMemoryAuthVerificationTokenStore implements AuthVerificationTokenStore {
   @override
   Future<void> delete(String identifier) async {
     _tokens.remove(identifier);
+  }
+
+  @override
+  Future<bool> deleteToken(String identifier, String token) async {
+    if (identifier.isEmpty || token.isEmpty) return false;
+    final byDigest = _tokens[identifier];
+    if (byDigest == null) return false;
+    final removed = byDigest.remove(hashOpaqueToken(token)) != null;
+    if (byDigest.isEmpty) _tokens.remove(identifier);
+    return removed;
   }
 
   int get _tokenCount =>

@@ -9,7 +9,9 @@ import 'tokens.dart' show hashOpaqueToken;
 /// Only token digests are retained. Production stores must provide the same
 /// atomic consume and expiry guarantees.
 final class InMemoryAuthEmailChangeTokenStore
-    implements AuthEmailChangeTokenStore {
+    implements
+        AuthEmailChangeTokenStore,
+        AuthEmailChangeTokenConditionalDeleteStore {
   InMemoryAuthEmailChangeTokenStore({
     DateTime Function()? clock,
     this.maxTokens = 1024,
@@ -65,6 +67,17 @@ final class InMemoryAuthEmailChangeTokenStore
     _records.removeWhere((_, record) => record.userId == normalized);
   }
 
+  @override
+  Future<bool> deleteTokenForUser(String userId, String token) async {
+    final normalized = userId.trim();
+    if (normalized.isEmpty || token.trim().isEmpty) return false;
+    final digest = hashOpaqueToken(token);
+    final record = _records[digest];
+    if (record == null || record.userId != normalized) return false;
+    _records.remove(digest);
+    return true;
+  }
+
   void _prune(DateTime now) {
     _records.removeWhere((_, record) => !now.isBefore(record.expiresAt));
   }
@@ -85,4 +98,3 @@ final class _EmailChangeRecord {
   final String newEmail;
   final DateTime expiresAt;
 }
-

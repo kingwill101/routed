@@ -67,6 +67,22 @@ void main() {
     expect(await store.consume('one-time-secret'), isNull);
   });
 
+  test('active reset-token lookup does not consume the token', () async {
+    final now = DateTime.utc(2026, 8, 19, 12);
+    final store = InMemoryAuthPasswordResetTokenStore(clock: () => now);
+    await store.save(
+      buildAuthPasswordResetToken(
+        userId: 'user-1',
+        token: 'lookup-secret',
+        ttl: const Duration(minutes: 10),
+        now: now,
+      ),
+    );
+
+    expect((await store.findActive('lookup-secret'))?.userId, 'user-1');
+    expect((await store.consume('lookup-secret'))?.userId, 'user-1');
+  });
+
   test('in-memory reset tokens reject expiry and blank input', () async {
     var now = DateTime.utc(2026, 8, 19, 12);
     final store = InMemoryAuthPasswordResetTokenStore(clock: () => now);
@@ -121,6 +137,7 @@ void main() {
         consumed = token == 'raw-secret';
         return saved;
       },
+      onFindPasswordResetToken: (_) => saved,
       onDeletePasswordResetTokens: (userId) => deletedUserId = userId,
     );
     final record = buildAuthPasswordResetToken(
@@ -130,6 +147,11 @@ void main() {
     );
 
     await store.passwordResetTokens.save(record);
+    expect(
+      await (store.passwordResetTokens as AuthPasswordResetTokenLookupStore)
+          .findActive('raw-secret'),
+      same(record),
+    );
     expect(
       await store.passwordResetTokens.consume('raw-secret'),
       equals(record),
