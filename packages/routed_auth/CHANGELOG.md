@@ -1,5 +1,8 @@
 ## 0.2.0 - 2026-08-20
 
+- Route device-token polling through the bounded issuance-lease protocol so
+  issuer failures can retry with the same stable authorization ID while
+  concurrent, stale, disabled-account, and consumed grants fail generically.
 - Derive Routed auth runtime durability from typed `AuthOptions` posture,
   removing the independently configurable provider durability flag, and
   require production options to boot through one typed deployment so proxy,

@@ -1,5 +1,13 @@
 ## 0.2.0 - 2026-08-20
 
+- Replace pre-issuance device-grant consumption with bounded digest-only
+  issuance leases and a typed authorization-ID-idempotent application token
+  issuer. Matching completion/release transitions make ambiguous failures and
+  process crashes retry-safe without storing access or refresh tokens; the
+  post-completion HTTP response remains an explicit at-most-once delivery
+  boundary. Rename the corresponding public store-conformance case from
+  `device-authorization.approve-claim-contention` to
+  `device-authorization.approve-lease-contention`.
 - Require every portable and host-owned endpoint to publish typed read or
   mutation semantics, including persistence boundary, atomicity, replay
   behavior, and validated persistence-schema/atomic-operation references.

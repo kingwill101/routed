@@ -6,6 +6,10 @@
   the conditional delete statement, and records mixed external-store
   topologies as non-authoritative. Those applications still boot and use their
   plugins, while destructive unlink fails closed until every store can join.
+- Add a data-preserving D1 migration and guarded issuance-lease transitions
+  for device authorization. Lease acquisition, matching completion, and
+  matching release use atomic D1 batches/statements and persist only digests,
+  timestamps, and status metadata.
 - Add a typed Cloudflare D1 `AuthStore` with prefix-isolated, idempotent
   migrations.
 - Cover every required public store-conformance case plus concurrent session,

@@ -198,6 +198,10 @@ The work is intentionally split between framework-agnostic capabilities in
 - [x] Add a CLI/device authorization flow for limited-input clients, including
   device-code issuance, browser approval, polling, denial, expiry, and
   client-side backoff semantics.
+- [x] Make device-token issuance crash/retry-safe with bounded digest-only
+  leases, a typed authorization-ID-idempotent application issuer, guarded
+  in-memory and D1 completion/release transitions, and an explicit
+  at-most-once response-delivery boundary without persisted token material.
 - [x] Add OpenAPI 3.1 endpoint and model generation for core auth routes and
   composed plugin routes, with generated-client compatibility tests.
 - [x] Publish framework-neutral store and runtime conformance APIs for durable

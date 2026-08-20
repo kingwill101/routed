@@ -281,6 +281,53 @@ foundation is Users-only. Groups, application projection orchestration, and a
 managed connection/credential catalog remain explicitly deferred; there is no
 SCIM client plugin because directories consume the protocol directly.
 
+## Device authorization issuance
+
+Device authorization uses a bounded, digest-only issuance lease. The
+application token service must implement the typed idempotent issuer and use
+the stable authorization ID as its durable idempotency key:
+
+```dart
+final class ApplicationDeviceTokenIssuer
+    implements AuthDeviceAuthorizationTokenIssuer<MyRequestContext> {
+  ApplicationDeviceTokenIssuer(this.tokens);
+
+  final ApplicationTokenService tokens;
+
+  @override
+  Future<AuthDeviceAccessToken> issue(
+    AuthDeviceAuthorizationTokenIssuanceRequest<MyRequestContext> request,
+  ) {
+    return tokens.issueIdempotently(
+      idempotencyKey: request.authorizationId,
+      userId: request.user.id,
+      clientId: request.clientId,
+      scopes: request.scopes,
+    );
+  }
+}
+
+final deviceAuthorization = DeviceAuthorizationPlugin<MyRequestContext>(
+  verificationUri: 'https://example.com/device',
+  validateClient: validateDeviceClient,
+  tokenIssuer: ApplicationDeviceTokenIssuer(applicationTokens),
+);
+```
+
+The token service must reject reuse of an authorization ID with a different
+user, client, or scope binding and return the same logical grant after an
+ambiguous failure. Routed stores no raw device code, user code, lease value,
+access token, or refresh token. An issuer failure releases only its matching
+lease; a process crash is recoverable after lease expiry.
+
+There is one deliberate at-most-once delivery boundary: after the application
+issuer succeeds and Routed commits the authorization as consumed, loss of the
+HTTP response cannot be replayed from Routed because Routed does not retain
+token material. Applications requiring retryable delivery must implement that
+delivery/result reference in their own token service. Routed guarantees that
+retry before completion uses the same authorization ID; it does not claim
+exactly-once token delivery.
+
 ## Optional last-authentication-method plugin
 
 Install this plugin only when the sign-in UI needs to remember which method a
