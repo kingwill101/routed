@@ -14,6 +14,10 @@
   preserve one-time raw-secret delivery and exact application-authorized
   tenant/organization binding across create, list, update, disable, issue,
   rotate, revoke, and bounded catalog operations.
+- Mount the opt-in username plugin's authenticated, CSRF-protected rename and
+  safe-removal operations, preserving generic failures, idempotent replay,
+  store-owned atomicity metadata, and the separately selected typed username
+  client surface.
 - Route device-token polling through the bounded issuance-lease protocol so
   issuer failures can retry with the same stable authorization ID while
   concurrent, stale, disabled-account, and consumed grants fail generically.

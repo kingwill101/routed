@@ -533,8 +533,23 @@ final options = AuthOptions<MyRequestContext>(
 );
 ```
 
+The selected root store must implement `AuthUsernameStore`. That capability
+owns one transaction spanning the normalized username reservation, user
+projection, and password credential. Registration and username changes fail
+closed when the root store cannot provide that boundary; the plugin never
+emulates it with separate lookup, remove, and write calls. `InMemoryAuthStore`
+implements the contract for local development and tests. Durable adapters can
+verify their implementation with the public helper from
+`package:server_auth/testing.dart`:
+
+```dart
+await verifyAuthUsernameStoreConformance(
+  AuthUsernameStoreConformanceFixture(store: myDurableAuthStore),
+);
+```
+
 Install only the matching client plugin when the application needs username
-registration or sign-in:
+registration, sign-in, rename, or safe removal:
 
 ```dart
 const usernameClient = AuthUsernameClientPlugin();
@@ -547,7 +562,16 @@ await auth.plugins.use(usernameClient).signIn(
   identifier: 'ada',
   password: password,
 );
+
+await auth.plugins.use(usernameClient).change(username: 'ada-lovelace');
+await auth.plugins.use(usernameClient).remove();
 ```
+
+Rename is idempotent for the same normalized target. Removal is also
+idempotent, but succeeds only when the composed authentication-method inventory
+proves that another usable method remains in the same store-owned transaction.
+Conflicts, unavailable users, and persistence faults stay behind generic public
+failures.
 
 ## Optional two-factor plugin
 

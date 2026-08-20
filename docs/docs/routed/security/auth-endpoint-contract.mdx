@@ -120,6 +120,13 @@ server route.
 | --- | --- | --- | --- | --- |
 | `POST /username/register` | Public | Browser Origin; no CSRF | `username.registration`; canonical username | Creates the credential and issues the configured identity, or returns a 2FA challenge when policy requires it. |
 | `POST /username/sign-in` | Public | Browser Origin; no CSRF | `username.sign_in`; canonical username or email selected by the typed identifier policy | Issues the configured identity, or returns a 2FA challenge. Ambiguous identifiers are rejected. |
+| `POST /username/change` | Session | Browser Origin + CSRF | `username.change`; current user ID | Atomically reserves the normalized target while updating the credential and public user projection. Replaying the same target is idempotent; conflicts and unavailable accounts use a generic failure. |
+| `POST /username/remove` | Session | Browser Origin + CSRF | `username.remove`; current user ID | Atomically removes the username only when the authoritative authentication-method inventory proves another usable method remains. Replays are idempotent and unsupported mixed-store topologies fail closed. |
+
+Selecting `UsernamePlugin` requires the root auth store to implement
+`AuthUsernameStore`. Durable adapters own the full transaction and identifier
+uniqueness constraint; Routed does not fall back to a lookup/remove/write
+sequence.
 
 ### Last authentication method
 

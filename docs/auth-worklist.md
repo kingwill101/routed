@@ -234,6 +234,9 @@ account, session, client, and plugin contracts above:
 - [x] Add phone-number authentication with provider-owned delivery and
   verification boundaries.
 - [x] Add username-first authentication and explicit identifier policy.
+  Registration, rename, and safe removal reserve normalized identifiers through
+  a root store-owned atomic capability, with public adapter conformance,
+  contention, rollback, replay, and hostile-input coverage.
 - [x] Add anonymous/guest sessions with safe account upgrade/linking rules.
 - [x] Track the last successful authentication method through independent
   server/client plugins without storing identities, credentials, or secrets.
@@ -391,8 +394,7 @@ account, session, client, and plugin contracts above:
   authorization-code consumption with token issuance; device token polling,
   claiming, and application token delivery are separate steps; WebAuthn
   verification consumes a challenge separately from authenticator creation or
-  counter updates; username registration does not yet publish a persistence
-  descriptor; Admin ban/disable can require separately persisted plugin
+  counter updates; Admin ban/disable can require separately persisted plugin
   revocation; Admin impersonation replacement sessions are host-owned; and
   organization update plus its host callbacks spans store or host boundaries
   without one declared transaction. Two-factor durable mutations now resolve
@@ -400,8 +402,12 @@ account, session, client, and plugin contracts above:
   completion deliberately remains a host-session operation because session and
   cookie delivery occurs after the durable command commits. Password
   change/reset and trusted-device revocation also remain separate host and
-  plugin transactions. Weaker operations remain `nonAtomic` or `unguarded`
-  until their adapters expose a stronger bounded operation.
+  plugin transactions. Username registration, rename, and safe removal now
+  publish atomic persistence descriptors backed by the root
+  `AuthUsernameStore` transaction capability. The remaining weaker operations
+  stay
+  `nonAtomic` or `unguarded` until their adapters expose a stronger bounded
+  operation.
 - [x] Every advertised auth endpoint has documented authentication,
   CSRF/origin, rate-limit, redirect, session/body-token, and error semantics in
   the public auth endpoint security contract, including plugin-gated 2FA route

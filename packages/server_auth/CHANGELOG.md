@@ -27,6 +27,13 @@
   is one-time, while idempotent replays return metadata without reconstructing
   the raw secret. Add a separately selected typed client and reusable adapter
   conformance plus fault, contention, and property coverage.
+- Replace username credential sub-store mutation with the required root
+  `AuthUsernameStore` capability. Registration, normalized rename, and safe
+  removal are now store-owned atomic operations with generic public failures,
+  deterministic replay behavior, fail-closed topology checks, public durable
+  adapter conformance, fault injection, contention, and hostile-identifier
+  property coverage. This is a breaking adapter API with no compatibility
+  bridge.
 - Replace pre-issuance device-grant consumption with bounded digest-only
   issuance leases and a typed authorization-ID-idempotent application token
   issuer. Matching completion/release transitions make ambiguous failures and

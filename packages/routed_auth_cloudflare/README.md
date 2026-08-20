@@ -51,6 +51,15 @@ The local tests run `AuthStoreConformanceSuite` and
 SQLite-backed implementation of the public `CloudflareD1Database` API. They
 also inject a mid-batch fault and prove that code consumption and token
 persistence roll back together. The separate
+
+The root adapter implements `AuthUsernameStore`: normalized username
+registration and rename commit the user projection and password credential in
+one D1 batch, and contention relies on D1 uniqueness constraints. Safe username
+removal rechecks every supported fallback inside that same store-owned batch
+and fails closed for mixed or unsupported authentication-method stores.
+
+The local tests also run `verifyAuthUsernameStoreConformance` against that
+deterministic public D1 fake. The separate
 [live harness](test/live/README.md) is intentionally not part of the default
 test command and must be deployed to a real D1 database before it can be
 claimed as live validation.
@@ -67,4 +76,7 @@ adapter therefore fails closed by not advertising that optional capability;
 the conformance case is reported as skipped. Core records are never partially
 deleted under a false transaction guarantee. The separate typed user-deletion
 coordinator does compose guarded plugin and core cleanup into one D1 batch,
-including OAuth authorization-code and token records.
+including OAuth authorization-code and token records. It accepts only
+backend-bound typed mutation plans it can compile into that batch; supported
+authentication-method removal uses those plans, while mixed external stores
+fail closed instead of advertising a false transaction guarantee.

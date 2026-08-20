@@ -8,6 +8,10 @@
   rotation, topology, migration, and deletion coverage are included.
 - Reject in-memory, foreign-database, and otherwise split provider-mode stores
   whenever the host auth store is durable; there is no durable fallback bridge.
+- Implement the root `AuthUsernameStore` capability with atomic D1 batches for
+  normalized registration, rename, and supported safe removal. Add public
+  username adapter conformance, contention, rollback injection, replay, and
+  hard-deletion coverage; mixed authentication-method stores fail closed.
 - Add exact owner-checked OAuth account unlinking by provider ID and provider
   account ID. D1 binds an authoritative topology backed by its own users,
   credentials, accounts, and email-OTP stores, rechecks a usable fallback in

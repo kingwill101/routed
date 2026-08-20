@@ -156,6 +156,12 @@ await authClient.plugins.use(usernameClient).register(
   password: password,
 );
 
+await authClient.plugins.use(usernameClient).change(
+  username: 'ada-lovelace',
+);
+
+await authClient.plugins.use(usernameClient).remove();
+
 await authClient.plugins.use(phoneClient).sendCode(
   phoneNumber: '+18765551234',
 );
