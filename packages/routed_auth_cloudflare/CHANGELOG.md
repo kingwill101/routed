@@ -18,3 +18,8 @@
   deletion-receipt, and user deletion statements in one atomic batch. Core D1
   cleanup removes device authorization and email-OTP state even after those
   plugins are removed; unsupported active plugin adapters fail closed.
+- Add an explicitly opt-in deployed Worker auth harness for the public session,
+  JWT, plugin, external-provider, and browser-shaped WebAuthn contracts. The
+  typed CLI is inert without `--run`, reads its token only from an environment
+  variable, and calls only an already-deployed HTTPS Worker; it never invokes
+  Cloudflare control-plane APIs or mutates account resources.

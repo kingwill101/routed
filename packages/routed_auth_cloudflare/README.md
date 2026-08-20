@@ -29,6 +29,12 @@ separate [live harness](test/live/README.md) is intentionally not part of the
 default test command and must be deployed to a real D1 database before it can
 be claimed as live validation.
 
+The independent
+[deployed Worker auth harness](tool/deployed_worker/README.md) verifies Routed's
+session, JWT, plugin, external-provider, and browser-shaped WebAuthn contracts
+inside an already-deployed Cloudflare Worker. It is also opt-in and does not
+create, update, or delete Cloudflare resources.
+
 Cloudflare D1 exposes atomic statement batches, but not a transaction that can
 span the arbitrary callback required by `AuthAccountDeletionStore`. The
 adapter therefore fails closed by not advertising that optional capability;
