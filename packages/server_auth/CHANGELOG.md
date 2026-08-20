@@ -1,5 +1,11 @@
 ## 0.2.0 - 2026-08-20
 
+- Add the exact `AuthApiKeyPrimaryMutationStore` command for durable safe
+  primary-key revocation. Adapters recheck supported fallbacks inside their own
+  transaction; unsupported and mixed stores fail closed without invoking the
+  old process-local callback path.
+- Export `AuthApiKeyStoreConformanceSuite` for reusable lifecycle, capacity,
+  contention, single-use rotation, ownership, expiry, and rollback validation.
 - Breaking: move anonymous creation, authenticated deletion, and account-
   upgrade finalization behind `AuthAnonymousAccountMutationStore`. Remove the
   arbitrary link callback; durable adapters now fail configuration unless they

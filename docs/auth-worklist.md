@@ -103,8 +103,9 @@ The work is intentionally split between framework-agnostic capabilities in
   atomically per user. D1 binds only its authoritative core method stores,
   atomically rechecks the exact OAuth target and fallback in SQL, and records
   mixed external-store topologies without blocking plugin composition; unlink
-  then fails closed. Backend-bound D1 plans for external passkey, phone, API-key,
-  and future plugin stores remain. Passwordless unlinking requires a recent
+  then fails closed. D1 now owns the exact API-key store, primary-key removal,
+  and hard-deletion plan through migration v9. Backend-bound D1 plans for
+  external passkey, phone, and future plugin stores remain. Passwordless unlinking requires a recent
   original authentication or explicit step-up proof rather than merely an
   active session.
 - [x] Add a first-class server-session management API: list current sessions
@@ -184,16 +185,17 @@ The work is intentionally split between framework-agnostic capabilities in
   paths. `routed_auth_cloudflare` now supplies a typed, migrated D1 `AuthStore`
   and a backend-owned deletion coordinator that pass local conformance,
   rollback, contention, and fault tests. It now owns OAuth provider-mode
-  code/token exchange, managed SCIM connections, username mutations, and the
-  typed anonymous create/delete/upgrade contract through append-only migration
-  version 7. A disposable live-D1 run passed all 41 enabled cases, including
-  the anonymous v7 cases, and its owned database was independently confirmed
-  deleted. Broader SQL adapters and D1 plans for external plugin stores remain
-  open. D1's
+  code/token exchange, managed SCIM connections, username mutations, the typed
+  anonymous create/delete/upgrade contract, and bounded digest-only API keys
+  through append-only migration version 9. A disposable live-D1 run passed all
+  41 cases enabled through migration v7, including the anonymous cases, and its
+  owned database was independently confirmed deleted. The API-key v9 cases are
+  wired into the opt-in harness but have not run against live D1. Broader SQL
+  adapters and D1 plans for external plugin stores remain open. D1's
   authentication-method coordinator accepts its own users, credentials,
-  accounts, and email-OTP stores; external method stores require a future
-  backend-bound plan. Mixed topologies remain usable but account unlink fails
-  closed. Removed external plugins are not
+  accounts, email-OTP, and exact API-key stores; external method stores require
+  a future backend-bound plan. Mixed topologies remain usable but account
+  unlink fails closed. Removed external plugins are not
   discoverable automatically:
   durable adapters must retain a historical namespace inventory or reject
   deletion until that namespace has backend-owned cleanup.
@@ -304,8 +306,8 @@ account, session, client, and plugin contracts above:
   organizations, device authorization, phone number, and OAuth provider mode;
   incomplete, duplicate, unsupported, and foreign-domain plans fail before
   mutation, with reusable rollback, contention, and fault tests. D1 supplies
-  native device-authorization and email-OTP plans, owns anonymous mutation and
-  receipt cleanup inside its core transaction, always cleans those
+  native device-authorization, email-OTP, and API-key plans, owns anonymous
+  mutation and receipt cleanup inside its core transaction, always cleans those
   backend-owned tables, and fails closed for active external plugins without a
   D1 plan.
 - [x] Make organization last-owner checks transactional across removal,
@@ -384,12 +386,11 @@ account, session, client, and plugin contracts above:
   issuance across IO, portable/native Node, and portable/native Cloudflare
   Fetch adapters.
 - [x] Run the D1 conformance harness against a deployed or remote-bound
-  Cloudflare database. On 2026-08-20, all 35 core, username, OAuth provider,
-  managed SCIM, rollback, contention, and migration-isolation cases passed
-  against a disposable remote D1 database. The ownership guard deleted the
-  database, and a separate account listing confirmed that no disposable
-  `routed-auth-conformance` database remained. The later anonymous migration v7
-  cases are wired into the opt-in harness but have not been run live.
+  Cloudflare database. On 2026-08-20, all 41 cases enabled through anonymous
+  migration v7 passed against a disposable remote D1 database. The ownership
+  guard deleted the database, and a separate account listing confirmed that no
+  disposable `routed-auth-conformance` database remained. The API-key migration
+  v9 cases are wired into the opt-in harness but have not been run live.
 - [x] Keep the current auth packages, host adapter integrations, and public
   conformance suites analyzer-clean and passing on `master`.
 

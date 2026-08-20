@@ -967,6 +967,12 @@ Only a digest is persisted. The raw key is returned once when it is created or
 rotated; listing returns metadata, scopes, expiry, last-use, and revocation
 state. Production applications should provide a durable `AuthApiKeyStore` and
 implement its atomic touch, revoke, and rotate operations transactionally.
+Stores that support `countsAsPrimaryAuthenticationMethod` must additionally
+implement the typed `AuthApiKeyPrimaryMutationStore` command and recheck the
+complete supported fallback topology in their own transaction. Unsupported or
+mixed persistence fails closed. `package:routed_auth_cloudflare` exposes the
+matching D1 store as `CloudflareD1AuthStore.apiKeys`; its migration and plugin
+setup are documented in that package's README.
 Routed can additionally expose `POST /auth/api-keys/exchange` when
 `sessionExchangeEnabled` is true. It accepts the API key from an auth header
 and creates a normal server-side session; it is disabled by default.

@@ -1,5 +1,19 @@
 ## 0.1.0
 
+- Add append-only migration version 9 and a typed `store.apiKeys` D1 adapter.
+  API-key issue, lookup, touch, revoke, rotate, list, expiry pruning, and
+  user-access revocation persist only secret digests and bounded safe metadata.
+- Enforce `apiKeyMaxRecords` during issue and rotation, including replacement
+  at capacity, with deterministic contention and full D1-batch rollback after
+  a replacement insert.
+- Add a backend-bound API-key hard-deletion plan and exact opt-in primary-key
+  revocation for authoritative D1 topologies. Mixed or foreign stores fail
+  closed without a process-local fallback. Root deletion also scrubs the
+  backend-owned table after plugin removal.
+- Run the public API-key adapter conformance suite, hostile-identifier
+  properties, digest inspection, migration/drop-all, deletion, topology, and
+  fault tests against the local D1 fake. Non-fault cases are wired into the
+  opt-in live harness; migration v9 has not been run against live Cloudflare D1.
 - Implement `AuthAnonymousAccountMutationStore` on the root D1 adapter. Create,
   delete, and upgrade mutations now use backend transactions and fail closed
   without any process-local fallback.

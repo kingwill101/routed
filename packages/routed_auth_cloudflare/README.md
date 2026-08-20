@@ -44,6 +44,43 @@ is configured with the typed `anonymousReplayTtl` and `anonymousMaxReceipts`
 arguments to `CloudflareD1AuthStore.open`. Once a receipt expires or is evicted,
 the operation is no longer replayable; hard-deleted user IDs remain unavailable.
 
+API keys use the separately selected D1 sub-store; the root adapter does not
+enable the plugin implicitly:
+
+```dart
+final store = await CloudflareD1AuthStore.open(
+  env.d1('AUTH_DB'),
+  schema: const CloudflareD1AuthSchema(tablePrefix: 'my_app_auth'),
+  apiKeyMaxRecords: 20_000,
+);
+
+final apiKeys = AuthApiKeyPlugin<MyRequestContext>(
+  store: store.apiKeys,
+  countsAsPrimaryAuthenticationMethod: false,
+  sessionExchangeEnabled: false,
+);
+
+final options = AuthOptions<MyRequestContext>(
+  store: store,
+  plugins: [apiKeys],
+);
+```
+
+Migration v8 stores only the secret digest and safe key metadata: owner, name,
+prefix, scopes, expiry, last-use, and revocation timestamps. The raw key remains
+in the one-time create or rotate result and never enters D1. Issue, touch,
+revoke, rotate, resolve, and list operations are bounded by
+`apiKeyMaxRecords`; rotation may replace its old row at capacity but never
+leaves the table above the configured bound. Coordinated hard deletion compiles
+the API-key cleanup plan into the same D1 batch as core user deletion. Because
+the table is owned by the root adapter, core deletion also scrubs it when a
+previously installed API-key plugin is no longer composed.
+
+When `countsAsPrimaryAuthenticationMethod` is enabled, safe revocation is
+available only if the exact `store.apiKeys` instance and every fallback method
+belong to the authoritative D1 topology. Mixed or foreign stores fail closed;
+there is no process-local callback transaction or compatibility fallback.
+
 Provider mode must use all three OAuth stores from the same opened adapter:
 
 ```dart
@@ -104,11 +141,12 @@ secret. The default replay lifetime is one day and can be changed with the
 typed `scimReplayTtl` argument to `CloudflareD1AuthStore.open`.
 
 The local tests run `AuthStoreConformanceSuite`,
-`AuthAnonymousStoreConformanceSuite`, and
+`AuthAnonymousStoreConformanceSuite`, `AuthApiKeyStoreConformanceSuite`, and
 `verifyOAuthAuthorizationCodeExchangeStoreConformance` against a deterministic
 SQLite-backed implementation of the public `CloudflareD1Database` API. They
 inject mid-batch faults to prove that anonymous identities, replay receipts,
-OAuth code consumption, and token persistence roll back with their transaction.
+API-key rotation, OAuth code consumption, and token persistence roll back with
+their transaction.
 
 The root adapter implements `AuthUsernameStore`: normalized username
 registration and rename commit the user projection and password credential in
@@ -124,6 +162,8 @@ passed all 41 enabled cases, including six anonymous cases plus the core,
 managed-SCIM, username, OAuth-exchange, rollback, and prefix-isolation cases.
 Fault-injection cases remain local-only. The harness deleted its owned database,
 and a separate Wrangler listing confirmed that no matching resource remained.
+The API-key non-fault cases and migration v9 are included in the harness but
+have not run against live Cloudflare D1.
 
 The adapter also implements `AuthMagicLinkBackend` and `AuthEmailOtpBackend`.
 Magic-link replacement and consume-plus-user resolution, and OTP attempt/
