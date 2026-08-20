@@ -469,6 +469,16 @@ JSObject _durableObjectState(JSObject socket, {JSObject? container}) {
 }
 
 void runCloudflareBindingsRuntimeTests() {
+  test('reads text bindings through the public host-neutral helper', () {
+    final environment = JSObject()
+      ..setProperty('ROUTED_AUTH_TOKEN'.toJS, 'worker-secret'.toJS);
+    final env = cloudflare_internal.cloudflareEnvironmentFromJavaScript(
+      environment,
+    );
+
+    expect(cloudflareTextBinding(env, 'ROUTED_AUTH_TOKEN'), 'worker-secret');
+  });
+
   test('request wrappers hide native Fetch request types', () async {
     final request = createCloudflareRequest(
       'https://example.test/items',

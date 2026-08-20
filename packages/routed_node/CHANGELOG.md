@@ -32,6 +32,8 @@
 - Added text and JSON helpers for buffered Durable Object responses.
 - Added host-neutral Durable Object `WebSocketPair`, hibernation socket
   methods, and message/close/error callback forwarding.
+- Add `cloudflareTextBinding` so Worker text and secret bindings can be read
+  through the public host-neutral API without `package:web` or JS interop.
 
 ## 0.1.0
 

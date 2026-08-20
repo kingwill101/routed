@@ -8,9 +8,17 @@ import 'cloudflare_types.dart';
 CloudflareEnvironment? cloudflareEnvironmentOf(EngineContext context) {
   final extension = routedNodeExtensionOf<FetchRuntimeExtension>(context);
   final environment = extension?.environment;
+  if (environment is CloudflareEnvironment) return environment;
   return environment == null
       ? null
       : cloudflareEnvironmentFromJavaScript(environment);
+}
+
+/// Reads a text or secret Worker binding without exposing JavaScript interop.
+String cloudflareTextBinding(CloudflareEnvironment environment, String name) {
+  final value = environment.binding(name);
+  if (value is String) return value;
+  throw StateError('Cloudflare binding is not text: $name.');
 }
 
 /// Returns the native Fetch request associated with [context], when present.

@@ -10,6 +10,7 @@ export 'src/cloudflare/cloudflare_bindings_stub.dart'
     if (dart.library.js_interop) 'src/cloudflare/cloudflare_bindings_js.dart'
     show
         cloudflareEnvironmentOf,
+        cloudflareTextBinding,
         cloudflareRequestOf,
         createCloudflareRequest,
         cloudflareCache,
