@@ -41,6 +41,20 @@ import 'package:routed_core/src/provider/typed_provider.dart';
 import 'package:routed_core/src/response.dart';
 import 'package:routed_core/src/router/types.dart';
 
+/// Creates a provider coupled to one Routed deployment binding.
+///
+/// This helper remains internal to Routed's `src` libraries; the public
+/// deployment extension is the user-facing entry point.
+AuthServiceProvider createDeploymentAuthServiceProvider({
+  required AuthConfig configuration,
+  required bool requireDurableStore,
+  required AuthOptions<EngineContext> options,
+}) => AuthServiceProvider._deployment(
+  configuration: configuration,
+  requireDurableStore: requireDurableStore,
+  expectedOptions: options,
+);
+
 /// Service provider that boots routed auth infrastructure.
 ///
 /// Registers JWT and OAuth middleware, session auth defaults, and binds an
@@ -52,7 +66,15 @@ class AuthServiceProvider extends ServiceProvider
     AuthConfig? configuration,
     this.requireDurableStore = false,
   }) : _httpClient = httpClient ?? http.Client(),
-       configuration = configuration ?? AuthConfig.defaults();
+       configuration = configuration ?? AuthConfig.defaults(),
+       _expectedDeploymentOptions = null;
+
+  AuthServiceProvider._deployment({
+    required this.configuration,
+    required this.requireDurableStore,
+    required AuthOptions<EngineContext> expectedOptions,
+  }) : _httpClient = http.Client(),
+       _expectedDeploymentOptions = expectedOptions;
 
   @override
   final AuthConfig configuration;
@@ -62,6 +84,14 @@ class AuthServiceProvider extends ServiceProvider
   /// Rejects intentionally ephemeral auth storage during provider boot.
   /// Enable this for production deployments.
   final bool requireDurableStore;
+
+  /// Options that a Routed deployment expects [Container] to contain.
+  ///
+  /// Deployment-created providers use this identity check to fail startup
+  /// when `deployment.bindTo` was omitted or an unrelated auth context was
+  /// bound instead. Direct providers leave this unset so they can continue to
+  /// provide config-only JWT and gate middleware without an [AuthManager].
+  final AuthOptions<EngineContext>? _expectedDeploymentOptions;
   JwtVerifier? _jwtVerifier;
   Middleware? _oauthMiddleware;
   SessionAuthService? _sessionAuth;
@@ -186,6 +216,24 @@ class AuthServiceProvider extends ServiceProvider
   }
 
   void _applyAuthManager(Container container) {
+    final expectedOptions = _expectedDeploymentOptions;
+    if (expectedOptions != null) {
+      if (!container.has<AuthOptions<EngineContext>>()) {
+        throw StateError(
+          'The Routed auth deployment was not bound to this engine. '
+          'Call deployment.bindTo(engine) before Engine.initialize().',
+        );
+      }
+      final boundOptions = container.get<AuthOptions<EngineContext>>();
+      if (!identical(boundOptions, expectedOptions)) {
+        throw StateError(
+          'The Routed auth deployment options do not match the options bound '
+          'to this engine. Bind the same deployment used to create the auth '
+          'service provider.',
+        );
+      }
+    }
+
     if (!container.has<AuthOptions<EngineContext>>()) {
       if (_ownsAuthManager) {
         container.remove<AuthManager>();

@@ -1,0 +1,19 @@
+import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_core/routed_core.dart';
+
+void main() {
+  final deployment = AuthDeployment<String>.custom(
+    options: AuthOptions<String>(
+      providers: const <AuthProvider>[],
+      store: InMemoryAuthStore(),
+      storeMode: AuthStoreMode.ephemeral,
+    ),
+    configuration: AuthConfig.defaults(),
+    proxyPolicy: const AuthProxyPolicy.direct(),
+  );
+  final engine = Engine();
+
+  deployment.bindTo(engine);
+  deployment.serviceProvider();
+  deployment.engineConfig();
+}

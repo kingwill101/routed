@@ -4,16 +4,17 @@ import 'package:server_auth/server_auth.dart';
 import 'provider.dart';
 
 /// Routed-specific binding helpers for a typed [AuthDeployment].
-extension RoutedAuthDeploymentBinding<TContext> on AuthDeployment<TContext> {
+extension RoutedAuthDeploymentBinding on AuthDeployment<EngineContext> {
   /// Creates the auth provider configured by this deployment.
-  AuthServiceProvider serviceProvider() => AuthServiceProvider(
+  AuthServiceProvider serviceProvider() => createDeploymentAuthServiceProvider(
     configuration: configuration,
     requireDurableStore: requiresDurableStore,
+    options: options,
   );
 
   /// Binds the deployment's runtime options before [Engine.initialize].
   void bindTo(Engine engine) {
-    engine.container.instance<AuthOptions<TContext>>(options);
+    engine.container.instance<AuthOptions<EngineContext>>(options);
   }
 
   /// Applies the deployment's explicit proxy decision to Routed's engine.
