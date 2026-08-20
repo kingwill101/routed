@@ -222,6 +222,34 @@ native auth model.
 - [ ] Keep external identity resolution separate from `AuthStore`, local
   account provisioning, and local session ownership.
 
+## Active security-audit remediation
+
+- [ ] Route every plugin-authenticated identity through host-owned session
+  issuance. WebAuthn JWT authentication must not report success without a
+  usable session, and phone, anonymous, email-OTP, username, and WebAuthn must
+  all honor the configured JWT body-token policy, callbacks, and events.
+- [ ] Require browser-origin protection for anonymous and email-OTP sign-in
+  while retaining explicit native-client behavior.
+- [ ] Derive bounded, non-secret rate-limit identifiers from typed plugin
+  requests, use each operation namespace as provider identity, and preserve
+  that metadata through the Routed rate-limit adapter.
+- [ ] Prevent public WebAuthn authentication options from revealing enrollment
+  or credential IDs, and validate presented certificate chains against
+  out-of-band trust anchors when the root is omitted from `x5c`.
+- [ ] Start captcha replay retention after successful provider verification so
+  slow providers cannot make an accepted token immediately reusable.
+- [ ] Make plugin conformance consume actual installed client operation and
+  codec contracts instead of comparing only server-declared descriptors.
+- [ ] Constrain Routed auth deployment binding to `EngineContext` and reject an
+  incompatible context at startup instead of silently omitting auth routes.
+- [ ] Replace callback-based hard deletion with backend-bound deletion plans
+  executed with core deletion by one storage transaction. Include anonymous,
+  email-OTP, API-key, WebAuthn, two-factor, and organization-owned state, and
+  fail closed when contributors use another persistence domain.
+- [ ] Make organization last-owner checks transactional and retain a
+  non-personal revocation receipt so explicit user-ID reuse cannot reactivate
+  credentials or JWTs after hard deletion.
+
 ## Required test coverage
 
 - [x] Property-test public serialization to prove secrets, credentials,
