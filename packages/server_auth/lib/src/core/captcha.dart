@@ -149,11 +149,12 @@ final class CaptchaPlugin<TContext>
     }
     try {
       await _verify(verificationRequest);
-      _purgeExpired(now);
+      final acceptedAt = _now();
+      _purgeExpired(acceptedAt);
       if (_acceptedTokenDigests.length >= config.maxTrackedTokens) {
         throw AuthFlowException(authCaptchaFailedErrorCode);
       }
-      _acceptedTokenDigests[digest] = now.add(config.replayRetention);
+      _acceptedTokenDigests[digest] = acceptedAt.add(config.replayRetention);
     } finally {
       _inFlightTokenDigests.remove(digest);
     }

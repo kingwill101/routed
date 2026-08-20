@@ -66,7 +66,7 @@ final class AnonymousPlugin<TContext>
       requestCodec: _mapCodec,
       responseCodec: _objectCodec,
       authentication: AuthOperationAuthentication.none,
-      originPolicy: AuthOperationOriginPolicy.none,
+      originPolicy: AuthOperationOriginPolicy.browser,
       csrfPolicy: AuthOperationCsrfPolicy.none,
       rateLimitOperation: const AuthRateLimitOperation('anonymous', 'sign_in'),
       handler: (invocation, request) => _signInEndpoint(invocation),

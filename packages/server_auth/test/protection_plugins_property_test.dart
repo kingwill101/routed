@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:property_testing/property_testing.dart';
 import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
@@ -131,15 +133,72 @@ void main() {
       expect(result.success, isTrue, reason: _propertyReport(result));
     },
   );
+
+  test(
+    'provider latency never shortens one-time captcha replay retention',
+    () async {
+      final runner = PropertyTestRunner<int>(Gen.integer(min: 2, max: 10000), (
+        providerLatencyMilliseconds,
+      ) async {
+        var now = DateTime.utc(2030, 1, 1);
+        var calls = 0;
+        final plugin = CaptchaPlugin<String>(
+          verifier: _PropertyCaptchaVerifier(() async {
+            calls += 1;
+            now = now.add(Duration(milliseconds: providerLatencyMilliseconds));
+            await Future<void>.delayed(Duration.zero);
+            return const AuthCaptchaVerificationResult.accepted();
+          }),
+          config: AuthCaptchaPluginConfig(
+            tokenUsePolicy: AuthCaptchaTokenUsePolicy.oneTime,
+            replayRetention: const Duration(milliseconds: 1),
+            clock: () => now,
+          ),
+        );
+        final runtime = AuthRuntime<String>(
+          options: AuthOptions<String>(
+            providers: const <AuthProvider>[],
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
+            plugins: <AuthServerPlugin<String>>[plugin],
+          ),
+        );
+
+        await runtime.registry.enforceCredentialPolicy(
+          AuthCredentialPolicyRequest<String>(
+            context: 'property',
+            provider: CredentialsProvider(),
+            operation: AuthCredentialPolicyOperation.signIn,
+            verificationToken: 'latency-bound-token',
+          ),
+        );
+        await expectLater(
+          runtime.registry.enforceCredentialPolicy(
+            AuthCredentialPolicyRequest<String>(
+              context: 'property',
+              provider: CredentialsProvider(),
+              operation: AuthCredentialPolicyOperation.signIn,
+              verificationToken: 'latency-bound-token',
+            ),
+          ),
+          throwsA(isA<AuthFlowException>()),
+        );
+        expect(calls, 1);
+      }, PropertyConfig(numTests: 100, seed: 20260820));
+
+      final result = await runner.run();
+      expect(result.success, isTrue, reason: _propertyReport(result));
+    },
+  );
 }
 
 final class _PropertyCaptchaVerifier implements AuthCaptchaVerifier<String> {
   _PropertyCaptchaVerifier(this.onCall);
 
-  final AuthCaptchaVerificationResult Function() onCall;
+  final FutureOr<AuthCaptchaVerificationResult> Function() onCall;
 
   @override
-  AuthCaptchaVerificationResult verify(
+  FutureOr<AuthCaptchaVerificationResult> verify(
     AuthCaptchaVerificationRequest<String> request,
   ) => onCall();
 }

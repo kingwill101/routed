@@ -232,6 +232,46 @@ void main() {
       );
       expect(verifier.requests, hasLength(3));
     });
+
+    test(
+      'one-time retention begins after delayed provider acceptance',
+      () async {
+        var now = DateTime.utc(2030, 1, 1);
+        final verifier = _CaptchaVerifier((_) async {
+          now = now.add(const Duration(milliseconds: 20));
+          await Future<void>.delayed(Duration.zero);
+          return const AuthCaptchaVerificationResult.accepted();
+        });
+        final runtime = _runtimeWith(
+          CaptchaPlugin<String>(
+            verifier: verifier,
+            config: AuthCaptchaPluginConfig(
+              tokenUsePolicy: AuthCaptchaTokenUsePolicy.oneTime,
+              replayRetention: const Duration(milliseconds: 1),
+              clock: () => now,
+            ),
+          ),
+        );
+
+        await runtime.registry.enforceCredentialPolicy(
+          _credentialRequest(token: 'delayed-provider-token'),
+        );
+
+        await expectLater(
+          runtime.registry.enforceCredentialPolicy(
+            _credentialRequest(token: 'delayed-provider-token'),
+          ),
+          throwsA(
+            isA<AuthFlowException>().having(
+              (error) => error.code,
+              'code',
+              authCaptchaFailedErrorCode,
+            ),
+          ),
+        );
+        expect(verifier.requests, hasLength(1));
+      },
+    );
   });
 
   group('BreachedPasswordPlugin', () {

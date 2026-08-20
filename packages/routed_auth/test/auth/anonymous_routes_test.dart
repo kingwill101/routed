@@ -26,6 +26,63 @@ SessionConfig _sessionConfig() {
 String _cookieHeader(Cookie cookie) => '${cookie.name}=${cookie.value}';
 
 void main() {
+  test(
+    'anonymous sign-in rejects cross-origin forms but allows same-origin and native clients',
+    () async {
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
+          providers: const [],
+          plugins: [AnonymousPlugin<EngineContext>()],
+        ),
+      );
+      final engine = testEngine(
+        config: EngineConfig(
+          security: const EngineSecurityFeatures(csrfProtection: false),
+        ),
+        providers: [RoutedSessionsProvider(_sessionConfig())],
+      );
+      engine.addGlobalMiddleware(sessionMiddleware());
+      engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
+      AuthRoutes(manager).register(engine.defaultRouter);
+      await engine.initialize();
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+
+      final crossOrigin = await client.post(
+        '/auth/sign-in/anonymous',
+        '',
+        headers: const <String, List<String>>{
+          HttpHeaders.contentTypeHeader: ['application/x-www-form-urlencoded'],
+          'Origin': ['https://attacker.example'],
+          'Sec-Fetch-Site': ['cross-site'],
+        },
+      );
+      crossOrigin.assertStatus(HttpStatus.forbidden);
+      expect(crossOrigin.json(), <String, dynamic>{'error': 'invalid_origin'});
+
+      final sameOrigin = await client.post(
+        '/auth/sign-in/anonymous',
+        '',
+        headers: const <String, List<String>>{
+          HttpHeaders.contentTypeHeader: ['application/x-www-form-urlencoded'],
+          'Origin': ['http://server_testing.internal'],
+          'Sec-Fetch-Site': ['same-origin'],
+        },
+      );
+      sameOrigin.assertStatus(HttpStatus.ok);
+      expect(sameOrigin.json()['user']['isAnonymous'], isTrue);
+
+      final native = await client.postJson(
+        '/auth/sign-in/anonymous',
+        const <String, dynamic>{},
+      );
+      native.assertStatus(HttpStatus.ok);
+      expect(native.json()['user']['isAnonymous'], isTrue);
+    },
+  );
+
   test('Routed supports anonymous sessions and account deletion', () async {
     final feature = AnonymousPlugin<EngineContext>();
     final manager = AuthManager(

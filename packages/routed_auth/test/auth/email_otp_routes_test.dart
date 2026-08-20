@@ -27,6 +27,89 @@ String _cookieHeader(Cookie cookie) => '${cookie.name}=${cookie.value}';
 
 void main() {
   test(
+    'email OTP sign-in rejects cross-origin forms but allows same-origin and native clients',
+    () async {
+      String? sentCode;
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
+          providers: const [],
+          plugins: [
+            EmailOtpPlugin<EngineContext>(
+              generateOtp: (_) => '123456',
+              sendCode: (delivery) => sentCode = delivery.code,
+            ),
+          ],
+        ),
+      );
+      final engine = testEngine(
+        config: EngineConfig(
+          security: const EngineSecurityFeatures(csrfProtection: false),
+        ),
+        providers: [RoutedSessionsProvider(_sessionConfig())],
+      );
+      engine.addGlobalMiddleware(sessionMiddleware());
+      engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
+      AuthRoutes(manager).register(engine.defaultRouter);
+      await engine.initialize();
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+
+      Future<void> sendOtp() async {
+        final sent = await client.postJson(
+          '/auth/email-otp/send-verification-otp',
+          const <String, dynamic>{
+            'email': 'browser@example.com',
+            'type': 'sign-in',
+          },
+        );
+        sent.assertStatus(HttpStatus.ok);
+        expect(sentCode, '123456');
+      }
+
+      await sendOtp();
+      final formBody = Uri(
+        queryParameters: <String, String>{
+          'email': 'browser@example.com',
+          'otp': sentCode!,
+        },
+      ).query;
+      final crossOrigin = await client.post(
+        '/auth/sign-in/email-otp',
+        formBody,
+        headers: const <String, List<String>>{
+          HttpHeaders.contentTypeHeader: ['application/x-www-form-urlencoded'],
+          'Origin': ['https://attacker.example'],
+          'Sec-Fetch-Site': ['cross-site'],
+        },
+      );
+      crossOrigin.assertStatus(HttpStatus.forbidden);
+      expect(crossOrigin.json(), <String, dynamic>{'error': 'invalid_origin'});
+
+      final sameOrigin = await client.post(
+        '/auth/sign-in/email-otp',
+        formBody,
+        headers: const <String, List<String>>{
+          HttpHeaders.contentTypeHeader: ['application/x-www-form-urlencoded'],
+          'Origin': ['http://server_testing.internal'],
+          'Sec-Fetch-Site': ['same-origin'],
+        },
+      );
+      sameOrigin.assertStatus(HttpStatus.ok);
+      expect(sameOrigin.json()['user']['email'], 'browser@example.com');
+
+      await sendOtp();
+      final native = await client.postJson(
+        '/auth/sign-in/email-otp',
+        <String, dynamic>{'email': 'browser@example.com', 'otp': sentCode},
+      );
+      native.assertStatus(HttpStatus.ok);
+      expect(native.json()['user']['email'], 'browser@example.com');
+    },
+  );
+
+  test(
     'email OTP routes send, sign in, and verify with typed sessions',
     () async {
       String? sentCode;

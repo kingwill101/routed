@@ -127,7 +127,7 @@ final class EmailOtpPlugin<TContext>
       id: 'emailOtp.signIn',
       path: '/sign-in/email-otp',
       authentication: AuthOperationAuthentication.none,
-      originPolicy: AuthOperationOriginPolicy.none,
+      originPolicy: AuthOperationOriginPolicy.browser,
       csrfPolicy: AuthOperationCsrfPolicy.none,
       operationName: 'sign_in',
     ),
