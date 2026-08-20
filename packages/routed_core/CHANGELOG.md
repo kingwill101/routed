@@ -1,4 +1,4 @@
-## Unreleased
+## 0.5.0
 
 - Warn instead of throwing when the compiled route topology contains duplicate
   HTTP method/path registrations. The first registration remains active and
