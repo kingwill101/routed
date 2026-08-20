@@ -18,6 +18,8 @@ final class CloudflareD1AuthStore
         AuthAnonymousAccountMutationStore,
         AuthMagicLinkBackend,
         AuthEmailOtpBackend,
+        AuthWebAuthnStoreCapabilities,
+        AuthWebAuthnUserDeletionPlanFactory,
         AuthUserDeletionCoordinatorHost,
         AuthOAuthAccountMutationStore,
         AuthAuthenticationMethodTopologyStore {
@@ -28,6 +30,8 @@ final class CloudflareD1AuthStore
     this.anonymousReplayTtl = const Duration(days: 1),
     this.anonymousMaxReceipts = 10000,
     this.apiKeyMaxRecords = 10000,
+    this.webAuthnChallengeMaxRecords = 10000,
+    this.webAuthnAuthenticatorMaxRecords = 10000,
     DateTime Function()? clock,
   }) : _database = database,
        _clock = clock ?? DateTime.now {
@@ -52,6 +56,20 @@ final class CloudflareD1AuthStore
         'must be positive',
       );
     }
+    if (webAuthnChallengeMaxRecords <= 0) {
+      throw ArgumentError.value(
+        webAuthnChallengeMaxRecords,
+        'webAuthnChallengeMaxRecords',
+        'must be positive',
+      );
+    }
+    if (webAuthnAuthenticatorMaxRecords <= 0) {
+      throw ArgumentError.value(
+        webAuthnAuthenticatorMaxRecords,
+        'webAuthnAuthenticatorMaxRecords',
+        'must be positive',
+      );
+    }
     final sql = _D1(database);
     _sql = sql;
     users = _D1Users(sql, schema);
@@ -72,6 +90,19 @@ final class CloudflareD1AuthStore
       clock: _clock,
     );
     _deletionCoordinator = deletionCoordinator;
+    webAuthnChallenges = CloudflareD1WebAuthnChallengeStore._(
+      sql,
+      schema,
+      _clock,
+      webAuthnChallengeMaxRecords,
+    );
+    webAuthnAuthenticators = CloudflareD1WebAuthnAuthenticatorStore._(
+      sql,
+      schema,
+      _clock,
+      webAuthnAuthenticatorMaxRecords,
+      this,
+    );
     apiKeys = CloudflareD1AuthApiKeyStore._(
       sql,
       schema,
@@ -121,6 +152,8 @@ final class CloudflareD1AuthStore
     Duration anonymousReplayTtl = const Duration(days: 1),
     int anonymousMaxReceipts = 10000,
     int apiKeyMaxRecords = 10000,
+    int webAuthnChallengeMaxRecords = 10000,
+    int webAuthnAuthenticatorMaxRecords = 10000,
     DateTime Function()? clock,
   }) async {
     await schema.migrate(database);
@@ -131,6 +164,8 @@ final class CloudflareD1AuthStore
       anonymousReplayTtl: anonymousReplayTtl,
       anonymousMaxReceipts: anonymousMaxReceipts,
       apiKeyMaxRecords: apiKeyMaxRecords,
+      webAuthnChallengeMaxRecords: webAuthnChallengeMaxRecords,
+      webAuthnAuthenticatorMaxRecords: webAuthnAuthenticatorMaxRecords,
       clock: clock,
     );
   }
@@ -143,6 +178,8 @@ final class CloudflareD1AuthStore
   final Duration anonymousReplayTtl;
   final int anonymousMaxReceipts;
   final int apiKeyMaxRecords;
+  final int webAuthnChallengeMaxRecords;
+  final int webAuthnAuthenticatorMaxRecords;
   late final CloudflareD1UserDeletionCoordinator _deletionCoordinator;
   bool _authenticationMethodTopologyBound = false;
   bool _authenticationMethodInventoryAuthoritative = false;
@@ -188,6 +225,8 @@ final class CloudflareD1AuthStore
           ? const {AuthAuthenticationMethodKind.emailOtp}
           : identical(binding.authenticationMethodStore, apiKeys)
           ? const {AuthAuthenticationMethodKind.apiKey}
+          : identical(binding.authenticationMethodStore, webAuthnAuthenticators)
+          ? const {AuthAuthenticationMethodKind.passkey}
           : const <AuthAuthenticationMethodKind>{};
       if (binding.authenticationMethodKinds.isEmpty ||
           binding.authenticationMethodKinds.any(
@@ -231,6 +270,8 @@ final class CloudflareD1AuthStore
 
     var hasCredentialFallback = false;
     var hasEmailFallback = false;
+    var hasApiKeyFallback = false;
+    var hasPasskeyFallback = false;
     final oauthProviderIds = <String>{};
     for (final method in fallbacks) {
       switch (method.kind) {
@@ -247,8 +288,10 @@ final class CloudflareD1AuthStore
         case AuthAuthenticationMethodKind.emailLink:
           hasEmailFallback = true;
         case AuthAuthenticationMethodKind.passkey:
-        case AuthAuthenticationMethodKind.phone:
+          hasPasskeyFallback = true;
         case AuthAuthenticationMethodKind.apiKey:
+          hasApiKeyFallback = true;
+        case AuthAuthenticationMethodKind.phone:
         case AuthAuthenticationMethodKind.plugin:
           return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
       }
@@ -283,6 +326,19 @@ final class CloudflareD1AuthStore
              AND COALESCE(json_extract(payload, '\$.attributes.disabled'), 0) <> 1
              AND COALESCE(json_extract(payload, '\$.attributes.accountDisabled'), 0) <> 1
              AND json_extract(payload, '\$.attributes.deletedAt') IS NULL)''');
+      fallbackValues.add(userId);
+    }
+    if (hasApiKeyFallback) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('api_keys')}
+           WHERE user_id = ? AND revoked_at IS NULL
+             AND (expires_at IS NULL OR expires_at > ?))''');
+      fallbackValues.addAll([userId, _date(_clock())]);
+    }
+    if (hasPasskeyFallback) {
+      clauses.add(
+        '''EXISTS (SELECT 1 FROM ${schema.table('webauthn_authenticators')}
+           WHERE user_id = ?)''',
+      );
       fallbackValues.add(userId);
     }
     if (clauses.isEmpty) {
@@ -902,6 +958,8 @@ final class CloudflareD1AuthStore
 
     var hasCredentialFallback = false;
     var hasEmailFallback = false;
+    var hasApiKeyFallback = false;
+    var hasPasskeyFallback = false;
     final oauthProviderIds = <String>{};
     for (final method in fallbacks) {
       switch (method.kind) {
@@ -918,8 +976,10 @@ final class CloudflareD1AuthStore
         case AuthAuthenticationMethodKind.emailLink:
           hasEmailFallback = true;
         case AuthAuthenticationMethodKind.passkey:
-        case AuthAuthenticationMethodKind.phone:
+          hasPasskeyFallback = true;
         case AuthAuthenticationMethodKind.apiKey:
+          hasApiKeyFallback = true;
+        case AuthAuthenticationMethodKind.phone:
         case AuthAuthenticationMethodKind.plugin:
           return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
       }
@@ -941,6 +1001,19 @@ final class CloudflareD1AuthStore
     if (hasEmailFallback) {
       clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('users')}
            WHERE id = ? AND email IS NOT NULL AND email <> '')''');
+      fallbackValues.add(userId);
+    }
+    if (hasApiKeyFallback) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('api_keys')}
+           WHERE user_id = ? AND revoked_at IS NULL
+             AND (expires_at IS NULL OR expires_at > ?))''');
+      fallbackValues.addAll([userId, _date(_clock())]);
+    }
+    if (hasPasskeyFallback) {
+      clauses.add(
+        '''EXISTS (SELECT 1 FROM ${schema.table('webauthn_authenticators')}
+           WHERE user_id = ?)''',
+      );
       fallbackValues.add(userId);
     }
     if (clauses.isEmpty) {
@@ -1352,6 +1425,42 @@ final class CloudflareD1AuthStore
   /// Digest-only, bounded API-key persistence in this D1 domain.
   late final CloudflareD1AuthApiKeyStore apiKeys;
 
+  @override
+  late final CloudflareD1WebAuthnChallengeStore webAuthnChallenges;
+
+  @override
+  late final CloudflareD1WebAuthnAuthenticatorStore webAuthnAuthenticators;
+
+  @override
+  AuthUserDeletionPlan createWebAuthnDeletionPlan({
+    required AuthUserDeletionDomain domain,
+    required AuthUser user,
+    required String namespace,
+  }) {
+    if (!identical(domain, _deletionCoordinator.domain)) {
+      throw StateError('WebAuthn received a foreign D1 deletion domain.');
+    }
+    return CloudflareD1UserDeletionPlan(
+      domain: _deletionCoordinator.domain,
+      userId: user.id,
+      namespace: namespace,
+      statements: [
+        CloudflareD1UserDeletionStatement(
+          sql:
+              'DELETE FROM ${schema.table('webauthn_challenges')} '
+              'WHERE user_id = ? AND {{guard}}',
+          parameters: [user.id],
+        ),
+        CloudflareD1UserDeletionStatement(
+          sql:
+              'DELETE FROM ${schema.table('webauthn_authenticators')} '
+              'WHERE user_id = ? AND {{guard}}',
+          parameters: [user.id],
+        ),
+      ],
+    );
+  }
+
   /// Applies all pending schema migrations.
   Future<void> migrate() => schema.migrate(_database);
 }
@@ -1613,6 +1722,8 @@ final class CloudflareD1UserDeletionCoordinator
       (schema.table('oauth_authorization_codes'), 'user_id'),
       (schema.table('oauth_access_tokens'), 'user_id'),
       (schema.table('api_keys'), 'user_id'),
+      (schema.table('webauthn_challenges'), 'user_id'),
+      (schema.table('webauthn_authenticators'), 'user_id'),
     ]) {
       yield _sql.database
           .prepare('DELETE FROM ${entry.$1} WHERE ${entry.$2} = ? AND $guard')
@@ -1750,6 +1861,365 @@ final class _D1 {
     if (!result.success) {
       throw StateError('D1 statement failed: ${result.error}');
     }
+  }
+}
+
+/// Bounded, digest-only one-time WebAuthn challenge persistence in D1.
+final class CloudflareD1WebAuthnChallengeStore
+    implements AuthWebAuthnChallengeStore {
+  CloudflareD1WebAuthnChallengeStore._(
+    this._sql,
+    this.schema,
+    this._clock,
+    this.maxRecords,
+  );
+
+  final _D1 _sql;
+  final CloudflareD1AuthSchema schema;
+  final DateTime Function() _clock;
+  final int maxRecords;
+
+  String get table => schema.table('webauthn_challenges');
+
+  @override
+  Future<void> save(AuthWebAuthnChallenge challenge) async {
+    _validateD1WebAuthnChallenge(challenge);
+    final now = _clock().toUtc();
+    if (!challenge.expiresAt.toUtc().isAfter(now)) {
+      throw StateError('WebAuthn challenge is already expired.');
+    }
+    final userId = challenge.userId;
+    final results = await _sql.batch([
+      _sql.database.prepare('DELETE FROM $table WHERE expires_at <= ?').bind([
+        _date(now),
+      ]),
+      _sql.database
+          .prepare('''INSERT OR IGNORE INTO $table
+            (challenge_hash, id, ceremony, relying_party_id, origin, user_id,
+             created_at, expires_at)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?
+            WHERE (SELECT COUNT(*) FROM $table) < ?
+              AND (? IS NULL OR NOT EXISTS (
+                SELECT 1 FROM ${schema.table('deletion_receipts')}
+                WHERE user_id_hash = ?
+              ))''')
+          .bind([
+            challenge.challengeHash,
+            challenge.id,
+            challenge.ceremony.name,
+            challenge.relyingPartyId,
+            challenge.origin,
+            userId,
+            _date(challenge.createdAt),
+            _date(challenge.expiresAt),
+            maxRecords,
+            userId,
+            userId == null ? null : hashOpaqueToken(userId),
+          ]),
+    ]);
+    if ((results[1].meta?.changes ?? 0) != 1) {
+      throw StateError(
+        'WebAuthn challenge capacity, identity, or owner is unavailable.',
+      );
+    }
+  }
+
+  @override
+  Future<AuthWebAuthnChallenge?> consume({
+    required String challengeHash,
+    required AuthWebAuthnCeremony ceremony,
+    required String relyingPartyId,
+    required String origin,
+    String? userId,
+    DateTime? now,
+  }) async {
+    final digest = _d1WebAuthnDigest(challengeHash, 'challengeHash');
+    final rpId = _d1WebAuthnComponent(relyingPartyId, 'relyingPartyId', 253);
+    final exactOrigin = _d1WebAuthnComponent(origin, 'origin', 2048);
+    final owner = userId == null
+        ? null
+        : _d1WebAuthnComponent(userId, 'userId', 512);
+    final current = (now ?? _clock()).toUtc();
+    final results = await _sql.batchRows([
+      _sql.database.prepare('DELETE FROM $table WHERE expires_at <= ?').bind([
+        _date(current),
+      ]),
+      _sql.database
+          .prepare('''DELETE FROM $table
+            WHERE challenge_hash = ? AND ceremony = ?
+              AND relying_party_id = ? AND origin = ?
+              AND ((user_id IS NULL AND ? IS NULL) OR user_id = ?)
+              AND created_at <= ? AND expires_at > ?
+            RETURNING *''')
+          .bind([
+            digest,
+            ceremony.name,
+            rpId,
+            exactOrigin,
+            owner,
+            owner,
+            _date(current),
+            _date(current),
+          ]),
+    ]);
+    final row = results[1].results.firstOrNull;
+    return row == null ? null : _decodeD1WebAuthnChallenge(row);
+  }
+
+  @override
+  Future<void> deleteForUser(String userId) async {
+    await _sql.run('DELETE FROM $table WHERE user_id = ?', [
+      _d1WebAuthnComponent(userId, 'userId', 512),
+    ]);
+  }
+}
+
+/// Bounded passkey persistence with exact counter and removal mutations.
+final class CloudflareD1WebAuthnAuthenticatorStore
+    implements
+        AuthWebAuthnAuthenticatorStore,
+        AuthWebAuthnAuthenticatorMutationStore {
+  CloudflareD1WebAuthnAuthenticatorStore._(
+    this._sql,
+    this.schema,
+    this._clock,
+    this.maxRecords,
+    this._root,
+  );
+
+  final _D1 _sql;
+  final CloudflareD1AuthSchema schema;
+  final DateTime Function() _clock;
+  final int maxRecords;
+  final CloudflareD1AuthStore _root;
+
+  String get table => schema.table('webauthn_authenticators');
+
+  @override
+  Future<WebAuthnAuthenticator?> findByCredentialId(String credentialId) =>
+      _sql.first('SELECT * FROM $table WHERE credential_id = ?', [
+        _d1WebAuthnComponent(
+          credentialId,
+          'credentialId',
+          _webAuthnCredentialIdMaxLength,
+        ),
+      ], _decodeD1WebAuthnAuthenticator);
+
+  @override
+  Future<List<WebAuthnAuthenticator>> listForUser(String userId) => _sql.all(
+    'SELECT * FROM $table WHERE user_id = ? ORDER BY created_at, credential_id',
+    [_d1WebAuthnComponent(userId, 'userId', 512)],
+    _decodeD1WebAuthnAuthenticator,
+  );
+
+  @override
+  Future<WebAuthnAuthenticator> create(
+    WebAuthnAuthenticator authenticator,
+  ) async {
+    _validateD1WebAuthnAuthenticator(authenticator);
+    final result = await _sql.run(
+      '''INSERT OR IGNORE INTO $table
+        (credential_id, user_id, public_key, counter, transports, name,
+         created_at, last_used_at)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?
+        WHERE (SELECT COUNT(*) FROM $table) < ?
+          AND NOT EXISTS (
+            SELECT 1 FROM ${schema.table('deletion_receipts')}
+            WHERE user_id_hash = ?
+          )''',
+      [
+        ..._d1WebAuthnAuthenticatorValues(authenticator),
+        maxRecords,
+        hashOpaqueToken(authenticator.userId!),
+      ],
+    );
+    if ((result.meta?.changes ?? 0) != 1) {
+      throw StateError(
+        'WebAuthn credential capacity, identity, or owner is unavailable.',
+      );
+    }
+    return authenticator;
+  }
+
+  @override
+  Future<WebAuthnAuthenticator?> updateUsage({
+    required String credentialId,
+    required int expectedCounter,
+    required int newCounter,
+    required DateTime lastUsedAt,
+  }) {
+    if (expectedCounter < 0 ||
+        newCounter < expectedCounter ||
+        newCounter > 0x7fffffffffffffff) {
+      return Future.value(null);
+    }
+    final timestamp = _date(lastUsedAt);
+    return _sql.first(
+      '''UPDATE $table SET counter = ?,
+           last_used_at = CASE
+             WHEN last_used_at IS NULL OR last_used_at < ? THEN ?
+             ELSE last_used_at END
+         WHERE credential_id = ? AND counter = ? AND created_at <= ?
+         RETURNING *''',
+      [
+        newCounter,
+        timestamp,
+        timestamp,
+        _d1WebAuthnComponent(
+          credentialId,
+          'credentialId',
+          _webAuthnCredentialIdMaxLength,
+        ),
+        expectedCounter,
+        timestamp,
+      ],
+      _decodeD1WebAuthnAuthenticator,
+    );
+  }
+
+  @override
+  Future<bool> deleteForUser(String userId, String credentialId) async {
+    final result = await _sql
+        .run('DELETE FROM $table WHERE user_id = ? AND credential_id = ?', [
+          _d1WebAuthnComponent(userId, 'userId', 512),
+          _d1WebAuthnComponent(
+            credentialId,
+            'credentialId',
+            _webAuthnCredentialIdMaxLength,
+          ),
+        ]);
+    return (result.meta?.changes ?? 0) == 1;
+  }
+
+  @override
+  Future<WebAuthnAuthenticator?> renameForUser(
+    String userId,
+    String credentialId,
+    String name,
+  ) => _sql.first(
+    '''UPDATE $table SET name = ?
+       WHERE user_id = ? AND credential_id = ? RETURNING *''',
+    [
+      _d1WebAuthnComponent(name, 'name', 256),
+      _d1WebAuthnComponent(userId, 'userId', 512),
+      _d1WebAuthnComponent(
+        credentialId,
+        'credentialId',
+        _webAuthnCredentialIdMaxLength,
+      ),
+    ],
+    _decodeD1WebAuthnAuthenticator,
+  );
+
+  @override
+  Future<AuthAuthenticationMethodMutationResult> removeCredentialIfSafe(
+    AuthWebAuthnCredentialRemovalCommand command,
+  ) async {
+    if (!_root._authenticationMethodTopologyBound ||
+        !_root._authenticationMethodInventoryAuthoritative) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+    final snapshot = await command.loadInventory();
+    if (!snapshot.isComplete) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+    final target = AuthAuthenticationMethod.passkey(command.credentialId);
+    if (!snapshot.methods.contains(target)) {
+      return AuthAuthenticationMethodMutationResult.notFound;
+    }
+    final fallbacks = snapshot.methods
+        .where((method) => method.canAuthenticate && method != target)
+        .toList(growable: false);
+    if (fallbacks.isEmpty) {
+      return AuthAuthenticationMethodMutationResult.lastAuthenticationMethod;
+    }
+    final predicate = _fallbackPredicate(
+      command.userId,
+      command.credentialId,
+      fallbacks,
+    );
+    if (predicate == null) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+    final result = await _sql.run(
+      '''DELETE FROM $table
+         WHERE user_id = ? AND credential_id = ? AND (${predicate.$1})''',
+      [command.userId, command.credentialId, ...predicate.$2],
+    );
+    if ((result.meta?.changes ?? 0) == 1) {
+      return AuthAuthenticationMethodMutationResult.mutated;
+    }
+    final existing = await findByCredentialId(command.credentialId);
+    return existing?.userId == command.userId
+        ? AuthAuthenticationMethodMutationResult.lastAuthenticationMethod
+        : AuthAuthenticationMethodMutationResult.notFound;
+  }
+
+  (String, List<Object?>)? _fallbackPredicate(
+    String userId,
+    String credentialId,
+    List<AuthAuthenticationMethod> methods,
+  ) {
+    var credentials = false;
+    var email = false;
+    var apiKeys = false;
+    var passkeys = false;
+    final oauthProviders = <String>{};
+    for (final method in methods) {
+      switch (method.kind) {
+        case AuthAuthenticationMethodKind.password:
+        case AuthAuthenticationMethodKind.username:
+          credentials = true;
+        case AuthAuthenticationMethodKind.oauthProvider:
+          final providerId = method.providerId;
+          if (providerId == null || method.providerAccountId == null) {
+            return null;
+          }
+          oauthProviders.add(providerId);
+        case AuthAuthenticationMethodKind.emailOtp:
+        case AuthAuthenticationMethodKind.emailLink:
+          email = true;
+        case AuthAuthenticationMethodKind.apiKey:
+          apiKeys = true;
+        case AuthAuthenticationMethodKind.passkey:
+          passkeys = true;
+        case AuthAuthenticationMethodKind.phone:
+        case AuthAuthenticationMethodKind.plugin:
+          return null;
+      }
+    }
+    final clauses = <String>[];
+    final values = <Object?>[];
+    if (credentials) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('credentials')}
+        WHERE user_id = ? AND enabled = 1)''');
+      values.add(userId);
+    }
+    if (oauthProviders.isNotEmpty) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('accounts')}
+        WHERE user_id = ? AND provider_id IN
+          (${List.filled(oauthProviders.length, '?').join(', ')}))''');
+      values.addAll([userId, ...oauthProviders]);
+    }
+    if (email) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('users')}
+        WHERE id = ? AND email IS NOT NULL AND email <> ''
+          AND ${_usableUserSql('payload')})''');
+      values.add(userId);
+    }
+    if (apiKeys) {
+      final now = _date(_clock());
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('api_keys')}
+        WHERE user_id = ? AND revoked_at IS NULL
+          AND (expires_at IS NULL OR expires_at > ?))''');
+      values.addAll([userId, now]);
+    }
+    if (passkeys) {
+      clauses.add('''EXISTS (SELECT 1 FROM $table
+        WHERE user_id = ? AND credential_id <> ?)''');
+      values.addAll([userId, credentialId]);
+    }
+    return clauses.isEmpty ? null : (clauses.join(' OR '), values);
   }
 }
 
@@ -2048,6 +2518,7 @@ final class CloudflareD1AuthApiKeyStore
     var credentials = false;
     var email = false;
     var apiKeys = false;
+    var passkeys = false;
     final oauthProviders = <String>{};
     for (final method in methods) {
       switch (method.kind) {
@@ -2066,6 +2537,7 @@ final class CloudflareD1AuthApiKeyStore
         case AuthAuthenticationMethodKind.apiKey:
           apiKeys = true;
         case AuthAuthenticationMethodKind.passkey:
+          passkeys = true;
         case AuthAuthenticationMethodKind.phone:
         case AuthAuthenticationMethodKind.plugin:
           return null;
@@ -2097,6 +2569,13 @@ final class CloudflareD1AuthApiKeyStore
         WHERE user_id = ? AND id <> ? AND revoked_at IS NULL
           AND (expires_at IS NULL OR expires_at > ?))''');
       values.addAll([userId, keyId, _date(now)]);
+    }
+    if (passkeys) {
+      clauses.add(
+        '''EXISTS (SELECT 1 FROM ${schema.table('webauthn_authenticators')}
+          WHERE user_id = ?)''',
+      );
+      values.add(userId);
     }
     return clauses.isEmpty ? null : (clauses.join(' OR '), values);
   }
@@ -4934,6 +5413,147 @@ final class _D1ScimReplay {
   final String fingerprint;
   final AuthScimManagedConnection connection;
   final AuthScimCredentialRecord credential;
+}
+
+const int _webAuthnCredentialIdMaxLength = 4096;
+
+AuthWebAuthnChallenge _decodeD1WebAuthnChallenge(Map<String, Object?> row) {
+  final challenge = AuthWebAuthnChallenge(
+    id: row['id']! as String,
+    challengeHash: row['challenge_hash']! as String,
+    ceremony: AuthWebAuthnCeremony.values.byName(row['ceremony']! as String),
+    relyingPartyId: row['relying_party_id']! as String,
+    origin: row['origin']! as String,
+    userId: row['user_id'] as String?,
+    createdAt: DateTime.parse(row['created_at']! as String).toUtc(),
+    expiresAt: DateTime.parse(row['expires_at']! as String).toUtc(),
+  );
+  _validateD1WebAuthnChallenge(challenge);
+  return challenge;
+}
+
+void _validateD1WebAuthnChallenge(AuthWebAuthnChallenge challenge) {
+  _d1WebAuthnComponent(challenge.id, 'challenge.id', 512);
+  _d1WebAuthnDigest(challenge.challengeHash, 'challenge.challengeHash');
+  _d1WebAuthnComponent(
+    challenge.relyingPartyId,
+    'challenge.relyingPartyId',
+    253,
+  );
+  _d1WebAuthnComponent(challenge.origin, 'challenge.origin', 2048);
+  if (challenge.userId case final userId?) {
+    _d1WebAuthnComponent(userId, 'challenge.userId', 512);
+  }
+  if (!challenge.expiresAt.toUtc().isAfter(challenge.createdAt.toUtc())) {
+    throw ArgumentError.value(
+      challenge.expiresAt,
+      'challenge.expiresAt',
+      'must be after createdAt',
+    );
+  }
+}
+
+List<Object?> _d1WebAuthnAuthenticatorValues(WebAuthnAuthenticator value) => [
+  value.credentialId,
+  value.userId,
+  value.publicKey,
+  value.counter,
+  jsonEncode(value.transports ?? const <String>[]),
+  value.name,
+  _date(value.createdAt!),
+  _nullableDate(value.lastUsedAt),
+];
+
+WebAuthnAuthenticator _decodeD1WebAuthnAuthenticator(Map<String, Object?> row) {
+  final authenticator = WebAuthnAuthenticator(
+    credentialId: row['credential_id']! as String,
+    userId: row['user_id']! as String,
+    publicKey: row['public_key']! as String,
+    counter: (row['counter']! as num).toInt(),
+    transports: _decodeStringList(row['transports']),
+    name: row['name'] as String?,
+    createdAt: DateTime.parse(row['created_at']! as String).toUtc(),
+    lastUsedAt: _optionalDate(row['last_used_at']),
+  );
+  _validateD1WebAuthnAuthenticator(authenticator);
+  return authenticator;
+}
+
+void _validateD1WebAuthnAuthenticator(WebAuthnAuthenticator authenticator) {
+  _d1WebAuthnComponent(
+    authenticator.credentialId,
+    'authenticator.credentialId',
+    _webAuthnCredentialIdMaxLength,
+  );
+  _d1WebAuthnComponent(
+    authenticator.publicKey,
+    'authenticator.publicKey',
+    16384,
+  );
+  final userId = authenticator.userId;
+  if (userId == null) {
+    throw ArgumentError.value(userId, 'authenticator.userId', 'is required');
+  }
+  _d1WebAuthnComponent(userId, 'authenticator.userId', 512);
+  final createdAt = authenticator.createdAt;
+  if (createdAt == null) {
+    throw ArgumentError.value(
+      createdAt,
+      'authenticator.createdAt',
+      'is required',
+    );
+  }
+  if (authenticator.counter < 0 || authenticator.counter > 0x7fffffffffffffff) {
+    throw ArgumentError.value(
+      authenticator.counter,
+      'authenticator.counter',
+      'must fit a non-negative SQLite integer',
+    );
+  }
+  final transports = authenticator.transports ?? const <String>[];
+  if (transports.length > 16 ||
+      transports.toSet().length != transports.length) {
+    throw ArgumentError.value(
+      transports,
+      'authenticator.transports',
+      'must contain at most 16 unique values',
+    );
+  }
+  for (final transport in transports) {
+    _d1WebAuthnComponent(transport, 'authenticator.transport', 32);
+  }
+  if (authenticator.name case final name?) {
+    _d1WebAuthnComponent(name, 'authenticator.name', 256);
+  }
+  final lastUsedAt = authenticator.lastUsedAt;
+  if (lastUsedAt != null && lastUsedAt.toUtc().isBefore(createdAt.toUtc())) {
+    throw ArgumentError.value(
+      lastUsedAt,
+      'authenticator.lastUsedAt',
+      'must not be before createdAt',
+    );
+  }
+}
+
+String _d1WebAuthnDigest(String value, String name) {
+  if (!RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(value)) {
+    throw ArgumentError.value(
+      value,
+      name,
+      'must be a SHA-256 base64url digest',
+    );
+  }
+  return value;
+}
+
+String _d1WebAuthnComponent(String value, String name, int maxLength) {
+  if (value.isEmpty ||
+      value != value.trim() ||
+      value.length > maxLength ||
+      value.contains(RegExp(r'[\u0000-\u001f\u007f]'))) {
+    throw ArgumentError.value(value, name, 'must be a bounded safe value');
+  }
+  return value;
 }
 
 List<Object?> _apiKeyValues(AuthApiKeyRecord value) => [

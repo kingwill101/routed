@@ -22,7 +22,7 @@ final class CloudflareD1AuthSchema {
   /// underscores are accepted because SQLite cannot bind identifiers.
   final String tablePrefix;
 
-  static const int currentVersion = 9;
+  static const int currentVersion = 10;
 
   String table(String suffix) {
     final prefix = tablePrefix.trim();
@@ -54,7 +54,42 @@ final class CloudflareD1AuthSchema {
     CloudflareD1AuthMigration(version: 7, statements: _versionSeven),
     CloudflareD1AuthMigration(version: 8, statements: _versionEight),
     CloudflareD1AuthMigration(version: 9, statements: _versionNine),
+    CloudflareD1AuthMigration(version: 10, statements: _versionTen),
   ];
+
+  List<String> get _versionTen {
+    final challenges = table('webauthn_challenges');
+    final authenticators = table('webauthn_authenticators');
+    return [
+      '''CREATE TABLE IF NOT EXISTS $challenges (
+        challenge_hash TEXT PRIMARY KEY,
+        id TEXT NOT NULL UNIQUE,
+        ceremony TEXT NOT NULL
+          CHECK (ceremony IN ('registration', 'authentication')),
+        relying_party_id TEXT NOT NULL,
+        origin TEXT NOT NULL,
+        user_id TEXT,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL
+      )''',
+      'CREATE INDEX IF NOT EXISTS ${challenges}_user '
+          'ON $challenges(user_id)',
+      'CREATE INDEX IF NOT EXISTS ${challenges}_expiry '
+          'ON $challenges(expires_at)',
+      '''CREATE TABLE IF NOT EXISTS $authenticators (
+        credential_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        public_key TEXT NOT NULL,
+        counter INTEGER NOT NULL CHECK (counter >= 0),
+        transports TEXT NOT NULL,
+        name TEXT,
+        created_at TEXT NOT NULL,
+        last_used_at TEXT
+      )''',
+      'CREATE INDEX IF NOT EXISTS ${authenticators}_user '
+          'ON $authenticators(user_id, created_at, credential_id)',
+    ];
+  }
 
   List<String> get _versionNine {
     final apiKeys = table('api_keys');
@@ -451,6 +486,8 @@ final class CloudflareD1AuthSchema {
   /// retain migration history and never call it during normal operation.
   Future<void> dropAll(CloudflareD1Database database) async {
     final suffixes = [
+      'webauthn_authenticators',
+      'webauthn_challenges',
       'api_keys',
       'anonymous_mutation_guards',
       'anonymous_mutation_receipts',
