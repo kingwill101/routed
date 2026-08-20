@@ -281,12 +281,13 @@ account, session, client, and plugin contracts above:
   AuthnRequest and ACS flows, durable atomic request/assertion replay state,
   strict XML bounds and assertion validation, host-owned session issuance,
   OpenAPI contracts, and an application-owned XMLDSig verifier seam.
-- [ ] Prove live SAML interoperability and add a built-in portable XMLDSig
-  verifier only when exact reference binding, canonicalization, pinned
-  certificates, supported algorithms, and hostile XML vectors pass the public
-  verifier conformance suite. Dynamic SSO administration, OIDC enterprise
-  connections, encrypted assertions, logout, and group/role mapping remain
-  deferred.
+- [x] Add a built-in portable XMLDSig verifier after exact reference binding,
+  bounded exclusive canonicalization/transforms, pinned certificates, explicit
+  RSA/SHA-2 allowlists, independent xmlsec fixtures, hostile XML vectors, and
+  generated mutations pass the public verifier conformance suite.
+- [ ] Prove live SAML interoperability against external IdPs. Dynamic SSO
+  administration, OIDC enterprise connections, encrypted assertions, logout,
+  and group/role mapping remain deferred.
 
 ## Active security-audit remediation
 

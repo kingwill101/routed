@@ -629,7 +629,7 @@ from a signed external account key to an application user:
 final saml = AuthSamlPlugin<MyRequestContext>(
   connections: mySamlConnectionCatalog,
   replayStore: myDurableSamlReplayStore,
-  assertionVerifier: myXmlSignatureVerifier,
+  assertionVerifier: AuthPortableSamlXmlDsigVerifier(),
   identityResolver: mySamlIdentityResolver,
   browserBindingResolver: (context) => context.browserSessionId,
   options: AuthSamlOptions(
@@ -681,15 +681,38 @@ final form = await auth.plugins.use(samlClientPlugin).signIn(
 // Submit form.fields to form.destination using an HTML POST form.
 ```
 
-Routed intentionally does not include a built-in XMLDSig verifier yet. The
-maintained Dart `xml_crypto` package supports useful primitives, but its public
-API leaves exact signed-node binding to callers, defaults to SHA-1, and does
-not advertise browser support. Production applications must provide
-`AuthSamlAssertionVerifier` and run
-`AuthSamlVerifierConformanceSuite` with real signed and hostile fixtures.
-Dynamic connection administration, OIDC enterprise connections, encrypted
-assertions, single logout, and group or role provisioning are not in this
-slice.
+`AuthPortableSamlXmlDsigVerifier` is the built-in pure-Dart verifier. Its
+default policy accepts only RSA-SHA256 signatures, SHA-256 digests, exclusive
+canonicalization without comments, and the exact enveloped-signature then
+exclusive-canonicalization transform sequence. Trust comes only from the one
+certificate pinned by `AuthSamlConnection`; an embedded certificate is ignored
+as a trust source and must match the pin when present. Every local `#ID`
+reference must name the signature's direct Response or Assertion parent.
+
+RSA-SHA384/SHA-384 and RSA-SHA512/SHA-512 are implemented but require explicit
+opt-in:
+
+```dart
+final verifier = AuthPortableSamlXmlDsigVerifier(
+  policy: AuthSamlXmlDsigPolicy(
+    signatureAlgorithms: {
+      AuthSamlXmlDsigSignatureAlgorithm.rsaSha384,
+    },
+    digestAlgorithms: {
+      AuthSamlXmlDsigDigestAlgorithm.sha384,
+    },
+  ),
+);
+```
+
+SHA-1, ECDSA, RSA-PSS, comments canonicalization, InclusiveNamespaces prefix
+lists, XPath/XPointer, external or empty references, implicit transforms,
+encrypted assertions, and certificate chains are unsupported by the built-in
+profile. Applications needing another profile can still implement the
+application-owned `AuthSamlAssertionVerifier` seam and must run
+`AuthSamlVerifierConformanceSuite` with independently signed and hostile
+fixtures. Dynamic connection administration, OIDC enterprise connections,
+single logout, and group or role provisioning are also outside this slice.
 
 ## Optional last-authentication-method plugin
 

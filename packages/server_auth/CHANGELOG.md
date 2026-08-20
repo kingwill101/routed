@@ -112,6 +112,10 @@
 - Require an application-owned `AuthSamlAssertionVerifier` until portable
   XMLDSig reference binding is proven, and publish a verifier conformance
   runner instead of presenting synthetic test signatures as production SAML.
+- Add `AuthPortableSamlXmlDsigVerifier` behind that seam with exact direct-
+  parent reference binding, pinned single-certificate trust, bounded exclusive
+  canonicalization and transforms, explicit RSA/SHA-2 allowlists, independent
+  xmlsec fixtures, hostile XML vectors, and property-based mutation coverage.
 - Replace split authorization-code consumption and access-token persistence
   with a required typed exchange store owned by `OAuthProviderModePlugin`.
   Code bindings are revalidated and consumed with the digest-only prepared
