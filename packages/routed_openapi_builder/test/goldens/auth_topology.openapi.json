@@ -112,10 +112,11 @@
         "x-routed-auth-operation-semantics": {
           "effect": "mutation",
           "persistence": "durable",
-          "atomicity": "nonAtomic",
+          "atomicity": "atomic",
           "replaySafety": "repeatable",
           "persistenceReference": {
-            "schemaId": "anonymous"
+            "schemaId": "anonymous",
+            "atomicOperationId": "anonymous.createAccount"
           }
         },
         "x-routed-auth-rate-limit-operation": {
@@ -239,7 +240,7 @@
           "effect": "mutation",
           "persistence": "durable",
           "atomicity": "atomic",
-          "replaySafety": "singleUse",
+          "replaySafety": "idempotent",
           "persistenceReference": {
             "schemaId": "anonymous",
             "atomicOperationId": "anonymous.deleteUser"

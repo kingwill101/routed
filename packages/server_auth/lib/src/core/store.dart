@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'account_policy.dart';
+import 'anonymous_store.dart';
 import 'authentication_methods.dart';
 import 'deletion_transaction.dart';
 import 'email_change_token_store.dart';
@@ -376,6 +378,21 @@ typedef _InMemoryAuthCoreDeletionState = ({
   Object emailOtps,
 });
 
+final class _AuthAnonymousMutationReceipt {
+  const _AuthAnonymousMutationReceipt({
+    required this.fingerprint,
+    this.user,
+    this.subjectUserId,
+  });
+
+  final String fingerprint;
+  final AuthUser? user;
+  final String? subjectUserId;
+}
+
+String _anonymousCreateFingerprint(AuthAnonymousCreateAccountCommand command) =>
+    'create:${hashOpaqueToken(jsonEncode(command.user.toJson()))}';
+
 /// In-memory store for tests, examples, and local development.
 ///
 /// This implementation deliberately keeps password hashes outside [AuthUser]
@@ -386,6 +403,7 @@ class InMemoryAuthStore
     implements
         AuthStore,
         AuthUsernameStore,
+        AuthAnonymousAccountMutationStore,
         AuthAdminStoreCapabilities,
         AuthWebAuthnStoreCapabilities,
         AuthAccountStateStore,
@@ -393,27 +411,31 @@ class InMemoryAuthStore
         AuthOAuthAccountMutationStore,
         AuthUserDeletionCoordinatorHost,
         AuthInMemoryUserDeletionBackend {
-  InMemoryAuthStore({AuthUsernameFaultInjector? usernameFaultInjector})
-    : users = _InMemoryUserStore(),
-      credentials = _InMemoryCredentialStore(),
-      accounts = _InMemoryAccountStore(),
-      sessions = _InMemorySessionStore(),
-      oauthChallenges = InMemoryAuthOAuthChallengeStore(),
-      passwordResetTokens = InMemoryAuthPasswordResetTokenStore(),
-      jwtVersions = InMemoryAuthJwtVersionStore(),
-      verificationTokens = InMemoryAuthVerificationTokenStore(),
-      emailChangeTokens = InMemoryAuthEmailChangeTokenStore(),
-      webAuthnChallenges = InMemoryAuthWebAuthnChallengeStore(),
-      webAuthnAuthenticators = InMemoryAuthWebAuthnAuthenticatorStore(),
-      deviceAuthorizations = InMemoryAuthDeviceAuthorizationStore(),
-      emailOtps = InMemoryAuthEmailOtpStore(),
-      _deletionDomain = AuthInMemoryUserDeletionDomain(),
-      _accountStates = InMemoryAuthAccountStateStore(),
-      _usernameFaultInjector = usernameFaultInjector {
+  InMemoryAuthStore({
+    this.anonymousFaultInjector,
+    AuthUsernameFaultInjector? usernameFaultInjector,
+    AuthUserDeletionFaultInjector? userDeletionFaultInjector,
+  }) : users = _InMemoryUserStore(),
+       credentials = _InMemoryCredentialStore(),
+       accounts = _InMemoryAccountStore(),
+       sessions = _InMemorySessionStore(),
+       oauthChallenges = InMemoryAuthOAuthChallengeStore(),
+       passwordResetTokens = InMemoryAuthPasswordResetTokenStore(),
+       jwtVersions = InMemoryAuthJwtVersionStore(),
+       verificationTokens = InMemoryAuthVerificationTokenStore(),
+       emailChangeTokens = InMemoryAuthEmailChangeTokenStore(),
+       webAuthnChallenges = InMemoryAuthWebAuthnChallengeStore(),
+       webAuthnAuthenticators = InMemoryAuthWebAuthnAuthenticatorStore(),
+       deviceAuthorizations = InMemoryAuthDeviceAuthorizationStore(),
+       emailOtps = InMemoryAuthEmailOtpStore(),
+       _deletionDomain = AuthInMemoryUserDeletionDomain(),
+       _accountStates = InMemoryAuthAccountStateStore(),
+       _usernameFaultInjector = usernameFaultInjector {
     (credentials as _InMemoryCredentialStore).users = users;
     _deletionCoordinator = AuthInMemoryUserDeletionCoordinator(
       domain: _deletionDomain,
       backend: this,
+      faultInjector: userDeletionFaultInjector,
     );
   }
 
@@ -458,8 +480,12 @@ class InMemoryAuthStore
 
   final InMemoryAuthAccountStateStore _accountStates;
   final AuthUsernameFaultInjector? _usernameFaultInjector;
+  final AuthAnonymousInMemoryFaultInjector? anonymousFaultInjector;
   final AuthInMemoryUserDeletionDomain _deletionDomain;
   late final AuthInMemoryUserDeletionCoordinator _deletionCoordinator;
+  final Map<String, _AuthAnonymousMutationReceipt> _anonymousReceipts =
+      <String, _AuthAnonymousMutationReceipt>{};
+  Future<void> _anonymousMutationTail = Future<void>.value();
   final Map<String, Future<void>> _authenticationMethodMutationTails =
       <String, Future<void>>{};
   final Map<String, Future<void>> _usernameMutationTails =
@@ -731,6 +757,150 @@ class InMemoryAuthStore
   @override
   AuthUserDeletionCoordinator get userDeletionCoordinator =>
       _deletionCoordinator;
+
+  @override
+  Future<AuthAnonymousMutationResult> createAnonymousAccount(
+    AuthAnonymousCreateAccountCommand command,
+  ) => _serializeAnonymousMutation(() async {
+    final fingerprint = _anonymousCreateFingerprint(command);
+    final replay = _anonymousReplay(command.operationId, fingerprint);
+    if (replay != null) return replay;
+    var created = false;
+    try {
+      final user = await users.create(command.user);
+      created = true;
+      await anonymousFaultInjector?.call(
+        AuthAnonymousInMemoryFaultPoint.afterCreateWrite,
+      );
+      _anonymousReceipts[command.operationId] = _AuthAnonymousMutationReceipt(
+        fingerprint: fingerprint,
+        user: user,
+        subjectUserId: user.id,
+      );
+      return AuthAnonymousMutationResult(
+        AuthAnonymousMutationStatus.applied,
+        user: user,
+      );
+    } catch (error, stackTrace) {
+      if (created) {
+        final current = await users.findById(command.user.id);
+        if (identical(current, command.user)) {
+          await users.delete(command.user.id);
+        }
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  });
+
+  @override
+  Future<AuthAnonymousMutationResult> deleteAnonymousAccount(
+    AuthAnonymousDeleteAccountCommand command,
+  ) => _serializeAnonymousMutation(() async {
+    final fingerprint = hashOpaqueToken('delete:${command.userId}');
+    final replay = _anonymousReplay(command.operationId, fingerprint);
+    if (replay != null) return replay;
+    final existing = await users.findById(command.userId);
+    if (existing == null) {
+      return const AuthAnonymousMutationResult(
+        AuthAnonymousMutationStatus.notFound,
+      );
+    }
+    if (!existing.isAnonymous) {
+      return const AuthAnonymousMutationResult(
+        AuthAnonymousMutationStatus.notAnonymous,
+      );
+    }
+    if (!await _deletionCoordinator.deleteUser(command.userId)) {
+      return const AuthAnonymousMutationResult(
+        AuthAnonymousMutationStatus.notFound,
+      );
+    }
+    _replaceAnonymousUserReceipts(
+      userId: command.userId,
+      operationId: command.operationId,
+      fingerprint: fingerprint,
+    );
+    return const AuthAnonymousMutationResult(
+      AuthAnonymousMutationStatus.applied,
+    );
+  });
+
+  @override
+  Future<AuthAnonymousMutationResult> completeAnonymousAccountUpgrade(
+    AuthAnonymousCompleteUpgradeCommand command,
+  ) => _serializeAnonymousMutation(() async {
+    final fingerprint = hashOpaqueToken(
+      'upgrade:${command.anonymousUserId}:${command.targetUserId}',
+    );
+    final replay = _anonymousReplay(command.operationId, fingerprint);
+    if (replay != null) return replay;
+    final source = await users.findById(command.anonymousUserId);
+    if (source == null) {
+      return const AuthAnonymousMutationResult(
+        AuthAnonymousMutationStatus.notFound,
+      );
+    }
+    if (!source.isAnonymous) {
+      return const AuthAnonymousMutationResult(
+        AuthAnonymousMutationStatus.notAnonymous,
+      );
+    }
+    if (!await _deletionCoordinator.deleteUser(command.anonymousUserId)) {
+      return const AuthAnonymousMutationResult(
+        AuthAnonymousMutationStatus.notFound,
+      );
+    }
+    _replaceAnonymousUserReceipts(
+      userId: command.anonymousUserId,
+      operationId: command.operationId,
+      fingerprint: fingerprint,
+    );
+    return const AuthAnonymousMutationResult(
+      AuthAnonymousMutationStatus.applied,
+    );
+  });
+
+  AuthAnonymousMutationResult? _anonymousReplay(
+    String operationId,
+    String fingerprint,
+  ) {
+    final receipt = _anonymousReceipts[operationId];
+    if (receipt == null) return null;
+    if (receipt.fingerprint != fingerprint) {
+      return const AuthAnonymousMutationResult(
+        AuthAnonymousMutationStatus.replayMismatch,
+      );
+    }
+    return AuthAnonymousMutationResult(
+      AuthAnonymousMutationStatus.replayed,
+      user: receipt.user,
+    );
+  }
+
+  void _replaceAnonymousUserReceipts({
+    required String userId,
+    required String operationId,
+    required String fingerprint,
+  }) {
+    _anonymousReceipts.removeWhere(
+      (_, receipt) => receipt.subjectUserId == userId,
+    );
+    _anonymousReceipts[operationId] = _AuthAnonymousMutationReceipt(
+      fingerprint: fingerprint,
+    );
+  }
+
+  Future<T> _serializeAnonymousMutation<T>(Future<T> Function() operation) {
+    final completer = Completer<T>();
+    _anonymousMutationTail = _anonymousMutationTail.then((_) async {
+      try {
+        completer.complete(await operation());
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    return completer.future;
+  }
 
   @override
   void bindUserDeletionPlanContributors(

@@ -31,9 +31,12 @@ void main() {
         <String, Object?>{
           'effect': 'mutation',
           'persistence': 'durable',
-          'atomicity': 'nonAtomic',
+          'atomicity': 'atomic',
           'replaySafety': 'repeatable',
-          'persistenceReference': <String, Object?>{'schemaId': 'anonymous'},
+          'persistenceReference': <String, Object?>{
+            'schemaId': 'anonymous',
+            'atomicOperationId': 'anonymous.createAccount',
+          },
         },
       );
 

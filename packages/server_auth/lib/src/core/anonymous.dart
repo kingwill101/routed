@@ -1,24 +1,17 @@
 import 'dart:async';
 
+import 'anonymous_store.dart';
 import 'deletion_transaction.dart';
 import 'exceptions.dart';
 import 'plugin.dart';
 import 'models.dart';
 import 'rate_limit.dart';
-import 'store.dart';
-import 'tokens.dart' show secureRandomToken;
+import 'tokens.dart' show hashOpaqueToken, secureRandomToken;
 
 const String authAnonymousPluginId = 'anonymous';
 
 typedef AuthAnonymousNameGenerator<TContext> =
     FutureOr<String?> Function(TContext context);
-
-typedef AuthAnonymousLinkHandler<TContext> =
-    FutureOr<void> Function({
-      required TContext context,
-      required AuthUser anonymousUser,
-      required AuthUser newUser,
-    });
 
 final class AuthAnonymousSignInResult {
   const AuthAnonymousSignInResult({required this.user});
@@ -36,17 +29,12 @@ final class AnonymousPlugin<TContext>
         AuthClientOperationContributor,
         AuthRateLimitContributor,
         AuthUserDeletionPlanContributor {
-  AnonymousPlugin({
-    this.generateName,
-    this.onLinkAccount,
-    this.disableDeleteAnonymousUser = false,
-  });
+  AnonymousPlugin({this.generateName, this.disableDeleteAnonymousUser = false});
 
   final AuthAnonymousNameGenerator<TContext>? generateName;
-  final AuthAnonymousLinkHandler<TContext>? onLinkAccount;
   final bool disableDeleteAnonymousUser;
 
-  late AuthStore _store;
+  late AuthAnonymousAccountMutationStore _mutationStore;
   late AuthUserDeletionCoordinator _deletionCoordinator;
   bool _configured = false;
 
@@ -55,11 +43,18 @@ final class AnonymousPlugin<TContext>
 
   @override
   void configure(AuthServerPluginContext<TContext> context) {
-    _store = context.store;
     final host = context.store;
+    if (host is! AuthAnonymousAccountMutationStore) {
+      throw StateError(
+        'AnonymousPlugin requires an AuthAnonymousAccountMutationStore. '
+        'Durable topologies must provide a transactional adapter; no '
+        'in-memory fallback is installed.',
+      );
+    }
     if (host is! AuthUserDeletionCoordinatorHost) {
       throw StateError('AnonymousPlugin requires a deletion-coordinator host.');
     }
+    _mutationStore = host as AuthAnonymousAccountMutationStore;
     _deletionCoordinator =
         (host as AuthUserDeletionCoordinatorHost).userDeletionCoordinator;
     _configured = true;
@@ -84,9 +79,10 @@ final class AnonymousPlugin<TContext>
       path: '/sign-in/anonymous',
       semantics: const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
-          atomicity: AuthMutationAtomicity.nonAtomic,
+          atomicity: AuthMutationAtomicity.atomic,
           reference: AuthPersistenceOperationReference(
             schemaId: authAnonymousPluginId,
+            atomicOperationId: 'anonymous.createAccount',
           ),
         ),
         replaySafety: AuthMutationReplaySafety.repeatable,
@@ -111,7 +107,7 @@ final class AnonymousPlugin<TContext>
             atomicOperationId: 'anonymous.deleteUser',
           ),
         ),
-        replaySafety: AuthMutationReplaySafety.singleUse,
+        replaySafety: AuthMutationReplaySafety.idempotent,
       ),
       requestCodec: _emptyRequestCodec,
       responseCodec: _deletedResponseCodec,
@@ -152,9 +148,19 @@ final class AnonymousPlugin<TContext>
       ],
       atomicOperations: <AuthAtomicOperationDescriptor>[
         AuthAtomicOperationDescriptor(
+          id: 'anonymous.createAccount',
+          description:
+              'Create one anonymous identity and its replay receipt in a backend transaction.',
+        ),
+        AuthAtomicOperationDescriptor(
           id: 'anonymous.deleteUser',
           description:
               'Delete the anonymous user through the backend-owned deletion transaction.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'anonymous.completeUpgrade',
+          description:
+              'Delete an upgraded anonymous identity and record replay completion atomically after host-owned session issuance.',
         ),
       ],
     ),
@@ -164,15 +170,23 @@ final class AnonymousPlugin<TContext>
     required TContext context,
   }) async {
     _ensureConfigured();
-    final name = await generateName?.call(context);
-    final user = await _store.users.create(
-      AuthUser(
-        id: secureRandomToken(length: 24),
-        name: name?.trim().isEmpty == true ? null : name?.trim(),
-        isAnonymous: true,
+    final userId = secureRandomToken(length: 24);
+    final result = await _mutationStore.createAnonymousAccount(
+      AuthAnonymousCreateAccountCommand(
+        operationId: userId,
+        user: AuthUser(
+          id: userId,
+          name: normalizeAuthAnonymousDisplayName(
+            await generateName?.call(context),
+          ),
+          isAnonymous: true,
+        ),
       ),
     );
-    return AuthAnonymousSignInResult(user: user);
+    if (!result.committed || result.user == null) {
+      throw AuthFlowException('anonymous_create_unavailable');
+    }
+    return AuthAnonymousSignInResult(user: result.user!);
   }
 
   Future<void> deleteAnonymousUser({required AuthUser user}) async {
@@ -181,54 +195,60 @@ final class AnonymousPlugin<TContext>
     if (disableDeleteAnonymousUser) {
       throw AuthFlowException('anonymous_delete_disabled');
     }
-    if (!await _deletionCoordinator.deleteUser(user.id)) {
-      throw AuthFlowException('anonymous_user_not_found');
+    final result = await _mutationStore.deleteAnonymousAccount(
+      AuthAnonymousDeleteAccountCommand(
+        operationId: hashOpaqueToken('anonymous-delete:${user.id}'),
+        userId: user.id,
+      ),
+    );
+    switch (result.status) {
+      case AuthAnonymousMutationStatus.applied:
+      case AuthAnonymousMutationStatus.replayed:
+        return;
+      case AuthAnonymousMutationStatus.notAnonymous:
+        throw AuthFlowException('anonymous_required');
+      case AuthAnonymousMutationStatus.notFound:
+        throw AuthFlowException('anonymous_user_not_found');
+      case AuthAnonymousMutationStatus.replayMismatch:
+        throw AuthFlowException('anonymous_delete_unavailable');
     }
   }
 
-  /// Runs the host-owned data migration while retaining the anonymous user.
-  Future<void> migrateAnonymousAccount({
-    required TContext context,
+  /// Finalizes an upgrade after the host has issued the target user's session.
+  ///
+  /// The plugin never creates, serializes, or rolls back that session. A
+  /// failed finalization leaves the anonymous identity intact and can be
+  /// retried with the same deterministic operation binding.
+  Future<void> completeAnonymousAccountUpgrade({
     required AuthUser anonymousUser,
-    required AuthUser newUser,
+    required AuthUser targetUser,
   }) async {
     _ensureConfigured();
     if (!anonymousUser.isAnonymous) {
       throw AuthFlowException('anonymous_required');
     }
-    await onLinkAccount?.call(
-      context: context,
-      anonymousUser: anonymousUser,
-      newUser: newUser,
-    );
-  }
-
-  /// Removes a migrated anonymous identity after replacement sign-in succeeds.
-  Future<void> deleteMigratedAnonymousUser(AuthUser anonymousUser) async {
-    _ensureConfigured();
-    if (!anonymousUser.isAnonymous) {
-      throw AuthFlowException('anonymous_required');
-    }
-    if (!await _deletionCoordinator.deleteUser(anonymousUser.id)) {
+    if (targetUser.isAnonymous || targetUser.id == anonymousUser.id) {
       throw AuthFlowException('anonymous_link_unavailable');
     }
-  }
-
-  /// Migrates and removes an anonymous account.
-  ///
-  /// Prefer the split migration/finalization methods when replacement session
-  /// issuance can fail between these steps.
-  Future<void> linkAnonymousAccount({
-    required TContext context,
-    required AuthUser anonymousUser,
-    required AuthUser newUser,
-  }) async {
-    await migrateAnonymousAccount(
-      context: context,
-      anonymousUser: anonymousUser,
-      newUser: newUser,
+    final result = await _mutationStore.completeAnonymousAccountUpgrade(
+      AuthAnonymousCompleteUpgradeCommand(
+        operationId: hashOpaqueToken(
+          'anonymous-upgrade:${anonymousUser.id}:${targetUser.id}',
+        ),
+        anonymousUserId: anonymousUser.id,
+        targetUserId: targetUser.id,
+      ),
     );
-    await deleteMigratedAnonymousUser(anonymousUser);
+    switch (result.status) {
+      case AuthAnonymousMutationStatus.applied:
+      case AuthAnonymousMutationStatus.replayed:
+        return;
+      case AuthAnonymousMutationStatus.notAnonymous:
+        throw AuthFlowException('anonymous_required');
+      case AuthAnonymousMutationStatus.notFound:
+      case AuthAnonymousMutationStatus.replayMismatch:
+        throw AuthFlowException('anonymous_link_unavailable');
+    }
   }
 
   Future<Object?> _signInEndpoint(

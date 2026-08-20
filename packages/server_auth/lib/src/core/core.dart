@@ -10,6 +10,7 @@ export 'admin_client.dart';
 export 'admin_models.dart';
 export 'admin_store.dart';
 export 'anonymous.dart';
+export 'anonymous_store.dart';
 export 'authorization.dart';
 export 'browser.dart';
 export 'browser_validator.dart';

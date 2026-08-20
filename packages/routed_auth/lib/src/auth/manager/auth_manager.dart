@@ -1617,14 +1617,6 @@ class AuthManager {
               resolveRedirect(ctx, candidate, provider: provider),
         );
 
-    if (anonymousUser != null) {
-      await anonymous!.migrateAnonymousAccount(
-        context: ctx,
-        anonymousUser: anonymousUser,
-        newUser: user,
-      );
-    }
-
     if (isNewUser) {
       await _emitAuthEvent(
         ctx,
@@ -1694,7 +1686,10 @@ class AuthManager {
     }
 
     if (anonymousUser != null) {
-      await anonymous!.deleteMigratedAnonymousUser(anonymousUser);
+      await anonymous!.completeAnonymousAccountUpgrade(
+        anonymousUser: anonymousUser,
+        targetUser: user,
+      );
     }
 
     final result = resolvedSignIn.result;

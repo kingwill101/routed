@@ -247,6 +247,9 @@ abstract interface class AuthUserDeletionCoordinator {
 /// A conformance-friendly fault point for coordinator implementations.
 enum AuthUserDeletionFaultPoint { beforeMutation, plugin, core, restore }
 
+typedef AuthUserDeletionFaultInjector =
+    FutureOr<void> Function(AuthUserDeletionFaultPoint point);
+
 /// Thrown when a deletion plan set cannot describe one complete transaction.
 final class AuthUserDeletionPreflightException implements Exception {
   const AuthUserDeletionPreflightException(this.message);
@@ -321,12 +324,15 @@ final class AuthInMemoryUserDeletionCoordinator
   AuthInMemoryUserDeletionCoordinator({
     required this.domain,
     required AuthInMemoryUserDeletionBackend backend,
-  }) : _backend = backend;
+    AuthUserDeletionFaultInjector? faultInjector,
+  }) : _backend = backend,
+       _faultInjector = faultInjector;
 
   @override
   final AuthInMemoryUserDeletionDomain domain;
 
   final AuthInMemoryUserDeletionBackend _backend;
+  final AuthUserDeletionFaultInjector? _faultInjector;
   List<AuthUserDeletionPlanContributor> _contributors = const [];
   bool _bound = false;
   Future<void> _tail = Future<void>.value();
@@ -434,6 +440,7 @@ final class AuthInMemoryUserDeletionCoordinator
       for (final operation in operations) operation.captureState(),
     ];
     try {
+      await _faultInjector?.call(AuthUserDeletionFaultPoint.beforeMutation);
       if (consumeToken &&
           (token == null ||
               !await _backend.consumeUserDeletionToken(
@@ -444,9 +451,11 @@ final class AuthInMemoryUserDeletionCoordinator
       }
       for (final operation in operations) {
         await operation.apply();
+        await _faultInjector?.call(AuthUserDeletionFaultPoint.plugin);
       }
       final deleted = await _backend.deleteCoreUserData(normalizedUserId);
       if (!deleted) throw StateError('Core user deletion failed.');
+      await _faultInjector?.call(AuthUserDeletionFaultPoint.core);
       return true;
     } catch (error, stackTrace) {
       try {
@@ -454,6 +463,7 @@ final class AuthInMemoryUserDeletionCoordinator
           await operations[index].restoreState(checkpoints[index]);
         }
         await _backend.restoreDeletionState(coreState);
+        await _faultInjector?.call(AuthUserDeletionFaultPoint.restore);
       } catch (restoreError, restoreStackTrace) {
         Error.throwWithStackTrace(
           StateError('In-memory deletion rollback failed: $restoreError'),

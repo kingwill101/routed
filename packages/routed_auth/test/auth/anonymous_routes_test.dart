@@ -232,10 +232,9 @@ void main() {
   );
 
   test(
-    'JWT account upgrade migrates then deletes the anonymous identity',
+    'JWT account upgrade finalizes after replacement session issuance',
     () async {
       final store = InMemoryAuthStore();
-      String? migratedAnonymousId;
       final manager = AuthManager(
         AuthOptions<EngineContext>(
           store: store,
@@ -246,23 +245,7 @@ void main() {
                   AuthUser(id: 'target-user', email: credentials.email),
             ),
           ],
-          plugins: [
-            AnonymousPlugin<EngineContext>(
-              onLinkAccount:
-                  ({
-                    required context,
-                    required anonymousUser,
-                    required newUser,
-                  }) async {
-                    migratedAnonymousId = anonymousUser.id;
-                    expect(newUser.id, 'target-user');
-                    expect(
-                      await store.users.findById(anonymousUser.id),
-                      isNotNull,
-                    );
-                  },
-            ),
-          ],
+          plugins: [AnonymousPlugin<EngineContext>()],
           sessionStrategy: AuthSessionStrategy.jwt,
           jwtOptions: const JwtSessionOptions(secret: 'anonymous-jwt-secret'),
         ),
@@ -307,7 +290,6 @@ void main() {
       );
 
       upgraded.assertStatus(HttpStatus.ok);
-      expect(migratedAnonymousId, anonymousId);
       expect(await store.users.findById(anonymousId), isNull);
       expect(upgraded.cookie('auth_token'), isNotNull);
     },
