@@ -2,4 +2,5 @@
 library;
 
 export 'server_auth.dart';
+export 'src/testing/auth_plugin_conformance.dart';
 export 'src/testing/auth_store_conformance.dart';

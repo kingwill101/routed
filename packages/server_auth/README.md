@@ -56,6 +56,36 @@ no dependency on `package:test`; adapters may register its cases with any test
 runner. Optional capabilities are reported as explicit skips, while every core
 `AuthStore` contract is required.
 
+## Plugin conformance
+
+Plugin authors can validate a composed runtime with the framework-neutral
+suite exported by `package:server_auth/testing.dart`:
+
+```dart
+final suite = AuthPluginConformanceSuite.fromRuntime(
+  runtime,
+  publicEndpointClientExceptions: {
+    'mcpAuth.protectedResourceMetadata':
+        'Protocol metadata is consumed by generic HTTP clients.',
+  },
+);
+
+for (final conformanceCase in suite.filtered(
+  include: {'endpoints.typed-contracts', 'endpoints.mutation-protection'},
+)) {
+  test(conformanceCase.id, conformanceCase.run);
+}
+```
+
+The cases check stable composition and route identifiers, typed operation
+contracts, rate-limit references, bidirectional public client-operation
+mappings, and safe origin/CSRF metadata. Every non-server-only endpoint needs a
+matching client operation unless the suite is given a non-empty explanation
+for a deliberate protocol/discovery omission. Rate-limited anonymous
+verification may omit session CSRF with either browser-origin validation or an
+explicit non-browser policy. The reusable suite itself has no dependency on
+`package:test`.
+
 ## Quick start
 
 ```dart
