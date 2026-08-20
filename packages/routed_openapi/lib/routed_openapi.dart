@@ -11,3 +11,4 @@ export 'src/openapi/route_metadata_merger.dart';
 export 'src/openapi/route_builder_extensions.dart';
 export 'src/openapi/schema.dart';
 export 'src/openapi/schema_validation.dart';
+export 'src/server_auth/auth_plugin_openapi.dart';

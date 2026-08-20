@@ -25,6 +25,17 @@ void main() {
       expect(signIn.tags, <String>['anonymous']);
       expect(signIn.security, isEmpty);
       expect(signIn.responses.keys, containsAll(<String>['200', '429']));
+      expect(
+        signIn.extensions[AuthPluginOpenApiGenerator
+            .operationSemanticsExtension],
+        <String, Object?>{
+          'effect': 'mutation',
+          'persistence': 'durable',
+          'atomicity': 'nonAtomic',
+          'replaySafety': 'repeatable',
+          'persistenceReference': <String, Object?>{'schemaId': 'anonymous'},
+        },
+      );
 
       final delete = spec.paths['/auth/delete-anonymous-user']!.post!;
       expect(delete.operationId, 'authAnonymousDelete');
@@ -65,6 +76,10 @@ void main() {
               id: 'magicLink.send',
               method: AuthOperationMethod.post,
               path: '/magic-link/send',
+              semantics: AuthOperationSemantics.mutation(
+                persistence: AuthMutationPersistence.external(),
+                replaySafety: AuthMutationReplaySafety.repeatable,
+              ),
               requestSchema: <String, Object?>{
                 'type': 'object',
                 'properties': <String, Object?>{
@@ -116,6 +131,7 @@ void main() {
               id: 'tokens.inspect',
               method: AuthOperationMethod.get,
               path: '/tokens/{id}',
+              semantics: AuthOperationSemantics.readOnly(),
               requestSchema: <String, Object?>{
                 'type': 'object',
                 'properties': <String, Object?>{
@@ -134,6 +150,12 @@ void main() {
           .toOpenApi31(info: _info)
           .paths['/auth/tokens/{id}']!
           .get!;
+
+      expect(
+        operation.extensions[AuthPluginOpenApiGenerator
+            .operationSemanticsExtension],
+        const <String, Object?>{'effect': 'readOnly'},
+      );
 
       expect(
         operation.parameters
@@ -155,6 +177,7 @@ void main() {
               id: 'metadata.discovery',
               method: AuthOperationMethod.get,
               path: '/.well-known/auth',
+              semantics: AuthOperationSemantics.readOnly(),
               requestSchema: <String, Object?>{},
               responseSchema: <String, Object?>{'type': 'object'},
             ),
@@ -202,6 +225,10 @@ void main() {
               id: 'magic-link.send',
               method: AuthOperationMethod.post,
               path: '/magic-link/send',
+              semantics: AuthOperationSemantics.mutation(
+                persistence: AuthMutationPersistence.boundedEphemeral(),
+                replaySafety: AuthMutationReplaySafety.repeatable,
+              ),
               requestSchema: <String, Object?>{},
               responseSchema: <String, Object?>{},
             ),
@@ -209,6 +236,10 @@ void main() {
               id: 'magic_link.send',
               method: AuthOperationMethod.post,
               path: '/magic-link/send-again',
+              semantics: AuthOperationSemantics.mutation(
+                persistence: AuthMutationPersistence.boundedEphemeral(),
+                replaySafety: AuthMutationReplaySafety.repeatable,
+              ),
               requestSchema: <String, Object?>{},
               responseSchema: <String, Object?>{},
             ),
@@ -238,6 +269,10 @@ void main() {
                 id: 'first.send',
                 method: AuthOperationMethod.post,
                 path: '/send',
+                semantics: AuthOperationSemantics.mutation(
+                  persistence: AuthMutationPersistence.boundedEphemeral(),
+                  replaySafety: AuthMutationReplaySafety.repeatable,
+                ),
                 requestSchema: <String, Object?>{},
                 responseSchema: <String, Object?>{},
               ),
@@ -245,6 +280,10 @@ void main() {
                 id: 'second.send',
                 method: AuthOperationMethod.post,
                 path: '/send',
+                semantics: AuthOperationSemantics.mutation(
+                  persistence: AuthMutationPersistence.boundedEphemeral(),
+                  replaySafety: AuthMutationReplaySafety.repeatable,
+                ),
                 requestSchema: <String, Object?>{},
                 responseSchema: <String, Object?>{},
               ),
@@ -270,6 +309,12 @@ void main() {
               id: 'internal.rotate',
               method: AuthOperationMethod.post,
               path: '/internal/rotate',
+              semantics: AuthOperationSemantics.mutation(
+                persistence: AuthMutationPersistence.durable(
+                  atomicity: AuthMutationAtomicity.nonAtomic,
+                ),
+                replaySafety: AuthMutationReplaySafety.singleUse,
+              ),
               requestSchema: <String, Object?>{},
               responseSchema: <String, Object?>{},
               serverOnly: true,
@@ -571,6 +616,7 @@ final class _EndpointContract {
     required this.id,
     required this.method,
     required this.path,
+    required this.semantics,
     required this.requestSchema,
     required this.responseSchema,
     this.requestRequired = false,
@@ -581,6 +627,7 @@ final class _EndpointContract {
   final String id;
   final AuthOperationMethod method;
   final String path;
+  final AuthOperationSemantics semantics;
   final Map<String, Object?> requestSchema;
   final Map<String, Object?> responseSchema;
   final bool requestRequired;
@@ -592,6 +639,7 @@ final class _EndpointContract {
         id: id,
         method: method,
         path: path,
+        semantics: semantics,
         requestCodec: AuthOperationCodec<Map<String, dynamic>>(
           decode: (value) => value,
           encode: (value) => value,

@@ -86,6 +86,8 @@ final class AuthPluginOpenApiGenerator<TContext> {
   static const String csrfPolicyExtension = 'x-routed-auth-csrf-policy';
   static const String rateLimitOperationExtension =
       'x-routed-auth-rate-limit-operation';
+  static const String operationSemanticsExtension =
+      'x-routed-auth-operation-semantics';
   static const String captchaExtension = 'x-routed-auth-captcha';
   static const String breachedPasswordExtension =
       'x-routed-auth-breached-password';
@@ -261,6 +263,7 @@ final class AuthPluginOpenApiGenerator<TContext> {
         pluginExtension: pluginId,
         originPolicyExtension: endpoint.originPolicy.name,
         csrfPolicyExtension: endpoint.csrfPolicy.name,
+        operationSemanticsExtension: _operationSemantics(endpoint.semantics),
         if (endpoint.rateLimitOperation case final rateLimit?)
           rateLimitOperationExtension: <String, Object?>{
             'id': rateLimit.id,
@@ -338,6 +341,26 @@ final class AuthPluginOpenApiGenerator<TContext> {
             : const {},
       ),
     );
+  }
+
+  Map<String, Object?> _operationSemantics(AuthOperationSemantics semantics) {
+    if (semantics is AuthReadOnlyOperationSemantics) {
+      return const <String, Object?>{'effect': 'readOnly'};
+    }
+    final mutation = semantics as AuthMutationOperationSemantics;
+    final persistence = mutation.persistence;
+    final reference = persistence.reference;
+    return <String, Object?>{
+      'effect': 'mutation',
+      'persistence': persistence.kind.name,
+      'atomicity': persistence.atomicity.name,
+      'replaySafety': mutation.replaySafety.name,
+      if (reference != null)
+        'persistenceReference': <String, Object?>{
+          'schemaId': reference.schemaId,
+          'atomicOperationId': ?reference.atomicOperationId,
+        },
+    };
   }
 
   String _resolvePath(String endpointPath) {

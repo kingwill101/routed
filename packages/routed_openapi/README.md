@@ -50,6 +50,22 @@ dart run build_runner build --delete-conflicting-outputs
 
 See `example/` and `test/` for additional examples.
 
+## Auth operation contracts
+
+```dart
+import 'package:routed_openapi/routed_openapi.dart';
+
+final spec = authRuntime.registry.toOpenApi31(
+  info: const OpenApiInfo(title: 'Application auth', version: '1.0.0'),
+);
+```
+
+Generated auth operations preserve the endpoint's typed read/mutation,
+persistence, atomicity, replay-safety, and public persistence-reference
+metadata in `x-routed-auth-operation-semantics`. The generator reads the
+frozen plugin topology directly, including host-owned endpoints, so no separate
+route catalogue or hand-maintained mutation documentation is required.
+
 ## Testing
 
 ```bash

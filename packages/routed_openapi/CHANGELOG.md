@@ -1,5 +1,7 @@
 ## 0.1.0
 
+- Preserve public auth persistence, atomicity, and replay semantics in the
+  generated `x-routed-auth-operation-semantics` operation extension.
 - Generate the exact frozen opt-in auth topology, including host-owned routes,
   API-key and session security alternatives, client-safe operation IDs,
   generic public error schemas, and read-only one-time secret fields.
