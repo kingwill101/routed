@@ -213,6 +213,11 @@ final class HttpDeployedWorkerAuthConformanceRunner
       final request = await _client
           .openUrl(method, config.workerOrigin.resolve(path))
           .timeout(config.timeout);
+      // Each suite creates and closes an isolated in-memory auth runtime on
+      // the Worker. Do not let a keep-alive connection carry protocol state
+      // from one suite into the next, especially across Cloudflare's HTTP/2
+      // edge proxy.
+      request.persistentConnection = false;
       request.followRedirects = false;
       request.headers.set(deployedWorkerAuthTokenHeader, config.token);
       request.headers.set(HttpHeaders.acceptHeader, ContentType.json.mimeType);

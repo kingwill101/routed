@@ -182,6 +182,13 @@ void main() {
       expect(output.toString(), isNot(contains('test-only-token')));
     });
 
+    test('uses isolated requests for sequential suite calls', () async {
+      final source = File(
+        'tool/src/deployed_worker_auth_harness.dart',
+      ).readAsStringSync();
+      expect(source, contains('request.persistentConnection = false;'));
+    });
+
     test('reports only stable failure identifiers', () async {
       final output = StringBuffer();
       final errors = StringBuffer();

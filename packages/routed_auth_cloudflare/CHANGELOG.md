@@ -1,5 +1,9 @@
 ## 0.1.0
 
+- Run the deployed Worker auth conformance harness against a temporary
+  Cloudflare Worker. Session, JWT, plugin, external-provider, and
+  browser-shaped WebAuthn suites passed; the Worker and secret were deleted
+  afterward. Isolate sequential suite requests from reused edge connections.
 - Validate the live disposable-D1 harness through migrations v9, v10, and v11.
   API-key rotation/capacity, WebAuthn challenge/counter, phone issuance and
   deletion, username, OAuth exchange, rollback, and prefix-isolation cases all
@@ -98,8 +102,8 @@
 - Make session-token rotation contention-safe so one old token cannot produce
   multiple surviving replacement sessions.
 - Add an optional live Worker harness while keeping JavaScript interop and
-  `package:web` behind `routed_node`. A deployed remote-D1 run remains
-  outstanding; local conformance tests do not claim live Cloudflare validation.
+  `package:web` behind `routed_node`. Local conformance tests remain separate
+  from the explicitly authorized deployed Worker run.
 - Add an explicitly gated live-D1 conformance CLI with disposable-resource
   ownership checks, exact cleanup, external-database no-delete mode, secret
   redaction, bounded safe retries, and local control-plane tests. No live run is

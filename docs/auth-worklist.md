@@ -13,7 +13,7 @@ core auth model.
 The work is intentionally split between framework-agnostic capabilities in
 `server_auth` and HTTP/session integration in `routed_auth`.
 
-> Status refreshed: 2026-08-20. Checked items describe capabilities currently
+> Status refreshed: 2026-08-21. Checked items describe capabilities currently
 > present in the workspace; unchecked items are the remaining product or
 > validation work.
 
@@ -456,7 +456,7 @@ account, session, client, and plugin contracts above:
   mounting.
 - [x] The shared credentials/session runtime contract is verified through
   `routed_io`, native Node, and native Cloudflare Fetch request paths.
-- [ ] Every advertised plugin flow has matching end-to-end coverage across its
+- [x] Every advertised plugin flow has matching end-to-end coverage across its
   applicable host runtimes. Provider-free flows now run across IO, Node, and
   Cloudflare Fetch, and deterministic external-provider callbacks run across
   IO, portable/native Node, and portable/native Cloudflare Fetch, including
@@ -464,9 +464,10 @@ account, session, client, and plugin contracts above:
   has the same IO, portable/native Node, and portable/native Cloudflare Fetch
   coverage, including delivery, browser/session boundaries, lockout, secrecy,
   and one-winner consumption. An opt-in, token-protected deployed Worker
-  harness now compiles and runs every suite without invoking Cloudflare
-  control-plane APIs; an authorized run against an actual deployed Worker
-  remains.
+  harness compiles and runs every suite without invoking Cloudflare control-
+  plane APIs. On 2026-08-21, a temporary Worker run passed session, JWT,
+  plugin, external-provider, and browser-shaped WebAuthn suites; the Worker
+  and secret were deleted afterward.
 - [x] Security-sensitive defaults are safe without requiring users to discover
   undocumented configuration switches. Durable options fail closed as
   production posture and require an exact HTTPS origin/proxy boundary, secure

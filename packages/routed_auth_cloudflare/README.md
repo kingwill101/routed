@@ -245,6 +245,10 @@ session, JWT, plugin, external-provider, and browser-shaped WebAuthn contracts
 inside an already-deployed Cloudflare Worker. It is also opt-in and does not
 create, update, or delete Cloudflare resources.
 
+The full suite was run against a temporary Worker on 2026-08-21. All five
+suites passed, and the Worker plus its conformance secret were deleted after
+the run.
+
 Cloudflare D1 exposes atomic statement batches, but not a transaction that can
 span the arbitrary callback required by `AuthAccountDeletionStore`. The
 adapter therefore fails closed by not advertising that optional capability;
