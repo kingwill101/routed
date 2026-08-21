@@ -1,7 +1,7 @@
 # Routed package catalog
 
 Package inventory for the Routed ecosystem. Versions below match the package
-manifests in this checkout as of 2026-08-20.
+manifests in this checkout as of 2026-08-21.
 
 ## Framework and feature packages
 
@@ -11,6 +11,7 @@ manifests in this checkout as of 2026-08-20.
 | [`routed_core`](https://github.com/kingwill101/routed/tree/master/packages/routed_core) | `0.5.0` | Slim engine, routing, contexts, configuration, and lifecycle |
 | [`routed_auth`](https://github.com/kingwill101/routed/tree/master/packages/routed_auth) | `0.2.0` | Routed auth plugin mounting, typed deployment binding, and runtime conformance support |
 | [`routed_auth_cloudflare`](https://github.com/kingwill101/routed/tree/master/packages/routed_auth_cloudflare) | `0.1.0` | Durable Cloudflare D1 `AuthStore` adapter and typed migrations |
+| [`routed_auth_sqlite`](https://github.com/kingwill101/routed/tree/master/packages/routed_auth_sqlite) | `0.1.0` | Durable Dart IO SQLite `AuthStore` adapter and typed migrations |
 | [`routed_cache`](https://github.com/kingwill101/routed/tree/master/packages/routed_cache) | `0.2.0` | Cache services and context helpers for Routed |
 | [`routed_logging`](https://github.com/kingwill101/routed/tree/master/packages/routed_logging) | `0.2.0` | HTTP logging provider and request logger helpers |
 | [`routed_observability`](https://github.com/kingwill101/routed/tree/master/packages/routed_observability) | `0.1.0` | Health, metrics, tracing, and error observation |

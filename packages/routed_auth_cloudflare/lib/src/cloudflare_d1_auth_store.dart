@@ -10,8 +10,9 @@ import 'cloudflare_d1_auth_schema.dart';
 ///
 /// Construct the adapter from the host-neutral binding exported by
 /// `package:routed_node/cloudflare.dart`; callers never handle JavaScript or
-/// `package:web` values.
-final class CloudflareD1AuthStore
+/// `package:web` values. SQL-compatible host adapters may extend this class
+/// when they provide the same atomic D1 statement contract.
+class CloudflareD1AuthStore
     implements
         AuthStore,
         AuthUsernameStore,

@@ -1,5 +1,8 @@
 ## 0.1.0
 
+- Make the SQL-backed `CloudflareD1AuthStore` extensible so the Dart IO
+  `routed_auth_sqlite` adapter can reuse its typed persistence implementation
+  without duplicating auth lifecycle behavior.
 - Support historical user-data namespaces in the D1 deletion coordinator so
   `AuthOptions.historicalUserDataNamespaces` fails hard deletion closed when a
   removed plugin contributor is absent.

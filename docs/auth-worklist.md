@@ -213,9 +213,12 @@ The work is intentionally split between framework-agnostic capabilities in
   now applies the same guard to hard deletion through the optional coordinator
   capability. Future durable adapters still need backend-owned cleanup or an
   equivalent historical inventory capability.
-- [ ] Add additional durable adapters for future Routed storage paths, such as
-  a Dart IO SQL adapter, with the same typed conformance, transaction, and
-  historical-namespace guarantees.
+- [x] Add additional durable adapters for future Routed storage paths. The
+  `routed_auth_sqlite` Dart IO package now provides file-backed and in-memory
+  SQLite `AuthStore` persistence through the same typed SQL implementation,
+  migrations, transaction boundaries, conformance suite, and historical-
+  namespace guarantees as the D1 adapter. Additional SQL engines still need
+  their own backend-native adapters rather than a process-local bridge.
 - [x] Require external future plugins that own authentication methods or
   user-data namespaces to publish their typed inventory and deletion
   contributors, plus adapter-specific removal routes, before production use.
