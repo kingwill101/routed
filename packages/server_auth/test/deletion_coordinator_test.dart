@@ -14,6 +14,41 @@ void main() {
       expect(await store.users.findById('user-1'), isNotNull);
     });
 
+    test('fails closed when a historical namespace is not active', () async {
+      final backend = _Backend();
+      final coordinator = AuthInMemoryUserDeletionCoordinator(
+        domain: AuthInMemoryUserDeletionDomain(),
+        backend: backend,
+      )..bind(const []);
+      coordinator.bindHistoricalUserDeletionNamespaces(const ['legacy_device']);
+
+      await expectLater(
+        coordinator.deleteUser(backend.user.id),
+        throwsA(isA<AuthUserDeletionPreflightException>()),
+      );
+      expect(backend.deleted, isFalse);
+    });
+
+    test('allows deletion when every historical namespace is active', () async {
+      final backend = _Backend();
+      final domain = AuthInMemoryUserDeletionDomain();
+      final pluginStore = _PluginStore();
+      final coordinator =
+          AuthInMemoryUserDeletionCoordinator(domain: domain, backend: backend)
+            ..bind([
+              _Contributor(
+                domain: domain,
+                namespace: 'legacy_device',
+                store: pluginStore,
+              ),
+            ]);
+      coordinator.bindHistoricalUserDeletionNamespaces(const ['legacy_device']);
+
+      expect(await coordinator.deleteUser(backend.user.id), isTrue);
+      expect(backend.deleted, isTrue);
+      expect(pluginStore.records, isEmpty);
+    });
+
     test(
       'deletes core-owned plugin stores when plugins are no longer active',
       () async {

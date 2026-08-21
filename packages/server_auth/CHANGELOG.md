@@ -3,6 +3,9 @@
 - Add typed historical authentication-method namespaces to `AuthOptions` and
   the shared inventory service. Removed future-plugin namespaces now make
   destructive in-memory mutations fail closed until their contributors return.
+- Add typed historical user-data namespaces to `AuthOptions` and the deletion
+  coordinator capability. Removed plugin data now makes hard deletion fail
+  closed until its contributor returns.
 - Add typed recent-authentication endpoint metadata and require it for
   username, phone, passkey, and API-key credential-removal mutations. Routed
   enforces the metadata with the configured recent-auth or step-up policy.

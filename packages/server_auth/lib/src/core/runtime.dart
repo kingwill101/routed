@@ -62,6 +62,7 @@ class AuthRuntime<TContext> {
       passwordHasher: options.passwordHasher,
       passwordPolicy: options.passwordPolicy,
       sessionStrategy: options.sessionStrategy,
+      historicalUserDataNamespaces: options.historicalUserDataNamespaces,
     );
     for (final plugin in this.plugins) {
       registry.register(plugin);

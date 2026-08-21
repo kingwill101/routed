@@ -39,6 +39,11 @@ If a historical namespace is absent from the active authoritative contributors,
 safe authentication-method removal fails closed. This prevents a removed
 plugin's credentials from being invisible during fallback checks.
 
+For hard deletion of user-owned plugin records, configure the matching
+storage namespace in `AuthOptions.historicalUserDataNamespaces`. The D1
+deletion coordinator supports this capability and fails closed when a
+previously deployed contributor is absent.
+
 Anonymous authentication is selected like any other server plugin; the root D1
 adapter itself supplies the required mutation capability:
 

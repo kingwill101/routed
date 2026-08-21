@@ -258,6 +258,10 @@ namespace in `AuthOptions.historicalAuthenticationMethodNamespaces` until
 the adapter has a backend-owned cleanup path. The runtime then marks the
 inventory incomplete and fails destructive authentication-method mutations
 closed instead of treating the removed plugin's credentials as absent.
+For plugin-owned user data, retain its storage namespace in
+`AuthOptions.historicalUserDataNamespaces`; coordinators with historical
+topology support fail hard deletion closed until that contributor is active
+again.
 
 ## Typed Dart client
 

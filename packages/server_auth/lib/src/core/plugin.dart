@@ -1051,17 +1051,22 @@ class AuthServerPluginRegistry<TContext> {
     PasswordHasher? passwordHasher,
     PasswordPolicy passwordPolicy = const PasswordPolicy(),
     AuthSessionStrategy sessionStrategy = AuthSessionStrategy.session,
+    Iterable<String> historicalUserDataNamespaces = const [],
   }) : _store = store,
        _authenticationMethods = authenticationMethods,
        _passwordHasher = passwordHasher ?? Argon2idPasswordHasher(),
        _passwordPolicy = passwordPolicy,
-       _sessionStrategy = sessionStrategy;
+       _sessionStrategy = sessionStrategy,
+       _historicalUserDataNamespaces = _normalizeHistoricalUserDataNamespaces(
+         historicalUserDataNamespaces,
+       );
 
   final AuthStore _store;
   final AuthAuthenticationMethodService _authenticationMethods;
   final PasswordHasher _passwordHasher;
   final PasswordPolicy _passwordPolicy;
   final AuthSessionStrategy _sessionStrategy;
+  final Set<String> _historicalUserDataNamespaces;
   final Map<String, AuthServerPlugin<TContext>> _plugins =
       <String, AuthServerPlugin<TContext>>{};
   final Map<String, AuthEndpointDescriptor<TContext>> _endpoints =
@@ -1129,12 +1134,26 @@ class AuthServerPluginRegistry<TContext> {
     final deletionHost = _store is AuthUserDeletionCoordinatorHost
         ? _store as AuthUserDeletionCoordinatorHost
         : null;
-    if (deletionHost == null && deletionContributors.isNotEmpty) {
+    if (deletionHost == null &&
+        (deletionContributors.isNotEmpty ||
+            _historicalUserDataNamespaces.isNotEmpty)) {
       throw StateError(
         'The auth store cannot coordinate plugin-owned user deletion plans.',
       );
     }
     deletionHost?.bindUserDeletionPlanContributors(deletionContributors);
+    if (_historicalUserDataNamespaces.isEmpty) return;
+    final coordinator = deletionHost!.userDeletionCoordinator;
+    if (coordinator
+        case AuthHistoricalUserDeletionNamespaceCoordinator capability) {
+      capability.bindHistoricalUserDeletionNamespaces(
+        _historicalUserDataNamespaces,
+      );
+    } else {
+      throw StateError(
+        'The auth store cannot guard historical user-data namespaces.',
+      );
+    }
   }
 
   AuthServerPlugin<TContext>? find(String id) => _plugins[id.trim()];
@@ -1253,4 +1272,23 @@ class AuthServerPluginRegistry<TContext> {
           (plugin) => plugin.rateLimitOperations,
         ),
       );
+}
+
+Set<String> _normalizeHistoricalUserDataNamespaces(Iterable<String> values) {
+  final namespaces = <String>{};
+  for (final value in values) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized != value ||
+        normalized.isEmpty ||
+        normalized.length > 64 ||
+        normalized.contains(RegExp(r'[\u0000-\u001f\u007f]')) ||
+        !namespaces.add(normalized)) {
+      throw ArgumentError.value(
+        values,
+        'historicalUserDataNamespaces',
+        'must contain unique, bounded, canonical namespace values',
+      );
+    }
+  }
+  return Set<String>.unmodifiable(namespaces);
 }

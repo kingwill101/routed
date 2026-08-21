@@ -588,6 +588,22 @@ void main() {
     );
   });
 
+  test('D1 deletion fails closed for missing historical user data', () async {
+    final database = FakeCloudflareD1Database();
+    addTearDown(database.close);
+    final store = await CloudflareD1AuthStore.open(database);
+    store.bindUserDeletionPlanContributors(const []);
+    final coordinator =
+        store.userDeletionCoordinator
+            as AuthHistoricalUserDeletionNamespaceCoordinator;
+    coordinator.bindHistoricalUserDeletionNamespaces(const ['legacy_device']);
+
+    await expectLater(
+      store.userDeletionCoordinator.deleteUser('missing-user'),
+      throwsA(isA<AuthUserDeletionPreflightException>()),
+    );
+  });
+
   test('D1 deletion rolls back faults and retries the same token', () async {
     final database = FakeCloudflareD1Database();
     addTearDown(database.close);

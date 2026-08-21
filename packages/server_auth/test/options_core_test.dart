@@ -257,18 +257,30 @@ void main() {
       store: InMemoryAuthStore(),
       storeMode: AuthStoreMode.ephemeral,
       historicalAuthenticationMethodNamespaces: const ['legacy_device'],
+      historicalUserDataNamespaces: const ['legacy_device'],
     );
 
     final updated = base.copyWith();
 
     expect(base.historicalAuthenticationMethodNamespaces, ['legacy_device']);
     expect(updated.historicalAuthenticationMethodNamespaces, ['legacy_device']);
+    expect(base.historicalUserDataNamespaces, ['legacy_device']);
+    expect(updated.historicalUserDataNamespaces, ['legacy_device']);
     expect(
       () => AuthOptions<String>(
         providers: const <AuthProvider>[],
         store: InMemoryAuthStore(),
         storeMode: AuthStoreMode.ephemeral,
         historicalAuthenticationMethodNamespaces: const [' legacy_device'],
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => AuthOptions<String>(
+        providers: const <AuthProvider>[],
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
+        historicalUserDataNamespaces: const ['LEGACY_DEVICE'],
       ),
       throwsArgumentError,
     );

@@ -311,6 +311,7 @@ void main() {
         store: InMemoryAuthStore(),
         storeMode: AuthStoreMode.ephemeral,
         historicalAuthenticationMethodNamespaces: const ['legacy_device'],
+        historicalUserDataNamespaces: const ['legacy_device'],
       ),
     );
     expect(
@@ -318,6 +319,12 @@ void main() {
         'user-1',
       )).isComplete,
       isFalse,
+    );
+    await expectLater(
+      (runtime.store as AuthUserDeletionCoordinatorHost)
+          .userDeletionCoordinator
+          .deleteUser('user-1'),
+      throwsA(isA<AuthUserDeletionPreflightException>()),
     );
 
     final service = AuthAuthenticationMethodService(

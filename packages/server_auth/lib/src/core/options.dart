@@ -36,6 +36,7 @@ class AuthOptions<TContext> {
     this.productionBoundary,
     this.plugins = const [],
     Iterable<String> historicalAuthenticationMethodNamespaces = const [],
+    Iterable<String> historicalUserDataNamespaces = const [],
     this.sessionStrategy = AuthSessionStrategy.session,
     this.rateLimiter,
     AuthBrowserProtectionOptions? browserProtection,
@@ -84,6 +85,9 @@ class AuthOptions<TContext> {
            _normalizeHistoricalAuthenticationMethodNamespaces(
              historicalAuthenticationMethodNamespaces,
            ),
+       historicalUserDataNamespaces = _normalizeHistoricalUserDataNamespaces(
+         historicalUserDataNamespaces,
+       ),
        passwordHasher = passwordHasher ?? Argon2idPasswordHasher(),
        callbacks = callbacks ?? AuthCallbacks<TContext>() {
     validateAuthProviderConfiguration(this.providers);
@@ -146,6 +150,11 @@ class AuthOptions<TContext> {
   /// are not currently composed. Missing contributors make destructive
   /// authentication-method mutations fail closed.
   final List<String> historicalAuthenticationMethodNamespaces;
+
+  /// Namespaces from previously deployed plugins whose user-owned records
+  /// are not currently composed. Missing contributors make hard deletion
+  /// fail closed when the coordinator supports historical topology checks.
+  final List<String> historicalUserDataNamespaces;
 
   /// Typed persistence boundary used by every auth flow.
   final AuthStore store;
@@ -351,6 +360,7 @@ class AuthOptions<TContext> {
     AuthProductionBoundary? productionBoundary,
     List<AuthServerPlugin<TContext>>? plugins,
     Iterable<String>? historicalAuthenticationMethodNamespaces,
+    Iterable<String>? historicalUserDataNamespaces,
     AuthSessionStrategy? sessionStrategy,
     AuthRateLimiter<TContext>? rateLimiter,
     AuthBrowserProtectionOptions? browserProtection,
@@ -392,6 +402,8 @@ class AuthOptions<TContext> {
       historicalAuthenticationMethodNamespaces:
           historicalAuthenticationMethodNamespaces ??
           this.historicalAuthenticationMethodNamespaces,
+      historicalUserDataNamespaces:
+          historicalUserDataNamespaces ?? this.historicalUserDataNamespaces,
       sessionStrategy: sessionStrategy ?? this.sessionStrategy,
       rateLimiter: rateLimiter ?? this.rateLimiter,
       browserProtection: browserProtection ?? this.browserProtection,
@@ -449,6 +461,25 @@ List<String> _normalizeHistoricalAuthenticationMethodNamespaces(
         values,
         'historicalAuthenticationMethodNamespaces',
         'must contain unique, bounded, safe namespace values',
+      );
+    }
+  }
+  return List<String>.unmodifiable(namespaces);
+}
+
+List<String> _normalizeHistoricalUserDataNamespaces(Iterable<String> values) {
+  final namespaces = <String>{};
+  for (final value in values) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized != value ||
+        normalized.isEmpty ||
+        normalized.length > 64 ||
+        normalized.contains(RegExp(r'[\u0000-\u001f\u007f]')) ||
+        !namespaces.add(normalized)) {
+      throw ArgumentError.value(
+        values,
+        'historicalUserDataNamespaces',
+        'must contain unique, bounded, canonical namespace values',
       );
     }
   }

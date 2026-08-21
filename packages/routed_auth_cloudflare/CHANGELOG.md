@@ -1,5 +1,8 @@
 ## 0.1.0
 
+- Support historical user-data namespaces in the D1 deletion coordinator so
+  `AuthOptions.historicalUserDataNamespaces` fails hard deletion closed when a
+  removed plugin contributor is absent.
 - Add a typed `historicalAuthenticationMethodNamespaces` inventory for D1
   deployments. Safe authentication-method removal now fails closed when a
   previously deployed external plugin namespace is absent from active

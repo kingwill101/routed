@@ -1759,7 +1759,9 @@ final class CloudflareD1UserDeletionPlan implements AuthUserDeletionPlan {
 /// plugin's private D1 tables remain undiscoverable unless its adapter keeps a
 /// historical namespace inventory and contributes cleanup independently.
 final class CloudflareD1UserDeletionCoordinator
-    implements AuthUserDeletionCoordinator {
+    implements
+        AuthUserDeletionCoordinator,
+        AuthHistoricalUserDeletionNamespaceCoordinator {
   CloudflareD1UserDeletionCoordinator._({
     required CloudflareD1Database database,
     required _D1 sql,
@@ -1773,6 +1775,9 @@ final class CloudflareD1UserDeletionCoordinator
   final CloudflareD1AuthSchema schema;
   final DateTime Function() _clock;
   List<AuthUserDeletionPlanContributor> _contributors = const [];
+  Set<String> _historicalUserDataNamespaces = const {};
+  bool _historicalUserDataTopologyComplete = true;
+  bool _historicalUserDataNamespacesBound = false;
   bool _bound = false;
 
   @override
@@ -1798,6 +1803,22 @@ final class CloudflareD1UserDeletionCoordinator
     }
     _contributors = List<AuthUserDeletionPlanContributor>.unmodifiable(values);
     _bound = true;
+  }
+
+  @override
+  void bindHistoricalUserDeletionNamespaces(Iterable<String> namespaces) {
+    if (!_bound) {
+      throw StateError('Auth deletion contributor topology is not bound.');
+    }
+    if (_historicalUserDataNamespacesBound) {
+      throw StateError('Historical user-data namespaces are already bound.');
+    }
+    final values = _normalizeHistoricalUserDataNamespaces(namespaces);
+    _historicalUserDataNamespaces = values;
+    _historicalUserDataTopologyComplete = _activeUserDataNamespaces.containsAll(
+      values,
+    );
+    _historicalUserDataNamespacesBound = true;
   }
 
   @override
@@ -1854,6 +1875,7 @@ final class CloudflareD1UserDeletionCoordinator
   }) async {
     final id = _required(userId, 'userId');
     _ensureBound();
+    _ensureHistoricalUserDataTopologyComplete();
     final user = await _sql.first(
       'SELECT payload FROM ${schema.table('users')} WHERE id = ?',
       [id],
@@ -1935,6 +1957,26 @@ final class CloudflareD1UserDeletionCoordinator
   void _ensureBound() {
     if (!_bound) {
       throw StateError('Auth deletion contributor topology is not bound.');
+    }
+  }
+
+  Set<String> get _activeUserDataNamespaces => {
+    for (final contributor in _contributors)
+      _required(
+        contributor.userDataNamespace,
+        'userDataNamespace',
+      ).toLowerCase(),
+  };
+
+  void _ensureHistoricalUserDataTopologyComplete() {
+    if (!_historicalUserDataTopologyComplete) {
+      final missing = _historicalUserDataNamespaces.difference(
+        _activeUserDataNamespaces,
+      );
+      throw AuthUserDeletionPreflightException(
+        'Historical user-data namespaces are missing active contributors: '
+        '${missing.join(', ')}.',
+      );
     }
   }
 
@@ -6307,6 +6349,25 @@ Set<String> _normalizeHistoricalAuthenticationMethodNamespaces(
         values,
         'historicalAuthenticationMethodNamespaces',
         'must contain unique, bounded, safe namespace values',
+      );
+    }
+  }
+  return Set<String>.unmodifiable(namespaces);
+}
+
+Set<String> _normalizeHistoricalUserDataNamespaces(Iterable<String> values) {
+  final namespaces = <String>{};
+  for (final value in values) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized != value ||
+        normalized.isEmpty ||
+        normalized.length > 64 ||
+        normalized.contains(RegExp(r'[\u0000-\u001f\u007f]')) ||
+        !namespaces.add(normalized)) {
+      throw ArgumentError.value(
+        values,
+        'historicalUserDataNamespaces',
+        'must contain unique, bounded, canonical namespace values',
       );
     }
   }

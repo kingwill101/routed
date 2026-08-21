@@ -223,6 +223,15 @@ abstract interface class AuthUserDeletionCoordinatorHost {
   );
 }
 
+/// Optional coordinator capability for deployments that removed a plugin.
+///
+/// The active contributor list cannot reveal records written by a previous
+/// deployment. Hosts that support this capability reject hard deletion until
+/// every configured historical user-data namespace is active again.
+abstract interface class AuthHistoricalUserDeletionNamespaceCoordinator {
+  void bindHistoricalUserDeletionNamespaces(Iterable<String> namespaces);
+}
+
 /// Backend-owned coordinator for hard user deletion.
 abstract interface class AuthUserDeletionCoordinator {
   AuthUserDeletionDomain get domain;
@@ -323,7 +332,9 @@ typedef AuthInMemoryUserDeletionMutationSerializer =
     Future<T> Function<T>(Future<T> Function() operation);
 
 final class AuthInMemoryUserDeletionCoordinator
-    implements AuthUserDeletionCoordinator {
+    implements
+        AuthUserDeletionCoordinator,
+        AuthHistoricalUserDeletionNamespaceCoordinator {
   AuthInMemoryUserDeletionCoordinator({
     required this.domain,
     required AuthInMemoryUserDeletionBackend backend,
@@ -340,6 +351,9 @@ final class AuthInMemoryUserDeletionCoordinator
   final AuthUserDeletionFaultInjector? _faultInjector;
   final AuthInMemoryUserDeletionMutationSerializer? _mutationSerializer;
   List<AuthUserDeletionPlanContributor> _contributors = const [];
+  Set<String> _historicalUserDataNamespaces = const {};
+  bool _historicalUserDataTopologyComplete = true;
+  bool _historicalUserDataNamespacesBound = false;
   bool _bound = false;
   Future<void> _tail = Future<void>.value();
 
@@ -366,6 +380,22 @@ final class AuthInMemoryUserDeletionCoordinator
     }
     _contributors = List<AuthUserDeletionPlanContributor>.unmodifiable(values);
     _bound = true;
+  }
+
+  @override
+  void bindHistoricalUserDeletionNamespaces(Iterable<String> namespaces) {
+    if (!_bound) {
+      throw StateError('Auth deletion contributor topology is not bound.');
+    }
+    if (_historicalUserDataNamespacesBound) {
+      throw StateError('Historical user-data namespaces are already bound.');
+    }
+    final values = _normalizeHistoricalUserDataNamespaces(namespaces);
+    _historicalUserDataNamespaces = values;
+    _historicalUserDataTopologyComplete = _activeUserDataNamespaces.containsAll(
+      values,
+    );
+    _historicalUserDataNamespacesBound = true;
   }
 
   @override
@@ -427,6 +457,7 @@ final class AuthInMemoryUserDeletionCoordinator
   }) async {
     final normalizedUserId = _normalizeUserId(userId);
     _ensureBound();
+    _ensureHistoricalUserDataTopologyComplete();
     final user = await _backend.findUserForDeletion(normalizedUserId);
     if (user == null) return false;
     await _backend.validateUserDeletion(normalizedUserId);
@@ -509,6 +540,23 @@ final class AuthInMemoryUserDeletionCoordinator
       throw StateError('Auth deletion contributor topology is not bound.');
     }
   }
+
+  Set<String> get _activeUserDataNamespaces => {
+    for (final contributor in _contributors)
+      _normalizeNamespace(contributor.userDataNamespace),
+  };
+
+  void _ensureHistoricalUserDataTopologyComplete() {
+    if (!_historicalUserDataTopologyComplete) {
+      final missing = _historicalUserDataNamespaces.difference(
+        _activeUserDataNamespaces,
+      );
+      throw AuthUserDeletionPreflightException(
+        'Historical user-data namespaces are missing active contributors: '
+        '${missing.join(', ')}.',
+      );
+    }
+  }
 }
 
 String _normalizeUserId(String value) {
@@ -525,4 +573,23 @@ String _normalizeNamespace(String value) {
     throw ArgumentError.value(value, 'namespace', 'must not be empty');
   }
   return normalized;
+}
+
+Set<String> _normalizeHistoricalUserDataNamespaces(Iterable<String> values) {
+  final namespaces = <String>{};
+  for (final value in values) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized != value ||
+        normalized.isEmpty ||
+        normalized.length > 64 ||
+        normalized.contains(RegExp(r'[\u0000-\u001f\u007f]')) ||
+        !namespaces.add(normalized)) {
+      throw ArgumentError.value(
+        values,
+        'historicalUserDataNamespaces',
+        'must contain unique, bounded, canonical namespace values',
+      );
+    }
+  }
+  return Set<String>.unmodifiable(namespaces);
 }
