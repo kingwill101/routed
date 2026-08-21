@@ -8,8 +8,8 @@ Wraps `server_*` OpenAPI tooling for `routed` `Engine` via build-time extraction
 
 ```yaml
 dependencies:
-  routed: ^0.4.0
-  routed_core: ^0.3.3
+  routed: ^0.5.0
+  routed_core: ^0.5.0
   routed_openapi: ^0.1.0
 ```
 

@@ -18,7 +18,7 @@ Uploaded from this snapshot so far:
 - `routed_views` `0.2.0`
 - `routed_cache` `0.2.0`
 - `routed_auth` `0.2.0`
-- `routed_hotwire` `0.1.4` and corrective `0.1.5`
+- `routed_hotwire` `0.1.6`
 - `routed_observability` `0.1.0`
 - `routed_rate_limit` `0.1.0`
 - `routed_security` `0.1.0`
@@ -64,7 +64,9 @@ updated after each successful publish.
 
 Packages that are still drifted from current pub.dev and still require action:
 
-- `routed_hotwire` `0.1.4` (pub.dev: `0.1.5`) — local version is behind.
+- No publishable package is currently behind the hosted release recorded by
+  the latest audit. `routed_hotwire` was corrected to `0.1.6` and published
+  after the earlier `0.1.4`/`0.1.5` entries.
 
 `server_native` is intentionally excluded from this release even though its
 current version is already published; native assets require a separate
@@ -89,8 +91,7 @@ intentionally released.
 
 The dependency graph has no workspace cycles. The release audit checked 28
 publishable packages after excluding `server_native`, with satisfiable local
-constraints. Only one publishable package remains drifted (`routed_hotwire`),
-and the listed batch is ready for a dry-run cycle.
+constraints. The listed batch is ready for a dry-run cycle.
 
 The auth implementation roadmap is tracked in
 [`docs/auth-worklist.md`](auth-worklist.md).
@@ -109,7 +110,7 @@ The external prerequisites (`server_testing`, `server_testing_shelf`, and
 `property_testing`) are published separately. Filtering the audit's
 dependency order to only non-same status packages gives:
 
-1. `routed_hotwire`
+No package is currently required by the audit's same-status release filter.
 
 `server_native` is intentionally excluded from this release. Its native
 version, generated metadata, GitHub release assets, and artifact hashes will

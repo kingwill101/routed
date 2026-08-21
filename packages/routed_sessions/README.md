@@ -8,9 +8,9 @@ Wraps `server_sessions` for `routed` `EngineContext.session` (`ctx.session`, `ct
 
 ```yaml
 dependencies:
-  routed: ^0.4.0
-  routed_core: ^0.3.3
-  routed_sessions: ^0.1.0
+  routed: ^0.5.0
+  routed_core: ^0.5.0
+  routed_sessions: ^0.2.0
   server_sessions: ^0.1.0
 ```
 

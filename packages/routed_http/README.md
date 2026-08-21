@@ -8,7 +8,7 @@ requests.
 
 ```yaml
 dependencies:
-  routed_core: ^0.3.3
+  routed_core: ^0.5.0
   routed_http: ^0.1.0
 ```
 

@@ -8,7 +8,7 @@ configured policy blocks it.
 
 ```yaml
 dependencies:
-  routed_core: ^0.4.0
+  routed_core: ^0.5.0
   routed_rate_limit: ^0.1.0
   server_rate_limit: ^0.1.0
 ```

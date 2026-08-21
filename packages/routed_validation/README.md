@@ -7,7 +7,7 @@ registry is created on demand from an initialized engine container.
 ## Install
 ```yaml
 dependencies:
-  routed: ^0.4.0
+  routed: ^0.5.0
   routed_validation: ^0.1.0
 ```
 

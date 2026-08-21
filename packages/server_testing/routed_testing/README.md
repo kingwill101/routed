@@ -22,9 +22,9 @@ in-memory engine or launch an ephemeral server without writing glue code.
 
 ```yaml
 dev_dependencies:
-  routed_testing: ^0.3.3
+  routed_testing: ^0.4.0
   server_testing: ">=0.4.0 <1.0.0"
-  routed_core: ">=0.3.3 <1.0.0"
+  routed_core: ">=0.5.0 <1.0.0"
   test: ^1.29.0
 ```
 

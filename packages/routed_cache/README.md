@@ -8,8 +8,8 @@ Wraps `server_cache` (array/file/redis/null stores, `DataCacheManager`, `Reposit
 
 ```yaml
 dependencies:
-  routed: ^0.4.0
-  routed_core: ^0.3.3
+  routed: ^0.5.0
+  routed_core: ^0.5.0
   routed_cache: ^0.2.0
   server_cache: ^0.2.0
 ```

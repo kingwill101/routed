@@ -8,8 +8,8 @@ engines, view provider, localization provider, locale resolvers, and
 
 ```yaml
 dependencies:
-  routed_core: ^0.3.3
-  routed_views: ^0.1.0
+  routed_core: ^0.5.0
+  routed_views: ^0.2.0
 ```
 
 Most applications can import `package:routed/routed.dart`, which re-exports

@@ -20,8 +20,8 @@ Routed engine so you can build interactive hybrids without leaving Dart.
 
 ```yaml
 dependencies:
-  routed: ^0.4.0
-  routed_hotwire: ^0.1.3
+  routed: ^0.5.0
+  routed_hotwire: ^0.1.6
 ```
 
 Turbo-first apps typically include `routed`, `routed_testing`, and

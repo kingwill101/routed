@@ -21,7 +21,7 @@ Declared capabilities: `HostCapabilities.ioProcess`.
 
 ```yaml
 dependencies:
-  routed_core: ^0.3.3
+  routed_core: ^0.5.0
   routed_io: ^0.1.0
 ```
 
