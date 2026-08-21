@@ -64,9 +64,14 @@ updated after each successful publish.
 
 Packages that are still drifted from current pub.dev and still require action:
 
-- No publishable package is currently behind the hosted release recorded by
-  the latest audit. `routed_hotwire` was corrected to `0.1.6` and published
-  after the earlier `0.1.4`/`0.1.5` entries.
+- `routed_auth_sqlite` `0.1.0` is not published yet. Its hosted prerequisites
+  are already present in the audit order; publish it after
+  `routed_auth_cloudflare` if the Dart IO SQLite adapter is included in the
+  next release.
+
+No existing published package is behind the hosted release recorded by the
+latest audit. `routed_hotwire` was corrected to `0.1.6` and published after
+the earlier `0.1.4`/`0.1.5` entries.
 
 `server_native` is intentionally excluded from this release even though its
 current version is already published; native assets require a separate
@@ -89,9 +94,9 @@ and do not need a release in this batch:
 and its changelog. Leave it out unless those non-library changes are
 intentionally released.
 
-The dependency graph has no workspace cycles. The release audit checked 28
-publishable packages after excluding `server_native`, with satisfiable local
-constraints. The listed batch is ready for a dry-run cycle.
+The dependency graph has no workspace cycles or dependency issues. The release
+audit includes the unpublished SQLite adapter in its order and reports
+satisfiable local constraints. The listed batch is ready for a dry-run cycle.
 
 The auth implementation roadmap is tracked in
 [`docs/auth-worklist.md`](auth-worklist.md).
@@ -108,9 +113,9 @@ Local packages include the extracted `routed_*` and `server_*` packages. Each
 must be published before a package that declares it as a hosted dependency.
 The external prerequisites (`server_testing`, `server_testing_shelf`, and
 `property_testing`) are published separately. Filtering the audit's
-dependency order to only non-same status packages gives:
+dependency order to only packages that need a hosted release currently gives:
 
-No package is currently required by the audit's same-status release filter.
+- `routed_auth_sqlite`
 
 `server_native` is intentionally excluded from this release. Its native
 version, generated metadata, GitHub release assets, and artifact hashes will
@@ -124,7 +129,7 @@ workspace root:
 
 ```bash
 for package in \
-  packages/routed_hotwire; do
+  packages/routed_auth_sqlite; do
   (cd "$package" && dart pub publish --dry-run) || {
     result=$?
     # Pub uses exit 65 for validation warnings (for example, a dirty tree).
