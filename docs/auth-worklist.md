@@ -195,12 +195,11 @@ The work is intentionally split between framework-agnostic capabilities in
   challenges plus passkeys through version 10. It now also owns bounded
   digest-only phone issuance, verification, identity binding, projection, hard
   deletion, and authentication-method inventory through migration version 11.
-  A disposable live-D1 run passed
-  all 41 cases enabled through migration v7, including the anonymous cases,
-  and its owned database was independently confirmed deleted. The API-key v9
-  WebAuthn v10, and phone v11 cases are wired into the opt-in harness but have
-  not run against live D1. Broader SQL adapters and future-plugin plans remain
-  open. D1's authentication-method coordinator accepts its own users,
+  A disposable live-D1 run on 2026-08-21 passed the core, anonymous, phone v11,
+  API-key v9, WebAuthn v10, username, OAuth exchange, rollback, and prefix
+  isolation cases, and its owned database was independently confirmed deleted.
+  Broader SQL adapters and future-plugin plans remain open. D1's
+  authentication-method coordinator accepts its own users,
   credentials, accounts, email-OTP, exact phone, exact API-key, and exact
   passkey stores;
   external method stores require a future backend-bound plan. Mixed topologies
@@ -414,12 +413,11 @@ account, session, client, and plugin contracts above:
   issuance across IO, portable/native Node, and portable/native Cloudflare
   Fetch adapters.
 - [x] Run the D1 conformance harness against a deployed or remote-bound
-  Cloudflare database. On 2026-08-20, all 41 cases enabled through anonymous
-  migration v7 passed against a disposable remote D1 database. The ownership
-  guard deleted the database, and a separate account listing confirmed that no
-  disposable `routed-auth-conformance` database remained. The API-key v9,
-  WebAuthn v10, and phone v11 non-fault cases are wired into the opt-in
-  harness but have not been run live.
+  Cloudflare database. On 2026-08-21, the disposable run passed the core,
+  anonymous, phone v11, API-key v9, WebAuthn v10, username, OAuth exchange,
+  rollback, and prefix-isolation cases. The ownership guard deleted the
+  database, and a separate account listing confirmed that no disposable
+  `routed-auth-conformance` database remained.
 - [x] Keep the current auth packages, host adapter integrations, and public
   conformance suites analyzer-clean and passing on `master`.
 

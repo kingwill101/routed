@@ -1,13 +1,16 @@
 ## 0.1.0
 
+- Validate the live disposable-D1 harness through migrations v9, v10, and v11.
+  API-key rotation/capacity, WebAuthn challenge/counter, phone issuance and
+  deletion, username, OAuth exchange, rollback, and prefix-isolation cases all
+  passed against Cloudflare D1, and the owned database was deleted afterward.
 - Add append-only migration version 11 and a typed root-owned D1 phone-number
   backend. Challenges, verified identities, and issuance receipts are bounded;
   code and operation identifiers persist only as digests.
 - Add atomic phone issue/verify commands with replay binding, contention-safe
   lockout, user creation/projection, hard-deletion cleanup, local adapter
   conformance, capacity, rollback, and secret-inspection coverage. Wire the
-  non-fault phone cases into the opt-in live-D1 harness; no migration v11 live
-  run has been performed.
+  non-fault phone cases into the opt-in live-D1 harness.
 - Add backend-owned safe phone-identity removal. D1 rechecks the composed
   fallback inventory in one batch, clears the verified projection and phone
   artifacts, and lets phone authentication preserve safe removal of other
@@ -21,8 +24,7 @@
   bounded public-key and metadata validation. Mixed stores fail closed.
 - Run reusable WebAuthn conformance, 200 hostile-input property cases,
   capacity, secret-inspection, contention, rollback, and deletion tests against
-  the local D1 fake. Non-fault cases are wired into the offline/live harness;
-  migration v10 has not run against live Cloudflare D1.
+  the local D1 fake. Non-fault cases are wired into the offline/live harness.
 - Add append-only migration version 9 and a typed `store.apiKeys` D1 adapter.
   API-key issue, lookup, touch, revoke, rotate, list, expiry pruning, and
   user-access revocation persist only secret digests and bounded safe metadata.
@@ -36,7 +38,7 @@
 - Run the public API-key adapter conformance suite, hostile-identifier
   properties, digest inspection, migration/drop-all, deletion, topology, and
   fault tests against the local D1 fake. Non-fault cases are wired into the
-  opt-in live harness; migration v9 has not been run against live Cloudflare D1.
+  opt-in live harness.
 - Implement `AuthAnonymousAccountMutationStore` on the root D1 adapter. Create,
   delete, and upgrade mutations now use backend transactions and fail closed
   without any process-local fallback.

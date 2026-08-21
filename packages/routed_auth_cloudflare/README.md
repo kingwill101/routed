@@ -224,14 +224,11 @@ and fails closed for mixed or unsupported authentication-method stores.
 The local tests also run `verifyAuthUsernameStoreConformance` against that
 deterministic public D1 fake. The separate
 [live harness](test/live/README.md) is intentionally not part of the default
-test command. On 2026-08-20, a disposable live D1 run applied migration v7 and
-passed all 41 enabled cases, including six anonymous cases plus the core,
-managed-SCIM, username, OAuth-exchange, rollback, and prefix-isolation cases.
-Fault-injection cases remain local-only. The harness deleted its owned database,
-and a separate Wrangler listing confirmed that no matching resource remained.
-The API-key, phone, and WebAuthn non-fault cases through migrations v9, v11,
-and v10 respectively are included in the harness but have not run against live
-Cloudflare D1.
+test command. On 2026-08-21, a disposable live D1 run passed the core,
+anonymous, managed-SCIM, phone v11, API-key v9, WebAuthn v10, username,
+OAuth-exchange, rollback, and prefix-isolation cases. Fault-injection cases
+remain local-only. The harness deleted its owned database, and a separate
+Wrangler listing confirmed that no matching resource remained.
 
 The adapter also implements `AuthMagicLinkBackend` and `AuthEmailOtpBackend`.
 Magic-link replacement and consume-plus-user resolution, and OTP attempt/
