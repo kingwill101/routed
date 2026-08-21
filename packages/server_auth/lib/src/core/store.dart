@@ -462,6 +462,7 @@ class InMemoryAuthStore
         AuthMagicLinkBackend,
         AuthEmailOtpBackend,
         AuthPhoneNumberBackend,
+        AuthPhoneNumberMutationStore,
         AuthAdminStoreCapabilities,
         AuthWebAuthnStoreCapabilities,
         AuthAccountStateStore,
@@ -1088,6 +1089,56 @@ class InMemoryAuthStore
     loadInventory: loadInventory,
     mutate: () => accounts.unlinkForUser(userId, providerId, providerAccountId),
   );
+
+  @override
+  Future<AuthAuthenticationMethodMutationResult> removePhoneNumberIfSafe(
+    AuthPhoneNumberRemovalCommand command,
+  ) => _serializePhoneNumberMutation(() async {
+    final snapshot = await command.loadInventory();
+    if (!snapshot.isComplete) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+    final target = AuthAuthenticationMethod.phone(command.phoneNumber);
+    if (!snapshot.methods.contains(target)) {
+      return AuthAuthenticationMethodMutationResult.notFound;
+    }
+    if (!snapshot.methods.any(
+      (method) => method.canAuthenticate && method != target,
+    )) {
+      return AuthAuthenticationMethodMutationResult.lastAuthenticationMethod;
+    }
+    final identity = _phoneIdentitiesByPhone[command.phoneNumber];
+    if (identity == null || identity.userId != command.userId) {
+      return AuthAuthenticationMethodMutationResult.notFound;
+    }
+    final user = _users._usersById[command.userId];
+    if (user == null) return AuthAuthenticationMethodMutationResult.notFound;
+    _phoneIdentitiesByPhone.remove(command.phoneNumber);
+    if (_phoneByUser[command.userId] == command.phoneNumber) {
+      _phoneByUser.remove(command.userId);
+    }
+    _phoneVerifications.remove(command.phoneNumber);
+    _phoneIssueReceipts.removeWhere(
+      (_, receipt) => receipt.phoneNumber == command.phoneNumber,
+    );
+    final attributes = Map<String, dynamic>.from(user.attributes)
+      ..remove('phoneNumber')
+      ..remove('phoneNumberVerified');
+    final updated = AuthUser(
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      image: user.image,
+      roles: user.roles,
+      isAnonymous: user.isAnonymous,
+      attributes: attributes,
+    );
+    final persisted = await _users.update(updated);
+    if (persisted == null) {
+      throw StateError('Phone identity owner disappeared during removal.');
+    }
+    return AuthAuthenticationMethodMutationResult.mutated;
+  });
 
   @override
   AuthUserDeletionCoordinator get userDeletionCoordinator =>

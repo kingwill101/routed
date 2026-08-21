@@ -182,6 +182,74 @@ void main() {
         isEmpty,
       );
     });
+
+    test(
+      'removes phone identity and projection with a durable fallback',
+      () async {
+        final database = FakeCloudflareD1Database();
+        addTearDown(database.close);
+        final store = await CloudflareD1AuthStore.open(
+          database,
+          clock: () => _now,
+        );
+        final phone = PhoneNumberPlugin<Object>(
+          sendCode: (_) {},
+          codeHashKey: '0123456789abcdef0123456789abcdef',
+        );
+        final user = AuthUser(
+          id: 'd1-phone-remove-user',
+          email: 'd1-phone-remove@example.com',
+        );
+        await store.credentials.register(
+          user,
+          AuthPasswordCredential(
+            id: 'd1-phone-remove-password',
+            userId: user.id,
+            identifier: user.email!,
+            passwordHash: 'encoded-hash',
+            createdAt: _now,
+            updatedAt: _now,
+          ),
+        );
+        AuthRuntime<Object>(
+          options: AuthOptions<Object>(
+            providers: <AuthProvider>[CredentialsProvider()],
+            store: store,
+            runtimeMode: AuthRuntimeMode.localDevelopment,
+            plugins: <AuthServerPlugin<Object>>[phone],
+          ),
+        );
+        await store.issuePhoneNumberCode(_issue());
+        final verified = await store.verifyPhoneNumberCode(
+          AuthPhoneNumberVerifyCodeCommand(
+            phoneNumber: '+15555550123',
+            codeDigest: 'phone-digest',
+            now: _now,
+            candidateUser: user,
+          ),
+        );
+        expect(verified.status, AuthPhoneNumberVerifyStatus.verified);
+
+        await phone.removePhoneNumber(userId: 'd1-phone-remove-user');
+
+        expect(await store.findPhoneNumberIdentity('+15555550123'), isNull);
+        final storedUser = await store.users.findById('d1-phone-remove-user');
+        expect(storedUser!.attributes, isNot(contains('phoneNumber')));
+        expect(storedUser.attributes, isNot(contains('phoneNumberVerified')));
+        expect(
+          database.select(
+            'SELECT * FROM ${store.schema.table('phone_verifications')}',
+          ),
+          isEmpty,
+        );
+        expect(
+          database.select(
+            'SELECT * FROM ${store.schema.table('phone_issue_receipts')}',
+          ),
+          isEmpty,
+        );
+      },
+    );
   });
 }
 

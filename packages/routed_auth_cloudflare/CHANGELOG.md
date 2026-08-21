@@ -8,6 +8,11 @@
   conformance, capacity, rollback, and secret-inspection coverage. Wire the
   non-fault phone cases into the opt-in live-D1 harness; no migration v11 live
   run has been performed.
+- Add backend-owned safe phone-identity removal. D1 rechecks the composed
+  fallback inventory in one batch, clears the verified projection and phone
+  artifacts, and lets phone authentication preserve safe removal of other
+  primary methods. No HTTP authorization policy is implied by this storage
+  capability.
 - Add append-only migration version 10 and typed root-owned D1 WebAuthn
   challenge and authenticator stores. Challenges are bounded and digest-only;
   credential IDs are unique and counters use compare-and-set updates.

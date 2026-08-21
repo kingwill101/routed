@@ -39,6 +39,10 @@
 - Serialize in-memory phone commands with coordinated hard deletion so a
   deletion rollback cannot overwrite a concurrently committed issuance or
   verification mutation.
+- Add the typed `AuthPhoneNumberMutationStore` capability for safe verified
+  phone removal. The phone plugin now clears its identity, verification state,
+  and verified-user projection only when another usable authentication method
+  remains; hosts still own recent-auth or step-up authorization.
 - Breaking: move anonymous creation, authenticated deletion, and account-
   upgrade finalization behind `AuthAnonymousAccountMutationStore`. Remove the
   arbitrary link callback; durable adapters now fail configuration unless they

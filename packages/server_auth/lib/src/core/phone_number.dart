@@ -231,6 +231,7 @@ final class PhoneNumberPlugin<TContext>
 
   late AuthPhoneNumberBackend _backend;
   late AuthUserDeletionDomain _deletionDomain;
+  late AuthAuthenticationMethodService _authenticationMethods;
   bool _configured = false;
 
   @override
@@ -281,7 +282,55 @@ final class PhoneNumberPlugin<TContext>
         .userDeletionCoordinator
         .domain;
     _backend = host as AuthPhoneNumberBackend;
+    final authenticationMethods = context.authenticationMethods;
+    if (authenticationMethods == null) {
+      throw StateError(
+        'PhoneNumberPlugin requires an authentication-method service.',
+      );
+    }
+    _authenticationMethods = authenticationMethods;
     _configured = true;
+  }
+
+  /// Removes the current phone identity only when another usable method
+  /// remains.
+  ///
+  /// This is a persistence capability, not an authorization check. Hosts must
+  /// require recent authentication or an explicit step-up proof before
+  /// calling it.
+  Future<void> removePhoneNumber({required String userId}) async {
+    _ensureConfigured();
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) {
+      throw AuthFlowException('phone_identity_removal_failed');
+    }
+    final identity = await _backend.findPhoneNumberIdentityForUser(
+      normalizedUserId,
+    );
+    if (identity == null) return;
+    final mutation = _backend is AuthPhoneNumberMutationStore
+        ? _backend as AuthPhoneNumberMutationStore
+        : null;
+    if (mutation == null) {
+      throw AuthFlowException('authentication_method_mutation_unavailable');
+    }
+    final result = await mutation.removePhoneNumberIfSafe(
+      AuthPhoneNumberRemovalCommand(
+        userId: normalizedUserId,
+        phoneNumber: identity.phoneNumber,
+        loadInventory: () =>
+            _authenticationMethods.snapshotForUser(normalizedUserId),
+      ),
+    );
+    switch (result) {
+      case AuthAuthenticationMethodMutationResult.mutated:
+      case AuthAuthenticationMethodMutationResult.notFound:
+        return;
+      case AuthAuthenticationMethodMutationResult.lastAuthenticationMethod:
+        throw AuthFlowException('last_authentication_method');
+      case AuthAuthenticationMethodMutationResult.atomicityUnavailable:
+        throw AuthFlowException('authentication_method_mutation_unavailable');
+    }
   }
 
   @override

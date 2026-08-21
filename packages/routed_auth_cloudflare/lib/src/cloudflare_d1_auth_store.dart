@@ -19,6 +19,7 @@ final class CloudflareD1AuthStore
         AuthMagicLinkBackend,
         AuthEmailOtpBackend,
         AuthPhoneNumberBackend,
+        AuthPhoneNumberMutationStore,
         AuthWebAuthnStoreCapabilities,
         AuthWebAuthnUserDeletionPlanFactory,
         AuthUserDeletionCoordinatorHost,
@@ -229,7 +230,11 @@ final class CloudflareD1AuthStore
         continue;
       }
       final allowedKinds = identical(binding.authenticationMethodStore, this)
-          ? const {AuthAuthenticationMethodKind.username}
+          ? binding.authenticationMethodKinds.contains(
+                  AuthAuthenticationMethodKind.phone,
+                )
+                ? const {AuthAuthenticationMethodKind.phone}
+                : const {AuthAuthenticationMethodKind.username}
           : identical(binding.authenticationMethodStore, users)
           ? const {AuthAuthenticationMethodKind.emailLink}
           : identical(binding.authenticationMethodStore, credentials)
@@ -292,6 +297,7 @@ final class CloudflareD1AuthStore
     var hasEmailFallback = false;
     var hasApiKeyFallback = false;
     var hasPasskeyFallback = false;
+    var hasPhoneFallback = false;
     final oauthProviderIds = <String>{};
     for (final method in fallbacks) {
       switch (method.kind) {
@@ -312,6 +318,7 @@ final class CloudflareD1AuthStore
         case AuthAuthenticationMethodKind.apiKey:
           hasApiKeyFallback = true;
         case AuthAuthenticationMethodKind.phone:
+          hasPhoneFallback = true;
         case AuthAuthenticationMethodKind.plugin:
           return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
       }
@@ -361,6 +368,11 @@ final class CloudflareD1AuthStore
       );
       fallbackValues.add(userId);
     }
+    if (hasPhoneFallback) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('phone_identities')}
+           WHERE user_id = ?)''');
+      fallbackValues.add(userId);
+    }
     if (clauses.isEmpty) {
       return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
     }
@@ -378,6 +390,157 @@ final class CloudflareD1AuthStore
     return existing?.userId == userId
         ? AuthAuthenticationMethodMutationResult.lastAuthenticationMethod
         : AuthAuthenticationMethodMutationResult.notFound;
+  }
+
+  @override
+  Future<AuthAuthenticationMethodMutationResult> removePhoneNumberIfSafe(
+    AuthPhoneNumberRemovalCommand command,
+  ) async {
+    if (!_authenticationMethodTopologyBound ||
+        !_authenticationMethodInventoryAuthoritative) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+    final snapshot = await command.loadInventory();
+    if (!snapshot.isComplete) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+    final target = AuthAuthenticationMethod.phone(command.phoneNumber);
+    if (!snapshot.methods.contains(target)) {
+      return AuthAuthenticationMethodMutationResult.notFound;
+    }
+    final fallbacks = snapshot.methods
+        .where((method) => method.canAuthenticate && method != target)
+        .toList(growable: false);
+    if (fallbacks.isEmpty) {
+      return AuthAuthenticationMethodMutationResult.lastAuthenticationMethod;
+    }
+
+    final predicate = _phoneRemovalFallbackPredicate(command.userId, fallbacks);
+    if (predicate == null) {
+      return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
+    }
+    final identities = schema.table('phone_identities');
+    final usersTable = schema.table('users');
+    final verifications = schema.table('phone_verifications');
+    final receipts = schema.table('phone_issue_receipts');
+    final userGuard =
+        '''id = ? AND EXISTS (
+      SELECT 1 FROM $identities
+      WHERE phone_number = ? AND user_id = ?
+    ) AND (${predicate.$1})''';
+    final results = await _sql.batch([
+      _database
+          .prepare('''UPDATE $usersTable
+             SET payload = json_remove(
+               json_remove(payload, '\$.attributes.phoneNumber'),
+               '\$.attributes.phoneNumberVerified'
+             )
+             WHERE $userGuard''')
+          .bind([
+            command.userId,
+            command.phoneNumber,
+            command.userId,
+            ...predicate.$2,
+          ]),
+      _database
+          .prepare('''DELETE FROM $identities
+             WHERE phone_number = ? AND user_id = ?
+               AND changes() = 1
+               AND (${predicate.$1})''')
+          .bind([command.phoneNumber, command.userId, ...predicate.$2]),
+      _database
+          .prepare('''DELETE FROM $verifications
+             WHERE phone_number = ?''')
+          .bind([command.phoneNumber]),
+      _database
+          .prepare('''DELETE FROM $receipts
+             WHERE phone_number = ?''')
+          .bind([command.phoneNumber]),
+    ]);
+    if ((results[1].meta?.changes ?? 0) == 1) {
+      return AuthAuthenticationMethodMutationResult.mutated;
+    }
+    final existing = await phoneNumbers.findPhoneNumberIdentity(
+      command.phoneNumber,
+    );
+    return existing?.userId == command.userId
+        ? AuthAuthenticationMethodMutationResult.lastAuthenticationMethod
+        : AuthAuthenticationMethodMutationResult.notFound;
+  }
+
+  (String, List<Object?>)? _phoneRemovalFallbackPredicate(
+    String userId,
+    List<AuthAuthenticationMethod> methods,
+  ) {
+    var credentials = false;
+    var email = false;
+    var apiKeys = false;
+    var passkeys = false;
+    var phone = false;
+    final oauthProviders = <String>{};
+    for (final method in methods) {
+      switch (method.kind) {
+        case AuthAuthenticationMethodKind.password:
+        case AuthAuthenticationMethodKind.username:
+          credentials = true;
+        case AuthAuthenticationMethodKind.oauthProvider:
+          final providerId = method.providerId;
+          if (providerId == null || method.providerAccountId == null) {
+            return null;
+          }
+          oauthProviders.add(providerId);
+        case AuthAuthenticationMethodKind.emailOtp:
+        case AuthAuthenticationMethodKind.emailLink:
+          email = true;
+        case AuthAuthenticationMethodKind.apiKey:
+          apiKeys = true;
+        case AuthAuthenticationMethodKind.passkey:
+          passkeys = true;
+        case AuthAuthenticationMethodKind.phone:
+          phone = true;
+        case AuthAuthenticationMethodKind.plugin:
+          return null;
+      }
+    }
+    final clauses = <String>[];
+    final values = <Object?>[];
+    if (credentials) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('credentials')}
+        WHERE user_id = ? AND enabled = 1)''');
+      values.add(userId);
+    }
+    if (oauthProviders.isNotEmpty) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('accounts')}
+        WHERE user_id = ? AND provider_id IN
+          (${List.filled(oauthProviders.length, '?').join(', ')}))''');
+      values.addAll([userId, ...oauthProviders]);
+    }
+    if (email) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('users')}
+        WHERE id = ? AND email IS NOT NULL AND email <> ''
+          AND ${_usableUserSql('payload')})''');
+      values.add(userId);
+    }
+    if (apiKeys) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('api_keys')}
+        WHERE user_id = ? AND revoked_at IS NULL
+          AND (expires_at IS NULL OR expires_at > ?))''');
+      values.addAll([userId, _date(_clock())]);
+    }
+    if (passkeys) {
+      clauses.add(
+        '''EXISTS (SELECT 1 FROM ${schema.table('webauthn_authenticators')}
+        WHERE user_id = ?)''',
+      );
+      values.add(userId);
+    }
+    if (phone) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('phone_identities')}
+        WHERE user_id = ?)''');
+      values.add(userId);
+    }
+    if (clauses.isEmpty) return null;
+    return (clauses.join(' OR '), values);
   }
 
   String get _anonymousGuards => schema.table('anonymous_mutation_guards');
@@ -980,6 +1143,7 @@ final class CloudflareD1AuthStore
     var hasEmailFallback = false;
     var hasApiKeyFallback = false;
     var hasPasskeyFallback = false;
+    var hasPhoneFallback = false;
     final oauthProviderIds = <String>{};
     for (final method in fallbacks) {
       switch (method.kind) {
@@ -1000,6 +1164,7 @@ final class CloudflareD1AuthStore
         case AuthAuthenticationMethodKind.apiKey:
           hasApiKeyFallback = true;
         case AuthAuthenticationMethodKind.phone:
+          hasPhoneFallback = true;
         case AuthAuthenticationMethodKind.plugin:
           return AuthAuthenticationMethodMutationResult.atomicityUnavailable;
       }
@@ -1034,6 +1199,11 @@ final class CloudflareD1AuthStore
         '''EXISTS (SELECT 1 FROM ${schema.table('webauthn_authenticators')}
            WHERE user_id = ?)''',
       );
+      fallbackValues.add(userId);
+    }
+    if (hasPhoneFallback) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('phone_identities')}
+           WHERE user_id = ?)''');
       fallbackValues.add(userId);
     }
     if (clauses.isEmpty) {
@@ -2225,6 +2395,7 @@ final class CloudflareD1WebAuthnAuthenticatorStore
     var email = false;
     var apiKeys = false;
     var passkeys = false;
+    var phone = false;
     final oauthProviders = <String>{};
     for (final method in methods) {
       switch (method.kind) {
@@ -2245,6 +2416,7 @@ final class CloudflareD1WebAuthnAuthenticatorStore
         case AuthAuthenticationMethodKind.passkey:
           passkeys = true;
         case AuthAuthenticationMethodKind.phone:
+          phone = true;
         case AuthAuthenticationMethodKind.plugin:
           return null;
       }
@@ -2280,7 +2452,13 @@ final class CloudflareD1WebAuthnAuthenticatorStore
         WHERE user_id = ? AND credential_id <> ?)''');
       values.addAll([userId, credentialId]);
     }
-    return clauses.isEmpty ? null : (clauses.join(' OR '), values);
+    if (phone) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('phone_identities')}
+        WHERE user_id = ?)''');
+      values.add(userId);
+    }
+    if (clauses.isEmpty) return null;
+    return (clauses.join(' OR '), values);
   }
 }
 
@@ -2580,6 +2758,7 @@ final class CloudflareD1AuthApiKeyStore
     var email = false;
     var apiKeys = false;
     var passkeys = false;
+    var phone = false;
     final oauthProviders = <String>{};
     for (final method in methods) {
       switch (method.kind) {
@@ -2600,6 +2779,7 @@ final class CloudflareD1AuthApiKeyStore
         case AuthAuthenticationMethodKind.passkey:
           passkeys = true;
         case AuthAuthenticationMethodKind.phone:
+          phone = true;
         case AuthAuthenticationMethodKind.plugin:
           return null;
       }
@@ -2636,6 +2816,11 @@ final class CloudflareD1AuthApiKeyStore
         '''EXISTS (SELECT 1 FROM ${schema.table('webauthn_authenticators')}
           WHERE user_id = ?)''',
       );
+      values.add(userId);
+    }
+    if (phone) {
+      clauses.add('''EXISTS (SELECT 1 FROM ${schema.table('phone_identities')}
+        WHERE user_id = ?)''');
       values.add(userId);
     }
     return clauses.isEmpty ? null : (clauses.join(' OR '), values);

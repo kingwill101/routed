@@ -106,10 +106,12 @@ The work is intentionally split between framework-agnostic capabilities in
   then fails closed. D1 now owns the exact API-key store through migration v9
   and bounded WebAuthn challenges, passkeys, counter updates, primary-method
   removal, and hard-deletion cleanup through migration v10. Backend-bound D1
-  phone persistence now exists through migration v11, but phone-aware unlink
-  and primary-method removal remain. Future plugin stores remain. Passwordless
-  unlinking requires a recent original authentication or explicit step-up proof
-  rather than merely an active session.
+  phone persistence now exists through migration v11, including exact
+  phone-aware unlink and primary-method removal with verified projection and
+  challenge cleanup. Future plugin stores remain. The host-facing removal
+  route and authorization proof still need to require recent original
+  authentication or explicit step-up proof rather than merely an active
+  session.
 - [x] Add a first-class server-session management API: list current sessions
   with device metadata, revoke one session, revoke all other sessions, and
   rotate credentials after sensitive changes. JWT session management remains a

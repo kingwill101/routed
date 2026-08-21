@@ -566,6 +566,65 @@ void main() {
       },
     );
 
+    test(
+      'removes a phone identity only when a usable fallback remains',
+      () async {
+        final store = InMemoryAuthStore();
+        final plugin = PhoneNumberPlugin<Object>(
+          sendCode: (_) {},
+          codeHashKey: _hashKey,
+          allowSignUp: true,
+          generateCode: (_) => '123456',
+          createUser: (_, _, _) => AuthUser(id: 'user-1'),
+        );
+        AuthRuntime<Object>(
+          options: AuthOptions<Object>(
+            providers: <AuthProvider>[CredentialsProvider()],
+            store: store,
+            storeMode: AuthStoreMode.ephemeral,
+            plugins: <AuthServerPlugin<Object>>[plugin],
+          ),
+        );
+        await plugin.issueCode(
+          context: Object(),
+          phoneNumber: '+18765551234',
+          now: _now,
+        );
+        await plugin.verifyCode(
+          context: Object(),
+          phoneNumber: '+18765551234',
+          code: '123456',
+          now: _now,
+        );
+
+        await expectLater(
+          plugin.removePhoneNumber(userId: 'user-1'),
+          _flow('last_authentication_method'),
+        );
+
+        await store.upsertCredentialForAdministration(
+          AuthPasswordCredential(
+            id: 'password-1',
+            userId: 'user-1',
+            identifier: 'user-1@example.com',
+            passwordHash: 'encoded-hash',
+            createdAt: _now,
+            updatedAt: _now,
+          ),
+        );
+        await plugin.removePhoneNumber(userId: 'user-1');
+
+        expect(await store.findPhoneNumberIdentity('+18765551234'), isNull);
+        final user = await store.users.findById('user-1');
+        expect(user!.attributes, isNot(contains('phoneNumber')));
+        expect(user.attributes, isNot(contains('phoneNumberVerified')));
+        final staleVerification = await store.verifyPhoneNumberCode(
+          _verify(now: _now.add(const Duration(seconds: 1))),
+        );
+        expect(staleVerification.status, AuthPhoneNumberVerifyStatus.invalid);
+      },
+    );
+
     test('endpoint metadata advertises backend-atomic commands', () {
       final plugin = PhoneNumberPlugin<Object>(
         sendCode: (_) {},

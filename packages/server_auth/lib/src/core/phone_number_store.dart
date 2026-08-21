@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'authentication_methods.dart';
 import 'models.dart';
 
 /// A verified E.164 phone number linked to one auth user.
@@ -190,6 +191,40 @@ abstract interface class AuthPhoneNumberBackend {
 
   FutureOr<AuthPhoneNumberIdentity?> findPhoneNumberIdentityForUser(
     String userId,
+  );
+}
+
+/// Complete input to an atomic phone-identity removal.
+final class AuthPhoneNumberRemovalCommand {
+  AuthPhoneNumberRemovalCommand({
+    required this.userId,
+    required this.phoneNumber,
+    required this.loadInventory,
+  }) {
+    if (userId.isEmpty || userId.trim() != userId) {
+      throw ArgumentError.value(
+        userId,
+        'userId',
+        'must be canonical and non-empty',
+      );
+    }
+    validateAuthCanonicalPhoneNumber(phoneNumber);
+  }
+
+  final String userId;
+  final String phoneNumber;
+
+  /// Loads the composed topology as evidence for the backend command.
+  ///
+  /// Durable backends must recheck every supported fallback inside their own
+  /// transaction. This callback is not itself a transaction boundary.
+  final AuthAuthenticationMethodInventoryLoader loadInventory;
+}
+
+/// Optional exact transaction for removing a verified phone identity safely.
+abstract interface class AuthPhoneNumberMutationStore {
+  FutureOr<AuthAuthenticationMethodMutationResult> removePhoneNumberIfSafe(
+    AuthPhoneNumberRemovalCommand command,
   );
 }
 
