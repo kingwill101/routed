@@ -64,14 +64,12 @@ updated after each successful publish.
 
 Packages that are still drifted from current pub.dev and still require action:
 
-- `routed_auth_sqlite` `0.1.0` is not published yet. Its hosted prerequisites
-  are already present in the audit order; publish it after
-  `routed_auth_cloudflare` if the Dart IO SQLite adapter is included in the
-  next release.
+- No publishable package is currently behind the hosted release recorded by
+  the latest audit.
 
-No existing published package is behind the hosted release recorded by the
-latest audit. `routed_hotwire` was corrected to `0.1.6` and published after
-the earlier `0.1.4`/`0.1.5` entries.
+`routed_auth_sqlite` `0.1.0` was accepted by pub.dev on 2026-08-21 after its
+zero-warning dry run. `routed_hotwire` was corrected to `0.1.6` and published
+after the earlier `0.1.4`/`0.1.5` entries.
 
 `server_native` is intentionally excluded from this release even though its
 current version is already published; native assets require a separate
@@ -89,6 +87,7 @@ and do not need a release in this batch:
 - `server_rate_limit` `0.1.0`
 - `server_sessions` `0.1.0`
 - `server_storage` `0.1.0`
+- `routed_auth_sqlite` `0.1.0`
 
 `routed_io` currently differs only in tests, development metadata, ignore rules,
 and its changelog. Leave it out unless those non-library changes are
@@ -112,10 +111,8 @@ dart pub publish --dry-run
 Local packages include the extracted `routed_*` and `server_*` packages. Each
 must be published before a package that declares it as a hosted dependency.
 The external prerequisites (`server_testing`, `server_testing_shelf`, and
-`property_testing`) are published separately. Filtering the audit's
-dependency order to only packages that need a hosted release currently gives:
-
-- `routed_auth_sqlite`
+`property_testing`) are published separately. Filtering the audit's dependency
+order to only packages that need a hosted release currently gives no packages.
 
 `server_native` is intentionally excluded from this release. Its native
 version, generated metadata, GitHub release assets, and artifact hashes will
