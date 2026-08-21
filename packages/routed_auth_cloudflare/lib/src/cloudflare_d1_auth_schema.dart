@@ -22,7 +22,7 @@ final class CloudflareD1AuthSchema {
   /// underscores are accepted because SQLite cannot bind identifiers.
   final String tablePrefix;
 
-  static const int currentVersion = 10;
+  static const int currentVersion = 11;
 
   String table(String suffix) {
     final prefix = tablePrefix.trim();
@@ -55,7 +55,47 @@ final class CloudflareD1AuthSchema {
     CloudflareD1AuthMigration(version: 8, statements: _versionEight),
     CloudflareD1AuthMigration(version: 9, statements: _versionNine),
     CloudflareD1AuthMigration(version: 10, statements: _versionTen),
+    CloudflareD1AuthMigration(version: 11, statements: _versionEleven),
   ];
+
+  List<String> get _versionEleven {
+    final verifications = table('phone_verifications');
+    final identities = table('phone_identities');
+    final receipts = table('phone_issue_receipts');
+    return [
+      '''CREATE TABLE IF NOT EXISTS $verifications (
+        id_hash TEXT PRIMARY KEY,
+        phone_number TEXT NOT NULL UNIQUE,
+        code_digest TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        max_attempts INTEGER NOT NULL CHECK (max_attempts > 0),
+        attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+        locked_at TEXT,
+        consumed_at TEXT,
+        verification_marker TEXT
+      )''',
+      'CREATE INDEX IF NOT EXISTS ${verifications}_expiry '
+          'ON $verifications(expires_at)',
+      '''CREATE TABLE IF NOT EXISTS $identities (
+        phone_number TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        verified_at TEXT NOT NULL
+      )''',
+      'CREATE INDEX IF NOT EXISTS ${identities}_user '
+          'ON $identities(user_id)',
+      '''CREATE TABLE IF NOT EXISTS $receipts (
+        operation_id_hash TEXT PRIMARY KEY,
+        fingerprint_hash TEXT NOT NULL,
+        phone_number TEXT NOT NULL,
+        claim_nonce TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL
+      )''',
+      'CREATE INDEX IF NOT EXISTS ${receipts}_phone '
+          'ON $receipts(phone_number, created_at DESC)',
+    ];
+  }
 
   List<String> get _versionTen {
     final challenges = table('webauthn_challenges');
@@ -486,6 +526,9 @@ final class CloudflareD1AuthSchema {
   /// retain migration history and never call it during normal operation.
   Future<void> dropAll(CloudflareD1Database database) async {
     final suffixes = [
+      'phone_issue_receipts',
+      'phone_identities',
+      'phone_verifications',
       'webauthn_authenticators',
       'webauthn_challenges',
       'api_keys',

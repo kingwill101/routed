@@ -343,7 +343,7 @@ void main() {
     },
   );
 
-  test('D1 phone authentication fails closed without typed commands', () async {
+  test('D1 phone authentication is backed by typed commands', () async {
     final database = FakeCloudflareD1Database();
     addTearDown(database.close);
     final store = await CloudflareD1AuthStore.open(database);
@@ -352,23 +352,15 @@ void main() {
       codeHashKey: '0123456789abcdef0123456789abcdef',
     );
 
-    expect(
-      () => AuthRuntime<Object>(
-        options: AuthOptions<Object>(
-          providers: const <AuthProvider>[],
-          store: store,
-          runtimeMode: AuthRuntimeMode.localDevelopment,
-          plugins: <AuthServerPlugin<Object>>[phone],
-        ),
-      ),
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          contains('AuthPhoneNumberBackend'),
-        ),
+    final runtime = AuthRuntime<Object>(
+      options: AuthOptions<Object>(
+        providers: const <AuthProvider>[],
+        store: store,
+        runtimeMode: AuthRuntimeMode.localDevelopment,
+        plugins: <AuthServerPlugin<Object>>[phone],
       ),
     );
+    expect(runtime.hasPlugin('phone_number'), isTrue);
   });
 
   test('typed migrations are idempotent and prefixes are isolated', () async {

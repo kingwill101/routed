@@ -81,6 +81,36 @@ available only if the exact `store.apiKeys` instance and every fallback method
 belong to the authoritative D1 topology. Mixed or foreign stores fail closed;
 there is no process-local callback transaction or compatibility fallback.
 
+Phone authentication uses the root adapter's typed backend. Add the plugin and
+keep SMS delivery as an application-owned post-commit callback:
+
+```dart
+final store = await authStore(env);
+final phone = PhoneNumberPlugin<MyRequestContext>(
+  sendCode: (delivery) => sms.send(
+    delivery.phoneNumber,
+    delivery.code,
+  ),
+  codeHashKey: authPhoneCodeHashKey,
+  allowSignUp: true,
+);
+
+final options = AuthOptions<MyRequestContext>(
+  store: store,
+  plugins: [phone],
+);
+```
+
+Append-only migration v11 adds bounded phone challenges, verified phone
+identities, and idempotency receipts. Challenge codes and issuance IDs cross
+the adapter only as digests; D1 stores no deliverable SMS code or raw operation
+ID. Verification updates attempts or lockout, consumes the challenge, creates
+or resolves the user, binds the phone identity, and projects the verified phone
+attributes in one D1 batch. Configure the global challenge bound with
+`phoneNumberMaxVerifications`. Hard deletion removes phone identities,
+challenges, and receipts with the user, including when the phone plugin is no
+longer composed.
+
 WebAuthn uses the root adapter's optional typed capability. Install only the
 plugin and its provider; application code does not construct D1 substores:
 
@@ -199,9 +229,9 @@ passed all 41 enabled cases, including six anonymous cases plus the core,
 managed-SCIM, username, OAuth-exchange, rollback, and prefix-isolation cases.
 Fault-injection cases remain local-only. The harness deleted its owned database,
 and a separate Wrangler listing confirmed that no matching resource remained.
-The API-key non-fault cases through migration v9 and WebAuthn non-fault cases
-through migration v10 are included in the harness but have not run against
-live Cloudflare D1.
+The API-key, phone, and WebAuthn non-fault cases through migrations v9, v11,
+and v10 respectively are included in the harness but have not run against live
+Cloudflare D1.
 
 The adapter also implements `AuthMagicLinkBackend` and `AuthEmailOtpBackend`.
 Magic-link replacement and consume-plus-user resolution, and OTP attempt/

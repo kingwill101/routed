@@ -1,5 +1,13 @@
 ## 0.1.0
 
+- Add append-only migration version 11 and a typed root-owned D1 phone-number
+  backend. Challenges, verified identities, and issuance receipts are bounded;
+  code and operation identifiers persist only as digests.
+- Add atomic phone issue/verify commands with replay binding, contention-safe
+  lockout, user creation/projection, hard-deletion cleanup, local adapter
+  conformance, capacity, rollback, and secret-inspection coverage. Wire the
+  non-fault phone cases into the opt-in live-D1 harness; no migration v11 live
+  run has been performed.
 - Add append-only migration version 10 and typed root-owned D1 WebAuthn
   challenge and authenticator stores. Challenges are bounded and digest-only;
   credential IDs are unique and counters use compare-and-set updates.

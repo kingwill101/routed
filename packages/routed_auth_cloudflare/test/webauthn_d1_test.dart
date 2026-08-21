@@ -38,7 +38,12 @@ void main() {
                 'ORDER BY version',
               )
               .map((row) => row['version']),
-          orderedEquals([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+          orderedEquals(
+            List<int>.generate(
+              CloudflareD1AuthSchema.currentVersion,
+              (index) => index + 1,
+            ),
+          ),
         );
         expect(
           database.select("SELECT name FROM sqlite_master WHERE name = ?", [

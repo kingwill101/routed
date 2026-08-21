@@ -316,6 +316,40 @@ final class DefaultLiveD1ConformanceExecutor
         }
       }
 
+      final phoneSuite = AuthPhoneNumberBackendConformanceSuite(() async {
+        final schema = await newSchema();
+        final store = CloudflareD1AuthStore(
+          database,
+          schema: schema,
+          clock: _clock,
+        );
+        store.bindUserDeletionPlanContributors(const []);
+        return AuthPhoneNumberBackendConformanceFixture(
+          store: store,
+          backend: store,
+          faults: const _LiveD1PhoneFaultController(),
+          hardDeleteUser: store.userDeletionCoordinator.deleteUser,
+          dispose: () => disposeSchema(schema),
+        );
+      });
+      for (final conformanceCase in phoneSuite.cases.where(
+        (candidate) => !candidate.id.endsWith('_rollback'),
+      )) {
+        final id = 'phone.${conformanceCase.id}';
+        try {
+          await conformanceCase.run();
+          results.add(LiveD1ConformanceCaseResult(id: id, passed: true));
+        } catch (error) {
+          results.add(
+            LiveD1ConformanceCaseResult(
+              id: id,
+              passed: false,
+              error: _safeError(error),
+            ),
+          );
+        }
+      }
+
       final apiKeySuite = AuthApiKeyStoreConformanceSuite(({
         int maxRecords = 10000,
       }) async {
@@ -542,6 +576,16 @@ final class _LiveD1ApiKeyFaultController
 
   @override
   void failNext(AuthApiKeyStoreConformanceFaultPoint point) {
+    throw StateError('Live D1 rollback fault injection is not configured.');
+  }
+}
+
+final class _LiveD1PhoneFaultController
+    implements AuthPhoneNumberBackendConformanceFaultController {
+  const _LiveD1PhoneFaultController();
+
+  @override
+  void failNext(AuthPhoneNumberBackendConformanceFaultPoint point) {
     throw StateError('Live D1 rollback fault injection is not configured.');
   }
 }

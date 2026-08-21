@@ -106,9 +106,10 @@ The work is intentionally split between framework-agnostic capabilities in
   then fails closed. D1 now owns the exact API-key store through migration v9
   and bounded WebAuthn challenges, passkeys, counter updates, primary-method
   removal, and hard-deletion cleanup through migration v10. Backend-bound D1
-  phone and future plugin stores remain. Passwordless unlinking requires a
-  recent original authentication or explicit step-up proof rather than merely
-  an active session.
+  phone persistence now exists through migration v11, but phone-aware unlink
+  and primary-method removal remain. Future plugin stores remain. Passwordless
+  unlinking requires a recent original authentication or explicit step-up proof
+  rather than merely an active session.
 - [x] Add a first-class server-session management API: list current sessions
   with device metadata, revoke one session, revoke all other sessions, and
   rotate credentials after sensitive changes. JWT session management remains a
@@ -189,13 +190,17 @@ The work is intentionally split between framework-agnostic capabilities in
   code/token exchange, managed SCIM connections, username mutations, the typed
   anonymous create/delete/upgrade contract, bounded digest-only API keys
   through append-only migration version 9, and bounded digest-only WebAuthn
-  challenges plus passkeys through version 10. A disposable live-D1 run passed
+  challenges plus passkeys through version 10. It now also owns bounded
+  digest-only phone issuance, verification, identity binding, projection, hard
+  deletion, and authentication-method inventory through migration version 11.
+  A disposable live-D1 run passed
   all 41 cases enabled through migration v7, including the anonymous cases,
   and its owned database was independently confirmed deleted. The API-key v9
-  and WebAuthn v10 cases are wired into the opt-in harness but have not run
-  against live D1. Broader SQL adapters and D1 phone/future-plugin plans remain
+  WebAuthn v10, and phone v11 cases are wired into the opt-in harness but have
+  not run against live D1. Broader SQL adapters and future-plugin plans remain
   open. D1's authentication-method coordinator accepts its own users,
-  credentials, accounts, email-OTP, exact API-key, and exact passkey stores;
+  credentials, accounts, email-OTP, exact phone, exact API-key, and exact
+  passkey stores;
   external method stores require a future backend-bound plan. Mixed topologies
   remain usable but account unlink fails closed. Removed external plugins are
   not discoverable automatically:
@@ -407,8 +412,9 @@ account, session, client, and plugin contracts above:
   Cloudflare database. On 2026-08-20, all 41 cases enabled through anonymous
   migration v7 passed against a disposable remote D1 database. The ownership
   guard deleted the database, and a separate account listing confirmed that no
-  disposable `routed-auth-conformance` database remained. The API-key migration
-  v9 cases are wired into the opt-in harness but have not been run live.
+  disposable `routed-auth-conformance` database remained. The API-key v9,
+  WebAuthn v10, and phone v11 non-fault cases are wired into the opt-in
+  harness but have not been run live.
 - [x] Keep the current auth packages, host adapter integrations, and public
   conformance suites analyzer-clean and passing on `master`.
 

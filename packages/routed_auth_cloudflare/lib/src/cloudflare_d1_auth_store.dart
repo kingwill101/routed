@@ -18,6 +18,7 @@ final class CloudflareD1AuthStore
         AuthAnonymousAccountMutationStore,
         AuthMagicLinkBackend,
         AuthEmailOtpBackend,
+        AuthPhoneNumberBackend,
         AuthWebAuthnStoreCapabilities,
         AuthWebAuthnUserDeletionPlanFactory,
         AuthUserDeletionCoordinatorHost,
@@ -32,6 +33,7 @@ final class CloudflareD1AuthStore
     this.apiKeyMaxRecords = 10000,
     this.webAuthnChallengeMaxRecords = 10000,
     this.webAuthnAuthenticatorMaxRecords = 10000,
+    this.phoneNumberMaxVerifications = 2048,
     DateTime Function()? clock,
   }) : _database = database,
        _clock = clock ?? DateTime.now {
@@ -70,6 +72,13 @@ final class CloudflareD1AuthStore
         'must be positive',
       );
     }
+    if (phoneNumberMaxVerifications <= 0) {
+      throw ArgumentError.value(
+        phoneNumberMaxVerifications,
+        'phoneNumberMaxVerifications',
+        'must be positive',
+      );
+    }
     final sql = _D1(database);
     _sql = sql;
     users = _D1Users(sql, schema);
@@ -83,6 +92,12 @@ final class CloudflareD1AuthStore
     emailChangeTokens = _D1EmailChangeTokens(sql, schema, _clock);
     deviceAuthorizations = _D1DeviceAuthorizations(sql, schema, _clock);
     emailOtps = _D1EmailOtps(sql, schema, _clock);
+    phoneNumbers = CloudflareD1PhoneNumberStore._(
+      sql,
+      schema,
+      _clock,
+      phoneNumberMaxVerifications,
+    );
     final deletionCoordinator = CloudflareD1UserDeletionCoordinator._(
       database: database,
       sql: sql,
@@ -154,6 +169,7 @@ final class CloudflareD1AuthStore
     int apiKeyMaxRecords = 10000,
     int webAuthnChallengeMaxRecords = 10000,
     int webAuthnAuthenticatorMaxRecords = 10000,
+    int phoneNumberMaxVerifications = 2048,
     DateTime Function()? clock,
   }) async {
     await schema.migrate(database);
@@ -166,6 +182,7 @@ final class CloudflareD1AuthStore
       apiKeyMaxRecords: apiKeyMaxRecords,
       webAuthnChallengeMaxRecords: webAuthnChallengeMaxRecords,
       webAuthnAuthenticatorMaxRecords: webAuthnAuthenticatorMaxRecords,
+      phoneNumberMaxVerifications: phoneNumberMaxVerifications,
       clock: clock,
     );
   }
@@ -180,6 +197,7 @@ final class CloudflareD1AuthStore
   final int apiKeyMaxRecords;
   final int webAuthnChallengeMaxRecords;
   final int webAuthnAuthenticatorMaxRecords;
+  final int phoneNumberMaxVerifications;
   late final CloudflareD1UserDeletionCoordinator _deletionCoordinator;
   bool _authenticationMethodTopologyBound = false;
   bool _authenticationMethodInventoryAuthoritative = false;
@@ -223,6 +241,8 @@ final class CloudflareD1AuthStore
           ? const {AuthAuthenticationMethodKind.oauthProvider}
           : identical(binding.authenticationMethodStore, emailOtps)
           ? const {AuthAuthenticationMethodKind.emailOtp}
+          : identical(binding.authenticationMethodStore, phoneNumbers)
+          ? const {AuthAuthenticationMethodKind.phone}
           : identical(binding.authenticationMethodStore, apiKeys)
           ? const {AuthAuthenticationMethodKind.apiKey}
           : identical(binding.authenticationMethodStore, webAuthnAuthenticators)
@@ -1134,6 +1154,9 @@ final class CloudflareD1AuthStore
   @override
   late final AuthEmailOtpStore emailOtps;
 
+  /// Digest-only, bounded phone verification persistence in this D1 domain.
+  late final CloudflareD1PhoneNumberStore phoneNumbers;
+
   /// Prefix-isolated D1 OAuth provider client registry.
   late final CloudflareD1OAuthClientStore oauthClientStore;
 
@@ -1152,6 +1175,26 @@ final class CloudflareD1AuthStore
   late final CloudflareD1ScimConnectionStore scimConnectionStore;
   @override
   AuthEmailOtpStore get emailOtpStore => emailOtps;
+
+  @override
+  Future<AuthPhoneNumberIssueResult> issuePhoneNumberCode(
+    AuthPhoneNumberIssueCodeCommand command,
+  ) => phoneNumbers.issuePhoneNumberCode(command);
+
+  @override
+  Future<AuthPhoneNumberVerifyResult> verifyPhoneNumberCode(
+    AuthPhoneNumberVerifyCodeCommand command,
+  ) => phoneNumbers.verifyPhoneNumberCode(command);
+
+  @override
+  Future<AuthPhoneNumberIdentity?> findPhoneNumberIdentity(
+    String phoneNumber,
+  ) => phoneNumbers.findPhoneNumberIdentity(phoneNumber);
+
+  @override
+  Future<AuthPhoneNumberIdentity?> findPhoneNumberIdentityForUser(
+    String userId,
+  ) => phoneNumbers.findPhoneNumberIdentityForUser(userId);
 
   @override
   Future<void> issueMagicLink(AuthMagicLinkIssueCommand command) async {
@@ -1729,6 +1772,24 @@ final class CloudflareD1UserDeletionCoordinator
           .prepare('DELETE FROM ${entry.$1} WHERE ${entry.$2} = ? AND $guard')
           .bind([id, ...guardValues]);
     }
+    final phoneIdentities = schema.table('phone_identities');
+    final phoneVerifications = schema.table('phone_verifications');
+    final phoneReceipts = schema.table('phone_issue_receipts');
+    yield _sql.database
+        .prepare('''DELETE FROM $phoneVerifications
+             WHERE phone_number IN (
+               SELECT phone_number FROM $phoneIdentities WHERE user_id = ?
+             ) AND $guard''')
+        .bind([id, ...guardValues]);
+    yield _sql.database
+        .prepare('''DELETE FROM $phoneReceipts
+             WHERE phone_number IN (
+               SELECT phone_number FROM $phoneIdentities WHERE user_id = ?
+             ) AND $guard''')
+        .bind([id, ...guardValues]);
+    yield _sql.database
+        .prepare('DELETE FROM $phoneIdentities WHERE user_id = ? AND $guard')
+        .bind([id, ...guardValues]);
     final verification = schema.table('verification_tokens');
     yield _sql.database
         .prepare('DELETE FROM $verification WHERE identifier = ? AND $guard')
@@ -4902,6 +4963,383 @@ final class _D1DeviceAuthorizations
   }
 }
 
+/// Durable, digest-only phone authentication commands owned by the D1 domain.
+final class CloudflareD1PhoneNumberStore implements AuthPhoneNumberBackend {
+  CloudflareD1PhoneNumberStore._(
+    this._sql,
+    this.schema,
+    this.clock,
+    this.maxVerifications,
+  );
+
+  final _D1 _sql;
+  final CloudflareD1AuthSchema schema;
+  final DateTime Function() clock;
+  final int maxVerifications;
+
+  String get _verifications => schema.table('phone_verifications');
+  String get _identities => schema.table('phone_identities');
+  String get _receipts => schema.table('phone_issue_receipts');
+  String get _users => schema.table('users');
+  String get _deletionReceipts => schema.table('deletion_receipts');
+
+  @override
+  Future<AuthPhoneNumberIssueResult> issuePhoneNumberCode(
+    AuthPhoneNumberIssueCodeCommand command,
+  ) async {
+    final sql = _sql;
+    final verification = command.verification;
+    final idHash = hashOpaqueToken(verification.id);
+    final fingerprint = hashOpaqueToken(
+      jsonEncode(verification.toStorageJson()),
+    );
+    final claimNonce = secureRandomToken(length: 24);
+    final now = clock().toUtc();
+    final results = await sql.batch([
+      sql.database
+          .prepare('DELETE FROM $_verifications WHERE expires_at <= ?')
+          .bind([_date(now)]),
+      sql.database
+          .prepare('''DELETE FROM $_verifications
+               WHERE id_hash IN (
+                 SELECT id_hash FROM $_verifications
+                 ORDER BY created_at DESC, id_hash DESC
+                 LIMIT -1 OFFSET ?
+               )''')
+          .bind([maxVerifications]),
+      sql.database
+          .prepare('''DELETE FROM $_receipts
+               WHERE operation_id_hash IN (
+                 SELECT operation_id_hash FROM $_receipts
+                 ORDER BY created_at DESC, operation_id_hash DESC
+                 LIMIT -1 OFFSET ?
+               )''')
+          .bind([maxVerifications * 2]),
+      sql.database
+          .prepare('''INSERT OR IGNORE INTO $_receipts
+               (operation_id_hash, fingerprint_hash, phone_number,
+                claim_nonce, created_at)
+               VALUES (?, ?, ?, ?, ?)''')
+          .bind([
+            idHash,
+            fingerprint,
+            verification.phoneNumber,
+            claimNonce,
+            _date(verification.createdAt),
+          ]),
+      sql.database
+          .prepare('''INSERT INTO $_verifications
+               (id_hash, phone_number, code_digest, created_at, expires_at,
+                max_attempts, attempts, locked_at, consumed_at,
+                verification_marker)
+               SELECT ?, ?, ?, ?, ?, ?, 0, NULL, NULL, NULL
+               WHERE EXISTS (
+                 SELECT 1 FROM $_receipts
+                 WHERE operation_id_hash = ? AND fingerprint_hash = ?
+                   AND claim_nonce = ?
+               )
+               ON CONFLICT(phone_number) DO UPDATE SET
+                 id_hash = excluded.id_hash,
+                 code_digest = excluded.code_digest,
+                 created_at = excluded.created_at,
+                 expires_at = excluded.expires_at,
+                 max_attempts = excluded.max_attempts,
+                 attempts = excluded.attempts,
+                 locked_at = NULL,
+                 consumed_at = NULL,
+                 verification_marker = NULL''')
+          .bind([
+            idHash,
+            verification.phoneNumber,
+            verification.codeDigest,
+            _date(verification.createdAt),
+            _date(verification.expiresAt),
+            verification.maxAttempts,
+            idHash,
+            fingerprint,
+            claimNonce,
+          ]),
+      sql.database
+          .prepare('''DELETE FROM $_verifications
+               WHERE id_hash IN (
+                 SELECT id_hash FROM $_verifications
+                 ORDER BY created_at DESC, id_hash DESC
+                 LIMIT -1 OFFSET ?
+               )''')
+          .bind([maxVerifications]),
+    ]);
+    if ((results[3].meta?.changes ?? 0) == 1) {
+      if ((results[4].meta?.changes ?? 0) != 1) {
+        throw StateError('D1 phone challenge was not installed.');
+      }
+      return AuthPhoneNumberIssueResult(
+        AuthPhoneNumberIssueStatus.issued,
+        verification: verification,
+      );
+    }
+
+    final receipt = await sql.first(
+      'SELECT fingerprint_hash, phone_number FROM $_receipts '
+      'WHERE operation_id_hash = ?',
+      [idHash],
+      (row) => (
+        row['fingerprint_hash']?.toString() ?? '',
+        row['phone_number']?.toString() ?? '',
+      ),
+    );
+    if (receipt == null ||
+        !constantTimeStringEquals(receipt.$1, fingerprint) ||
+        receipt.$2 != verification.phoneNumber) {
+      return const AuthPhoneNumberIssueResult(
+        AuthPhoneNumberIssueStatus.replayMismatch,
+      );
+    }
+    final active = await sql.first(
+      'SELECT id_hash FROM $_verifications '
+      'WHERE phone_number = ? AND id_hash = ? AND consumed_at IS NULL',
+      [verification.phoneNumber, idHash],
+      (row) => row['id_hash']?.toString(),
+    );
+    return active == null
+        ? const AuthPhoneNumberIssueResult(
+            AuthPhoneNumberIssueStatus.replayMismatch,
+          )
+        : AuthPhoneNumberIssueResult(
+            AuthPhoneNumberIssueStatus.replayed,
+            verification: verification,
+          );
+  }
+
+  @override
+  Future<AuthPhoneNumberVerifyResult> verifyPhoneNumberCode(
+    AuthPhoneNumberVerifyCodeCommand command,
+  ) async {
+    final sql = _sql;
+    final marker = secureRandomToken(length: 24);
+    final now = command.now.toUtc();
+    final candidate = command.candidateUser;
+    final projectedCandidate = candidate == null
+        ? null
+        : _phoneVerifiedUser(candidate, command.phoneNumber);
+    final candidateEmail = candidate == null
+        ? null
+        : _nullableEmail(candidate.email);
+    final results = await sql.batchRows([
+      sql.database
+          .prepare('SELECT * FROM $_verifications WHERE phone_number = ?')
+          .bind([command.phoneNumber]),
+      sql.database
+          .prepare('''UPDATE $_verifications SET
+               attempts = attempts + 1,
+               locked_at = CASE
+                 WHEN code_digest = ? THEN locked_at
+                 WHEN attempts + 1 >= max_attempts THEN ?
+                 ELSE locked_at
+               END,
+               consumed_at = CASE
+                 WHEN code_digest = ? THEN ?
+                 ELSE consumed_at
+               END,
+               verification_marker = CASE
+                 WHEN code_digest = ? THEN ?
+                 ELSE NULL
+               END
+             WHERE phone_number = ? AND expires_at > ?
+               AND consumed_at IS NULL AND locked_at IS NULL
+               AND attempts < max_attempts''')
+          .bind([
+            command.codeDigest,
+            _date(now),
+            command.codeDigest,
+            _date(now),
+            command.codeDigest,
+            marker,
+            command.phoneNumber,
+            _date(now),
+          ]),
+      if (projectedCandidate == null)
+        sql.database.prepare('SELECT 1').bind([])
+      else
+        sql.database
+            .prepare('''INSERT INTO $_users (id, email, payload)
+                 SELECT ?, ?, ?
+                 WHERE EXISTS (
+                   SELECT 1 FROM $_verifications
+                   WHERE phone_number = ? AND verification_marker = ?
+                 )
+                   AND NOT EXISTS (
+                     SELECT 1 FROM $_identities WHERE phone_number = ?
+                   )
+                   AND NOT EXISTS (SELECT 1 FROM $_users WHERE id = ?)
+                   AND (? IS NULL OR NOT EXISTS (
+                     SELECT 1 FROM $_users WHERE email = ?
+                   ))
+                   AND NOT EXISTS (
+                     SELECT 1 FROM $_deletionReceipts WHERE user_id_hash = ?
+                   )''')
+            .bind([
+              projectedCandidate.id,
+              candidateEmail,
+              _encodeUser(projectedCandidate),
+              command.phoneNumber,
+              marker,
+              command.phoneNumber,
+              projectedCandidate.id,
+              candidateEmail,
+              candidateEmail,
+              hashOpaqueToken(projectedCandidate.id),
+            ]),
+      sql.database
+          .prepare('''INSERT INTO $_identities
+               (phone_number, user_id, created_at, verified_at)
+               SELECT ?, ?, ?, ?
+               WHERE EXISTS (
+                 SELECT 1 FROM $_verifications
+                 WHERE phone_number = ? AND verification_marker = ?
+               )
+                 AND NOT EXISTS (
+                   SELECT 1 FROM $_identities WHERE phone_number = ?
+                 )
+                 AND NOT EXISTS (
+                   SELECT 1 FROM $_identities WHERE user_id = ?
+                 )
+                 AND EXISTS (SELECT 1 FROM $_users WHERE id = ?)''')
+          .bind([
+            command.phoneNumber,
+            projectedCandidate?.id,
+            _date(now),
+            _date(now),
+            command.phoneNumber,
+            marker,
+            command.phoneNumber,
+            projectedCandidate?.id,
+            projectedCandidate?.id,
+          ]),
+      sql.database
+          .prepare('''UPDATE $_users SET payload = json_set(
+               payload,
+               '\$.attributes.phoneNumber', ?,
+               '\$.attributes.phoneNumberVerified', json('true')
+             )
+             WHERE id = (
+               SELECT user_id FROM $_identities
+               WHERE phone_number = ?
+             )
+               AND ${_usableUserSql('payload')}
+               AND EXISTS (
+                 SELECT 1 FROM $_verifications
+                 WHERE phone_number = ? AND verification_marker = ?
+               )''')
+          .bind([
+            command.phoneNumber,
+            command.phoneNumber,
+            command.phoneNumber,
+            marker,
+          ]),
+      sql.database
+          .prepare('SELECT * FROM $_verifications WHERE phone_number = ?')
+          .bind([command.phoneNumber]),
+      sql.database
+          .prepare('SELECT * FROM $_identities WHERE phone_number = ?')
+          .bind([command.phoneNumber]),
+      sql.database
+          .prepare('''SELECT u.payload FROM $_users u
+             WHERE u.id = (
+               SELECT user_id FROM $_identities WHERE phone_number = ?
+             )''')
+          .bind([command.phoneNumber]),
+    ]);
+
+    final after = results[5].results.firstOrNull;
+    final verification = after == null ? null : _decodePhoneVerification(after);
+    if (verification == null) {
+      return const AuthPhoneNumberVerifyResult(
+        AuthPhoneNumberVerifyStatus.invalid,
+      );
+    }
+    final markerMatched = after!['verification_marker']?.toString() == marker;
+    if (verification.isExpired(now: now)) {
+      return AuthPhoneNumberVerifyResult(
+        AuthPhoneNumberVerifyStatus.expired,
+        verification: verification,
+      );
+    }
+    if (!markerMatched && verification.isConsumed) {
+      return AuthPhoneNumberVerifyResult(
+        AuthPhoneNumberVerifyStatus.invalid,
+        verification: verification,
+      );
+    }
+    if (!markerMatched && verification.isLocked) {
+      return AuthPhoneNumberVerifyResult(
+        AuthPhoneNumberVerifyStatus.tooManyAttempts,
+        verification: verification,
+      );
+    }
+    if (!markerMatched) {
+      return AuthPhoneNumberVerifyResult(
+        verification.attempts >= verification.maxAttempts
+            ? AuthPhoneNumberVerifyStatus.tooManyAttempts
+            : AuthPhoneNumberVerifyStatus.invalid,
+        verification: verification,
+      );
+    }
+
+    final identityRow = results[6].results.firstOrNull;
+    final identity = identityRow == null
+        ? null
+        : _decodePhoneIdentity(identityRow);
+    if (identity == null) {
+      return AuthPhoneNumberVerifyResult(
+        candidate == null
+            ? AuthPhoneNumberVerifyStatus.userNotFound
+            : AuthPhoneNumberVerifyStatus.conflict,
+        verification: verification,
+      );
+    }
+    final userRow = results[7].results.firstOrNull;
+    final user = userRow == null ? null : _decodeUser(userRow);
+    if (user == null) {
+      return AuthPhoneNumberVerifyResult(
+        AuthPhoneNumberVerifyStatus.userNotFound,
+        verification: verification,
+        identity: identity,
+      );
+    }
+    if (authUserIsDisabled(user)) {
+      return AuthPhoneNumberVerifyResult(
+        AuthPhoneNumberVerifyStatus.userUnavailable,
+        verification: verification,
+        identity: identity,
+      );
+    }
+    return AuthPhoneNumberVerifyResult(
+      AuthPhoneNumberVerifyStatus.verified,
+      verification: verification,
+      identity: identity,
+      user: user,
+    );
+  }
+
+  @override
+  Future<AuthPhoneNumberIdentity?> findPhoneNumberIdentity(String phoneNumber) {
+    final sql = _sql;
+    return sql.first('SELECT * FROM $_identities WHERE phone_number = ?', [
+      validateAuthCanonicalPhoneNumber(phoneNumber),
+    ], _decodePhoneIdentity);
+  }
+
+  @override
+  Future<AuthPhoneNumberIdentity?> findPhoneNumberIdentityForUser(
+    String userId,
+  ) {
+    final sql = _sql;
+    return sql.first('SELECT * FROM $_identities WHERE user_id = ?', [
+      userId.trim(),
+    ], _decodePhoneIdentity);
+  }
+}
+
 final class _D1EmailOtps
     implements AuthEmailOtpStore, AuthUserDeletionPlanFactory {
   _D1EmailOtps(this.sql, this.schema, this.clock);
@@ -5841,5 +6279,47 @@ AuthEmailOtp _decodeEmailOtp(Map<String, Object?> row) {
     maxAttempts: (value['max_attempts'] as num).toInt(),
     attempts: (value['attempts'] as num).toInt(),
     consumed: value['consumed'] == true,
+  );
+}
+
+AuthPhoneNumberIdentity _decodePhoneIdentity(Map<String, Object?> row) =>
+    AuthPhoneNumberIdentity(
+      phoneNumber: row['phone_number']! as String,
+      userId: row['user_id']! as String,
+      createdAt: DateTime.parse(row['created_at']! as String),
+      verifiedAt: DateTime.parse(row['verified_at']! as String),
+    );
+
+AuthPhoneNumberVerification _decodePhoneVerification(
+  Map<String, Object?> row,
+) => AuthPhoneNumberVerification(
+  id: row['id_hash']! as String,
+  phoneNumber: row['phone_number']! as String,
+  codeDigest: row['code_digest']! as String,
+  createdAt: DateTime.parse(row['created_at']! as String),
+  expiresAt: DateTime.parse(row['expires_at']! as String),
+  maxAttempts: (row['max_attempts'] as num).toInt(),
+  attempts: (row['attempts'] as num).toInt(),
+  lockedAt: _optionalDate(row['locked_at']),
+  consumedAt: _optionalDate(row['consumed_at']),
+);
+
+AuthUser _phoneVerifiedUser(AuthUser user, String phoneNumber) {
+  if (user.attributes['phoneNumber'] == phoneNumber &&
+      user.attributes['phoneNumberVerified'] == true) {
+    return user;
+  }
+  return AuthUser(
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    image: user.image,
+    roles: user.roles,
+    isAnonymous: user.isAnonymous,
+    attributes: <String, dynamic>{
+      ...user.attributes,
+      'phoneNumber': phoneNumber,
+      'phoneNumberVerified': true,
+    },
   );
 }
