@@ -13,7 +13,7 @@ without loading another document.
 
 - **Package:** `routed_hotwire`
 - **Directory:** `packages/routed_hotwire`
-- **Version in this checkout:** `0.1.4`
+- **Version in this checkout:** `0.1.6`
 - **Role:** Turbo and Stimulus response helpers
 - **Purpose:** Turbo and Stimulus helpers for server-rendered interactive applications. It adds response/request interpretation, Turbo Streams, websocket stream hubs, and context extensions without registering a provider.
 

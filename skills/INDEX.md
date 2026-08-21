@@ -22,7 +22,7 @@ node tool/generate_routed_skills.mjs --check
 | [`routed_cache`](./routed_cache/SKILL.md) | `routed-cache` | `0.2.0` | [package](../packages/routed_cache) |
 | [`routed_cli`](./routed_cli/SKILL.md) | `routed-cli` | `0.3.0` | [package](../packages/routed_cli) |
 | [`routed_core`](./routed_core/SKILL.md) | `routed-core` | `0.5.0` | [package](../packages/routed_core) |
-| [`routed_hotwire`](./routed_hotwire/SKILL.md) | `routed-hotwire` | `0.1.4` | [package](../packages/routed_hotwire) |
+| [`routed_hotwire`](./routed_hotwire/SKILL.md) | `routed-hotwire` | `0.1.6` | [package](../packages/routed_hotwire) |
 | [`routed_http`](./routed_http/SKILL.md) | `routed-http` | `0.1.0` | [package](../packages/routed_http) |
 | [`routed_io`](./routed_io/SKILL.md) | `routed-io` | `0.1.0` | [package](../packages/routed_io) |
 | [`routed_logging`](./routed_logging/SKILL.md) | `routed-logging` | `0.2.0` | [package](../packages/routed_logging) |
