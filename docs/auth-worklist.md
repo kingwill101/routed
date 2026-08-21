@@ -96,11 +96,11 @@ The work is intentionally split between framework-agnostic capabilities in
 - [x] Add an authenticated password-change flow with reauthentication,
   server-session revocation, trusted-device revocation, and JWT version
   rotation.
-- [ ] Protect linked-account and removable plugin credentials with a typed,
-  de-duplicated inventory across password, exact OAuth provider accounts,
+- [x] Protect built-in linked-account and removable plugin credentials with a
+  typed, de-duplicated inventory across password, exact OAuth provider accounts,
   passkeys, phone, email OTP/link, username, opt-in primary API keys, and
-  future plugin methods. In-memory removals serialize inventory and mutation
-  atomically per user. D1 binds only its authoritative core method stores,
+  typed future-plugin extension points. In-memory removals serialize inventory
+  and mutation atomically per user. D1 binds only its authoritative core method stores,
   atomically rechecks the exact OAuth target and fallback in SQL, and records
   mixed external-store topologies without blocking plugin composition; unlink
   then fails closed. D1 now owns the exact API-key store through migration v9
@@ -110,8 +110,9 @@ The work is intentionally split between framework-agnostic capabilities in
   phone-aware unlink and primary-method removal with verified projection and
   challenge cleanup. Routed now enforces endpoint-declared recent-auth or
   step-up proof for phone, username, passkey, and API-key removal mutations;
-  the phone plugin also exposes a typed removal route/client operation.
-  Future plugin stores and their adapter-specific removal routes remain.
+  the phone plugin also exposes a typed removal route/client operation. Shared
+  contributor interfaces and historical namespace guards cover future plugin
+  topology; external plugin requirements remain tracked below.
 - [x] Add a first-class server-session management API: list current sessions
   with device metadata, revoke one session, revoke all other sessions, and
   rotate credentials after sensitive changes. JWT session management remains a
@@ -185,8 +186,9 @@ The work is intentionally split between framework-agnostic capabilities in
 
 ## P2: Dart developer experience and platform integration
 
-- [ ] Complete typed persistence adapters for the supported Routed storage
-  paths. `routed_auth_cloudflare` now supplies a typed, migrated D1 `AuthStore`
+- [x] Complete the typed persistence adapter for the currently supported
+  Cloudflare Routed storage path. `routed_auth_cloudflare` now supplies a
+  typed, migrated D1 `AuthStore`
   and a backend-owned deletion coordinator that pass local conformance,
   rollback, contention, and fault tests. It now owns OAuth provider-mode
   code/token exchange, managed SCIM connections, username mutations, the typed
@@ -198,8 +200,7 @@ The work is intentionally split between framework-agnostic capabilities in
   A disposable live-D1 run on 2026-08-21 passed the core, anonymous, phone v11,
   API-key v9, WebAuthn v10, username, OAuth exchange, rollback, and prefix
   isolation cases, and its owned database was independently confirmed deleted.
-  Broader SQL adapters and future-plugin plans remain open. D1's
-  authentication-method coordinator accepts its own users,
+  D1's authentication-method coordinator accepts its own users,
   credentials, accounts, email-OTP, exact phone, exact API-key, and exact
   passkey stores;
   external method stores require a future backend-bound plan. Mixed topologies
@@ -212,6 +213,12 @@ The work is intentionally split between framework-agnostic capabilities in
   now applies the same guard to hard deletion through the optional coordinator
   capability. Future durable adapters still need backend-owned cleanup or an
   equivalent historical inventory capability.
+- [ ] Add additional durable adapters for future Routed storage paths, such as
+  a Dart IO SQL adapter, with the same typed conformance, transaction, and
+  historical-namespace guarantees.
+- [ ] Require external future plugins that own authentication methods or
+  user-data namespaces to publish their typed inventory and deletion
+  contributors, plus adapter-specific removal routes, before production use.
 - [x] Define a stable public adapter conformance suite that can run against
   every persistence implementation through `package:server_auth/testing.dart`.
 - [x] Add a small, typed Dart client contract for browser/mobile auth calls
