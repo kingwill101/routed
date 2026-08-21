@@ -53,6 +53,8 @@ class AuthRuntime<TContext> {
             )
             .whereType<AuthAuthenticationMethodInventoryContributor>(),
       ],
+      historicalAuthenticationMethodNamespaces:
+          options.historicalAuthenticationMethodNamespaces,
     );
     registry = AuthServerPluginRegistry<TContext>(
       store: this.store,

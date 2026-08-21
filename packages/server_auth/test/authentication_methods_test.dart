@@ -304,6 +304,44 @@ void main() {
     expect(mutated, isFalse);
   });
 
+  test('historical future-plugin namespaces fail closed', () async {
+    final runtime = AuthRuntime<Object>(
+      options: AuthOptions<Object>(
+        providers: const <AuthProvider>[],
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
+        historicalAuthenticationMethodNamespaces: const ['legacy_device'],
+      ),
+    );
+    expect(
+      (await runtime.authenticationMethods.snapshotForUser(
+        'user-1',
+      )).isComplete,
+      isFalse,
+    );
+
+    final service = AuthAuthenticationMethodService(
+      store: InMemoryAuthStore(),
+      historicalAuthenticationMethodNamespaces: const ['legacy_device'],
+    )..composeContributors(const []);
+    var mutated = false;
+
+    final result = await service.removeIfSafe(
+      userId: 'user-1',
+      target: AuthAuthenticationMethod.plugin(
+        namespace: 'legacy_device',
+        id: 'credential-1',
+      ),
+      mutate: () {
+        mutated = true;
+        return true;
+      },
+    );
+
+    expect(result, AuthAuthenticationMethodMutationResult.atomicityUnavailable);
+    expect(mutated, isFalse);
+  });
+
   test('concurrent cross-store removals preserve exactly one method', () async {
     await _verifyConcurrentRemoval(<int>[0, 1, 2]);
   });

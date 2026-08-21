@@ -35,6 +35,7 @@ class AuthOptions<TContext> {
     AuthRuntimeMode? runtimeMode,
     this.productionBoundary,
     this.plugins = const [],
+    Iterable<String> historicalAuthenticationMethodNamespaces = const [],
     this.sessionStrategy = AuthSessionStrategy.session,
     this.rateLimiter,
     AuthBrowserProtectionOptions? browserProtection,
@@ -79,6 +80,10 @@ class AuthOptions<TContext> {
        accountPolicy =
            accountPolicy ?? _defaultAccountPolicy(storeMode, runtimeMode),
        providers = List<AuthProvider>.unmodifiable(providers),
+       historicalAuthenticationMethodNamespaces =
+           _normalizeHistoricalAuthenticationMethodNamespaces(
+             historicalAuthenticationMethodNamespaces,
+           ),
        passwordHasher = passwordHasher ?? Argon2idPasswordHasher(),
        callbacks = callbacks ?? AuthCallbacks<TContext>() {
     validateAuthProviderConfiguration(this.providers);
@@ -136,6 +141,11 @@ class AuthOptions<TContext> {
 
   /// Typed plugin modules composed into the auth runtime.
   final List<AuthServerPlugin<TContext>> plugins;
+
+  /// Namespaces from previously deployed authentication plugins whose stores
+  /// are not currently composed. Missing contributors make destructive
+  /// authentication-method mutations fail closed.
+  final List<String> historicalAuthenticationMethodNamespaces;
 
   /// Typed persistence boundary used by every auth flow.
   final AuthStore store;
@@ -340,6 +350,7 @@ class AuthOptions<TContext> {
     AuthRuntimeMode? runtimeMode,
     AuthProductionBoundary? productionBoundary,
     List<AuthServerPlugin<TContext>>? plugins,
+    Iterable<String>? historicalAuthenticationMethodNamespaces,
     AuthSessionStrategy? sessionStrategy,
     AuthRateLimiter<TContext>? rateLimiter,
     AuthBrowserProtectionOptions? browserProtection,
@@ -378,6 +389,9 @@ class AuthOptions<TContext> {
       runtimeMode: runtimeMode ?? this.runtimeMode,
       productionBoundary: productionBoundary ?? this.productionBoundary,
       plugins: plugins ?? this.plugins,
+      historicalAuthenticationMethodNamespaces:
+          historicalAuthenticationMethodNamespaces ??
+          this.historicalAuthenticationMethodNamespaces,
       sessionStrategy: sessionStrategy ?? this.sessionStrategy,
       rateLimiter: rateLimiter ?? this.rateLimiter,
       browserProtection: browserProtection ?? this.browserProtection,
@@ -419,6 +433,27 @@ AuthRuntimeMode _defaultRuntimeMode(AuthStoreMode storeMode) =>
     storeMode == AuthStoreMode.ephemeral
     ? AuthRuntimeMode.localDevelopment
     : AuthRuntimeMode.production;
+
+List<String> _normalizeHistoricalAuthenticationMethodNamespaces(
+  Iterable<String> values,
+) {
+  final namespaces = <String>{};
+  for (final value in values) {
+    final normalized = value.trim();
+    if (value.isEmpty ||
+        value != normalized ||
+        value.length > 64 ||
+        value.contains(RegExp(r'[\u0000-\u001f\u007f]')) ||
+        !namespaces.add(value)) {
+      throw ArgumentError.value(
+        values,
+        'historicalAuthenticationMethodNamespaces',
+        'must contain unique, bounded, safe namespace values',
+      );
+    }
+  }
+  return List<String>.unmodifiable(namespaces);
+}
 
 AuthRuntimeMode _resolvedRuntimeMode(
   AuthStoreMode storeMode,

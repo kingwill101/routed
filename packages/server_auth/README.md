@@ -253,6 +253,12 @@ Durable adapters should run both `AuthStoreConformanceSuite` and
 `verifyAuthEmailBackendConformance` from `package:server_auth/testing.dart`,
 plus adapter-native fault injection at every transaction statement.
 
+When an authentication plugin is removed from a deployment, retain its
+namespace in `AuthOptions.historicalAuthenticationMethodNamespaces` until
+the adapter has a backend-owned cleanup path. The runtime then marks the
+inventory incomplete and fails destructive authentication-method mutations
+closed instead of treating the removed plugin's credentials as absent.
+
 ## Typed Dart client
 
 `AuthClient` owns the shared transport and installs only the optional client

@@ -206,8 +206,10 @@ The work is intentionally split between framework-agnostic capabilities in
   remain usable but account unlink fails closed. D1 now accepts the typed
   `historicalAuthenticationMethodNamespaces` inventory and rejects destructive
   method removal when a previously deployed namespace is absent from active
-  authoritative contributors. Future durable adapters need an equivalent
-  historical inventory or backend-owned cleanup plan.
+  authoritative contributors. Shared `AuthOptions` now carries the same
+  historical inventory into the in-memory coordinator, so missing future
+  contributors fail closed there too. Future durable adapters still need
+  backend-owned cleanup or an equivalent historical inventory.
 - [x] Define a stable public adapter conformance suite that can run against
   every persistence implementation through `package:server_auth/testing.dart`.
 - [x] Add a small, typed Dart client contract for browser/mobile auth calls

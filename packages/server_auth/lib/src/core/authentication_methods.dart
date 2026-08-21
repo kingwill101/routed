@@ -264,6 +264,7 @@ final class AuthAuthenticationMethodService {
     required Object store,
     Iterable<AuthAuthenticationMethodInventoryContributor> contributors =
         const <AuthAuthenticationMethodInventoryContributor>[],
+    Iterable<String> historicalAuthenticationMethodNamespaces = const [],
   }) : _mutationStore = store is AuthAuthenticationMethodMutationStore
            ? store
            : null,
@@ -273,14 +274,20 @@ final class AuthAuthenticationMethodService {
        _topologyStore = store is AuthAuthenticationMethodTopologyStore
            ? store
            : null,
-       _baseContributors = List.unmodifiable(contributors);
+       _baseContributors = List.unmodifiable(contributors),
+       _historicalAuthenticationMethodNamespaces =
+           _normalizeHistoricalAuthenticationMethodNamespaces(
+             historicalAuthenticationMethodNamespaces,
+           );
 
   final AuthAuthenticationMethodMutationStore? _mutationStore;
   final AuthOAuthAccountMutationStore? _oauthAccountMutationStore;
   final AuthAuthenticationMethodTopologyStore? _topologyStore;
   final List<AuthAuthenticationMethodInventoryContributor> _baseContributors;
+  final Set<String> _historicalAuthenticationMethodNamespaces;
   List<AuthAuthenticationMethodInventoryContributor> _contributors = const [];
   bool _composed = false;
+  bool _historicalNamespaceTopologyComplete = true;
 
   /// Finalizes the inventory after plugin topology registration.
   void composeContributors(
@@ -320,6 +327,9 @@ final class AuthAuthenticationMethodService {
         );
       }
     }
+    _historicalNamespaceTopologyComplete = namespaces.containsAll(
+      _historicalAuthenticationMethodNamespaces,
+    );
     _topologyStore?.bindAuthenticationMethodInventory(combined);
     _contributors = List.unmodifiable(combined);
     _composed = true;
@@ -383,7 +393,7 @@ final class AuthAuthenticationMethodService {
 
   Future<AuthAuthenticationMethodSnapshot> _loadInventory(String userId) async {
     final methods = <String, AuthAuthenticationMethod>{};
-    var complete = true;
+    var complete = _historicalNamespaceTopologyComplete;
     for (final contributor in _contributors) {
       AuthAuthenticationMethodSnapshot snapshot;
       try {
@@ -432,6 +442,27 @@ String _component(String value, String name, {required int maxLength}) {
     throw ArgumentError.value(value, name, 'must be a bounded safe value');
   }
   return normalized;
+}
+
+Set<String> _normalizeHistoricalAuthenticationMethodNamespaces(
+  Iterable<String> values,
+) {
+  final namespaces = <String>{};
+  for (final value in values) {
+    final namespace = _component(
+      value,
+      'historicalAuthenticationMethodNamespaces',
+      maxLength: 64,
+    );
+    if (!namespaces.add(namespace)) {
+      throw ArgumentError.value(
+        values,
+        'historicalAuthenticationMethodNamespaces',
+        'must contain unique namespace values',
+      );
+    }
+  }
+  return Set<String>.unmodifiable(namespaces);
 }
 
 String _compoundIdentity(String prefix, List<String> components) =>

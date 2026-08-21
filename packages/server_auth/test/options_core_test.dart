@@ -251,6 +251,29 @@ void main() {
     );
   });
 
+  test('preserves historical authentication namespaces through copyWith', () {
+    final base = AuthOptions<String>(
+      providers: const <AuthProvider>[],
+      store: InMemoryAuthStore(),
+      storeMode: AuthStoreMode.ephemeral,
+      historicalAuthenticationMethodNamespaces: const ['legacy_device'],
+    );
+
+    final updated = base.copyWith();
+
+    expect(base.historicalAuthenticationMethodNamespaces, ['legacy_device']);
+    expect(updated.historicalAuthenticationMethodNamespaces, ['legacy_device']);
+    expect(
+      () => AuthOptions<String>(
+        providers: const <AuthProvider>[],
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
+        historicalAuthenticationMethodNamespaces: const [' legacy_device'],
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('preserves verified-email policy through option merges', () {
     final options = AuthOptions<String>(
       providers: const <AuthProvider>[],
