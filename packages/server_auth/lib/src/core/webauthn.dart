@@ -337,6 +337,14 @@ final class WebAuthnPlugin<TContext>
   String get id => authWebAuthnPluginId;
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract(
+        authenticationMethodNamespace: authWebAuthnPluginId,
+        userDataNamespace: 'webauthn',
+        removalEndpointIds: <String>['webauthn.credentialDelete'],
+      );
+
+  @override
   String get userDataNamespace => 'webauthn';
 
   @override

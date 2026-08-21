@@ -730,6 +730,10 @@ final class _FailingDeletionPlugin
   String get id => 'failing-deletion';
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract(userDataNamespace: 'failing-deletion');
+
+  @override
   String get userDataNamespace => 'failing-deletion';
 
   @override

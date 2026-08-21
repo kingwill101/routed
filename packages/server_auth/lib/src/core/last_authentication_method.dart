@@ -284,6 +284,10 @@ final class AuthLastAuthenticationMethodPlugin<TContext>
   String get id => authLastAuthenticationMethodPluginId;
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
+
+  @override
   void configure(AuthServerPluginContext<TContext> context) {}
 
   @override

@@ -112,6 +112,10 @@ final class CaptchaPlugin<TContext>
   String get id => authCaptchaPluginId;
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
+
+  @override
   void configure(AuthServerPluginContext<TContext> context) {
     _configured = true;
   }

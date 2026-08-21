@@ -37,6 +37,10 @@ final class _RejectAuthenticationPlugin
   String get id => 'test_reject_authentication';
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
+
+  @override
   void configure(AuthServerPluginContext<EngineContext> context) {}
 
   @override

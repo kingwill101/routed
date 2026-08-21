@@ -1091,6 +1091,10 @@ final class _EmptyPlugin implements AuthServerPlugin<Object> {
   String get id => 'empty';
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
+
+  @override
   void configure(AuthServerPluginContext<Object> context) {}
 }
 

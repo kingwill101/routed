@@ -752,6 +752,11 @@ final class _FutureMethodPlugin
   String get id => 'future_method';
 
   @override
+  AuthServerPluginDataContract get dataContract => AuthServerPluginDataContract(
+    authenticationMethodNamespace: authenticationMethodNamespace,
+  );
+
+  @override
   String get authenticationMethodNamespace => method.namespace;
 
   @override

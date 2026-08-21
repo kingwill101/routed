@@ -110,6 +110,10 @@ final class AuthSamlPlugin<TContext>
   String get id => authSamlPluginId;
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
+
+  @override
   void configure(AuthServerPluginContext<TContext> context) {}
 
   @override

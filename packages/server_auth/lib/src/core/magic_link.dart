@@ -97,6 +97,11 @@ final class MagicLinkPlugin<TContext> extends AuthProvider
   String get authenticationMethodNamespace => 'email:$id';
 
   @override
+  AuthServerPluginDataContract get dataContract => AuthServerPluginDataContract(
+    authenticationMethodNamespace: authenticationMethodNamespace,
+  );
+
+  @override
   Object get authenticationMethodStore {
     _ensureConfigured();
     return _users;

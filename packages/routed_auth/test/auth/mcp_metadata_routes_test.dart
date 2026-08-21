@@ -206,6 +206,10 @@ final class _NamespacePlugin
   String get id => 'namespace-test';
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
+
+  @override
   void configure(AuthServerPluginContext<EngineContext> context) {}
 
   @override
@@ -244,6 +248,10 @@ final class _RedirectPlugin
         AuthEndpointContributor<EngineContext> {
   @override
   String get id => 'redirect-test';
+
+  @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
 
   @override
   void configure(AuthServerPluginContext<EngineContext> context) {}

@@ -633,6 +633,10 @@ final class _FixturePlugin
   String get id => 'sample';
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
+
+  @override
   final Iterable<AuthEndpointDescriptor<Object>> endpoints;
 
   @override

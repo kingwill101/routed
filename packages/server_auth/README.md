@@ -143,6 +143,35 @@ Conformance resolves both reference IDs against the frozen plugin topology. A
 multi-step handler must use `nonAtomic` unless its adapter exposes one real
 transactional operation covering the entire advertised mutation.
 
+Every server plugin also publishes its data ownership explicitly. Plugins that
+own a login method or user records must declare the matching typed inventory or
+deletion namespace. Credential-removal and rotation routes are listed by ID and
+must be recent-authenticated mutations owned by that plugin:
+
+```dart
+final class DeviceKeyPlugin implements
+    AuthServerPlugin<Object>,
+    AuthAuthenticationMethodInventoryContributor,
+    AuthEndpointContributor<Object> {
+  @override
+  String get id => 'device_keys';
+
+  @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract(
+        authenticationMethodNamespace: 'device_keys',
+        removalEndpointIds: <String>['device_keys.remove'],
+      );
+
+  // configure, authenticationMethodsForUser, and endpoints...
+}
+```
+
+Plugins with no user-owned authentication data return
+`const AuthServerPluginDataContract.none()`. The registry rejects missing or
+mismatched declarations, unknown removal routes, and removal routes without
+the recent-authentication boundary before the topology is frozen.
+
 ## Quick start
 
 ```dart

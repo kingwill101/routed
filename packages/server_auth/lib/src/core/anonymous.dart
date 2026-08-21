@@ -42,6 +42,12 @@ final class AnonymousPlugin<TContext>
   String get id => authAnonymousPluginId;
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract(
+        userDataNamespace: authAnonymousPluginId,
+      );
+
+  @override
   void configure(AuthServerPluginContext<TContext> context) {
     final host = context.store;
     if (host is! AuthAnonymousAccountMutationStore) {

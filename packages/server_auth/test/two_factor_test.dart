@@ -1053,6 +1053,12 @@ final class _FailingDeletionPlugin
   String get id => 'failing-two-factor-deletion-test';
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract(
+        userDataNamespace: 'failing-two-factor-deletion-test',
+      );
+
+  @override
   String get userDataNamespace => 'failing-two-factor-deletion-test';
 
   @override

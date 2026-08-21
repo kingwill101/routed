@@ -173,6 +173,10 @@ final class McpAuthPlugin<TContext>
   String get id => authMcpPluginId;
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
+
+  @override
   void configure(AuthServerPluginContext<TContext> context) {}
 
   @override

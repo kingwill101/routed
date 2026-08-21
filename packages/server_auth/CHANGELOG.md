@@ -1,5 +1,10 @@
 ## 0.2.0 - 2026-08-20
 
+- Breaking: require every `AuthServerPlugin` to publish an
+  `AuthServerPluginDataContract`. The registry now verifies that plugin-owned
+  authentication-method and user-data namespaces match their typed inventory
+  and deletion contributors, and that declared credential-removal or rotation
+  routes are recent-authenticated mutations owned by the plugin.
 - Add typed historical authentication-method namespaces to `AuthOptions` and
   the shared inventory service. Removed future-plugin namespaces now make
   destructive in-memory mutations fail closed until their contributors return.

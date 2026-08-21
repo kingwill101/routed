@@ -639,6 +639,42 @@ abstract interface class AuthServerPluginTopologyAware<TContext> {
   void composePluginTopology(Iterable<AuthServerPlugin<TContext>> plugins);
 }
 
+/// Declares the persistent data and destructive routes owned by one server
+/// plugin.
+///
+/// A plugin that contributes an authentication-method inventory must declare
+/// the same namespace here. A plugin that contributes user-owned deletion
+/// plans must declare its deletion namespace here. [removalEndpointIds]
+/// identifies credential-removal or credential-rotation routes that require
+/// the host's recent-authentication boundary; the registry verifies that each
+/// route is contributed by this plugin and is an explicit mutation.
+///
+/// Plugins that own neither authentication methods nor user-owned data should
+/// return [AuthServerPluginDataContract.none]. This declaration is required
+/// on every [AuthServerPlugin], so external plugins cannot silently omit their
+/// cleanup and account-safety topology.
+final class AuthServerPluginDataContract {
+  const AuthServerPluginDataContract({
+    this.authenticationMethodNamespace,
+    this.userDataNamespace,
+    this.removalEndpointIds = const <String>[],
+  });
+
+  const AuthServerPluginDataContract.none()
+    : authenticationMethodNamespace = null,
+      userDataNamespace = null,
+      removalEndpointIds = const <String>[];
+
+  /// Namespace declared by [AuthAuthenticationMethodInventoryContributor].
+  final String? authenticationMethodNamespace;
+
+  /// Namespace declared by [AuthUserDeletionPlanContributor].
+  final String? userDataNamespace;
+
+  /// Plugin endpoint IDs that remove or rotate an owned login credential.
+  final List<String> removalEndpointIds;
+}
+
 typedef AuthOAuthTokenGrantHandler<TContext> =
     FutureOr<Object?> Function(
       AuthOperationInvocation<TContext> invocation,
@@ -1036,6 +1072,8 @@ class AuthServerPluginContext<TContext> {
 abstract interface class AuthServerPlugin<TContext> {
   String get id;
 
+  AuthServerPluginDataContract get dataContract;
+
   void configure(AuthServerPluginContext<TContext> context);
 }
 
@@ -1124,7 +1162,97 @@ class AuthServerPluginRegistry<TContext> {
         _registerEndpoints(plugin.id, hostEndpoints, _hostEndpoints);
       }
     }
+    _validatePluginDataContracts(topology);
     _frozen = true;
+  }
+
+  void _validatePluginDataContracts(List<AuthServerPlugin<TContext>> topology) {
+    for (final plugin in topology) {
+      final contract = plugin.dataContract;
+      final methodNamespace = _normalizeDataContractNamespace(
+        contract.authenticationMethodNamespace,
+        plugin: plugin,
+        field: 'authenticationMethodNamespace',
+      );
+      final userNamespace = _normalizeDataContractNamespace(
+        contract.userDataNamespace,
+        plugin: plugin,
+        field: 'userDataNamespace',
+      );
+      final inventory = plugin is AuthAuthenticationMethodInventoryContributor
+          ? plugin as AuthAuthenticationMethodInventoryContributor
+          : null;
+      final inventoryEnabled = inventory == null
+          ? false
+          : plugin is AuthAuthenticationMethodInventoryControl
+          ? (plugin as AuthAuthenticationMethodInventoryControl)
+                .authenticationMethodInventoryEnabled
+          : true;
+      if (inventoryEnabled != (methodNamespace != null)) {
+        throw StateError(
+          'Plugin "${plugin.id}" must declare exactly one active '
+          'authentication-method namespace in dataContract.',
+        );
+      }
+      if (methodNamespace != null &&
+          (inventory == null ||
+              inventory.authenticationMethodNamespace != methodNamespace)) {
+        throw StateError(
+          'Plugin "${plugin.id}" dataContract authentication-method '
+          'namespace does not match its typed inventory contributor.',
+        );
+      }
+
+      final deletion = plugin is AuthUserDeletionPlanContributor
+          ? plugin as AuthUserDeletionPlanContributor
+          : null;
+      if ((deletion != null) != (userNamespace != null)) {
+        throw StateError(
+          'Plugin "${plugin.id}" must declare its user-data namespace '
+          'when it contributes user-deletion plans.',
+        );
+      }
+      if (userNamespace != null &&
+          (deletion == null || deletion.userDataNamespace != userNamespace)) {
+        throw StateError(
+          'Plugin "${plugin.id}" dataContract user-data namespace does '
+          'not match its typed deletion contributor.',
+        );
+      }
+
+      final endpointIds = <String>{};
+      for (final rawEndpointId in contract.removalEndpointIds) {
+        final endpointId = rawEndpointId.trim();
+        if (endpointId.isEmpty || endpointId != rawEndpointId) {
+          throw StateError(
+            'Plugin "${plugin.id}" dataContract removal endpoint IDs '
+            'must be non-empty and trimmed.',
+          );
+        }
+        if (!endpointIds.add(endpointId)) {
+          throw StateError(
+            'Plugin "${plugin.id}" dataContract removal endpoint IDs '
+            'must be unique.',
+          );
+        }
+        final endpoint = _endpoints[endpointId] ?? _hostEndpoints[endpointId];
+        if (endpoint == null || _endpointPluginIds[endpointId] != plugin.id) {
+          throw StateError(
+            'Plugin "${plugin.id}" dataContract references an endpoint '
+            'it does not contribute: "$endpointId".',
+          );
+        }
+        if (endpoint.semantics is! AuthMutationOperationSemantics ||
+            endpoint is! AuthEndpointSecurityDescriptor ||
+            !(endpoint as AuthEndpointSecurityDescriptor)
+                .requiresRecentAuthentication) {
+          throw StateError(
+            'Plugin "${plugin.id}" removal endpoint "$endpointId" must '
+            'declare a mutation and recent authentication.',
+          );
+        }
+      }
+    }
   }
 
   void _bindDeletionTopology(List<AuthServerPlugin<TContext>> topology) {
@@ -1291,4 +1419,23 @@ Set<String> _normalizeHistoricalUserDataNamespaces(Iterable<String> values) {
     }
   }
   return Set<String>.unmodifiable(namespaces);
+}
+
+String? _normalizeDataContractNamespace<TContext>(
+  String? value, {
+  required AuthServerPlugin<TContext> plugin,
+  required String field,
+}) {
+  if (value == null) return null;
+  final normalized = value.trim();
+  if (normalized != value ||
+      normalized.isEmpty ||
+      normalized.length > 64 ||
+      normalized.contains(RegExp(r'[\u0000-\u001f\u007f]'))) {
+    throw StateError(
+      'Plugin "${plugin.id}" dataContract $field must be a bounded, '
+      'trimmed namespace.',
+    );
+  }
+  return normalized;
 }

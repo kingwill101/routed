@@ -837,6 +837,10 @@ final class _ContractPlugin
 
   @override
   final String id;
+
+  @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
   final List<_EndpointContract> _contracts;
 
   @override

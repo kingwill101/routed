@@ -101,6 +101,10 @@ final class BreachedPasswordPlugin<TContext>
   String get id => authBreachedPasswordPluginId;
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
+
+  @override
   void configure(AuthServerPluginContext<TContext> context) {
     _passwordPolicy = context.passwordPolicy;
     _configured = true;

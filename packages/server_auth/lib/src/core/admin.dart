@@ -124,6 +124,10 @@ final class AdminPlugin<TContext>
   @override
   String get id => authAdminPluginId;
 
+  @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract(userDataNamespace: 'admin');
+
   final AuthAdminStore store;
   final AuthAdminOptions<TContext> options;
   final AuthAdminAccessControl accessControl;

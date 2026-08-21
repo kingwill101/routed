@@ -599,6 +599,10 @@ class _RecordingPlugin implements AuthServerPlugin<String> {
   @override
   final String id;
 
+  @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
+
   AuthStore? configuredStore;
 
   @override

@@ -150,6 +150,12 @@ final class DeviceAuthorizationPlugin<TContext>
   String get id => authDeviceAuthorizationPluginId;
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract(
+        userDataNamespace: 'device_authorization',
+      );
+
+  @override
   String get userDataNamespace => 'device_authorization';
 
   @override

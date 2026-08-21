@@ -258,6 +258,10 @@ final class _RoutePlugin
 
   @override
   final String id;
+
+  @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
   final String endpointId;
   final AuthRoutePath route;
   final AuthOperationMethod method;

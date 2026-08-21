@@ -490,6 +490,15 @@ final class AuthApiKeyPlugin<TContext>
   String get id => authApiKeyPluginId;
 
   @override
+  AuthServerPluginDataContract get dataContract => AuthServerPluginDataContract(
+    authenticationMethodNamespace: countsAsPrimaryAuthenticationMethod
+        ? authApiKeyPluginId
+        : null,
+    userDataNamespace: userDataNamespace,
+    removalEndpointIds: const <String>['apiKey.revoke', 'apiKey.rotate'],
+  );
+
+  @override
   String get userDataNamespace => 'api_keys';
 
   @override

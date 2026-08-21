@@ -165,9 +165,8 @@ final class AuthScimInternalFailure {
   final String? subjectId;
 }
 
-typedef AuthScimFailureReporter = FutureOr<void> Function(
-  AuthScimInternalFailure failure,
-);
+typedef AuthScimFailureReporter =
+    FutureOr<void> Function(AuthScimInternalFailure failure);
 
 /// Bounded SCIM server settings.
 final class AuthScimOptions {
@@ -237,6 +236,10 @@ final class ScimPlugin<TContext>
 
   @override
   String get id => authScimPluginId;
+
+  @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
 
   @override
   void configure(AuthServerPluginContext<TContext> context) {}

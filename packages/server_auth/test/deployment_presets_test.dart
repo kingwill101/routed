@@ -379,6 +379,10 @@ final class _ExamplePlugin implements AuthServerPlugin<String> {
   String get id => 'example';
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
+
+  @override
   void configure(AuthServerPluginContext<String> context) {}
 }
 

@@ -1040,6 +1040,10 @@ final class _FailOnceDeletionPlugin
   String get id => 'fail_once_deletion';
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      AuthServerPluginDataContract(userDataNamespace: id);
+
+  @override
   String get userDataNamespace => id;
 
   @override

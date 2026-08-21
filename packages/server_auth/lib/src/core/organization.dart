@@ -227,6 +227,10 @@ final class OrganizationPlugin<TContext>
   String get id => authOrganizationPluginId;
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract(userDataNamespace: 'organization');
+
+  @override
   void configure(AuthServerPluginContext<TContext> context) {
     _userStore ??= context.store.users;
     final host = context.store;

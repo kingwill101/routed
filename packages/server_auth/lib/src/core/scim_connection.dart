@@ -91,6 +91,10 @@ final class AuthScimConnectionPlugin<TContext>
   String get id => authScimConnectionPluginId;
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract(userDataNamespace: 'scim_connections');
+
+  @override
   String get userDataNamespace => 'scim_connections';
 
   @override

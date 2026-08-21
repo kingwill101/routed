@@ -239,6 +239,10 @@ final class _CollisionPlugin
   String get id => serverOnly ? 'server-only' : 'collision';
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
+
+  @override
   Iterable<AuthEndpointDescriptor<EngineContext>> get endpoints => [
     _CollisionEndpoint(serverOnly: serverOnly),
   ];

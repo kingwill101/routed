@@ -240,6 +240,14 @@ final class PhoneNumberPlugin<TContext>
   String get id => authPhoneNumberPluginId;
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract(
+        authenticationMethodNamespace: authPhoneNumberPluginId,
+        userDataNamespace: authPhoneNumberPluginId,
+        removalEndpointIds: <String>['phoneNumber.remove'],
+      );
+
+  @override
   String get userDataNamespace => authPhoneNumberPluginId;
 
   @override

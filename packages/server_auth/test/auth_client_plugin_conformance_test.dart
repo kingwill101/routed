@@ -477,6 +477,10 @@ final class _EchoServerPlugin
   String get id => 'echo';
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
+
+  @override
   Iterable<AuthEndpointDescriptor<Object>> get endpoints =>
       <AuthEndpointDescriptor<Object>>[
         TypedAuthEndpointDescriptor<

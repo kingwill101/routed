@@ -81,6 +81,12 @@ final class OAuthProviderModePlugin<TContext>
   String get userDataNamespace => authOAuthProviderModePluginId;
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract(
+        userDataNamespace: authOAuthProviderModePluginId,
+      );
+
+  @override
   String get userAccessNamespace => authOAuthProviderModePluginId;
 
   @override

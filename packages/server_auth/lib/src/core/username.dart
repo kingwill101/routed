@@ -304,6 +304,13 @@ final class UsernamePlugin<TContext>
   String get id => authUsernamePluginId;
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract(
+        authenticationMethodNamespace: authUsernamePluginId,
+        removalEndpointIds: <String>['username.remove'],
+      );
+
+  @override
   String get authenticationMethodNamespace => authUsernamePluginId;
 
   @override

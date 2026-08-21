@@ -1905,6 +1905,10 @@ final class TwoFactorPlugin<TContext>
   @override
   String get id => authTwoFactorPluginId;
 
+  @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract(userDataNamespace: 'two_factor');
+
   final AuthTwoFactorBackend backend;
   final AuthTwoFactorSecretProtector secretProtector;
   final String issuer;

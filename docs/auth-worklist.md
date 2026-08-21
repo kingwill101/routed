@@ -216,9 +216,12 @@ The work is intentionally split between framework-agnostic capabilities in
 - [ ] Add additional durable adapters for future Routed storage paths, such as
   a Dart IO SQL adapter, with the same typed conformance, transaction, and
   historical-namespace guarantees.
-- [ ] Require external future plugins that own authentication methods or
+- [x] Require external future plugins that own authentication methods or
   user-data namespaces to publish their typed inventory and deletion
   contributors, plus adapter-specific removal routes, before production use.
+  Every `AuthServerPlugin` now publishes an `AuthServerPluginDataContract`;
+  registry freeze rejects missing or mismatched namespaces, unknown removal
+  routes, and removal routes without recent-authentication mutation metadata.
 - [x] Define a stable public adapter conformance suite that can run against
   every persistence implementation through `package:server_auth/testing.dart`.
 - [x] Add a small, typed Dart client contract for browser/mobile auth calls

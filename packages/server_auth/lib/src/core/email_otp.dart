@@ -95,6 +95,13 @@ final class EmailOtpPlugin<TContext>
   String get id => authEmailOtpPluginId;
 
   @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract(
+        authenticationMethodNamespace: authEmailOtpPluginId,
+        userDataNamespace: authEmailOtpPluginId,
+      );
+
+  @override
   String get userDataNamespace => authEmailOtpPluginId;
 
   @override
