@@ -338,7 +338,7 @@ AuthUser _member() =>
     AuthUser(id: 'user-1', email: 'user@example.test', roles: <String>['user']);
 
 AuthSessionRecord _session(String userId, String id, {String? impersonatedBy}) {
-  final now = DateTime.utc(2026, 8, 20);
+  final now = DateTime.now().toUtc();
   return AuthSessionRecord(
     id: id,
     tokenHash: 'hash-$id',
