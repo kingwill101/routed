@@ -1,5 +1,9 @@
 ## 0.1.0
 
+- Add a typed `historicalAuthenticationMethodNamespaces` inventory for D1
+  deployments. Safe authentication-method removal now fails closed when a
+  previously deployed external plugin namespace is absent from active
+  authoritative contributors.
 - Run the deployed Worker auth conformance harness against a temporary
   Cloudflare Worker. Session, JWT, plugin, external-provider, and
   browser-shaped WebAuthn suites passed; the Worker and secret were deleted

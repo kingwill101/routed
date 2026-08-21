@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:property_testing/property_testing.dart';
 import 'package:routed_auth_cloudflare/routed_auth_cloudflare.dart';
 import 'package:server_auth/testing.dart';
 import 'package:test/test.dart';
@@ -52,6 +53,113 @@ void main() {
     expect(
       () => provider.configure(AuthServerPluginContext<Object>(store: store)),
       throwsStateError,
+    );
+  });
+
+  test(
+    'D1 fails closed when a historical plugin namespace is not active',
+    () async {
+      final database = FakeCloudflareD1Database();
+      addTearDown(database.close);
+      final store = await CloudflareD1AuthStore.open(
+        database,
+        historicalAuthenticationMethodNamespaces: const ['legacy_device'],
+      );
+      final now = DateTime.utc(2026, 8, 21);
+      await store.credentials.register(
+        AuthUser(id: 'user-1', email: 'user@example.com'),
+        AuthPasswordCredential(
+          id: 'credential-1',
+          userId: 'user-1',
+          identifier: 'user@example.com',
+          passwordHash: 'hash',
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      final methods = AuthAuthenticationMethodService(store: store)
+        ..composeContributors(const []);
+      var mutated = false;
+
+      final result = await methods.removeIfSafe(
+        userId: 'user-1',
+        target: AuthAuthenticationMethod.password('credential-1'),
+        mutate: () {
+          mutated = true;
+          return true;
+        },
+      );
+
+      expect(
+        result,
+        AuthAuthenticationMethodMutationResult.atomicityUnavailable,
+      );
+      expect(mutated, isFalse);
+    },
+  );
+
+  test('D1 validates historical authentication namespaces', () async {
+    final database = FakeCloudflareD1Database();
+    addTearDown(database.close);
+
+    expect(
+      () => CloudflareD1AuthStore(
+        database,
+        historicalAuthenticationMethodNamespaces: const [' legacy '],
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => CloudflareD1AuthStore(
+        database,
+        historicalAuthenticationMethodNamespaces: const ['legacy', 'legacy'],
+      ),
+      throwsArgumentError,
+    );
+  });
+
+  test('property: historical namespaces reject unsafe values', () async {
+    final database = FakeCloudflareD1Database();
+    addTearDown(database.close);
+    final generator = Gen.frequency<String>([
+      (8, Chaos.string(minLength: 0, maxLength: 80)),
+      (
+        2,
+        Gen.oneOf(['', ' ', 'legacy\nplugin', 'legacy\u0000plugin', 'x' * 65]),
+      ),
+    ]);
+    final runner = PropertyTestRunner<String>(generator, (candidate) async {
+      try {
+        final store = CloudflareD1AuthStore(
+          database,
+          historicalAuthenticationMethodNamespaces: [candidate],
+        );
+        expect(store.historicalAuthenticationMethodNamespaces, [candidate]);
+        expect(candidate, isNotEmpty);
+        expect(candidate, candidate.trim());
+        expect(candidate.length, lessThanOrEqualTo(64));
+        expect(
+          candidate.runes.any((rune) => rune < 0x20 || rune == 0x7f),
+          isFalse,
+        );
+      } on ArgumentError {
+        expect(
+          candidate.isEmpty ||
+              candidate != candidate.trim() ||
+              candidate.length > 64 ||
+              candidate.runes.any((rune) => rune < 0x20 || rune == 0x7f),
+          isTrue,
+        );
+      }
+    }, PropertyConfig(numTests: 256, seed: 20260821));
+
+    final result = await runner.run();
+    expect(
+      result.success,
+      isTrue,
+      reason:
+          'Property failed after ${result.numTests} cases: ${result.error}; '
+          'input=${result.failingInput}; seed=${result.seed}',
     );
   });
 

@@ -24,6 +24,21 @@ Future<CloudflareD1AuthStore> authStore(CloudflareEnvironment env) {
 YAML configuration and application code does not import `package:web` or use
 `dart:js_interop`.
 
+When an external authentication plugin is removed from a deployment, preserve
+its namespace in the durable safety inventory until its records have a
+backend-owned cleanup path:
+
+```dart
+final store = await CloudflareD1AuthStore.open(
+  env.d1('AUTH_DB'),
+  historicalAuthenticationMethodNamespaces: const ['legacy_device'],
+);
+```
+
+If a historical namespace is absent from the active authoritative contributors,
+safe authentication-method removal fails closed. This prevents a removed
+plugin's credentials from being invisible during fallback checks.
+
 Anonymous authentication is selected like any other server plugin; the root D1
 adapter itself supplies the required mutation capability:
 

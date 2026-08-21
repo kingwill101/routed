@@ -35,8 +35,13 @@ final class CloudflareD1AuthStore
     this.webAuthnChallengeMaxRecords = 10000,
     this.webAuthnAuthenticatorMaxRecords = 10000,
     this.phoneNumberMaxVerifications = 2048,
+    Iterable<String> historicalAuthenticationMethodNamespaces = const [],
     DateTime Function()? clock,
   }) : _database = database,
+       historicalAuthenticationMethodNamespaces =
+           _normalizeHistoricalAuthenticationMethodNamespaces(
+             historicalAuthenticationMethodNamespaces,
+           ),
        _clock = clock ?? DateTime.now {
     if (anonymousReplayTtl <= Duration.zero) {
       throw ArgumentError.value(
@@ -171,6 +176,7 @@ final class CloudflareD1AuthStore
     int webAuthnChallengeMaxRecords = 10000,
     int webAuthnAuthenticatorMaxRecords = 10000,
     int phoneNumberMaxVerifications = 2048,
+    Iterable<String> historicalAuthenticationMethodNamespaces = const [],
     DateTime Function()? clock,
   }) async {
     await schema.migrate(database);
@@ -184,6 +190,8 @@ final class CloudflareD1AuthStore
       webAuthnChallengeMaxRecords: webAuthnChallengeMaxRecords,
       webAuthnAuthenticatorMaxRecords: webAuthnAuthenticatorMaxRecords,
       phoneNumberMaxVerifications: phoneNumberMaxVerifications,
+      historicalAuthenticationMethodNamespaces:
+          historicalAuthenticationMethodNamespaces,
       clock: clock,
     );
   }
@@ -199,6 +207,11 @@ final class CloudflareD1AuthStore
   final int webAuthnChallengeMaxRecords;
   final int webAuthnAuthenticatorMaxRecords;
   final int phoneNumberMaxVerifications;
+
+  /// Namespaces written by previously deployed external authentication
+  /// plugins. Missing active contributors for these namespaces make
+  /// authentication-method removal fail closed.
+  final Set<String> historicalAuthenticationMethodNamespaces;
   late final CloudflareD1UserDeletionCoordinator _deletionCoordinator;
   bool _authenticationMethodTopologyBound = false;
   bool _authenticationMethodInventoryAuthoritative = false;
@@ -220,7 +233,9 @@ final class CloudflareD1AuthStore
       throw StateError('Authentication method inventory is already bound.');
     }
     var authoritative = true;
+    final activeNamespaces = <String>{};
     for (final contributor in contributors) {
+      activeNamespaces.add(contributor.authenticationMethodNamespace);
       final binding = switch (contributor) {
         AuthAuthenticationMethodInventoryBinding binding => binding,
         _ => null,
@@ -259,6 +274,11 @@ final class CloudflareD1AuthStore
           )) {
         authoritative = false;
       }
+    }
+    if (!activeNamespaces.containsAll(
+      historicalAuthenticationMethodNamespaces,
+    )) {
+      authoritative = false;
     }
     _authenticationMethodInventoryAuthoritative = authoritative;
     _authenticationMethodTopologyBound = true;
@@ -6271,6 +6291,26 @@ String _required(String value, String name) {
     throw ArgumentError.value(value, name, 'must be non-empty');
   }
   return normalized;
+}
+
+Set<String> _normalizeHistoricalAuthenticationMethodNamespaces(
+  Iterable<String> values,
+) {
+  final namespaces = <String>{};
+  for (final value in values) {
+    if (value.isEmpty ||
+        value != value.trim() ||
+        value.length > 64 ||
+        value.contains(RegExp(r'[\u0000-\u001f\u007f]')) ||
+        !namespaces.add(value)) {
+      throw ArgumentError.value(
+        values,
+        'historicalAuthenticationMethodNamespaces',
+        'must contain unique, bounded, safe namespace values',
+      );
+    }
+  }
+  return Set<String>.unmodifiable(namespaces);
 }
 
 String _email(String value) => _required(value, 'email').toLowerCase();
