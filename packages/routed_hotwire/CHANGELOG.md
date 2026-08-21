@@ -1,3 +1,7 @@
+## 0.1.6
+
+- Release metadata housekeeping: republish to restore publish-order consistency.
+
 ## 0.1.4
 
 - Updated dependency constraints for the typed core and feature adapter
