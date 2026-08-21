@@ -659,6 +659,19 @@ void main() {
             ?.atomicOperationId,
         'phoneNumber.verifyCode',
       );
+      expect(
+        (endpoints['phoneNumber.remove']! as AuthEndpointSecurityDescriptor)
+            .requiresRecentAuthentication,
+        isTrue,
+      );
+      expect(
+        (endpoints['phoneNumber.remove']!.semantics
+                as AuthMutationOperationSemantics)
+            .persistence
+            .reference
+            ?.atomicOperationId,
+        'phoneNumber.remove',
+      );
     });
   });
 }

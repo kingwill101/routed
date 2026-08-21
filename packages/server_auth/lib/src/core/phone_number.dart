@@ -21,6 +21,8 @@ const AuthRateLimitOperation authPhoneNumberSendRateLimitOperation =
     AuthRateLimitOperation(authPhoneNumberPluginId, 'send_code');
 const AuthRateLimitOperation authPhoneNumberVerifyRateLimitOperation =
     AuthRateLimitOperation(authPhoneNumberPluginId, 'verify_code');
+const AuthRateLimitOperation authPhoneNumberRemovalRateLimitOperation =
+    AuthRateLimitOperation(authPhoneNumberPluginId, 'remove');
 
 /// Normalizes application input into a canonical phone number or rejects it.
 abstract interface class AuthPhoneNumberPolicy {
@@ -409,6 +411,33 @@ final class PhoneNumberPlugin<TContext>
             );
           },
         ),
+        TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
+          id: 'phoneNumber.remove',
+          method: AuthOperationMethod.post,
+          path: const AuthRoutePath('/phone-number/remove'),
+          semantics: const AuthOperationSemantics.mutation(
+            persistence: AuthMutationPersistence.durable(
+              atomicity: AuthMutationAtomicity.atomic,
+              reference: AuthPersistenceOperationReference(
+                schemaId: authPhoneNumberPluginId,
+                atomicOperationId: 'phoneNumber.remove',
+              ),
+            ),
+            replaySafety: AuthMutationReplaySafety.idempotent,
+          ),
+          requestCodec: _emptyRequestCodec,
+          responseCodec: _objectResponseCodec,
+          authentication: AuthOperationAuthentication.session,
+          csrfPolicy: AuthOperationCsrfPolicy.required,
+          requiresRecentAuthentication: true,
+          rateLimitOperation: authPhoneNumberRemovalRateLimitOperation,
+          handler: (invocation, _) async {
+            final user = invocation.user;
+            if (user == null) throw AuthFlowException('unauthorized');
+            await removePhoneNumber(userId: user.id);
+            return const <String, dynamic>{'status': 'phone_number_removed'};
+          },
+        ),
       ];
 
   String? _phoneRateLimitIdentifier(String input) {
@@ -437,6 +466,7 @@ final class PhoneNumberPlugin<TContext>
       const <AuthRateLimitOperation>[
         authPhoneNumberSendRateLimitOperation,
         authPhoneNumberVerifyRateLimitOperation,
+        authPhoneNumberRemovalRateLimitOperation,
       ];
 
   @override
@@ -507,6 +537,11 @@ final class PhoneNumberPlugin<TContext>
           id: 'phoneNumber.verifyCode',
           description:
               'Update attempts or lockout and atomically consume, bind, and project one verified phone identity.',
+        ),
+        AuthAtomicOperationDescriptor(
+          id: 'phoneNumber.remove',
+          description:
+              'Recheck the authentication-method inventory and remove one phone identity and its artifacts atomically.',
         ),
       ],
     ),
@@ -678,6 +713,23 @@ final class PhoneNumberPlugin<TContext>
     encode: (value) => value.toAuthenticationIntent(),
     schema: _verifyResponseSchema,
   );
+
+  static final AuthOperationCodec<Map<String, dynamic>> _emptyRequestCodec =
+      AuthOperationCodec<Map<String, dynamic>>(
+        decode: (_) => const <String, dynamic>{},
+        encode: (value) => value,
+        schema: const <String, Object?>{
+          'type': 'object',
+          'additionalProperties': false,
+        },
+      );
+
+  static final AuthOperationCodec<Object?> _objectResponseCodec =
+      AuthOperationCodec<Object?>(
+        decode: (_) => throw UnsupportedError('Response-only codec'),
+        encode: (value) => value,
+        schema: _removeResponseSchema,
+      );
 }
 
 const Map<String, Object?> _sendRequestSchema = <String, Object?>{
@@ -733,6 +785,14 @@ const Map<String, Object?> _verifyResponseSchema = <String, Object?>{
       'format': 'date-time',
     },
     'strategy': <String, Object?>{'type': 'string'},
+  },
+};
+
+const Map<String, Object?> _removeResponseSchema = <String, Object?>{
+  'type': 'object',
+  'required': <String>['status'],
+  'properties': <String, Object?>{
+    'status': <String, Object?>{'const': 'phone_number_removed'},
   },
 };
 

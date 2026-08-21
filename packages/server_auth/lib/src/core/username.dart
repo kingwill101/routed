@@ -508,6 +508,7 @@ final class UsernamePlugin<TContext>
           authentication: AuthOperationAuthentication.session,
           originPolicy: AuthOperationOriginPolicy.browser,
           csrfPolicy: AuthOperationCsrfPolicy.required,
+          requiresRecentAuthentication: true,
           rateLimitOperation: authUsernameRemovalRateLimitOperation,
           handler: (invocation, _) async {
             await removeUsername(userId: _invocationUserId(invocation));

@@ -1,5 +1,9 @@
 ## 0.2.0 - 2026-08-20
 
+- Enforce host-owned recent-authentication or step-up proof before sensitive
+  plugin mutations, including phone and username removal, passkey deletion,
+  and API-key revoke/rotate operations. Add the phone removal route and typed
+  client method.
 - Authorize passwordless linked-account removal from the protected JWT
   `auth_time` claim, not the automatically refreshed `iat`. Token refresh and
   JWT callbacks cannot silently renew the recent-authentication window.

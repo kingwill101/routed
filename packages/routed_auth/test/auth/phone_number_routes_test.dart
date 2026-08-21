@@ -11,6 +11,8 @@ import '../test_engine.dart';
 
 const _hashKey = '0123456789abcdef0123456789abcdef';
 
+String _cookieHeader(Cookie cookie) => '${cookie.name}=${cookie.value}';
+
 void main() {
   test(
     'phone routes deliver, verify, and issue a phone-number session',
@@ -157,6 +159,149 @@ void main() {
       blocked.assertStatus(HttpStatus.tooManyRequests);
       expect(blocked.json(), <String, dynamic>{'error': 'rate_limited'});
       expect(blocked.headers[HttpHeaders.retryAfterHeader], contains('30'));
+    },
+  );
+
+  test('phone removal enforces recent auth and removes the identity', () async {
+    final store = InMemoryAuthStore();
+    String? deliveredCode;
+    final plugin = PhoneNumberPlugin<EngineContext>(
+      codeHashKey: _hashKey,
+      allowSignUp: true,
+      generateCode: (_) => '123456',
+      sendCode: (delivery) => deliveredCode = delivery.code,
+    );
+    final manager = AuthManager(
+      AuthOptions<EngineContext>(
+        store: store,
+        storeMode: AuthStoreMode.ephemeral,
+        providers: <AuthProvider>[CredentialsProvider()],
+        plugins: <AuthServerPlugin<EngineContext>>[plugin],
+      ),
+    );
+    final fixture = await _fixture(manager);
+
+    final csrf = await fixture.client.get('/auth/csrf');
+    final initialCookie = csrf.cookie('phone_session')!;
+    await fixture.client.postJson(
+      '/auth/phone-number/send-code',
+      const <String, dynamic>{'phoneNumber': '+18765551234'},
+    );
+    final verified = await fixture.client.postJson(
+      '/auth/phone-number/verify-code',
+      <String, dynamic>{'phoneNumber': '+18765551234', 'code': deliveredCode},
+      headers: <String, List<String>>{
+        HttpHeaders.cookieHeader: [_cookieHeader(initialCookie)],
+      },
+    );
+    verified.assertStatus(HttpStatus.ok);
+    final userId = verified.json()['user']['id'] as String;
+    final hasher = Argon2idPasswordHasher(
+      iterations: 1,
+      memoryKiB: 8,
+      derivedKeyLength: 16,
+    );
+    await store.upsertCredentialForAdministration(
+      AuthPasswordCredential(
+        id: 'password-fallback',
+        userId: userId,
+        identifier: 'fallback@example.com',
+        passwordHash: hasher.hash('fallback-password'),
+        createdAt: DateTime.utc(2026),
+        updatedAt: DateTime.utc(2026),
+      ),
+    );
+
+    var sessionCookie = verified.cookie('phone_session') ?? initialCookie;
+    final refreshedCsrf = await fixture.client.get(
+      '/auth/csrf',
+      headers: <String, List<String>>{
+        HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+      },
+    );
+    final refreshedCsrfToken = refreshedCsrf.json()['csrfToken'] as String;
+    sessionCookie = refreshedCsrf.cookie('phone_session') ?? sessionCookie;
+    final removed = await fixture.client.postJson(
+      '/auth/phone-number/remove',
+      <String, dynamic>{'_csrf': refreshedCsrfToken},
+      headers: <String, List<String>>{
+        HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+        'x-csrf-token': [refreshedCsrfToken],
+      },
+    );
+    removed.assertStatus(HttpStatus.ok);
+    expect(removed.json(), <String, dynamic>{'status': 'phone_number_removed'});
+    expect(await store.findPhoneNumberIdentity('+18765551234'), isNull);
+    expect(
+      (await store.users.findById(userId))?.attributes,
+      isNot(containsPair('phoneNumberVerified', true)),
+    );
+  });
+
+  test(
+    'stale phone sessions cannot remove an identity without step-up',
+    () async {
+      final store = InMemoryAuthStore();
+      final plugin = PhoneNumberPlugin<EngineContext>(
+        codeHashKey: _hashKey,
+        allowSignUp: true,
+        generateCode: (_) => '123456',
+        sendCode: (_) {},
+      );
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: store,
+          storeMode: AuthStoreMode.ephemeral,
+          providers: const <AuthProvider>[],
+          plugins: <AuthServerPlugin<EngineContext>>[plugin],
+        ),
+        clock: () => DateTime.utc(2100),
+      );
+      final fixture = await _fixture(manager);
+
+      final csrf = await fixture.client.get('/auth/csrf');
+      final initialCookie = csrf.cookie('phone_session')!;
+      await fixture.client.postJson(
+        '/auth/phone-number/send-code',
+        const <String, dynamic>{'phoneNumber': '+18765551234'},
+        headers: <String, List<String>>{
+          HttpHeaders.cookieHeader: [_cookieHeader(initialCookie)],
+        },
+      );
+      final verified = await fixture.client.postJson(
+        '/auth/phone-number/verify-code',
+        const <String, dynamic>{
+          'phoneNumber': '+18765551234',
+          'code': '123456',
+        },
+        headers: <String, List<String>>{
+          HttpHeaders.cookieHeader: [_cookieHeader(initialCookie)],
+        },
+      );
+      verified.assertStatus(HttpStatus.ok);
+      var sessionCookie = verified.cookie('phone_session') ?? initialCookie;
+      final refreshedCsrf = await fixture.client.get(
+        '/auth/csrf',
+        headers: <String, List<String>>{
+          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+        },
+      );
+      final refreshedCsrfToken = refreshedCsrf.json()['csrfToken'] as String;
+      sessionCookie = refreshedCsrf.cookie('phone_session') ?? sessionCookie;
+
+      final blocked = await fixture.client.postJson(
+        '/auth/phone-number/remove',
+        <String, dynamic>{'_csrf': refreshedCsrfToken},
+        headers: <String, List<String>>{
+          HttpHeaders.cookieHeader: [_cookieHeader(sessionCookie)],
+          'x-csrf-token': [refreshedCsrfToken],
+        },
+      );
+      blocked.assertStatus(HttpStatus.forbidden);
+      expect(blocked.json(), <String, dynamic>{
+        'error': 'recent_authentication_required',
+      });
+      expect(await store.findPhoneNumberIdentity('+18765551234'), isNotNull);
     },
   );
 

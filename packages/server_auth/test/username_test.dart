@@ -703,6 +703,14 @@ void main() {
           authUsernameRemovalRateLimitOperation,
         ]),
       );
+      final removalEndpoint = plugin.endpoints.singleWhere(
+        (endpoint) => endpoint.id == 'username.remove',
+      );
+      expect(
+        (removalEndpoint as AuthEndpointSecurityDescriptor)
+            .requiresRecentAuthentication,
+        isTrue,
+      );
       final durable = plugin.endpoints
           .where((endpoint) => endpoint.id != 'username.signIn')
           .map((endpoint) => endpoint.semantics)

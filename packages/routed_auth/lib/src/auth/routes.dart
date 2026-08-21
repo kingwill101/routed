@@ -7,6 +7,7 @@ import 'package:server_auth/server_auth.dart'
     show
         AuthCredentials,
         AuthEndpointDescriptor,
+        AuthEndpointSecurityDescriptor,
         AuthEndpointMount,
         AuthEndpointRequest,
         AuthRoutePath,
@@ -390,6 +391,15 @@ class AuthRoutes {
             ? await liveManager.currentStoredSessionId(ctx)
             : null,
       );
+      final security = endpoint is AuthEndpointSecurityDescriptor
+          ? endpoint as AuthEndpointSecurityDescriptor
+          : null;
+      if (security?.requiresRecentAuthentication == true) {
+        if (endpoint.authentication != AuthOperationAuthentication.session) {
+          throw AuthFlowException('recent_authentication_required');
+        }
+        await liveManager.requireRecentAuthentication(ctx);
+      }
       final response = await endpoint.invoke(
         AuthOperationInvocation<EngineContext>(
           context: ctx,

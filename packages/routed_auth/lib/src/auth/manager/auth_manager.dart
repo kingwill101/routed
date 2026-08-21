@@ -938,6 +938,17 @@ class AuthManager {
     );
   }
 
+  /// Requires a fresh authentication proof for a sensitive plugin operation.
+  ///
+  /// This is intentionally host-owned. Portable plugins declare the
+  /// requirement in endpoint metadata, while Routed validates the current
+  /// session age, JWT `iat`, or configured two-factor step-up proof here.
+  Future<void> requireRecentAuthentication(EngineContext ctx) async {
+    final session = await resolveSession(ctx);
+    if (session == null) throw AuthFlowException('not_authenticated');
+    await _requireAccountUnlinkProof(ctx, session.user);
+  }
+
   /// Reauthenticates and tombstones the current account.
   ///
   /// Plugin-owned namespaces are deleted before the core transaction.

@@ -170,6 +170,8 @@ final phoneSession = await authClient.plugins.use(phoneClient).verifyCode(
   code: deliveredCode,
 );
 
+await authClient.plugins.use(phoneClient).remove();
+
 await authClient.plugins.use(captchaClient).signIn(
   email: 'ada@example.com',
   password: password,
@@ -187,6 +189,9 @@ single-use consumption, user creation/projection, phone binding, and hard
 deletion; the plugin never installs a process-local fallback. SMS delivery and
 Routed's session/cookie response happen after that transaction commits. If
 either delivery boundary fails, the committed OTP state is not compensated.
+The phone removal route is CSRF protected and requires recent original
+authentication or a valid two-factor step-up proof. It clears the phone
+identity only when another usable authentication method remains.
 
 Anonymous auth follows the same composition rule:
 

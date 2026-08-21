@@ -1,5 +1,8 @@
 ## 0.2.0 - 2026-08-20
 
+- Add typed recent-authentication endpoint metadata and require it for
+  username, phone, passkey, and API-key credential-removal mutations. Routed
+  enforces the metadata with the configured recent-auth or step-up policy.
 - Add the protected JWT `auth_time` claim and preserve it across automatic
   refreshes and application claim callbacks. Sensitive-action policy now uses
   the original authentication time instead of refreshable JWT `iat`; legacy

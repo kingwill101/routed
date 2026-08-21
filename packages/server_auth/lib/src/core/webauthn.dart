@@ -490,6 +490,7 @@ final class WebAuthnPlugin<TContext>
           authentication: AuthOperationAuthentication.session,
           csrfPolicy: AuthOperationCsrfPolicy.required,
           operationName: 'credential-delete',
+          requiresRecentAuthentication: true,
         ),
         _endpoint(
           id: 'webauthn.credentialRename',
@@ -520,6 +521,7 @@ final class WebAuthnPlugin<TContext>
     required AuthOperationCsrfPolicy csrfPolicy,
     required String operationName,
     AuthOperationOriginPolicy originPolicy = AuthOperationOriginPolicy.browser,
+    bool requiresRecentAuthentication = false,
   }) {
     return TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
       id: id,
@@ -531,6 +533,7 @@ final class WebAuthnPlugin<TContext>
       authentication: authentication,
       originPolicy: originPolicy,
       csrfPolicy: csrfPolicy,
+      requiresRecentAuthentication: requiresRecentAuthentication,
       rateLimitOperation: AuthRateLimitOperation('webauthn', operationName),
       handler: (invocation, request) =>
           _invokeEndpoint(id, invocation, request),

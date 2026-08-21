@@ -95,6 +95,16 @@ final class AuthPhoneNumberClient {
       ),
     );
   }
+
+  /// Removes the current phone identity after the server validates its
+  /// recent-authentication or step-up policy.
+  Future<void> remove() async {
+    await transport.mutate(
+      'POST',
+      const AuthRoutePath('/phone-number/remove'),
+      const <String, dynamic>{},
+    );
+  }
 }
 
 Map<String, dynamic> _mapBody(String body) {

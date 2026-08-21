@@ -288,6 +288,31 @@ void main() {
       await _expectCaseFailure(suite, 'endpoints.mutation-protection');
     });
 
+    test(
+      'requires sensitive mutations to declare a session security boundary',
+      () async {
+        const operation = AuthRateLimitOperation('sample', 'remove');
+        final suite = _suite(
+          _FixturePlugin(
+            endpoints: <AuthEndpointDescriptor<Object>>[
+              _endpoint(
+                id: 'sample.remove',
+                method: AuthOperationMethod.post,
+                path: const AuthRoutePath('/sample/remove'),
+                originPolicy: AuthOperationOriginPolicy.browser,
+                csrfPolicy: AuthOperationCsrfPolicy.required,
+                rateLimitOperation: operation,
+                requiresRecentAuthentication: true,
+              ),
+            ],
+            rateLimitOperations: const <AuthRateLimitOperation>[operation],
+          ),
+        );
+
+        await _expectCaseFailure(suite, 'endpoints.mutation-protection');
+      },
+    );
+
     test('rejects missing and invalid mutation semantics', () async {
       final missing = _suite(
         const _FixturePlugin(
@@ -527,6 +552,7 @@ TypedAuthEndpointDescriptor<Object, Map<String, dynamic>, Object?> _endpoint({
   AuthOperationOriginPolicy originPolicy = AuthOperationOriginPolicy.none,
   AuthOperationCsrfPolicy csrfPolicy = AuthOperationCsrfPolicy.none,
   AuthRateLimitOperation? rateLimitOperation,
+  bool requiresRecentAuthentication = false,
   AuthOperationSemantics? semantics,
   Iterable<AuthEndpointResponseContract> responseContracts =
       const <AuthEndpointResponseContract>[],
@@ -560,6 +586,7 @@ TypedAuthEndpointDescriptor<Object, Map<String, dynamic>, Object?> _endpoint({
     originPolicy: originPolicy,
     csrfPolicy: csrfPolicy,
     rateLimitOperation: rateLimitOperation,
+    requiresRecentAuthentication: requiresRecentAuthentication,
     responseContracts: responseContracts,
     handler: (invocation, request) => const <String, Object?>{'ok': true},
   );

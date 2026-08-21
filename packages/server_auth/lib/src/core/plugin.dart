@@ -671,6 +671,18 @@ abstract interface class AuthEndpointDescriptor<TContext> {
   );
 }
 
+/// Optional security metadata for endpoints that remove or rotate a login
+/// method.
+///
+/// Framework adapters must require recent original authentication or an
+/// explicit step-up proof before invoking an endpoint that opts into this
+/// contract. Keeping the requirement as endpoint metadata lets portable
+/// plugins declare the boundary without depending on a session or router
+/// implementation.
+abstract interface class AuthEndpointSecurityDescriptor {
+  bool get requiresRecentAuthentication;
+}
+
 /// Optional endpoint contribution used to derive a private rate-limit key.
 ///
 /// The returned value is supplied only to [AuthRateLimiter]. Implementations
@@ -806,6 +818,7 @@ abstract interface class AuthEndpointPublicErrorResponseDescriptor {
 final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
     implements
         AuthEndpointDescriptor<TContext>,
+        AuthEndpointSecurityDescriptor,
         AuthEndpointContractDescriptor,
         AuthEndpointResponseContractDescriptor,
         AuthEndpointPublicErrorResponseDescriptor,
@@ -823,6 +836,7 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
     this.csrfPolicy = AuthOperationCsrfPolicy.none,
     this.rateLimitOperation,
     this.rateLimitIdentifier,
+    this.requiresRecentAuthentication = false,
     this.responseContracts = const <AuthEndpointResponseContract>[],
     this.publicErrorResponse,
     this.serverOnly = false,
@@ -857,6 +871,8 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
   @override
   final AuthRateLimitOperation? rateLimitOperation;
   final AuthEndpointRateLimitIdentifierResolver<TRequest>? rateLimitIdentifier;
+  @override
+  final bool requiresRecentAuthentication;
   @override
   final Iterable<AuthEndpointResponseContract> responseContracts;
   final AuthEndpointPublicErrorResponseFactory? publicErrorResponse;

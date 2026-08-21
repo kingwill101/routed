@@ -803,6 +803,7 @@ final class AuthApiKeyPlugin<TContext>
       responseCodec: _apiKeyMetadataResponseCodec,
       originPolicy: AuthOperationOriginPolicy.browser,
       csrfPolicy: AuthOperationCsrfPolicy.required,
+      requiresRecentAuthentication: true,
       rateLimitOperation: apiKeyRevokeRateLimitOperation,
       handler: (invocation, input) async {
         final user = _requireUser(invocation.user);
@@ -829,6 +830,7 @@ final class AuthApiKeyPlugin<TContext>
       responseCodec: _apiKeyIssuedResponseCodec,
       originPolicy: AuthOperationOriginPolicy.browser,
       csrfPolicy: AuthOperationCsrfPolicy.required,
+      requiresRecentAuthentication: true,
       rateLimitOperation: apiKeyRotateRateLimitOperation,
       handler: (invocation, input) async {
         final user = _requireUser(invocation.user);

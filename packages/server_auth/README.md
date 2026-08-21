@@ -335,6 +335,14 @@ The raw code exists only in `AuthPhoneNumberCodeDelivery`. SMS delivery,
 `onVerified`, and framework session/cookie issuance happen after the backend
 transaction commits, so failures at those boundaries do not roll it back.
 
+The plugin also contributes `POST /phone-number/remove` and the matching
+`AuthPhoneNumberClient.remove()` operation. It removes only the current
+phone identity, never the last usable authentication method, and clears the
+verified-phone projection and challenge artifacts in the backend transaction.
+Framework adapters must enforce the endpoint's recent-authentication or
+step-up metadata before invoking it; the persistence plugin does not treat an
+active session alone as sufficient proof.
+
 ## Anonymous accounts
 
 Anonymous authentication is an explicit server plugin. The root store must

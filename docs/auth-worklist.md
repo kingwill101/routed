@@ -108,10 +108,10 @@ The work is intentionally split between framework-agnostic capabilities in
   removal, and hard-deletion cleanup through migration v10. Backend-bound D1
   phone persistence now exists through migration v11, including exact
   phone-aware unlink and primary-method removal with verified projection and
-  challenge cleanup. Future plugin stores remain. The host-facing removal
-  route and authorization proof still need to require recent original
-  authentication or explicit step-up proof rather than merely an active
-  session.
+  challenge cleanup. Routed now enforces endpoint-declared recent-auth or
+  step-up proof for phone, username, passkey, and API-key removal mutations;
+  the phone plugin also exposes a typed removal route/client operation.
+  Future plugin stores and their adapter-specific removal routes remain.
 - [x] Add a first-class server-session management API: list current sessions
   with device metadata, revoke one session, revoke all other sessions, and
   rotate credentials after sensitive changes. JWT session management remains a

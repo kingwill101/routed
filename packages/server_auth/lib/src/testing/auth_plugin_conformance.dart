@@ -552,6 +552,23 @@ final class AuthPluginConformanceSuite<TContext> {
         );
       }
       if (endpoint.serverOnly) continue;
+      final security = endpoint is AuthEndpointSecurityDescriptor
+          ? endpoint as AuthEndpointSecurityDescriptor
+          : null;
+      if (security?.requiresRecentAuthentication == true &&
+          endpoint.authentication != AuthOperationAuthentication.session) {
+        _fail(
+          'Sensitive mutation "${endpoint.id}" must use session '
+          'authentication so the host can validate recent proof.',
+        );
+      }
+      if (security?.requiresRecentAuthentication == true &&
+          !isBrowserProtected) {
+        _fail(
+          'Sensitive mutation "${endpoint.id}" must require browser origin '
+          'and CSRF protection.',
+        );
+      }
       if (endpoint.authentication == AuthOperationAuthentication.session &&
           !isBrowserProtected) {
         _fail(

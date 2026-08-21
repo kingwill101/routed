@@ -62,4 +62,38 @@ void main() {
     expect(signedIn.session.user.id, 'user-1');
     expect(signedIn.session.token, 'jwt-token');
   });
+
+  test(
+    'phone client removes through the mutating transport boundary',
+    () async {
+      var csrfRequests = 0;
+      final client = AuthClient(
+        baseUrl: Uri.parse('https://example.test'),
+        plugins: const <AuthClientPlugin<Object>>[
+          AuthPhoneNumberClientPlugin(),
+        ],
+        httpClient: MockClient((request) async {
+          if (request.url.path == '/auth/csrf') {
+            csrfRequests++;
+            return http.Response(
+              jsonEncode(<String, dynamic>{'csrfToken': 'csrf-token'}),
+              200,
+            );
+          }
+          expect(request.url.path, '/auth/phone-number/remove');
+          expect(request.headers['x-csrf-token'], 'csrf-token');
+          expect(jsonDecode(request.body), <String, dynamic>{
+            '_csrf': 'csrf-token',
+          });
+          return http.Response(
+            jsonEncode(<String, dynamic>{'status': 'phone_number_removed'}),
+            200,
+          );
+        }),
+      );
+
+      await client.plugins.use(const AuthPhoneNumberClientPlugin()).remove();
+      expect(csrfRequests, 1);
+    },
+  );
 }
