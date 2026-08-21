@@ -294,7 +294,10 @@ account, session, client, and plugin contracts above:
   bounded exclusive canonicalization/transforms, pinned certificates, explicit
   RSA/SHA-2 allowlists, independent xmlsec fixtures, hostile XML vectors, and
   generated mutations pass the public verifier conformance suite.
-- [ ] Prove live SAML interoperability against external IdPs. Dynamic SSO
+- [x] Prove live SAML interoperability against an external IdP. The pinned
+  Keycloak harness passed a real signed browser POST, typed provider path,
+  host session issuance, and replay boundary; it runs separately from the
+  normal test suite and cleans up its container and certificates. Dynamic SSO
   administration, OIDC enterprise connections, encrypted assertions, logout,
   and group/role mapping remain deferred.
 

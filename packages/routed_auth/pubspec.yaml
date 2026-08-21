@@ -27,6 +27,7 @@ dependencies:
 
   crypto: ^3.0.0
 dev_dependencies:
+  html: ^0.15.6
   jose: ^0.3.5
   lints: ^6.0.0
   property_testing: ^0.3.2

@@ -1,0 +1,60 @@
+{
+  "realm": "routed-saml",
+  "enabled": true,
+  "displayName": "Routed SAML interoperability",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "rememberMe": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "clients": [
+    {
+      "clientId": "https://sp.routed.test/entity",
+      "name": "Routed SAML service provider",
+      "enabled": true,
+      "protocol": "saml",
+      "publicClient": true,
+      "frontchannelLogout": false,
+      "adminUrl": "https://sp.routed.test/auth/sso/saml/acs/keycloak",
+      "baseUrl": "https://sp.routed.test/",
+      "redirectUris": [
+        "https://sp.routed.test/auth/sso/saml/acs/keycloak"
+      ],
+      "attributes": {
+        "saml.assertion.signature": "true",
+        "saml.server.signature": "true",
+        "saml.client.signature": "false",
+        "saml.force.post.binding": "true",
+        "saml.encrypt": "false",
+        "saml.authnstatement": "true",
+        "saml.onetimeuse.condition": "false",
+        "saml_force_name_id_format": "true",
+        "saml_name_id_format": "persistent",
+        "saml.signature.algorithm": "RSA_SHA256",
+        "saml_signature_canonicalization_method": "http://www.w3.org/2001/10/xml-exc-c14n#",
+        "saml.server.signature.keyinfo.ext": "false",
+        "saml.server.signature.keyinfo.xmlSigKeyInfoKeyNameTransformer": "NONE",
+        "saml_assertion_consumer_url_post": "https://sp.routed.test/auth/sso/saml/acs/keycloak"
+      },
+      "fullScopeAllowed": false
+    }
+  ],
+  "users": [
+    {
+      "username": "routed-user",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "routed-user@example.test",
+      "firstName": "Routed",
+      "lastName": "Interop",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "routed-password",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

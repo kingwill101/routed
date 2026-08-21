@@ -304,6 +304,18 @@ policy, session or JWT issuance, callback, lifecycle, and safe-redirect path as
 other plugin authentication. Client applications independently install
 `AuthSamlClientPlugin`; no SAML operations appear on clients that omit it.
 
+For a real signed-assertion interoperability check, run the pinned local
+Keycloak harness from this package. It requires Docker and OpenSSL, starts a
+temporary HTTPS IdP with a test realm, verifies the SAML POST and host session,
+then removes the container and generated certificates:
+
+```bash
+./tool/run_saml_keycloak_interop.sh
+```
+
+The harness is intentionally separate from `dart test`: it tests the live
+browser-shaped IdP exchange rather than only a synthesized XML fixture.
+
 To let a browser-facing sign-in screen read only the most recently successful
 method, compose the portable plugin with Routed's cookie adapter and install
 its client plugin separately:

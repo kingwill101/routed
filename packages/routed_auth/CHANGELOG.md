@@ -1,5 +1,9 @@
 ## 0.2.0 - 2026-08-20
 
+- Add a pinned Keycloak interoperability harness for real signed SAML
+  responses. It starts an isolated HTTPS IdP, exercises the typed provider
+  path and ACS/session boundary, verifies the browser form flow, and removes
+  the container and temporary certificates on exit.
 - Enforce host-owned recent-authentication or step-up proof before sensitive
   plugin mutations, including phone and username removal, passkey deletion,
   and API-key revoke/rotate operations. Add the phone removal route and typed
