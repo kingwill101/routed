@@ -59,20 +59,12 @@ releases while preserving `1.0.0` as the next deliberate breaking boundary;
 ### Current hosted-release status
 
 The following snapshot was refreshed from the workspace audit and package
-publish dry-runs on 2026-08-21. Keep this list updated after each successful
-publish.
+publish dry-runs on 2026-08-21 after the recent publish run. Keep this list
+updated after each successful publish.
 
-Packages with no release currently visible on pub.dev:
+Packages that are still drifted from current pub.dev and still require action:
 
-- `routed_auth_cloudflare`
-
-Packages with published upstream versions but local workspace versions that still
-need release decisions:
-
-- `routed_core` `0.5.0` (pub.dev: `0.4.0`)
-- `routed_node` `0.2.0` (pub.dev: `0.1.0`)
-- `server_auth` `0.2.0` (pub.dev: `0.1.0`)
-- `routed_hotwire` `0.1.4` (pub.dev: `0.1.5`)
+- `routed_hotwire` `0.1.4` (pub.dev: `0.1.5`) — local version is behind.
 
 `server_native` is intentionally excluded from this release even though its
 current version is already published; native assets require a separate
@@ -91,15 +83,14 @@ and do not need a release in this batch:
 - `server_sessions` `0.1.0`
 - `server_storage` `0.1.0`
 
-`routed_io` currently differs only in tests, development metadata, ignore
-rules, and its changelog. Leave it out unless those non-library changes are
+`routed_io` currently differs only in tests, development metadata, ignore rules,
+and its changelog. Leave it out unless those non-library changes are
 intentionally released.
 
 The dependency graph has no workspace cycles. The release audit checked 28
 publishable packages after excluding `server_native`, with satisfiable local
-constraints. Five packages are unpublished or locally/version-drifted (`routed_auth_cloudflare`,
-`routed_core`, `routed_node`, `server_auth`, `routed_hotwire`) and the listed
-batch is ready for a dry-run cycle.
+constraints. Only one publishable package remains drifted (`routed_hotwire`),
+and the listed batch is ready for a dry-run cycle.
 
 The auth implementation roadmap is tracked in
 [`docs/auth-worklist.md`](auth-worklist.md).
@@ -118,11 +109,7 @@ The external prerequisites (`server_testing`, `server_testing_shelf`, and
 `property_testing`) are published separately. Filtering the audit's
 dependency order to only non-same status packages gives:
 
-1. `routed_core`
-2. `server_auth`
-3. `routed_node`
-4. `routed_auth_cloudflare`
-5. `routed_hotwire`
+1. `routed_hotwire`
 
 `server_native` is intentionally excluded from this release. Its native
 version, generated metadata, GitHub release assets, and artifact hashes will
@@ -136,10 +123,6 @@ workspace root:
 
 ```bash
 for package in \
-  packages/routed_core \
-  packages/server_auth \
-  packages/routed_node \
-  packages/routed_auth_cloudflare \
   packages/routed_hotwire; do
   (cd "$package" && dart pub publish --dry-run) || {
     result=$?
