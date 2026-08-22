@@ -62,14 +62,18 @@ The following snapshot was refreshed from the workspace audit and package
 publish dry-runs on 2026-08-21 after the recent publish run. Keep this list
 updated after each successful publish.
 
-Packages that are still drifted from current pub.dev and still require action:
+The six packages prepared in this batch were uploaded successfully:
 
-- `routed_analyzer` `0.1.1` (hosted `0.1.0`)
-- `routed_http` `0.1.1` (hosted `0.1.0`)
-- `routed_io` `0.1.1` (hosted `0.1.0`)
-- `server_rate_limit` `0.1.1` (hosted `0.1.0`)
-- `server_sessions` `0.1.1` (hosted `0.1.0`)
-- `server_storage` `0.1.1` (hosted `0.1.0`)
+- `routed_analyzer` `0.1.1`
+- `routed_http` `0.1.1`
+- `routed_io` `0.1.1`
+- `server_rate_limit` `0.1.1`
+- `server_sessions` `0.1.1`
+- `server_storage` `0.1.1`
+
+Pub.dev may take several minutes to expose a newly uploaded version to the
+release audit. Until propagation completes, a temporary `ahead` result for
+one of these versions is expected.
 
 `routed_auth_sqlite` `0.1.0` was accepted by pub.dev on 2026-08-21 after its
 zero-warning dry run. `routed_hotwire` was corrected to `0.1.6` and published
@@ -87,9 +91,9 @@ and do not need a release in this batch:
 - `server_cache` `0.2.0`
 - `server_contracts` `0.1.0`
 
-The dependency graph has no workspace cycles or dependency issues. The release
-audit reports six patch releases with satisfiable local constraints. The listed
-batch is ready for a dry-run cycle.
+The dependency graph has no workspace cycles or dependency issues. All six
+patch releases passed analysis, tests, and zero-warning publish dry-runs before
+upload.
 
 The auth implementation roadmap is tracked in
 [`docs/auth-worklist.md`](auth-worklist.md).
@@ -105,15 +109,15 @@ dart pub publish --dry-run
 Local packages include the extracted `routed_*` and `server_*` packages. Each
 must be published before a package that declares it as a hosted dependency.
 The external prerequisites (`server_testing`, `server_testing_shelf`, and
-`property_testing`) are published separately. Filtering the audit's dependency
-order to only packages that need a hosted release currently gives:
+`property_testing`) are published separately. The six-package release batch
+was uploaded in this order:
 
-- `server_rate_limit`
-- `server_sessions`
-- `server_storage`
-- `routed_analyzer`
-- `routed_http`
-- `routed_io`
+1. `server_rate_limit`
+2. `server_sessions`
+3. `server_storage`
+4. `routed_analyzer`
+5. `routed_http`
+6. `routed_io`
 
 `server_native` is intentionally excluded from this release. Its native
 version, generated metadata, GitHub release assets, and artifact hashes will
@@ -121,9 +125,9 @@ be handled in a separate native release.
 
 ## Publish Order
 
-When you are ready to publish for real, use the numbered order above. A
-dry-run can be performed without publishing anything by running this from the
-workspace root:
+For a future release, use the audit's dependency order after selecting the
+packages whose local versions are ahead of pub.dev. A dry-run can be performed
+without publishing anything by running this from the workspace root:
 
 ```bash
 for package in \
