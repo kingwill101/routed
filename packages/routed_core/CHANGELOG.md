@@ -1,3 +1,10 @@
+## Unreleased
+
+### Fixes
+- Prevent portable Fetch responses from emitting each `Set-Cookie` header
+  twice. This keeps OAuth state cleanup and newly issued session cookies
+  reliable on Worker hosts.
+
 ## 0.5.0
 
 - Warn instead of throwing when the compiled route topology contains duplicate

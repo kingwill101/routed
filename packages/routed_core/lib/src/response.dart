@@ -176,8 +176,15 @@ class Response {
         }
       });
 
-      for (final cookie in native.cookies) {
-        native.headers.add(HttpHeaders.setCookieHeader, cookie.toString());
+      // A synthetic adapter response emits its cookie list from
+      // [AdapterHttpResponse._ensureHeadersSent]. Copying the same cookies
+      // into its headers here would make every Set-Cookie field appear twice
+      // on Fetch/Worker hosts. Native dart:io responses do not have that
+      // adapter flush step, so retain the explicit header copy there.
+      if (native is! AdapterHttpResponse) {
+        for (final cookie in native.cookies) {
+          native.headers.add(HttpHeaders.setCookieHeader, cookie.toString());
+        }
       }
     } else {
       final adapter = _adapter!;

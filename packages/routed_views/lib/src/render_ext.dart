@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:routed_core/routed_core.dart';
 import 'view/engine_manager.dart';
 
@@ -18,7 +16,11 @@ extension RoutedViewRender on EngineContext {
     final manager = container.get<ViewEngineManager>();
     final content = await manager.render(template, data);
     response.statusCode = statusCode;
-    response.headers.contentType = ContentType.html;
+    // Set the value through the portable header API. Assigning
+    // dart:io's ContentType.html is not supported by every Fetch runtime
+    // (notably Cloudflare Workers), while the wire representation is the
+    // same on native and portable hosts.
+    response.headers.set('Content-Type', 'text/html; charset=utf-8');
     response.write(content);
     return response;
   }

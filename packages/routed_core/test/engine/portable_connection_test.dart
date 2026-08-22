@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:routed_core/routed_core.dart';
@@ -147,6 +148,35 @@ void main() {
 
     expect(response.statusCode, 200);
     expect(utf8.decode(response.body.takeBytes()), 'hello-node');
+  });
+
+  test('portable responses emit each cookie exactly once', () async {
+    final engine = Engine(providers: Engine.defaultProviders);
+    engine.get('/cookies', (ctx) {
+      ctx.response.setCookie('session', 'abc', httpOnly: true);
+      ctx.response.cookies.add(Cookie('oauth_state', 'expired'));
+      return ctx.string('ok');
+    });
+    await engine.initialize();
+    addTearDown(engine.close);
+
+    final response = _MemoryResponseAdapter();
+    await engine.handleConnection(
+      HttpConnection(
+        _MemoryRequestAdapter(
+          method: 'GET',
+          uri: Uri.parse('http://example.test/cookies'),
+        ),
+        response,
+      ),
+    );
+
+    final setCookies = response.headers['set-cookie'];
+    expect(setCookies, hasLength(2));
+    expect(
+      setCookies!.map((cookie) => cookie.split(';').first),
+      containsAll(['session=abc', 'oauth_state=expired']),
+    );
   });
 
   test('handlePortable returns value-style PortableResponse', () async {
