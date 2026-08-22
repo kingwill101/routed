@@ -11,6 +11,7 @@ import 'browser.dart';
 import 'browser_validator.dart';
 import 'callbacks.dart';
 import 'deployment.dart';
+import 'framework_session.dart';
 import 'jwt.dart';
 import 'models.dart';
 import 'options.dart';
@@ -33,6 +34,7 @@ abstract final class AuthDeploymentPresets {
     Iterable<AuthServerPlugin<TContext>> plugins = const [],
     Iterable<Uri> trustedOrigins = const [],
     AuthLifecycleDelivery<TContext>? lifecycleDelivery,
+    AuthFrameworkSessionHooks<TContext>? frameworkSessionHooks,
     AuthRateLimiter<TContext>? rateLimiter,
     String basePath = '/auth',
   }) {
@@ -54,6 +56,8 @@ abstract final class AuthDeploymentPresets {
         passwordResetSender: delivery.passwordReset,
         emailChangeSender: delivery.emailChange,
         accountDeletionSender: delivery.accountDeletion,
+        frameworkSessionHooks:
+            frameworkSessionHooks ?? AuthFrameworkSessionHooks<TContext>(),
         basePath: basePath,
       ),
       configuration: _sessionConfiguration(
@@ -69,6 +73,7 @@ abstract final class AuthDeploymentPresets {
     required Iterable<AuthProvider> providers,
     required AuthProductionBoundary boundary,
     required AuthLifecycleDelivery<TContext> lifecycleDelivery,
+    AuthFrameworkSessionHooks<TContext>? frameworkSessionHooks,
     required AuthRateLimiter<TContext> rateLimiter,
     required bool requireVerifiedEmail,
     Iterable<AuthServerPlugin<TContext>> plugins = const [],
@@ -108,6 +113,7 @@ abstract final class AuthDeploymentPresets {
       policies: policies,
       callbacks: callbacks,
       httpClient: httpClient,
+      frameworkSessionHooks: frameworkSessionHooks,
     );
     return AuthDeployment<TContext>.custom(
       options: options,
@@ -126,6 +132,7 @@ abstract final class AuthDeploymentPresets {
     required Iterable<AuthProvider> providers,
     required AuthProductionBoundary boundary,
     required AuthLifecycleDelivery<TContext> lifecycleDelivery,
+    AuthFrameworkSessionHooks<TContext>? frameworkSessionHooks,
     required AuthRateLimiter<TContext> rateLimiter,
     required bool requireVerifiedEmail,
     required bool exposeJwtTokenInSessionResponse,
@@ -203,6 +210,7 @@ abstract final class AuthDeploymentPresets {
       policies: policies,
       callbacks: callbacks,
       httpClient: httpClient,
+      frameworkSessionHooks: frameworkSessionHooks,
     );
     return AuthDeployment<TContext>.custom(
       options: options,
@@ -222,6 +230,7 @@ abstract final class AuthDeploymentPresets {
     required Iterable<AuthProvider> providers,
     required AuthProductionBoundary boundary,
     required AuthLifecycleDelivery<TContext> lifecycleDelivery,
+    AuthFrameworkSessionHooks<TContext>? frameworkSessionHooks,
     required AuthRateLimiter<TContext> rateLimiter,
     required bool requireVerifiedEmail,
     required bool allowSessionExchange,
@@ -280,6 +289,7 @@ abstract final class AuthDeploymentPresets {
       policies: policies,
       callbacks: callbacks,
       httpClient: httpClient,
+      frameworkSessionHooks: frameworkSessionHooks,
     );
     return AuthApiKeyDeployment<TContext>.custom(
       options: options,
@@ -315,6 +325,7 @@ AuthOptions<TContext> _productionOptions<TContext>({
   bool exposeJwtTokenInSessionResponse = false,
   AuthCallbacks<TContext>? callbacks,
   http.Client? httpClient,
+  AuthFrameworkSessionHooks<TContext>? frameworkSessionHooks,
 }) {
   return AuthOptions<TContext>(
     providers: providers.toList(growable: false),
@@ -345,6 +356,8 @@ AuthOptions<TContext> _productionOptions<TContext>({
     rbac: rbac,
     policies: policies,
     callbacks: callbacks,
+    frameworkSessionHooks:
+        frameworkSessionHooks ?? AuthFrameworkSessionHooks<TContext>(),
   );
 }
 

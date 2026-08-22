@@ -351,6 +351,9 @@ void main() {
       passwordPolicy: const PasswordPolicy(minimumLength: 16),
       passwordResetSender: passwordResetSender,
       callbacks: AuthCallbacks<String>(redirect: (context) => context.url),
+      frameworkSessionHooks: AuthFrameworkSessionHooks<String>(
+        afterSignOut: (_) {},
+      ),
     );
 
     final updated = base.copyWith(
@@ -366,6 +369,10 @@ void main() {
     expect(updated.sessionStrategy, equals(AuthSessionStrategy.jwt));
     expect(updated.passwordPolicy.minimumLength, equals(16));
     expect(updated.passwordResetSender, same(passwordResetSender));
+    expect(
+      updated.frameworkSessionHooks.afterSignOut,
+      same(base.frameworkSessionHooks.afterSignOut),
+    );
     expect(
       base.browserProtection.allowedOrigins,
       equals(['https://app.example']),

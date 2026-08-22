@@ -9,6 +9,7 @@ import 'browser.dart';
 import 'browser_validator.dart';
 import 'callbacks.dart';
 import 'email_change.dart';
+import 'framework_session.dart';
 import 'plugin.dart';
 import 'jwt.dart';
 import 'models.dart';
@@ -61,13 +62,16 @@ class AuthOptions<TContext> {
     this.accountDeletionTtl = const Duration(minutes: 30),
     this.accountDeletionSender,
     this.httpClient,
+    AuthFrameworkSessionHooks<TContext>? frameworkSessionHooks,
     this.enforceCsrf = true,
     this.requireVerifiedEmail = false,
     this.exposeJwtTokenInSessionResponse = false,
     this.rbac = const RbacOptions(),
     this.policies = const PolicyOptions(),
     AuthCallbacks<TContext>? callbacks,
-  }) : storeMode = storeMode,
+  }) : frameworkSessionHooks =
+           frameworkSessionHooks ?? AuthFrameworkSessionHooks<TContext>(),
+       storeMode = storeMode,
        runtimeMode = runtimeMode ?? _defaultRuntimeMode(storeMode),
        browserProtection =
            browserProtection ??
@@ -255,6 +259,14 @@ class AuthOptions<TContext> {
   /// HTTP client used for OAuth calls.
   final http.Client? httpClient;
 
+  /// Optional bridge for framework-owned session state.
+  ///
+  /// Auth core can revoke its own session and clear its principal, but it
+  /// cannot know how an adapter represents the surrounding framework session
+  /// or its cookie. Configure [AuthFrameworkSessionHooks.afterSignOut] when
+  /// the adapter must explicitly expire that cookie in the response.
+  final AuthFrameworkSessionHooks<TContext> frameworkSessionHooks;
+
   /// Whether to enforce CSRF checks on sign-in/sign-out.
   final bool enforceCsrf;
 
@@ -385,6 +397,7 @@ class AuthOptions<TContext> {
     Duration? accountDeletionTtl,
     AuthAccountDeletionSender<TContext>? accountDeletionSender,
     http.Client? httpClient,
+    AuthFrameworkSessionHooks<TContext>? frameworkSessionHooks,
     bool? enforceCsrf,
     bool? requireVerifiedEmail,
     bool? exposeJwtTokenInSessionResponse,
@@ -429,6 +442,8 @@ class AuthOptions<TContext> {
       accountDeletionSender:
           accountDeletionSender ?? this.accountDeletionSender,
       httpClient: httpClient ?? this.httpClient,
+      frameworkSessionHooks:
+          frameworkSessionHooks ?? this.frameworkSessionHooks,
       enforceCsrf: enforceCsrf ?? this.enforceCsrf,
       requireVerifiedEmail: requireVerifiedEmail ?? this.requireVerifiedEmail,
       exposeJwtTokenInSessionResponse:

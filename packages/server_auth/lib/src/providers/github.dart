@@ -371,6 +371,8 @@ OAuthProvider<GitHubProfile> githubProvider(GitHubProviderOptions options) {
     userInfoEndpoint: Uri.parse('$apiBaseUrl/user'),
     redirectUri: options.redirectUri,
     scopes: options.scopes,
+    userInfoRequest: (token, httpClient, endpoint) =>
+        _loadGitHubUserInfo(token, httpClient, endpoint),
     profileParser: GitHubProfile.fromJson,
     profileSerializer: (profile) => profile.toJson(),
     profile: (profile) {
@@ -402,6 +404,40 @@ OAuthProvider<GitHubProfile> githubProvider(GitHubProviderOptions options) {
   );
 }
 
+Future<Map<String, dynamic>> _loadGitHubUserInfo(
+  OAuthTokenResponse token,
+  http.Client httpClient,
+  Uri endpoint,
+) async {
+  final response = await httpClient.get(
+    endpoint,
+    headers: {
+      'Authorization': 'Bearer ${token.accessToken}',
+      'Accept': 'application/vnd.github+json',
+      'User-Agent': 'server_auth',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  );
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw OAuth2Exception(
+      'GitHub user-info endpoint responded with ${response.statusCode}',
+      response.statusCode,
+    );
+  }
+  if (response.body.length > maxOAuthResponseCharacters) {
+    throw OAuth2Exception('invalid_userinfo_response');
+  }
+  try {
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw const FormatException('expected JSON object');
+    }
+    return decoded.map((key, value) => MapEntry(key.toString(), value));
+  } catch (_) {
+    throw OAuth2Exception('invalid_userinfo_response');
+  }
+}
+
 Future<List<GitHubEmail>> _loadGitHubEmails(
   OAuthTokenResponse token,
   http.Client httpClient,
@@ -414,7 +450,9 @@ Future<List<GitHubEmail>> _loadGitHubEmails(
           Uri.parse('$apiBaseUrl/user/emails'),
           headers: {
             'Authorization': 'Bearer ${token.accessToken}',
+            'Accept': 'application/vnd.github+json',
             'User-Agent': 'server_auth',
+            'X-GitHub-Api-Version': '2022-11-28',
           },
         )
         .timeout(requestTimeout);

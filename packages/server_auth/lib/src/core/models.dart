@@ -188,14 +188,64 @@ class AuthUser {
     return AuthPrincipal(
       id: id,
       roles: roles,
-      attributes: {
-        ...attributes,
-        if (email != null) 'email': email,
-        if (name != null) 'name': name,
-        if (image != null) 'image': image,
-        if (isAnonymous) 'isAnonymous': true,
-      },
+      attributes: {...attributes, ..._standardPrincipalAttributes()},
     );
+  }
+
+  /// Converts this user to the compact principal stored in a framework
+  /// session.
+  ///
+  /// Provider profiles can contain large, provider-specific metadata. A
+  /// framework session may be serialized into a browser cookie, so retaining
+  /// those fields here can exceed browser cookie limits and make a successful
+  /// sign-in unusable on the next request. Applications that need additional
+  /// session claims can explicitly call `SessionAuth.updateSession` with an
+  /// [AuthPrincipal] containing the claims they intend to retain.
+  AuthPrincipal toSessionPrincipal() {
+    return AuthPrincipal(
+      id: id,
+      roles: roles,
+      attributes: _compactStandardPrincipalAttributes(),
+    );
+  }
+
+  Map<String, dynamic> _standardPrincipalAttributes() {
+    return {
+      if (email != null) 'email': email,
+      if (name != null) 'name': name,
+      if (image != null) 'image': image,
+      if (isAnonymous) 'isAnonymous': true,
+    };
+  }
+
+  Map<String, dynamic> _compactStandardPrincipalAttributes() {
+    final fallbackEmail = _compactAttribute('email', maxLength: 320);
+    final compactEmail = _compactValue(email, maxLength: 320);
+    final compactName = _compactValue(name, maxLength: 256);
+    final compactImage = _compactValue(image, maxLength: 2048);
+    return {
+      if (compactEmail != null) 'email': compactEmail,
+      if (compactEmail == null && email == null && fallbackEmail != null)
+        'email': fallbackEmail,
+      if (compactName != null) 'name': compactName,
+      if (compactImage != null) 'image': compactImage,
+      if (isAnonymous) 'isAnonymous': true,
+    };
+  }
+
+  String? _compactValue(String? value, {required int maxLength}) {
+    if (value == null || value.trim().isEmpty || value.length > maxLength) {
+      return null;
+    }
+    return value;
+  }
+
+  String? _compactAttribute(String key, {required int maxLength}) {
+    final value = attributes[key];
+    if (value is! String || value.trim().isEmpty || value.length > maxLength) {
+      return null;
+    }
+    return value;
   }
 
   /// Creates a user safe to retain in events and audit records.

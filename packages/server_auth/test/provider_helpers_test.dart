@@ -1343,6 +1343,7 @@ void main() {
     'resolveOAuthCallbackSignInForProvider binds typed OAuth challenges once',
     () async {
       final challengeStore = InMemoryAuthOAuthChallengeStore();
+      final session = <String, String>{};
       final provider = OAuthProvider<Map<String, dynamic>>(
         id: 'example',
         name: 'Example',
@@ -1362,8 +1363,12 @@ void main() {
             callbackKey: '_auth.callback',
             challengeStore: challengeStore,
             callbackUrl: '/dashboard',
-            writeSession: (_, _) => fail('OAuth challenge used session state'),
+            writeSession: (key, value) => session[key] = value,
           );
+      expect(
+        session[authProviderStateSessionKey('_auth.state', provider.id)],
+        equals(started.state),
+      );
 
       final store = CallbackAuthStore(
         onCreateUser: (user) async => AuthUser(id: 'created-user'),

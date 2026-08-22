@@ -23,6 +23,48 @@ void main() {
     );
   });
 
+  test('session principals omit provider profile metadata', () {
+    final user = AuthUser(
+      id: 'user-1',
+      email: 'user@example.com',
+      name: 'Routed User',
+      image: 'https://example.com/avatar.png',
+      roles: const ['member'],
+      attributes: {
+        'providerProfile': List<String>.filled(5000, 'profile-data'),
+        'emailVerified': true,
+      },
+    );
+
+    final principal = user.toSessionPrincipal();
+
+    expect(principal.id, equals('user-1'));
+    expect(principal.roles, equals(['member']));
+    expect(
+      principal.attributes,
+      equals({
+        'email': 'user@example.com',
+        'name': 'Routed User',
+        'image': 'https://example.com/avatar.png',
+      }),
+    );
+    expect(principal.attributes.containsKey('providerProfile'), isFalse);
+  });
+
+  test('session principals bound direct profile claims', () {
+    final user = AuthUser(
+      id: 'user-1',
+      email: 'e' * 321,
+      name: 'n' * 257,
+      image: 'i' * 2049,
+      attributes: {'email': 'fallback@example.com'},
+    );
+
+    final principal = user.toSessionPrincipal();
+
+    expect(principal.attributes, isEmpty);
+  });
+
   test('user deserialization tolerates hostile types and nested secrets', () {
     final user = AuthUser.fromJson({
       'id': 'user-1',

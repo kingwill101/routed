@@ -1,3 +1,23 @@
+## Unreleased
+
+- Mirror only the short-lived OAuth state into the framework session when a
+  durable challenge store is configured, so adapters can validate the browser
+  binding even if the separate state cookie is not returned by a host. Remove
+  the mirrored state as soon as the durable challenge is consumed.
+- Fix GitHub OAuth sign-in against the current GitHub REST API by sending the
+  required `User-Agent`, media-type, and API-version headers when loading the
+  authenticated user profile. Keep the bounded JSON parsing and private-email
+  fallback in the provider-specific request path.
+- Add regression coverage that verifies GitHub user-info requests include the
+  required headers before profile mapping is attempted.
+- Add typed framework-session lifecycle hooks to `AuthOptions`, allowing
+  adapters to synchronize host-owned session cookies after auth sign-out
+  without coupling the auth core to a specific HTTP framework.
+- Add compact framework-session principal projection so provider profile
+  metadata cannot overflow browser-backed session cookies during sign-in.
+- Bound the direct email, display-name, and avatar claims included in compact
+  framework-session principals, not only provider-profile fallback attributes.
+
 ## 0.2.0 - 2026-08-20
 
 - Breaking: require every `AuthServerPlugin` to publish an

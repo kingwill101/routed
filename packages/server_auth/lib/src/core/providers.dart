@@ -658,12 +658,15 @@ resolveOAuthAuthorizationStart<TContext, TProfile extends Object>({
     callbackUrl: callbackUrl,
   );
 
-  if (challengeStore == null) {
-    writeSession(
-      authProviderStateSessionKey(stateKey, provider.id),
-      start.state,
-    );
-  }
+  // Keep a browser-bound copy in the framework session even when the
+  // one-time challenge is persisted durably. The durable store owns replay
+  // protection and the PKCE material; the session copy makes the binding
+  // resilient when a host/browser drops the auxiliary state cookie during a
+  // cross-site redirect.
+  writeSession(
+    authProviderStateSessionKey(stateKey, provider.id),
+    start.state,
+  );
 
   if (provider.onStateGenerated != null) {
     await Future.sync(
@@ -1418,6 +1421,10 @@ resolveOAuthCallbackSignInForProvider<TContext, TProfile extends Object>({
       nonce: challenge.nonce,
       callbackUrl: challenge.callbackUrl,
     );
+    // The durable challenge is the replay guard, but the mirrored framework
+    // state should be removed from the browser session once that challenge is
+    // consumed as well.
+    removeSession?.call(authProviderStateSessionKey(stateKey, provider.id));
   } else {
     sessionValues = resolveOAuthCallbackSessionValues(
       providerId: provider.id,

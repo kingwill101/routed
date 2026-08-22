@@ -84,6 +84,42 @@ void main() {
     expect(enriched.email, isNull);
   });
 
+  test('GitHub user-info requests include GitHub API headers', () async {
+    final provider = githubProvider(
+      const GitHubProviderOptions(
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        redirectUri: 'https://app.test/callback/github',
+      ),
+    );
+    late http.BaseRequest request;
+    final client = MockClient((received) async {
+      request = received;
+      return http.Response(
+        jsonEncode(<String, dynamic>{
+          'id': 1,
+          'login': 'octocat',
+          'name': 'The Octocat',
+          'email': 'octo@example.com',
+        }),
+        200,
+      );
+    });
+
+    final profile = await loadOAuthProfile(
+      provider,
+      token: _token(),
+      httpClient: client,
+    );
+
+    expect(profile['id'], equals(1));
+    expect(request.url, equals(Uri.parse('https://api.github.com/user')));
+    expect(request.headers['Authorization'], equals('Bearer access-token'));
+    expect(request.headers['Accept'], equals('application/vnd.github+json'));
+    expect(request.headers['User-Agent'], equals('server_auth'));
+    expect(request.headers['X-GitHub-Api-Version'], equals('2022-11-28'));
+  });
+
   test(
     'Dropbox user-info rejects oversized responses before decoding',
     () async {
@@ -115,4 +151,83 @@ void main() {
       );
     },
   );
+
+  test(
+    'Dropbox profile preserves current-account data and identity mapping',
+    () {
+      final provider = dropboxProvider(
+        const DropboxProviderOptions(
+          clientId: 'client-id',
+          clientSecret: 'client-secret',
+          redirectUri: 'https://app.test/callback/dropbox',
+        ),
+      );
+      final profile = DropboxProfile.fromJson(<String, dynamic>{
+        'account_id': 'dbid:AA123',
+        'email': 'dropbox@example.com',
+        'email_verified': true,
+        'name': <String, dynamic>{
+          'display_name': 'Dropbox User',
+          'given_name': 'Dropbox',
+          'surname': 'User',
+        },
+        'profile_photo_url': 'https://cdn.example.test/avatar.png',
+        'disabled': false,
+        'country': 'JM',
+        'locale': 'en',
+        'is_paired': true,
+        'account_type': <String, dynamic>{'.tag': 'pro'},
+      });
+
+      final user = provider.mapProfile(profile);
+      expect(user.id, equals('dbid:AA123'));
+      expect(user.email, equals('dropbox@example.com'));
+      expect(user.name, equals('Dropbox User'));
+      expect(user.image, equals('https://cdn.example.test/avatar.png'));
+      expect(user.attributes['account_id'], equals('dbid:AA123'));
+      expect(user.attributes['email_verified'], isTrue);
+      expect(user.attributes['account_type'], <String, dynamic>{'.tag': 'pro'});
+    },
+  );
+
+  test('Dropbox user-info uses the current-account POST contract', () async {
+    final provider = dropboxProvider(
+      const DropboxProviderOptions(
+        clientId: 'client-id',
+        clientSecret: 'client-secret',
+        redirectUri: 'https://app.test/callback/dropbox',
+      ),
+    );
+    late http.Request request;
+    final client = MockClient((received) async {
+      request = received;
+      return http.Response(
+        jsonEncode(<String, dynamic>{
+          'account_id': 'dbid:AA123',
+          'email': 'dropbox@example.com',
+          'name': <String, dynamic>{'display_name': 'Dropbox User'},
+          'account_type': <String, dynamic>{'.tag': 'basic'},
+        }),
+        200,
+      );
+    });
+
+    final profile = await loadOAuthProfile(
+      provider,
+      token: _token(),
+      httpClient: client,
+    );
+
+    expect(request.method, equals('POST'));
+    expect(
+      request.url,
+      equals(
+        Uri.parse('https://api.dropboxapi.com/2/users/get_current_account'),
+      ),
+    );
+    expect(request.headers['Authorization'], equals('Bearer access-token'));
+    expect(request.headers['Content-Type'], equals('application/json'));
+    expect(request.body, equals('null'));
+    expect(profile['account_id'], equals('dbid:AA123'));
+  });
 }
