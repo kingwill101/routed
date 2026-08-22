@@ -20,8 +20,16 @@ class DeployCommand extends BaseCommand {
       )
       ..addOption(
         'entry',
-        help: 'Dart library that exports createEngine().',
+        help: 'Dart library that exports the selected Worker factory.',
         valueHelp: 'package:my_app/app.dart',
+      )
+      ..addOption(
+        'cloudflare-factory',
+        help:
+            'Cloudflare factory shape. Use environment when the app exports '
+            'createCloudflareEngine(CloudflareEnvironment).',
+        allowed: const ['engine', 'environment'],
+        defaultsTo: 'engine',
       )
       ..addOption(
         'runtime',
@@ -119,6 +127,14 @@ class DeployCommand extends BaseCommand {
     if (target != 'cloudflare' && target != 'netlify' && target != 'vercel') {
       throw UsageException('Unsupported deployment target: $target', usage);
     }
+    final cloudflareFactory =
+        results?['cloudflare-factory'] as String? ?? 'engine';
+    if (target != 'cloudflare' && cloudflareFactory != 'engine') {
+      throw UsageException(
+        '--cloudflare-factory is only supported for Cloudflare deployments.',
+        usage,
+      );
+    }
     final dartDurableObjects = _parseDurableObjectBindings(target);
     final containers = _parseContainerBindings(target);
     final durableObjects = _mergeDurableObjectBindings(
@@ -199,6 +215,7 @@ class DeployCommand extends BaseCommand {
     await dartEntry.writeAsString(
       generateCloudflareWorkerEntry(
         importPath: entry,
+        factory: cloudflareFactory,
         durableObjectClasses: dartDurableObjects.map(
           (binding) => binding.className,
         ),
@@ -1214,8 +1231,20 @@ final class _CloudflareSecretsStoreBinding {
 
 String generateCloudflareWorkerEntry({
   required String importPath,
+  String factory = 'engine',
   Iterable<String> durableObjectClasses = const <String>[],
 }) {
+  final factorySource = switch (factory) {
+    'engine' => 'defineCloudflareFetchFactoryAsync(app.createEngine);',
+    'environment' =>
+      'defineCloudflareFetchFactoryWithEnvironmentAsync('
+          'app.createCloudflareEngine);',
+    _ => throw ArgumentError.value(
+      factory,
+      'factory',
+      'must be engine or environment',
+    ),
+  };
   final classes = durableObjectClasses.toList(growable: false);
   final registration = classes.isEmpty
       ? ''
@@ -1228,7 +1257,7 @@ import 'package:routed_node/cloudflare.dart';
 import '$importPath' as app;
 
 void main() {
-$registration  defineCloudflareFetchFactoryAsync(app.createEngine);
+$registration  $factorySource
 }
 ''';
 }

@@ -76,6 +76,20 @@ routed deploy --target cloudflare \
   --d1 DB=app-db:00000000-0000-0000-0000-000000000000
 ```
 
+Applications that open host bindings themselves can select an environment
+factory. If `lib/app.dart` exports
+`createCloudflareEngine(CloudflareEnvironment)`, use:
+
+```bash
+routed deploy --target cloudflare \
+  --entry package:my_app/app.dart \
+  --cloudflare-factory environment \
+  --d1 DB=app-db:00000000-0000-0000-0000-000000000000
+```
+
+This generates `defineCloudflareFetchFactoryWithEnvironmentAsync` so D1 and
+other typed Worker bindings are supplied by the host at request time.
+
 R2 buckets, Queue producers, and Worker-to-Worker service bindings use the
 same `BINDING=RESOURCE_NAME` form:
 

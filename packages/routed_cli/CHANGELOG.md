@@ -1,5 +1,9 @@
 ## 0.3.0
 
+- Cloudflare deploys now support environment-backed Worker factories with
+  `--cloudflare-factory environment`, generating
+  `defineCloudflareFetchFactoryWithEnvironmentAsync` for typed runtime
+  bindings such as D1.
 - Defer project-command discovery until an invocation selects a non-built-in
   command, so broken project commands cannot block global flags or built-ins.
 - New projects now get a typed `lib/config.dart` bootstrap. `lib/app.dart`

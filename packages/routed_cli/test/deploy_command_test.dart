@@ -21,6 +21,8 @@ void main() {
     expect(pubspec.readAsStringSync(), contains('routed_node'));
 
     final parsed = command.argParser.parse([
+      '--cloudflare-factory',
+      'environment',
       '--durable-object',
       'COUNTER=Counter',
       '--durable-object',
@@ -41,6 +43,7 @@ void main() {
       'API_SECRET=store-1:API_KEY',
     ]);
     expect(parsed['durable-object'], ['COUNTER=Counter', 'ROOM=ChatRoom']);
+    expect(parsed['cloudflare-factory'], 'environment');
     expect(parsed['d1'], ['DB=routed-node-api-demo:database-id']);
     expect(parsed['r2'], ['FILES=app-files']);
     expect(parsed['queue'], ['EVENTS=app-events']);
@@ -60,6 +63,16 @@ void main() {
     expect(entry, contains("'Counter': app.Counter.new"));
     expect(entry, contains("'ChatRoom': app.ChatRoom.new"));
     expect(entry, contains('defineCloudflareFetchFactoryAsync'));
+
+    final environmentEntry = generateCloudflareWorkerEntry(
+      importPath: 'package:demo_app/app.dart',
+      factory: 'environment',
+    );
+    expect(
+      environmentEntry,
+      contains('defineCloudflareFetchFactoryWithEnvironmentAsync'),
+    );
+    expect(environmentEntry, contains('app.createCloudflareEngine'));
 
     final wrapper = generateCloudflareWorkerWrapper('/tmp/worker.dart.js', [
       'Counter',
