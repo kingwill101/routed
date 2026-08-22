@@ -13,6 +13,7 @@ export 'src/binding/multipart.dart';
 export 'src/binding/query.dart';
 export 'src/binding/uri.dart';
 export 'src/binding/utils.dart';
+export 'src/binding/xml.dart';
 export 'src/binding/convert/query_params.dart';
 export 'src/binding/convert/sse.dart';
 export 'src/binding/convert/xml.dart';

@@ -9,6 +9,7 @@ import 'json.dart' show JsonBinding;
 import 'multipart.dart' show MultipartBinding;
 import 'query.dart' show QueryBinding;
 import 'uri.dart' show UriBinding;
+import 'xml.dart' show XmlBinding;
 
 /// Interface for objects that can be bound from a map of data.
 abstract class Bindable {
@@ -27,6 +28,7 @@ final formBinding = FormBinding();
 final uriBinding = UriBinding();
 final multipartBinding = MultipartBinding();
 final queryBinding = QueryBinding();
+final xmlBinding = XmlBinding();
 
 enum MimeType {
   json('application/json'),
@@ -59,7 +61,7 @@ Binding defaultBinding(String method, String contentType) {
       return jsonBinding;
     case MimeType.xml:
     case MimeType.xml2:
-      throw UnimplementedError('XML binding not yet supported.');
+      return xmlBinding;
     case MimeType.multipartPostForm:
       return multipartBinding;
     case MimeType.postForm:

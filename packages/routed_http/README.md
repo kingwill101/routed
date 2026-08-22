@@ -9,7 +9,7 @@ requests.
 ```yaml
 dependencies:
   routed_core: ^0.5.0
-  routed_http: ^0.1.0
+  routed_http: ^0.1.2
 ```
 
 Import `package:routed_http/routed_http.dart` to add the HTTP extensions to
@@ -33,11 +33,16 @@ Future<void> main() async {
 }
 ```
 
-The package includes JSON, form, query, URI, and multipart bindings; binding
+The package includes JSON, XML, form, query, URI, and multipart bindings; binding
 extensions such as `ctx.bind(...)`, `ctx.bindJSON(...)`, and
 `ctx.bindQuery(...)`; content negotiation; ETag and conditional-request
 helpers; SSE encoding/streaming; and an opt-in gzip provider for buffered
 responses.
+
+XML request bodies are selected automatically for `application/xml` and
+`text/xml`. They bind to the same map or `Bindable` targets as the other body
+bindings, preserving the document root, attributes under `@attributes`, and
+text under `#text`.
 
 To use compression directly from this package, pass an immutable typed
 configuration to the provider:

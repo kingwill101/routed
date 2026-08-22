@@ -20,7 +20,7 @@ manifests in this checkout as of 2026-08-21.
 | [`routed_sessions`](https://github.com/kingwill101/routed/tree/master/packages/routed_sessions) | `0.2.0` | Session stores, middleware, and context helpers |
 | [`routed_storage`](https://github.com/kingwill101/routed/tree/master/packages/routed_storage) | `0.2.0` | Storage managers, disks, static-mount provider, middleware, and filesystem helpers |
 | [`routed_views`](https://github.com/kingwill101/routed/tree/master/packages/routed_views) | `0.2.0` | View rendering, localization, and translation helpers |
-| [`routed_http`](https://github.com/kingwill101/routed/tree/master/packages/routed_http) | `0.1.1` | Binding, multipart, negotiation, buffered gzip compression, SSE, and conditional requests |
+| [`routed_http`](https://github.com/kingwill101/routed/tree/master/packages/routed_http) | `0.1.2` | JSON/XML binding, multipart, negotiation, buffered gzip compression, SSE, and conditional requests |
 | [`routed_hotwire`](https://github.com/kingwill101/routed/tree/master/packages/routed_hotwire) | `0.1.6` | Turbo and Stimulus response helpers |
 | [`routed_validation`](https://github.com/kingwill101/routed/tree/master/packages/routed_validation) | `0.1.0` | Validation rules and validation utilities |
 | [`routed_openapi`](https://github.com/kingwill101/routed/tree/master/packages/routed_openapi) | `0.1.0` | OpenAPI route manifests plus OpenAPI 3.1 generation from composed auth plugins |
