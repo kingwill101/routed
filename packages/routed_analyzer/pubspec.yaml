@@ -1,6 +1,6 @@
 name: routed_analyzer
 description: Analyzer plugin and lint rules for Routed route and schema authoring.
-version: 0.1.0
+version: 0.1.1
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_analyzer
 tags:
   - analyzer

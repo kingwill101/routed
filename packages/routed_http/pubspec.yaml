@@ -1,6 +1,6 @@
 name: routed_http
 description: HTTP utilities for Routed — binding, multipart, negotiation, SSE and conditional requests.
-version: 0.1.0
+version: 0.1.1
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_http
 funding:
   - https://www.buymeacoffee.com/kingwill101

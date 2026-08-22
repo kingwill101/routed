@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.1
 
 - Serialized cache-backed rate-limit updates so concurrent requests cannot
   consume the same quota state.

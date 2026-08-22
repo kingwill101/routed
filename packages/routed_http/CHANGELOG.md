@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.1
 
 - Documented the standalone HTTP adapter surface used by modular Routed
   applications.

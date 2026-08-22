@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.1
 
 - Aligned session configuration and contract dependencies with the current
   server runtime.

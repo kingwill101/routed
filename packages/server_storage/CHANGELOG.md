@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.1
 
 - Hardened local-disk path resolution against directory escapes and invalid
   disk names.

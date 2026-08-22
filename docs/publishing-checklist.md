@@ -64,8 +64,12 @@ updated after each successful publish.
 
 Packages that are still drifted from current pub.dev and still require action:
 
-- No publishable package is currently behind the hosted release recorded by
-  the latest audit.
+- `routed_analyzer` `0.1.1` (hosted `0.1.0`)
+- `routed_http` `0.1.1` (hosted `0.1.0`)
+- `routed_io` `0.1.1` (hosted `0.1.0`)
+- `server_rate_limit` `0.1.1` (hosted `0.1.0`)
+- `server_sessions` `0.1.1` (hosted `0.1.0`)
+- `server_storage` `0.1.1` (hosted `0.1.0`)
 
 `routed_auth_sqlite` `0.1.0` was accepted by pub.dev on 2026-08-21 after its
 zero-warning dry run. `routed_hotwire` was corrected to `0.1.6` and published
@@ -78,24 +82,14 @@ artifact and metadata release.
 Packages whose publishable contents still match their current pub.dev release
 and do not need a release in this batch:
 
-- `routed_analyzer` `0.1.0`
-- `routed_http` `0.1.0`
 - `routed_logging` `0.2.0`
 - `routed_testing` `0.4.0`
 - `server_cache` `0.2.0`
 - `server_contracts` `0.1.0`
-- `server_rate_limit` `0.1.0`
-- `server_sessions` `0.1.0`
-- `server_storage` `0.1.0`
-- `routed_auth_sqlite` `0.1.0`
-
-`routed_io` currently differs only in tests, development metadata, ignore rules,
-and its changelog. Leave it out unless those non-library changes are
-intentionally released.
 
 The dependency graph has no workspace cycles or dependency issues. The release
-audit includes the unpublished SQLite adapter in its order and reports
-satisfiable local constraints. The listed batch is ready for a dry-run cycle.
+audit reports six patch releases with satisfiable local constraints. The listed
+batch is ready for a dry-run cycle.
 
 The auth implementation roadmap is tracked in
 [`docs/auth-worklist.md`](auth-worklist.md).
@@ -112,7 +106,14 @@ Local packages include the extracted `routed_*` and `server_*` packages. Each
 must be published before a package that declares it as a hosted dependency.
 The external prerequisites (`server_testing`, `server_testing_shelf`, and
 `property_testing`) are published separately. Filtering the audit's dependency
-order to only packages that need a hosted release currently gives no packages.
+order to only packages that need a hosted release currently gives:
+
+- `server_rate_limit`
+- `server_sessions`
+- `server_storage`
+- `routed_analyzer`
+- `routed_http`
+- `routed_io`
 
 `server_native` is intentionally excluded from this release. Its native
 version, generated metadata, GitHub release assets, and artifact hashes will
@@ -126,7 +127,12 @@ workspace root:
 
 ```bash
 for package in \
-  packages/routed_auth_sqlite; do
+  packages/server_rate_limit \
+  packages/server_sessions \
+  packages/server_storage \
+  packages/routed_analyzer \
+  packages/routed_http \
+  packages/routed_io; do
   (cd "$package" && dart pub publish --dry-run) || {
     result=$?
     # Pub uses exit 65 for validation warnings (for example, a dirty tree).

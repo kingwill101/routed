@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.1
 
 - Replace generated schema/default/field inspection with the Dart type of each
   provider's typed configuration object.

@@ -20,7 +20,7 @@ manifests in this checkout as of 2026-08-21.
 | [`routed_sessions`](https://github.com/kingwill101/routed/tree/master/packages/routed_sessions) | `0.2.0` | Session stores, middleware, and context helpers |
 | [`routed_storage`](https://github.com/kingwill101/routed/tree/master/packages/routed_storage) | `0.2.0` | Storage managers, disks, static-mount provider, middleware, and filesystem helpers |
 | [`routed_views`](https://github.com/kingwill101/routed/tree/master/packages/routed_views) | `0.2.0` | View rendering, localization, and translation helpers |
-| [`routed_http`](https://github.com/kingwill101/routed/tree/master/packages/routed_http) | `0.1.0` | Binding, multipart, negotiation, buffered gzip compression, SSE, and conditional requests |
+| [`routed_http`](https://github.com/kingwill101/routed/tree/master/packages/routed_http) | `0.1.1` | Binding, multipart, negotiation, buffered gzip compression, SSE, and conditional requests |
 | [`routed_hotwire`](https://github.com/kingwill101/routed/tree/master/packages/routed_hotwire) | `0.1.6` | Turbo and Stimulus response helpers |
 | [`routed_validation`](https://github.com/kingwill101/routed/tree/master/packages/routed_validation) | `0.1.0` | Validation rules and validation utilities |
 | [`routed_openapi`](https://github.com/kingwill101/routed/tree/master/packages/routed_openapi) | `0.1.0` | OpenAPI route manifests plus OpenAPI 3.1 generation from composed auth plugins |
@@ -29,7 +29,7 @@ manifests in this checkout as of 2026-08-21.
 
 | Package | Version | Role |
 | --- | --- | --- |
-| [`routed_io`](https://github.com/kingwill101/routed/tree/master/packages/routed_io) | `0.1.0` | `dart:io` server transport |
+| [`routed_io`](https://github.com/kingwill101/routed/tree/master/packages/routed_io) | `0.1.1` | `dart:io` server transport |
 | [`routed_node`](https://github.com/kingwill101/routed/tree/master/packages/routed_node) | `0.2.0` | Node.js, Bun, Deno, and Fetch/Cloudflare edge transports and bindings |
 | [`server_native`](https://github.com/kingwill101/routed/tree/master/packages/server_native) | `0.1.3+1` | Rust-backed native HTTP server runtime |
 
@@ -40,16 +40,16 @@ manifests in this checkout as of 2026-08-21.
 | [`server_contracts`](https://github.com/kingwill101/routed/tree/master/packages/server_contracts) | `0.1.0` | Framework-agnostic interfaces and value contracts |
 | [`server_auth`](https://github.com/kingwill101/routed/tree/master/packages/server_auth) | `0.2.0` | Typed auth plugins, stores, clients, OAuth/OIDC, WebAuthn, deployment presets, and conformance support |
 | [`server_cache`](https://github.com/kingwill101/routed/tree/master/packages/server_cache) | `0.2.0` | Framework-agnostic cache stores and repositories |
-| [`server_sessions`](https://github.com/kingwill101/routed/tree/master/packages/server_sessions) | `0.1.0` | Framework-agnostic session runtime |
-| [`server_storage`](https://github.com/kingwill101/routed/tree/master/packages/server_storage) | `0.1.0` | Framework-agnostic storage runtime |
-| [`server_rate_limit`](https://github.com/kingwill101/routed/tree/master/packages/server_rate_limit) | `0.1.0` | Framework-agnostic rate-limit runtime |
+| [`server_sessions`](https://github.com/kingwill101/routed/tree/master/packages/server_sessions) | `0.1.1` | Framework-agnostic session runtime |
+| [`server_storage`](https://github.com/kingwill101/routed/tree/master/packages/server_storage) | `0.1.1` | Framework-agnostic storage runtime |
+| [`server_rate_limit`](https://github.com/kingwill101/routed/tree/master/packages/server_rate_limit) | `0.1.1` | Framework-agnostic rate-limit runtime |
 
 ## Tooling and testing
 
 | Package | Version | Role |
 | --- | --- | --- |
 | [`routed_cli`](https://github.com/kingwill101/routed/tree/master/packages/routed_cli) | `0.3.0` | Project commands, configuration, development, and deployment tooling |
-| [`routed_analyzer`](https://github.com/kingwill101/routed/tree/master/packages/routed_analyzer) | `0.1.0` | Analyzer plugin and Routed lint rules |
+| [`routed_analyzer`](https://github.com/kingwill101/routed/tree/master/packages/routed_analyzer) | `0.1.1` | Analyzer plugin and Routed lint rules |
 | [`routed_openapi_builder`](https://github.com/kingwill101/routed/tree/master/packages/routed_openapi_builder) | `0.1.0` | Build-time OpenAPI artifact generation |
 | [`routed_testing`](https://github.com/kingwill101/routed/tree/master/packages/server_testing/routed_testing) | `0.4.0` | Routed adapter for the upstream `server_testing` harness |
 

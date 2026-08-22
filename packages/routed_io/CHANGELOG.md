@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.1
 
 - Verify native `dart:io` request handling against the public Routed auth
   runtime conformance contract.
