@@ -104,6 +104,7 @@ const _cloudflareAuthStyles = r'''
     .form-help { color: var(--faint); font-size: .78rem; margin: .45rem 0 0; }
     .form-submit { margin-top: 1.5rem; width: 100%; }
     .alert { background: rgba(190, 24, 93, .13); border: 1px solid rgba(253, 164, 175, .35); border-radius: .55rem; color: var(--danger); font-size: .88rem; margin-top: 1rem; padding: .75rem .85rem; }
+    .success { background: rgba(34, 197, 94, .12); border: 1px solid rgba(134, 239, 172, .3); border-radius: .55rem; color: var(--success); font-size: .88rem; margin: 1rem 0; padding: .75rem .85rem; }
     .social-divider { align-items: center; color: var(--faint); display: flex; font-family: "SFMono-Regular", Consolas, monospace; font-size: .7rem; gap: .7rem; letter-spacing: .1em; margin: 1.5rem 0 1rem; text-transform: uppercase; }
     .social-divider::before, .social-divider::after { background: var(--line); content: ""; flex: 1; height: 1px; }
     .social-actions { display: grid; gap: .65rem; }
@@ -123,6 +124,11 @@ const _cloudflareAuthStyles = r'''
     .panel-links { display: grid; gap: .65rem; margin-top: 1rem; }
     .panel-links a { border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; padding: .7rem 0; }
     .panel-links a:last-child { border-bottom: 0; }
+    .session-list { display: grid; gap: .75rem; margin: 1rem 0 1.25rem; }
+    .session-row { align-items: center; border-bottom: 1px solid var(--line); display: flex; gap: 1rem; justify-content: space-between; padding: .8rem 0; }
+    .session-row:last-child { border-bottom: 0; }
+    .session-row strong { color: var(--ink); display: block; }
+    .session-current { border: 1px solid rgba(134, 239, 172, .35); border-radius: 999px; color: var(--success); font-family: "SFMono-Regular", Consolas, monospace; font-size: .7rem; padding: .25rem .5rem; text-transform: uppercase; }
     footer { color: var(--faint); font-family: "SFMono-Regular", Consolas, monospace; font-size: .75rem; margin-top: 4rem; }
     @media (max-width: 720px) {
       nav { align-items: flex-start; flex-direction: column; padding-bottom: 2.5rem; }
@@ -267,6 +273,8 @@ const cloudflareAuthEmbeddedViews = <String, String>{
 {% block title %}Dashboard · Routed Cloudflare Auth{% endblock %}
 {% block navigation %}
         <a href="/">Home</a>
+        <a href="/settings/profile">Profile</a>
+        <a href="/settings/sessions">Sessions</a>
         <form action="/logout" method="post">
           <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
           <button type="submit">Sign out</button>
@@ -283,6 +291,7 @@ const cloudflareAuthEmbeddedViews = <String, String>{
       </section>
       <section class="dashboard-grid">
         <div class="panel metric"><div class="section-label">Signed in as</div><div class="value">{{ email | escape }}</div></div>
+        <div class="panel metric"><div class="section-label">Display name</div><div class="value">{{ name | escape }}</div></div>
         <div class="panel metric"><div class="section-label">Session strategy</div><div class="value">{{ session_strategy | escape }}</div></div>
         <div class="panel metric"><div class="section-label">Expires</div><div class="value">{{ session_expires | escape }}</div></div>
       </section>
@@ -292,6 +301,8 @@ const cloudflareAuthEmbeddedViews = <String, String>{
           <h2>Your account is live</h2>
           <p>The credential is stored in the configured AuthStore. On Cloudflare, that store is backed by D1 while session state stays in an encrypted cookie.</p>
           <div class="panel-links">
+            <a href="/settings/profile"><span>Edit profile</span><span>↗</span></a>
+            <a href="/settings/sessions"><span>Manage sessions</span><span>↗</span></a>
             <a href="/auth/session"><span>Inspect session payload</span><span>↗</span></a>
             <a href="/health"><span>Check deployment health</span><span>↗</span></a>
           </div>
@@ -303,6 +314,101 @@ const cloudflareAuthEmbeddedViews = <String, String>{
         </div>
       </section>
 {% endblock %}
+''',
+  'profile.liquid': '''{% layout "layouts/base.liquid" %}
+{% block title %}Profile · Routed Cloudflare Auth{% endblock %}
+{% block navigation %}
+        <a href="/dashboard">Dashboard</a>
+        <a href="/settings/sessions">Sessions</a>
+        <form action="/logout" method="post">
+          <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
+          <button type="submit">Sign out</button>
+        </form>
+{% endblock %}
+{% block content %}
+      <div class="auth-layout">
+        <section class="auth-copy">
+          <div class="eyebrow">Account settings</div>
+          <h1>Make it yours.</h1>
+          <p class="lede">Update the profile stored in D1 and refresh the signed session projection in the same request.</p>
+          <p class="mono">Your email remains the credential identifier in this demo.</p>
+        </section>
+        <section class="auth-form">
+          <h2>Profile</h2>
+          <p>{{ email | escape }}</p>
+          {% if updated %}<div class="success" role="status">Profile saved.</div>{% endif %}
+          {% if error %}<div class="alert" role="alert">{{ error | escape }}</div>{% endif %}
+          <form action="/settings/profile" method="post">
+            <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
+            <div class="field">
+              <label for="name">Display name</label>
+              <input id="name" name="name" type="text" value="{{ name | escape }}" maxlength="80" autocomplete="name">
+            </div>
+            <div class="field">
+              <label for="image">Profile image URL</label>
+              <input id="image" name="image" type="url" value="{{ image | escape }}" maxlength="2048" placeholder="https://example.com/avatar.png" autocomplete="url">
+              <div class="form-help">Use an HTTPS image URL or leave it blank to clear it.</div>
+            </div>
+            <button class="primary form-submit" type="submit">Save profile</button>
+          </form>
+        </section>
+      </div>
+      <section class="panel" style="margin: 1rem auto 0; max-width: 60rem;">
+        <div class="section-label">Connected providers</div>
+        <h2>Linked accounts</h2>
+        {% if has_accounts %}
+          <div class="session-list">
+            {% for account in accounts %}
+              <div class="session-row"><strong>{{ account.provider_id | escape }}</strong><span class="mono">{{ account.provider_account_id | escape }}</span></div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p>No external accounts are linked yet. Sign in with GitHub, Dropbox, or Telegram to exercise provider linking.</p>
+        {% endif %}
+      </section>
+{% endblock %}
+{% block footer %}{% endblock %}
+''',
+  'sessions.liquid': '''{% layout "layouts/base.liquid" %}
+{% block title %}Sessions · Routed Cloudflare Auth{% endblock %}
+{% block navigation %}
+        <a href="/dashboard">Dashboard</a>
+        <a href="/settings/profile">Profile</a>
+        <form action="/logout" method="post">
+          <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
+          <button type="submit">Sign out</button>
+        </form>
+{% endblock %}
+{% block content %}
+      <section class="dashboard-header">
+        <div>
+          <div class="eyebrow">Security settings</div>
+          <h1>Your sessions.</h1>
+          <p class="lede">Review active server sessions and revoke every other session while keeping this browser signed in.</p>
+        </div>
+      </section>
+      {% if revoked_notice %}<div class="success" role="status">{{ revoked_notice | escape }}</div>{% endif %}
+      {% if error %}<div class="alert" role="alert">{{ error | escape }}</div>{% endif %}
+      <section class="panel">
+        <div class="section-label">Active sessions · {{ session_count }}</div>
+        <div class="session-list">
+          {% for session in sessions %}
+            <div class="session-row">
+              <div>
+                <strong>{% if session.isCurrent %}This browser{% else %}Other session{% endif %}</strong>
+                <div class="mono">{{ session.authenticationMethod | escape }} · last used {{ session.lastUsedAt | escape }}</div>
+              </div>
+              {% if session.isCurrent %}<span class="session-current">current</span>{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+        <form action="/settings/sessions/revoke-others" method="post">
+          <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
+          <button class="button ghost" type="submit">Revoke other sessions</button>
+        </form>
+      </section>
+{% endblock %}
+{% block footer %}{% endblock %}
 ''',
 };
 

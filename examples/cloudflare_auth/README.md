@@ -8,6 +8,10 @@ This is a runnable Routed application for Cloudflare Workers. It uses:
 - an embedded Liquify frontend rendered by the `/` route
 - browser signup and login forms at `/signup` and `/login`
 - a protected HTML `/dashboard` with a form-based `/logout` flow
+- self-service profile management at `/settings/profile`, including linked
+  provider accounts
+- active-session listing and revoke-other-sessions controls at
+  `/settings/sessions`
 - a protected JSON `/account` route
 - optional GitHub, Dropbox, and Telegram sign-in providers
 - typed Worker bindings, without `package:web` or JS interop in application code
@@ -172,6 +176,14 @@ redirected to `/dashboard`. Existing users can use `/login`; the dashboard
 posts its CSRF-protected sign-out form to `/logout`. These HTML routes call the
 same typed `AuthManager` methods as the JSON routes, so the example does not
 maintain a second authentication implementation.
+
+The dashboard links to `/settings/profile`, where the current user can update
+their display name and avatar URL. The update persists through the typed
+`AuthStore.users.update` contract and refreshes the encrypted browser-session
+projection through `AuthManager.updateSession`. The profile page also lists
+linked OAuth accounts. `/settings/sessions` uses the package's session
+management API to show active sessions and revoke every other session while
+keeping the current browser signed in.
 
 The `/` response is HTML rendered by Liquify from a template embedded in the
 Worker bundle. It is intentionally a small frontend that links to the health,

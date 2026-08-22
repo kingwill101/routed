@@ -117,15 +117,41 @@ void registerRoutes(Engine engine, {String storeLabel = 'cloudflare_d1'}) {
   engine.get('/dashboard', (context) async {
     final manager = _authManager(context);
     final session = await manager.resolveSession(context);
+    final sessions = session == null
+        ? const <AuthSessionInfo>[]
+        : await manager.listSessions(context);
     return _renderEmbeddedPage(context, 'dashboard.liquid', <String, dynamic>{
       'csrf_token': manager.csrfToken(context),
       'email': session?.user.email ?? '',
+      'name': session?.user.name ?? '',
       'user_id': session?.user.id ?? '',
       'session_strategy': session?.strategy?.name ?? 'session',
       'session_expires':
           session?.expiresAt?.toUtc().toIso8601String() ?? 'browser session',
+      'sessions': sessions.map((value) => value.toJson()).toList(),
     });
   }, middlewares: [_browserAuthenticationGuard()]);
+
+  engine.get(
+    '/settings/profile',
+    _profilePage,
+    middlewares: [_browserAuthenticationGuard()],
+  );
+  engine.post(
+    '/settings/profile',
+    _updateProfile,
+    middlewares: [_browserAuthenticationGuard()],
+  );
+  engine.get(
+    '/settings/sessions',
+    _sessionsPage,
+    middlewares: [_browserAuthenticationGuard()],
+  );
+  engine.post(
+    '/settings/sessions/revoke-others',
+    _revokeOtherSessions,
+    middlewares: [_browserAuthenticationGuard()],
+  );
 
   engine.get('/health', (context) {
     return context.json(<String, Object?>{
@@ -182,6 +208,163 @@ Future<Response> _renderEmbeddedPage(
       .render(template, data);
   context.response.headers.set('Cache-Control', 'no-store, private');
   return context.html(content, statusCode: statusCode);
+}
+
+Future<Response> _profilePage(
+  EngineContext context, {
+  String? error,
+  String? name,
+  String? image,
+  int statusCode = HttpStatus.ok,
+}) async {
+  final manager = _authManager(context);
+  final session = await manager.resolveSession(context);
+  if (session == null) return context.redirect('/login');
+  final user = await manager.store.users.findById(session.user.id);
+  if (user == null) return context.redirect('/login');
+  final accounts = await manager.listLinkedAccounts(context);
+  return _renderEmbeddedPage(context, 'profile.liquid', <String, dynamic>{
+    'csrf_token': manager.csrfToken(context),
+    'email': user.email ?? '',
+    'name': name ?? user.name ?? '',
+    'image': image ?? user.image ?? '',
+    'accounts': accounts.map((value) => value.toJson()).toList(),
+    'has_accounts': accounts.isNotEmpty,
+    'error': error,
+    'updated': context.request.queryParameters['updated'] == '1',
+  }, statusCode: statusCode);
+}
+
+Future<Response> _updateProfile(EngineContext context) async {
+  final manager = _authManager(context);
+  final payload = await context.formCache;
+  final submittedName = payload['name']?.toString().trim() ?? '';
+  final submittedImage = payload['image']?.toString().trim() ?? '';
+
+  final browserError = manager.validateBrowserRequest(context);
+  if (browserError != null) {
+    return _profilePage(
+      context,
+      name: submittedName,
+      image: submittedImage,
+      error: _friendlyAuthError(browserError),
+      statusCode: HttpStatus.forbidden,
+    );
+  }
+  if (!manager.validateCsrf(context, payload)) {
+    return _profilePage(
+      context,
+      name: submittedName,
+      image: submittedImage,
+      error: _friendlyAuthError('invalid_csrf'),
+      statusCode: HttpStatus.forbidden,
+    );
+  }
+
+  final validationError = _profileValidationError(
+    name: submittedName,
+    image: submittedImage,
+  );
+  if (validationError != null) {
+    return _profilePage(
+      context,
+      name: submittedName,
+      image: submittedImage,
+      error: validationError,
+      statusCode: HttpStatus.badRequest,
+    );
+  }
+
+  final session = await manager.resolveSession(context);
+  if (session == null) return context.redirect('/login');
+  final current = await manager.store.users.findById(session.user.id);
+  if (current == null) return context.redirect('/login');
+
+  final updated = AuthUser(
+    id: current.id,
+    email: current.email,
+    name: submittedName.isEmpty ? null : submittedName,
+    image: submittedImage.isEmpty ? null : submittedImage,
+    roles: current.roles,
+    isAnonymous: current.isAnonymous,
+    attributes: current.attributes,
+  );
+  final stored = await manager.store.users.update(updated);
+  if (stored == null) {
+    return _profilePage(
+      context,
+      name: submittedName,
+      image: submittedImage,
+      error: 'We could not save your profile. Please try again.',
+      statusCode: HttpStatus.badRequest,
+    );
+  }
+
+  // Keep the browser cookie projection in sync with the durable user record.
+  await manager.updateSession(context, stored.toSessionPrincipal());
+  return context.redirect('/settings/profile?updated=1');
+}
+
+String? _profileValidationError({required String name, required String image}) {
+  if (name.length > 80) return 'Display name must be 80 characters or fewer.';
+  if (image.length > 2048) return 'Profile image URL is too long.';
+  if (image.isEmpty) return null;
+  final uri = Uri.tryParse(image);
+  if (uri == null ||
+      uri.host.isEmpty ||
+      !{'http', 'https'}.contains(uri.scheme)) {
+    return 'Profile image must be an HTTP or HTTPS URL.';
+  }
+  return null;
+}
+
+Future<Response> _sessionsPage(
+  EngineContext context, {
+  String? error,
+  int statusCode = HttpStatus.ok,
+}) async {
+  final manager = _authManager(context);
+  final session = await manager.resolveSession(context);
+  if (session == null) return context.redirect('/login');
+  final sessions = await manager.listSessions(context);
+  final revoked = int.tryParse(
+    context.request.queryParameters['revoked'] ?? '',
+  );
+  return _renderEmbeddedPage(context, 'sessions.liquid', <String, dynamic>{
+    'csrf_token': manager.csrfToken(context),
+    'sessions': sessions.map((value) => value.toJson()).toList(),
+    'session_count': sessions.length,
+    'revoked_notice': revoked == null ? null : _revokedSessionsMessage(revoked),
+    'error': error,
+  }, statusCode: statusCode);
+}
+
+String _revokedSessionsMessage(int count) {
+  final suffix = count == 1 ? '' : 's';
+  return 'Revoked $count other session$suffix.';
+}
+
+Future<Response> _revokeOtherSessions(EngineContext context) async {
+  final manager = _authManager(context);
+  final payload = await context.formCache;
+  final browserError = manager.validateBrowserRequest(context);
+  if (browserError != null || !manager.validateCsrf(context, payload)) {
+    return await _sessionsPage(
+      context,
+      error: _friendlyAuthError(browserError ?? 'invalid_csrf'),
+      statusCode: HttpStatus.forbidden,
+    );
+  }
+  try {
+    final revoked = await manager.revokeOtherSessions(context);
+    return await context.redirect('/settings/sessions?revoked=$revoked');
+  } on AuthFlowException {
+    return _sessionsPage(
+      context,
+      error: 'We could not update your sessions. Please try again.',
+      statusCode: HttpStatus.badRequest,
+    );
+  }
 }
 
 CredentialsProvider _credentialsProvider(AuthManager manager) {

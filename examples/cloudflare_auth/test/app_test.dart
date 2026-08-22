@@ -132,6 +132,68 @@ void main() {
     expect(dashboard.body, contains('browser@example.test'));
     expect(dashboard.body, contains('Session strategy'));
 
+    final profilePage = await client.get('/settings/profile');
+    profilePage.assertStatus(HttpStatus.ok);
+    expect(profilePage.body, contains('Account settings'));
+    expect(profilePage.body, contains('browser@example.test'));
+    expect(profilePage.body, contains('No external accounts are linked yet.'));
+
+    final profileUpdate =
+        await _postForm(client, '/settings/profile', <String, String>{
+          '_csrf': _csrfFromHtml(profilePage.body),
+          'name': 'Browser User',
+          'image': 'https://example.test/avatars/browser.png',
+        });
+    profileUpdate.assertStatus(HttpStatus.found);
+    expect(
+      profileUpdate.headerValue('location'),
+      '/settings/profile?updated=1',
+    );
+
+    final updatedProfile = await client.get(
+      profileUpdate.headerValue('location'),
+    );
+    updatedProfile.assertStatus(HttpStatus.ok);
+    expect(updatedProfile.body, contains('Profile saved.'));
+    expect(updatedProfile.body, contains('value="Browser User"'));
+    expect(
+      updatedProfile.body,
+      contains('https://example.test/avatars/browser.png'),
+    );
+
+    final updatedSession = await client.get('/auth/session');
+    updatedSession.assertStatus(HttpStatus.ok);
+    expect(updatedSession.body, contains('Browser User'));
+
+    final sessionsPage = await client.get('/settings/sessions');
+    sessionsPage.assertStatus(HttpStatus.ok);
+    expect(sessionsPage.body, contains('This browser'));
+    expect(sessionsPage.body, contains('Revoke other sessions'));
+
+    final revokeOthers = await _postForm(
+      client,
+      '/settings/sessions/revoke-others',
+      <String, String>{'_csrf': _csrfFromHtml(sessionsPage.body)},
+    );
+    revokeOthers.assertStatus(HttpStatus.found);
+    expect(
+      revokeOthers.headerValue('location'),
+      '/settings/sessions?revoked=0',
+    );
+
+    final invalidProfilePage = await client.get('/settings/profile');
+    final invalidProfile =
+        await _postForm(client, '/settings/profile', <String, String>{
+          '_csrf': _csrfFromHtml(invalidProfilePage.body),
+          'name': 'Browser User',
+          'image': 'javascript:alert(1)',
+        });
+    invalidProfile.assertStatus(HttpStatus.badRequest);
+    expect(
+      invalidProfile.body,
+      contains('Profile image must be an HTTP or HTTPS URL.'),
+    );
+
     final logout = await _postForm(client, '/logout', <String, String>{
       '_csrf': _csrfFromHtml(dashboard.body),
     });
