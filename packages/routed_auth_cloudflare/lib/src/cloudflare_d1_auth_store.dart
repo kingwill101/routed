@@ -6,6 +6,11 @@ import 'package:server_auth/server_auth.dart';
 
 import 'cloudflare_d1_auth_schema.dart';
 
+// WebAuthn signature counters are unsigned 32-bit values. Keeping this bound
+// within JavaScript's exact integer range also makes the D1 adapter portable
+// to Dart's JavaScript target.
+const _maximumWebAuthnCounter = 0xffffffff;
+
 /// A durable [AuthStore] backed by a Cloudflare D1 binding.
 ///
 /// Construct the adapter from the host-neutral binding exported by
@@ -2344,7 +2349,7 @@ final class CloudflareD1WebAuthnAuthenticatorStore
   }) {
     if (expectedCounter < 0 ||
         newCounter < expectedCounter ||
-        newCounter > 0x7fffffffffffffff) {
+        newCounter > _maximumWebAuthnCounter) {
       return Future.value(null);
     }
     final timestamp = _date(lastUsedAt);
@@ -6189,7 +6194,8 @@ void _validateD1WebAuthnAuthenticator(WebAuthnAuthenticator authenticator) {
       'is required',
     );
   }
-  if (authenticator.counter < 0 || authenticator.counter > 0x7fffffffffffffff) {
+  if (authenticator.counter < 0 ||
+      authenticator.counter > _maximumWebAuthnCounter) {
     throw ArgumentError.value(
       authenticator.counter,
       'authenticator.counter',

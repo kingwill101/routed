@@ -1,3 +1,8 @@
+## 0.1.1
+
+- Keep WebAuthn counter validation within JavaScript's exact integer range so
+  D1-backed auth Workers compile and preserve the unsigned 32-bit contract.
+
 ## 0.1.0
 
 - Make the SQL-backed `CloudflareD1AuthStore` extensible so the Dart IO

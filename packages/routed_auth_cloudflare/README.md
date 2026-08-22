@@ -24,6 +24,10 @@ Future<CloudflareD1AuthStore> authStore(CloudflareEnvironment env) {
 YAML configuration and application code does not import `package:web` or use
 `dart:js_interop`.
 
+For a complete Worker entrypoint, Wrangler configuration, local SQLite-backed
+smoke test, and curl walkthrough, see the runnable
+[Cloudflare D1 auth example](../../examples/cloudflare_auth).
+
 When an external authentication plugin is removed from a deployment, preserve
 its namespace in the durable safety inventory until its records have a
 backend-owned cleanup path:

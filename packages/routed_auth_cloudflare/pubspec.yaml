@@ -1,6 +1,6 @@
 name: routed_auth_cloudflare
 description: Durable Cloudflare D1 AuthStore persistence for Routed applications.
-version: 0.1.0
+version: 0.1.1
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_auth_cloudflare
 tags:
   - routed
