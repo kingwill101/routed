@@ -71,11 +71,10 @@ The six packages prepared in this batch were uploaded successfully:
 - `server_sessions` `0.1.1`
 - `server_storage` `0.1.1`
 
-The release audit now confirms all six versions are current on pub.dev.
+The release audit confirms all six batch releases are hosted on pub.dev.
 
 After that batch, `routed_http` `0.1.2` was uploaded with XML request
-binding. Its new version may briefly remain `ahead` in the audit while pub.dev
-propagates the release.
+binding and is now also current on pub.dev.
 
 `routed_auth_sqlite` `0.1.0` was accepted by pub.dev on 2026-08-21 after its
 zero-warning dry run. `routed_hotwire` was corrected to `0.1.6` and published
