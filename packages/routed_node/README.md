@@ -85,6 +85,18 @@ defineCloudflareFetchAsync(
 );
 ```
 
+When engine startup needs Worker bindings such as D1 or secrets, pass the
+typed environment to the factory. The wrapper keeps `package:web` and JS
+interop out of application code:
+
+```dart
+defineCloudflareFetchFactoryWithEnvironmentAsync((environment) async {
+  final database = environment.d1('DB');
+  // Build the engine and its typed providers from the binding.
+  return Engine.create(providers: Engine.defaultProviders);
+});
+```
+
 The generated JS bootstrap calls `globalThis.__routed_fetch__` with the native
 Fetch request. Vercel and Netlify use the equivalent `defineVercelFetch` and
 `defineNetlifyFetch` entrypoints.

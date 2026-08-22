@@ -1,6 +1,6 @@
 name: routed_node
 description: Node.js host transport for Routed — IncomingMessage/ServerResponse adapters on RequestAdapter/ResponseAdapter/ServerTransport.
-version: 0.2.0
+version: 0.2.1
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_node
 tags:
   - routed

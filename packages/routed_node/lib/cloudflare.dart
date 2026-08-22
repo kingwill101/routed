@@ -2,6 +2,10 @@ library;
 
 import 'package:routed_core/routed_core.dart';
 
+import 'src/cloudflare/cloudflare_bindings_stub.dart'
+    if (dart.library.js_interop) 'src/cloudflare/cloudflare_bindings_js.dart'
+    as cloudflare_bindings;
+import 'src/cloudflare/cloudflare_types.dart';
 import 'src/fetch/fetch_entry.dart';
 import 'src/runtime/runtime.dart';
 
@@ -33,7 +37,8 @@ export 'src/fetch/fetch_entry.dart'
     show
         defineFetchExport,
         defineFetchExportAsync,
-        defineFetchExportFactoryAsync;
+        defineFetchExportFactoryAsync,
+        defineFetchExportFactoryWithEnvironmentAsync;
 
 /// Installs the Cloudflare Fetch bootstrap function.
 void defineCloudflareFetch(Object engine) {
@@ -61,4 +66,23 @@ void defineCloudflareFetchFactoryAsync(Future<Engine> Function() factory) {
     factory,
     capabilities: cloudflareCapabilities,
   );
+}
+
+/// Installs a lazy Cloudflare Fetch entry whose engine is built with the
+/// Worker environment and its typed D1, KV, R2, or secret bindings.
+///
+/// The factory runs once per Worker isolate, on the first request. The
+/// environment is wrapped before it reaches application code, so Cloudflare
+/// applications do not need to use `package:web` or JS interop directly.
+void defineCloudflareFetchFactoryWithEnvironmentAsync(
+  Future<Engine> Function(CloudflareEnvironment environment) factory,
+) {
+  defineFetchExportFactoryWithEnvironmentAsync('Cloudflare', (environment) {
+    if (environment == null) {
+      throw StateError('Cloudflare Worker environment was not provided.');
+    }
+    return factory(
+      cloudflare_bindings.cloudflareEnvironmentFromJavaScript(environment),
+    );
+  }, capabilities: cloudflareCapabilities);
 }

@@ -158,6 +158,45 @@ void defineFetchExportFactoryAsync(
   globalContext.setProperty(name.toJS, handler);
 }
 
+/// Installs a lazy Fetch export whose engine factory receives the host
+/// environment from the first request.
+///
+/// Fetch hosts pass bindings such as Cloudflare's D1 databases and secrets as
+/// the third argument to the exported handler. The environment is deliberately
+/// exposed as an opaque [Object?] here; host-specific libraries should wrap it
+/// in their typed environment abstraction before application code uses it.
+void defineFetchExportFactoryWithEnvironmentAsync(
+  String runtime,
+  Future<Engine> Function(Object? environment) engineFactory, {
+  required RoutedNodeCapabilities capabilities,
+  String name = defaultRoutedFetchEntryName,
+}) {
+  if (name.trim().isEmpty) {
+    throw ArgumentError.value(
+      name,
+      'name',
+      'Fetch entry name must not be empty',
+    );
+  }
+
+  final info = RoutedNodeRuntimeInfo(
+    runtime: capabilities.runtime,
+    capabilities: capabilities,
+  );
+  Future<Engine>? engineFuture;
+  final handler = ((JSAny request, [JSAny? context, JSAny? environment]) {
+    engineFuture ??= engineFactory(environment);
+    return _handleNativeFetchAfterEngine(
+      engineFuture!,
+      info,
+      web.Request(request),
+      context: context,
+      environment: environment,
+    ).toJS;
+  }).toJS;
+  globalContext.setProperty(name.toJS, handler);
+}
+
 /// Handles one native Fetch request and returns a native Fetch response.
 Future<web.Response> handleNativeFetch(
   Engine engine,

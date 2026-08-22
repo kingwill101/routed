@@ -1,3 +1,8 @@
+## 0.2.1
+
+- Add `defineCloudflareFetchFactoryWithEnvironmentAsync` for typed Worker
+  startup with Cloudflare bindings such as D1 and secrets.
+
 ## 0.2.0
 
 - Enumerate native Fetch headers at the portable request boundary and retain
