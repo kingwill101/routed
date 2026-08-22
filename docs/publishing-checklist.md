@@ -73,6 +73,10 @@ The six packages prepared in this batch were uploaded successfully:
 
 The release audit now confirms all six versions are current on pub.dev.
 
+After that batch, `routed_http` `0.1.2` was uploaded with XML request
+binding. Its new version may briefly remain `ahead` in the audit while pub.dev
+propagates the release.
+
 `routed_auth_sqlite` `0.1.0` was accepted by pub.dev on 2026-08-21 after its
 zero-warning dry run. `routed_hotwire` was corrected to `0.1.6` and published
 after the earlier `0.1.4`/`0.1.5` entries.
@@ -89,9 +93,9 @@ release and were not part of this batch:
 - `server_cache` `0.2.0`
 - `server_contracts` `0.1.0`
 
-The dependency graph has no workspace cycles or dependency issues. All six
-patch releases passed analysis, tests, and zero-warning publish dry-runs before
-upload.
+The dependency graph has no workspace cycles or dependency issues. The six
+batch releases and the follow-up `routed_http` patch passed analysis, tests,
+and zero-warning publish dry-runs before upload.
 
 The auth implementation roadmap is tracked in
 [`docs/auth-worklist.md`](auth-worklist.md).
