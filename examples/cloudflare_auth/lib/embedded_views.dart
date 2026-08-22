@@ -233,6 +233,7 @@ const cloudflareAuthEmbeddedViews = <String, String>{
       <section class="auth-form">
         <h2>{{ form_title | escape }}</h2>
         <p>{{ form_copy | escape }}</p>
+        {% if password_changed %}<div class="success" role="status">Password changed. Sign in again to continue.</div>{% endif %}
         {% if error %}<div class="alert" role="alert">{{ error | escape }}</div>{% endif %}
         <form action="{{ form_action | escape }}" method="post">
           <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
@@ -274,6 +275,7 @@ const cloudflareAuthEmbeddedViews = <String, String>{
 {% block navigation %}
         <a href="/">Home</a>
         <a href="/settings/profile">Profile</a>
+        <a href="/settings/password">Password</a>
         <a href="/settings/sessions">Sessions</a>
         <form action="/logout" method="post">
           <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
@@ -302,6 +304,7 @@ const cloudflareAuthEmbeddedViews = <String, String>{
           <p>The credential is stored in the configured AuthStore. On Cloudflare, that store is backed by D1 while session state stays in an encrypted cookie.</p>
           <div class="panel-links">
             <a href="/settings/profile"><span>Edit profile</span><span>↗</span></a>
+            <a href="/settings/password"><span>Change password</span><span>↗</span></a>
             <a href="/settings/sessions"><span>Manage sessions</span><span>↗</span></a>
             <a href="/auth/session"><span>Inspect session payload</span><span>↗</span></a>
             <a href="/health"><span>Check deployment health</span><span>↗</span></a>
@@ -319,6 +322,7 @@ const cloudflareAuthEmbeddedViews = <String, String>{
 {% block title %}Profile · Routed Cloudflare Auth{% endblock %}
 {% block navigation %}
         <a href="/dashboard">Dashboard</a>
+        <a href="/settings/password">Password</a>
         <a href="/settings/sessions">Sessions</a>
         <form action="/logout" method="post">
           <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
@@ -369,11 +373,57 @@ const cloudflareAuthEmbeddedViews = <String, String>{
 {% endblock %}
 {% block footer %}{% endblock %}
 ''',
+  'password.liquid': '''{% layout "layouts/base.liquid" %}
+{% block title %}Password · Routed Cloudflare Auth{% endblock %}
+{% block navigation %}
+        <a href="/dashboard">Dashboard</a>
+        <a href="/settings/profile">Profile</a>
+        <a href="/settings/sessions">Sessions</a>
+        <form action="/logout" method="post">
+          <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
+          <button type="submit">Sign out</button>
+        </form>
+{% endblock %}
+{% block content %}
+      <div class="auth-layout">
+        <section class="auth-copy">
+          <div class="eyebrow">Security settings</div>
+          <h1>Change your password.</h1>
+          <p class="lede">Reauthenticate before replacing the credential used by this account.</p>
+          <p class="mono">Changing a password signs out every active session, including this browser.</p>
+        </section>
+        <section class="auth-form">
+          <h2>Password</h2>
+          <p>{{ email | escape }}</p>
+          {% if error %}<div class="alert" role="alert">{{ error | escape }}</div>{% endif %}
+          <form action="/settings/password" method="post">
+            <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
+            <div class="field">
+              <label for="current-password">Current password</label>
+              <input id="current-password" name="current_password" type="password" autocomplete="current-password" required>
+            </div>
+            <div class="field">
+              <label for="new-password">New password</label>
+              <input id="new-password" name="new_password" type="password" autocomplete="new-password" minlength="12" required>
+              <div class="form-help">Use at least 12 characters.</div>
+            </div>
+            <div class="field">
+              <label for="new-password-confirmation">Confirm new password</label>
+              <input id="new-password-confirmation" name="new_password_confirmation" type="password" autocomplete="new-password" minlength="12" required>
+            </div>
+            <button class="primary form-submit" type="submit">Change password</button>
+          </form>
+        </section>
+      </div>
+{% endblock %}
+{% block footer %}{% endblock %}
+''',
   'sessions.liquid': '''{% layout "layouts/base.liquid" %}
 {% block title %}Sessions · Routed Cloudflare Auth{% endblock %}
 {% block navigation %}
         <a href="/dashboard">Dashboard</a>
         <a href="/settings/profile">Profile</a>
+        <a href="/settings/password">Password</a>
         <form action="/logout" method="post">
           <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
           <button type="submit">Sign out</button>

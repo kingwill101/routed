@@ -143,6 +143,16 @@ void registerRoutes(Engine engine, {String storeLabel = 'cloudflare_d1'}) {
     middlewares: [_browserAuthenticationGuard()],
   );
   engine.get(
+    '/settings/password',
+    _passwordPage,
+    middlewares: [_browserAuthenticationGuard()],
+  );
+  engine.post(
+    '/settings/password',
+    _changePassword,
+    middlewares: [_browserAuthenticationGuard()],
+  );
+  engine.get(
     '/settings/sessions',
     _sessionsPage,
     middlewares: [_browserAuthenticationGuard()],
@@ -233,6 +243,70 @@ Future<Response> _profilePage(
     'error': error,
     'updated': context.request.queryParameters['updated'] == '1',
   }, statusCode: statusCode);
+}
+
+Future<Response> _passwordPage(
+  EngineContext context, {
+  String? error,
+  int statusCode = HttpStatus.ok,
+}) async {
+  final manager = _authManager(context);
+  final session = await manager.resolveSession(context);
+  if (session == null) return context.redirect('/login');
+  return _renderEmbeddedPage(context, 'password.liquid', <String, dynamic>{
+    'csrf_token': manager.csrfToken(context),
+    'email': session.user.email ?? '',
+    'error': error,
+  }, statusCode: statusCode);
+}
+
+Future<Response> _changePassword(EngineContext context) async {
+  final manager = _authManager(context);
+  final payload = await context.formCache;
+  final currentPassword = payload['current_password']?.toString() ?? '';
+  final newPassword = payload['new_password']?.toString() ?? '';
+  final confirmation = payload['new_password_confirmation']?.toString() ?? '';
+
+  final browserError = manager.validateBrowserRequest(context);
+  if (browserError != null || !manager.validateCsrf(context, payload)) {
+    return _passwordPage(
+      context,
+      error: _friendlyAuthError(browserError ?? 'invalid_csrf'),
+      statusCode: HttpStatus.forbidden,
+    );
+  }
+  if (newPassword != confirmation) {
+    return _passwordPage(
+      context,
+      error: 'The new passwords do not match.',
+      statusCode: HttpStatus.badRequest,
+    );
+  }
+
+  final session = await manager.resolveSession(context);
+  if (session == null) return context.redirect('/login');
+  try {
+    await manager.changePassword(
+      context,
+      identifier: session.user.email ?? '',
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+    );
+    // Password changes revoke every server session, including this one.
+    return await context.redirect('/login?password_changed=1');
+  } on AuthFlowException catch (error) {
+    return _passwordPage(
+      context,
+      error: _friendlyAuthError(error.code),
+      statusCode: HttpStatus.badRequest,
+    );
+  } catch (_) {
+    return _passwordPage(
+      context,
+      error: _friendlyAuthError('password_change_failed'),
+      statusCode: HttpStatus.badRequest,
+    );
+  }
 }
 
 Future<Response> _updateProfile(EngineContext context) async {
@@ -506,6 +580,8 @@ Future<Response> _authPage(
     'csrf_token': manager.csrfToken(context),
     'email': email,
     'error': error,
+    'password_changed':
+        context.request.queryParameters['password_changed'] == '1',
     'github_enabled': manager.runtime.providers.any(
       (provider) => provider.id == 'github',
     ),
@@ -626,6 +702,10 @@ String _friendlyAuthError(String code) {
       return 'Use at least 12 characters.';
     case 'password_too_long':
       return 'Choose a shorter password.';
+    case 'invalid_current_password':
+      return 'The current password is not correct.';
+    case 'password_change_failed':
+      return 'We could not change your password. Please try again.';
     case 'account_locked':
       return 'This account is temporarily locked. Try again later.';
     case 'account_disabled':

@@ -10,6 +10,8 @@ This is a runnable Routed application for Cloudflare Workers. It uses:
 - a protected HTML `/dashboard` with a form-based `/logout` flow
 - self-service profile management at `/settings/profile`, including linked
   provider accounts
+- reauthenticated password changes at `/settings/password`, including the
+  forced session invalidation that follows a credential change
 - active-session listing and revoke-other-sessions controls at
   `/settings/sessions`
 - a protected JSON `/account` route
@@ -181,9 +183,12 @@ The dashboard links to `/settings/profile`, where the current user can update
 their display name and avatar URL. The update persists through the typed
 `AuthStore.users.update` contract and refreshes the encrypted browser-session
 projection through `AuthManager.updateSession`. The profile page also lists
-linked OAuth accounts. `/settings/sessions` uses the package's session
-management API to show active sessions and revoke every other session while
-keeping the current browser signed in.
+linked OAuth accounts. `/settings/password` reauthenticates the current
+credential before changing it, then sends the browser back through login
+because the package revokes every server session after a password change.
+`/settings/sessions` uses the package's session management API to show active
+sessions and revoke every other session while keeping the current browser
+signed in.
 
 The `/` response is HTML rendered by Liquify from a template embedded in the
 Worker bundle. It is intentionally a small frontend that links to the health,

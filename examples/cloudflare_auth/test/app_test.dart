@@ -194,8 +194,70 @@ void main() {
       contains('Profile image must be an HTTP or HTTPS URL.'),
     );
 
+    final passwordPage = await client.get('/settings/password');
+    passwordPage.assertStatus(HttpStatus.ok);
+    expect(passwordPage.body, contains('Change your password.'));
+    expect(passwordPage.body, contains('Changing a password signs out'));
+
+    final mismatchedPassword =
+        await _postForm(client, '/settings/password', <String, String>{
+          '_csrf': _csrfFromHtml(passwordPage.body),
+          'current_password': 'a deliberately long password',
+          'new_password': 'a new deliberately long password',
+          'new_password_confirmation': 'a different deliberately long password',
+        });
+    mismatchedPassword.assertStatus(HttpStatus.badRequest);
+    expect(mismatchedPassword.body, contains('new passwords do not match'));
+
+    final wrongPasswordPage = await client.get('/settings/password');
+    final wrongPassword =
+        await _postForm(client, '/settings/password', <String, String>{
+          '_csrf': _csrfFromHtml(wrongPasswordPage.body),
+          'current_password': 'not the current password',
+          'new_password': 'a new deliberately long password',
+          'new_password_confirmation': 'a new deliberately long password',
+        });
+    wrongPassword.assertStatus(HttpStatus.badRequest);
+    expect(wrongPassword.body, contains('current password is not correct'));
+    (await client.get('/dashboard')).assertStatus(HttpStatus.ok);
+
+    final changePasswordPage = await client.get('/settings/password');
+    final changedPassword =
+        await _postForm(client, '/settings/password', <String, String>{
+          '_csrf': _csrfFromHtml(changePasswordPage.body),
+          'current_password': 'a deliberately long password',
+          'new_password': 'a new deliberately long password',
+          'new_password_confirmation': 'a new deliberately long password',
+        });
+    changedPassword.assertStatus(HttpStatus.found);
+    expect(
+      changedPassword.headerValue('location'),
+      '/login?password_changed=1',
+    );
+    expect(
+      changedPassword.headers[HttpHeaders.setCookieHeader],
+      anyElement(contains('Max-Age=0')),
+    );
+
+    final passwordChangedLogin = await client.get(
+      changedPassword.headerValue('location'),
+    );
+    passwordChangedLogin.assertStatus(HttpStatus.ok);
+    expect(
+      passwordChangedLogin.body,
+      contains('Password changed. Sign in again to continue.'),
+    );
+    final relogin = await _postForm(client, '/login', <String, String>{
+      '_csrf': _csrfFromHtml(passwordChangedLogin.body),
+      'email': 'browser@example.test',
+      'password': 'a new deliberately long password',
+    });
+    relogin.assertStatus(HttpStatus.found);
+    final reloginDashboard = await client.get('/dashboard');
+    reloginDashboard.assertStatus(HttpStatus.ok);
+
     final logout = await _postForm(client, '/logout', <String, String>{
-      '_csrf': _csrfFromHtml(dashboard.body),
+      '_csrf': _csrfFromHtml(reloginDashboard.body),
     });
     logout.assertStatus(HttpStatus.found);
     expect(logout.headerValue('location'), '/');
@@ -219,7 +281,7 @@ void main() {
     final login = await _postForm(client, '/login', <String, String>{
       '_csrf': _csrfFromHtml(loginPage.body),
       'email': 'browser@example.test',
-      'password': 'a deliberately long password',
+      'password': 'a new deliberately long password',
     });
     login.assertStatus(HttpStatus.found);
     expect(login.headerValue('location'), '/dashboard');
