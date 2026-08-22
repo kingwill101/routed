@@ -41,6 +41,7 @@ workspace:
   - examples/route_events
   - examples/localization
   - examples/auth_demo
+  - examples/cloudflare_auth
   - examples/static_mounts
   - examples/oauth_keycloak
   - examples/kitchen_sink

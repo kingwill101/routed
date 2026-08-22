@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
+  "name": "routed-cloudflare-auth-example",
+  "main": "worker_wrapper.mjs",
+  "compatibility_date": "2026-08-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "vars": {
+    "AUTH_ORIGIN": "https://REPLACE_WITH_YOUR_WORKER_ORIGIN"
+  },
+  "d1_databases": [
+    {
+      "binding": "AUTH_DB",
+      "database_name": "REPLACE_WITH_D1_DATABASE_NAME",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

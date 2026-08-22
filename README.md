@@ -65,6 +65,8 @@ Each example lives under `examples/` so you can run it locally:
 - [examples/liquid_template](examples/liquid_template) – template rendering.
 - [examples/http2](examples/http2) – TLS + HTTP/2 bootstrap.
 - [examples/oauth_keycloak](examples/oauth_keycloak) – OAuth/Keycloak flow.
+- [examples/cloudflare_auth](examples/cloudflare_auth) – D1-backed Cloudflare
+  Worker auth with encrypted sessions and a protected route.
 - [examples/forward_proxy](examples/forward_proxy),
   [examples/fallback](examples/fallback),
   [examples/route_events](examples/route_events),
