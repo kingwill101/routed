@@ -792,20 +792,17 @@ class AuthRoutes {
       }, statusCode: HttpStatus.forbidden);
     }
 
-    final session = await manager.resolveSession(ctx);
+    await manager.signOut(ctx);
     final signOutResolution = await resolveAuthSignOutForStrategy(
       strategy: manager.options.sessionStrategy,
       jwtCookieName: manager.options.jwtOptions.cookieName,
       jwtCookieSecure: manager.options.jwtOptions.secure,
       jwtCookieSameSite: manager.options.jwtOptions.sameSite,
-      logoutSession: () => manager.logout(ctx),
     );
     final expiredJwtCookie = signOutResolution.expiredJwtCookie;
     if (expiredJwtCookie != null) {
       ctx.response.cookies.add(expiredJwtCookie);
     }
-
-    await manager.emitSignOut(ctx, session: session);
     return ctx.json({'ok': true});
   }
 
@@ -1510,5 +1507,6 @@ final class _RoutedPluginSessionControl
   AuthSessionStrategy get strategy => manager.options.sessionStrategy;
 
   @override
-  Future<void> signOut() => manager.signOutPluginSession(context);
+  Future<void> signOut() =>
+      manager.signOut(context, destroyFrameworkSession: true);
 }

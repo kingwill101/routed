@@ -1,3 +1,20 @@
+## Unreleased
+
+- Fall back to the encrypted framework session for the browser-bound OAuth
+  state when a host drops the auxiliary state cookie during a cross-site
+  redirect. The durable OAuth challenge and one-time consumption rules remain
+  unchanged, with regression coverage for the missing-cookie path.
+- Consolidate authentication sign-out through `AuthManager.signOut`, which
+  revokes the auth session, propagates the signed-out lifecycle event to
+  configured plugins, and publishes the Routed sign-out event. Applications
+  can explicitly request framework-session destruction when the auth cookie
+  owns the complete application session. Add framework-session hooks so
+  adapters can expire host-owned cookies from the manager rather than from
+  individual routes.
+- Store a compact principal for automatic sign-in so large OAuth provider
+  profiles cannot exceed browser session-cookie limits. Add a regression test
+  covering a large GitHub profile and the subsequent authenticated request.
+
 ## 0.2.0 - 2026-08-20
 
 - Add a pinned Keycloak interoperability harness for real signed SAML

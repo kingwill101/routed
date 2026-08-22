@@ -459,6 +459,7 @@ void main() {
       AuthOptions<EngineContext>(
         store: InMemoryAuthStore(),
         storeMode: AuthStoreMode.ephemeral,
+        cookiePolicy: AuthCookiePolicy.production,
         providers: [
           OAuthProvider<Map<String, dynamic>>(
             id: 'oauth',
@@ -535,7 +536,7 @@ void main() {
             (cookie) => cookie.name.startsWith('routed_oauth_state_'),
           );
       expect(stateCookie.secure, isTrue);
-      expect(stateCookie.sameSite, SameSite.none);
+      expect(stateCookie.sameSite, SameSite.lax);
 
       final callback = await victim.get(
         '/auth/callback/oauth?code=attacker-code&state=$state',
@@ -546,6 +547,43 @@ void main() {
       expect(stateCookie.value, equals(state));
     },
   );
+
+  test('form_post OAuth callbacks keep a cross-site state cookie', () async {
+    final manager = AuthManager(
+      AuthOptions<EngineContext>(
+        store: InMemoryAuthStore(),
+        storeMode: AuthStoreMode.ephemeral,
+        cookiePolicy: AuthCookiePolicy.production,
+        providers: [
+          OAuthProvider<Map<String, dynamic>>(
+            id: 'form-post-oauth',
+            name: 'Form Post OAuth',
+            clientId: 'client-id',
+            clientSecret: 'client-secret',
+            authorizationEndpoint: Uri.parse('https://auth.test/authorize'),
+            tokenEndpoint: Uri.parse('https://auth.test/token'),
+            redirectUri: 'https://app.test/auth/callback/form-post-oauth',
+            authorizationParams: const {'response_mode': 'form_post'},
+            profile: (_) => AuthUser(id: 'oauth-user'),
+          ),
+        ],
+      ),
+    );
+    final engine = _authEngine(manager);
+    await engine.initialize();
+    final client = TestClient(RoutedRequestHandler(engine));
+    addTearDown(() async => await client.close());
+
+    final start = await client.get('/auth/signin/form-post-oauth');
+    start.assertStatus(HttpStatus.movedTemporarily);
+    final stateCookie = (start.headers[HttpHeaders.setCookieHeader] ?? [])
+        .map(Cookie.fromSetCookieValue)
+        .firstWhere(
+          (cookie) => cookie.name.startsWith('routed_oauth_state_'),
+        );
+    expect(stateCookie.secure, isTrue);
+    expect(stateCookie.sameSite, SameSite.none);
+  });
 
   test(
     'email callback is bound to the browser that requested the link',

@@ -41,6 +41,30 @@ Engine _authEngine(AuthManager manager) {
 
 String _cookieHeader(Cookie cookie) => '${cookie.name}=${cookie.value}';
 
+final class _LifecycleRecordingPlugin
+    implements
+        AuthServerPlugin<EngineContext>,
+        AuthAuthenticationLifecycleContributor<EngineContext> {
+  final events = <AuthAuthenticationLifecycleEventType>[];
+
+  @override
+  String get id => 'lifecycle_recording';
+
+  @override
+  AuthServerPluginDataContract get dataContract =>
+      const AuthServerPluginDataContract.none();
+
+  @override
+  void configure(AuthServerPluginContext<EngineContext> context) {}
+
+  @override
+  Future<void> onAuthenticationLifecycleEvent(
+    AuthAuthenticationLifecycleEvent<EngineContext> event,
+  ) async {
+    events.add(event.type);
+  }
+}
+
 void main() {
   group('Auth callbacks and events', () {
     test('signIn callback can deny sign-in', () async {
@@ -194,6 +218,7 @@ void main() {
 
     test('events fire on sign-in and sign-out', () async {
       final events = <String>[];
+      final lifecyclePlugin = _LifecycleRecordingPlugin();
       AuthSignInEvent? signInEvent;
       final manager = AuthManager(
         AuthOptions<EngineContext>(
@@ -206,6 +231,7 @@ void main() {
               },
             ),
           ],
+          plugins: [lifecyclePlugin],
           sessionStrategy: AuthSessionStrategy.session,
           enforceCsrf: false,
         ),
@@ -256,6 +282,10 @@ void main() {
       expect(events, contains('sign_in:user-1'));
       expect(events, contains('sign_out:user-1'));
       expect(events, contains('session'));
+      expect(
+        lifecyclePlugin.events,
+        contains(AuthAuthenticationLifecycleEventType.signedOut),
+      );
     });
 
     test('account-link events identify the OAuth provider', () async {

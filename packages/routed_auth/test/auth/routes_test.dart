@@ -855,7 +855,16 @@ void main() {
 
       final oauthCookie = signInResponse.cookie('test_session');
       expect(oauthCookie, isNotNull);
-      final callbackResponse = await client.get(
+      // Deliberately use a fresh transport so the callback does not receive
+      // the auxiliary OAuth state cookie. The encrypted framework session is
+      // the browser-binding fallback used by hosts where that cookie is
+      // dropped during a cross-site redirect.
+      final callbackClient = TestClient(
+        RoutedRequestHandler(engine),
+        mode: TransportMode.ephemeralServer,
+      );
+      addTearDown(() async => await callbackClient.close());
+      final callbackResponse = await callbackClient.get(
         '/auth/callback/oauth?code=code123&state=$state',
         headers: {
           HttpHeaders.cookieHeader: [_cookieHeader(oauthCookie!)],
@@ -867,6 +876,143 @@ void main() {
         callbackResponse.json()['user']['email'],
         equals('oauth@example.com'),
       );
+    });
+
+    test('GitHub callback cookie authenticates a subsequent request', () async {
+      final httpClient = MockClient((request) async {
+        if (request.url.path.endsWith('/access_token')) {
+          return http.Response(
+            json.encode({
+              'access_token': 'github-access-123',
+              'token_type': 'Bearer',
+              'expires_in': 3600,
+            }),
+            200,
+          );
+        }
+        if (request.url.host == 'api.github.com' &&
+            request.url.path == '/user') {
+          return http.Response(
+            json.encode({
+              'id': 123456,
+              'login': 'routed-user',
+              'node_id': 'MDQ6VXNlcjEyMzQ1Ng==',
+              'avatar_url': 'https://avatars.example.test/123456.png',
+              'url': 'https://api.github.com/users/routed-user',
+              'html_url': 'https://github.com/routed-user',
+              'followers_url':
+                  'https://api.github.com/users/routed-user/followers',
+              'following_url':
+                  'https://api.github.com/users/routed-user/following{/other_user}',
+              'gists_url':
+                  'https://api.github.com/users/routed-user/gists{/gist_id}',
+              'starred_url':
+                  'https://api.github.com/users/routed-user/starred{/owner}{/repo}',
+              'subscriptions_url':
+                  'https://api.github.com/users/routed-user/subscriptions',
+              'organizations_url':
+                  'https://api.github.com/users/routed-user/orgs',
+              'repos_url': 'https://api.github.com/users/routed-user/repos',
+              'events_url':
+                  'https://api.github.com/users/routed-user/events{/privacy}',
+              'received_events_url':
+                  'https://api.github.com/users/routed-user/received_events',
+              'type': 'User',
+              'site_admin': false,
+              'name': 'Routed User',
+              'company': 'Routed',
+              'blog': 'https://routed.dev',
+              'location': 'The Edge',
+              'email': 'github@example.com',
+              'bio': List<String>.filled(5000, 'profile-data').join(),
+              'public_repos': 12,
+              'public_gists': 2,
+              'followers': 34,
+              'following': 5,
+              'created_at': '2020-01-01T00:00:00Z',
+              'updated_at': '2026-08-22T00:00:00Z',
+              'two_factor_authentication': true,
+            }),
+            200,
+          );
+        }
+        return http.Response('not found', 404);
+      });
+
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: InMemoryAuthStore(),
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [
+            server_auth.githubProvider(
+              const server_auth.GitHubProviderOptions(
+                clientId: 'github-client-id',
+                clientSecret: 'github-client-secret',
+                redirectUri: 'https://app.test/auth/callback/github',
+              ),
+            ),
+          ],
+          httpClient: httpClient,
+        ),
+      );
+
+      final engine = _authEngine(manager);
+      engine.get('/me', (ctx) {
+        final principal = SessionAuth.current(ctx);
+        if (principal == null) {
+          return ctx.json({'authenticated': false}, statusCode: 401);
+        }
+        return ctx.json({
+          'authenticated': true,
+          'id': principal.id,
+          'email': principal.attributes['email'],
+        });
+      });
+      await engine.initialize();
+
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async => await client.close());
+
+      final signInResponse = await client.get(
+        '/auth/signin/github?callbackUrl=%2Fdashboard',
+      );
+      signInResponse.assertStatus(HttpStatus.movedTemporarily);
+      final authorization = Uri.parse(
+        signInResponse.headers[HttpHeaders.locationHeader]!.single,
+      );
+      final state = authorization.queryParameters['state'];
+      expect(state, isNotNull);
+      final oauthCookie = signInResponse.cookie('test_session');
+      expect(oauthCookie, isNotNull);
+
+      final callbackResponse = await client.get(
+        '/auth/callback/github?code=github-code&state=$state',
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(oauthCookie!)],
+        },
+      );
+      callbackResponse.assertStatus(HttpStatus.movedTemporarily);
+      expect(
+        callbackResponse.headerValue(HttpHeaders.locationHeader),
+        '/dashboard',
+      );
+      final authenticatedCookie = callbackResponse.cookie('test_session');
+      expect(authenticatedCookie, isNotNull);
+      expect(
+        authenticatedCookie!.value.length,
+        lessThan(4096),
+        reason: 'the browser session cookie must remain below cookie limits',
+      );
+
+      final me = await client.get(
+        '/me',
+        headers: {
+          HttpHeaders.cookieHeader: [_cookieHeader(authenticatedCookie)],
+        },
+      );
+      me.assertStatus(HttpStatus.ok).assertJson((json) {
+        json.where('authenticated', true).where('email', 'github@example.com');
+      });
     });
 
     test('jwt strategy issues token cookie', () async {

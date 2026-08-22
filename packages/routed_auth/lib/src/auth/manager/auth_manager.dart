@@ -30,6 +30,7 @@ import 'package:server_auth/server_auth.dart'
         hashOpaqueToken,
         baseUrlFromUri,
         resolveOAuthAuthorizationStart,
+        authProviderStateSessionKey,
         resolveOAuthCallbackSignInForProvider,
         AuthResult,
         AuthSession,
@@ -1150,7 +1151,11 @@ class AuthManager {
       action: AuthRateLimitAction.oauthCallback,
     );
     final stateCookieName = _oauthStateCookieName(provider);
-    final browserState = _requestCookie(ctx, stateCookieName)?.value;
+    final browserState =
+        _requestCookie(ctx, stateCookieName)?.value ??
+        ctx.getSession<String>(
+          authProviderStateSessionKey(options.stateKey, provider.id),
+        );
     final resolved =
         await resolveOAuthCallbackSignInForProvider<EngineContext, TProfile>(
           store: store,
@@ -1495,14 +1500,22 @@ class AuthManager {
   Future<String?> currentStoredSessionId(EngineContext ctx) async =>
       (await _resolveStoredSession(ctx))?.id;
 
-  Future<void> signOutPluginSession(EngineContext ctx) async {
-    await logout(ctx);
-    if (ctx.hasSession) ctx.session.destroy();
-  }
-
-  /// Revokes the persisted server-side session before clearing framework
-  /// session state.
-  Future<void> logout(EngineContext ctx) async {
+  /// Signs out the current authentication session.
+  ///
+  /// This revokes the persisted server-side session when the session strategy
+  /// is enabled, clears the framework's authenticated principal, notifies
+  /// authentication plugins, and publishes the Routed sign-out event.
+  ///
+  /// Set [destroyFrameworkSession] when the auth session is also the complete
+  /// application session and its cookie must be expired. It is deliberately
+  /// opt-in so applications can preserve unrelated framework state such as a
+  /// flash message or an anonymous cart while ending authentication.
+  Future<AuthSession?> signOut(
+    EngineContext ctx, {
+    bool destroyFrameworkSession = false,
+  }) async {
+    final session = await resolveSession(ctx);
+    await options.frameworkSessionHooks.beforeSignOut?.call(ctx);
     if (options.sessionStrategy == AuthSessionStrategy.session &&
         ctx.hasSession) {
       await store.sessions.revoke(hashOpaqueToken(ctx.sessionId));
@@ -1515,6 +1528,10 @@ class AuthManager {
         strategy: options.sessionStrategy,
       ),
     );
+    if (destroyFrameworkSession && ctx.hasSession) ctx.session.destroy();
+    await options.frameworkSessionHooks.afterSignOut?.call(ctx);
+    await _emitSignOut(ctx, session: session);
+    return session;
   }
 
   Future<String?> resolveRedirect(
@@ -1564,7 +1581,7 @@ class AuthManager {
     return finalPayload;
   }
 
-  Future<void> emitSignOut(EngineContext ctx, {AuthSession? session}) async {
+  Future<void> _emitSignOut(EngineContext ctx, {AuthSession? session}) async {
     await _emitAuthEvent(
       ctx,
       AuthSignOutEvent(
@@ -1680,7 +1697,7 @@ class AuthManager {
       if (maximumAge != null) {
         ctx.session.options.setMaxAge(maximumAge.inSeconds);
       }
-      await sessionAuth.login(ctx, user.toPrincipal());
+      await sessionAuth.login(ctx, user.toSessionPrincipal());
       _setSessionIssuedAt(ctx, DateTime.now().toUtc());
       sessionExpiresAt = _sessionExpiry(ctx);
       await _persistStoredSession(
@@ -1967,8 +1984,23 @@ class AuthManager {
       state,
       expiresAt: expiresAt,
       path: _oauthCookiePath(),
-      sameSite: secure ? SameSite.none : SameSite.lax,
+      sameSite: _oauthStateCookieSameSite(provider, secure: secure),
     );
+  }
+
+  SameSite _oauthStateCookieSameSite(
+    AuthProvider provider, {
+    required bool secure,
+  }) {
+    // A normal OAuth callback is a top-level GET, so Lax is sufficient for
+    // the browser-bound state cookie and survives stricter privacy policies.
+    // Form-post callbacks (Apple, for example) need None on HTTPS because
+    // SameSite=Lax does not attach cookies to a cross-site POST.
+    final responseMode = provider is OAuthProvider
+        ? provider.authorizationParams['response_mode']?.toLowerCase()
+        : null;
+    if (responseMode == 'form_post' && secure) return SameSite.none;
+    return SameSite.lax;
   }
 
   Cookie _buildExpiredOAuthStateCookie(
