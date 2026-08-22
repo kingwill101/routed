@@ -276,6 +276,7 @@ const cloudflareAuthEmbeddedViews = <String, String>{
         <a href="/">Home</a>
         <a href="/settings/profile">Profile</a>
         <a href="/settings/password">Password</a>
+        <a href="/settings/api-keys">Service keys</a>
         <a href="/settings/sessions">Sessions</a>
         <form action="/logout" method="post">
           <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
@@ -305,6 +306,7 @@ const cloudflareAuthEmbeddedViews = <String, String>{
           <div class="panel-links">
             <a href="/settings/profile"><span>Edit profile</span><span>↗</span></a>
             <a href="/settings/password"><span>Change password</span><span>↗</span></a>
+            <a href="/settings/api-keys"><span>Manage service keys</span><span>↗</span></a>
             <a href="/settings/sessions"><span>Manage sessions</span><span>↗</span></a>
             <a href="/auth/session"><span>Inspect session payload</span><span>↗</span></a>
             <a href="/health"><span>Check deployment health</span><span>↗</span></a>
@@ -323,6 +325,7 @@ const cloudflareAuthEmbeddedViews = <String, String>{
 {% block navigation %}
         <a href="/dashboard">Dashboard</a>
         <a href="/settings/password">Password</a>
+        <a href="/settings/api-keys">Service keys</a>
         <a href="/settings/sessions">Sessions</a>
         <form action="/logout" method="post">
           <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
@@ -378,6 +381,7 @@ const cloudflareAuthEmbeddedViews = <String, String>{
 {% block navigation %}
         <a href="/dashboard">Dashboard</a>
         <a href="/settings/profile">Profile</a>
+        <a href="/settings/api-keys">Service keys</a>
         <a href="/settings/sessions">Sessions</a>
         <form action="/logout" method="post">
           <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
@@ -418,12 +422,98 @@ const cloudflareAuthEmbeddedViews = <String, String>{
 {% endblock %}
 {% block footer %}{% endblock %}
 ''',
+  'api_keys.liquid': '''{% layout "layouts/base.liquid" %}
+{% block title %}Service keys · Routed Cloudflare Auth{% endblock %}
+{% block navigation %}
+        <a href="/dashboard">Dashboard</a>
+        <a href="/settings/profile">Profile</a>
+        <a href="/settings/password">Password</a>
+        <a href="/settings/sessions">Sessions</a>
+        <form action="/logout" method="post">
+          <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
+          <button type="submit">Sign out</button>
+        </form>
+{% endblock %}
+{% block content %}
+      <section class="dashboard-header">
+        <div>
+          <div class="eyebrow">Developer access</div>
+          <h1>Service keys.</h1>
+          <p class="lede">Issue narrowly scoped credentials for scripts and services. The raw key is shown only once.</p>
+        </div>
+      </section>
+      {% if issued_key %}
+        <section class="panel success" role="status">
+          <strong>Copy this key now.</strong>
+          <p>The raw value for {{ issued_name | escape }} will not be shown again.</p>
+          <code>{{ issued_key | escape }}</code>
+        </section>
+      {% endif %}
+      {% if error %}<div class="alert" role="alert">{{ error | escape }}</div>{% endif %}
+      <section class="dashboard-panels">
+        <div class="panel">
+          <div class="section-label">Create a key</div>
+          <h2>New service credential</h2>
+          <form action="/settings/api-keys/create" method="post">
+            <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
+            <div class="field">
+              <label for="key-name">Name</label>
+              <input id="key-name" name="name" type="text" maxlength="80" placeholder="deploy bot" required>
+            </div>
+            <div class="field">
+              <label for="key-scopes">Scopes</label>
+              <input id="key-scopes" name="scopes" type="text" placeholder="profile:read, deploy:read">
+              <div class="form-help">Comma-separated scope labels. Keep them as narrow as possible.</div>
+            </div>
+            <button class="primary form-submit" type="submit">Issue service key</button>
+          </form>
+        </div>
+        <div class="panel">
+          <div class="section-label">Protected service route</div>
+          <h2><code>GET /service/account</code></h2>
+          <p>Send <code>X-API-Key</code> with one of these keys to authenticate without a browser session.</p>
+        </div>
+      </section>
+      <section class="panel" style="margin-top: 1rem;">
+        <div class="section-label">Issued keys · {{ key_count }}</div>
+        <div class="session-list">
+          {% for key in keys %}
+            <div class="session-row">
+              <div>
+                <strong>{{ key.name | escape }}</strong>
+                <div class="mono">{{ key.keyPrefix | escape }} · {{ key.scopes | join: ", " | escape }}</div>
+              </div>
+              <div class="hero-actions" style="margin-top: 0;">
+                {% if key.active %}
+                  <form action="/settings/api-keys/rotate" method="post">
+                    <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
+                    <input type="hidden" name="id" value="{{ key.id | escape }}">
+                    <input type="hidden" name="name" value="{{ key.name | escape }}">
+                    <button class="button ghost" type="submit">Rotate</button>
+                  </form>
+                  <form action="/settings/api-keys/revoke" method="post">
+                    <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
+                    <input type="hidden" name="id" value="{{ key.id | escape }}">
+                    <button class="button ghost" type="submit">Revoke</button>
+                  </form>
+                {% else %}
+                  <span class="session-current">revoked</span>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+{% endblock %}
+{% block footer %}{% endblock %}
+''',
   'sessions.liquid': '''{% layout "layouts/base.liquid" %}
 {% block title %}Sessions · Routed Cloudflare Auth{% endblock %}
 {% block navigation %}
         <a href="/dashboard">Dashboard</a>
         <a href="/settings/profile">Profile</a>
         <a href="/settings/password">Password</a>
+        <a href="/settings/api-keys">Service keys</a>
         <form action="/logout" method="post">
           <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
           <button type="submit">Sign out</button>

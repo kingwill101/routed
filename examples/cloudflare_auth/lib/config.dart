@@ -40,6 +40,7 @@ final class AppConfig {
 /// details.
 AppConfig config({
   required AuthStore store,
+  AuthApiKeyStore? apiKeyStore,
   required Uri origin,
   required String sessionKey,
   Iterable<AuthProvider> socialProviders = const [],
@@ -62,15 +63,21 @@ AppConfig config({
     CredentialsProvider(),
     ...socialProviders,
   ];
+  final apiKeys = AuthApiKeyPlugin<EngineContext>(
+    store: apiKeyStore ?? InMemoryAuthApiKeyStore(),
+    sessionExchangeEnabled: true,
+  );
   final deployment = localDevelopment
       ? AuthDeploymentPresets.localDevelopment<EngineContext>(
           providers: authProviders,
+          plugins: [apiKeys],
           trustedOrigins: [origin],
           rateLimiter: RoutedAuthRateLimiter(rateLimitService),
         )
       : AuthDeploymentPresets.secureSessionProduction<EngineContext>(
           store: store,
           providers: authProviders,
+          plugins: [apiKeys],
           boundary: AuthProductionBoundary(
             trustedOrigins: [origin],
             proxyPolicy: const AuthProxyPolicy.direct(),

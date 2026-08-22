@@ -12,6 +12,8 @@ This is a runnable Routed application for Cloudflare Workers. It uses:
   provider accounts
 - reauthenticated password changes at `/settings/password`, including the
   forced session invalidation that follows a credential change
+- one-time API-key issuance and metadata management at `/settings/api-keys`
+- an API-key protected `/service/account` endpoint for non-browser clients
 - active-session listing and revoke-other-sessions controls at
   `/settings/sessions`
 - a protected JSON `/account` route
@@ -188,7 +190,10 @@ credential before changing it, then sends the browser back through login
 because the package revokes every server session after a password change.
 `/settings/sessions` uses the package's session management API to show active
 sessions and revoke every other session while keeping the current browser
-signed in.
+signed in. `/settings/api-keys` uses the durable D1 API-key store, returns the
+raw key only in the issuance response, and exposes rotate/revoke controls.
+The service endpoint is protected by Routed's typed API-key middleware and
+reports only the authenticated key metadata.
 
 The `/` response is HTML rendered by Liquify from a template embedded in the
 Worker bundle. It is intentionally a small frontend that links to the health,

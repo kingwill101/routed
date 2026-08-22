@@ -19,6 +19,16 @@ String _csrfFromHtml(String html) {
   return match!.group(1)!;
 }
 
+String _rawApiKeyFromHtml(String html) {
+  final match = RegExp(
+    r'rka\.[A-Za-z0-9_-]+\.[A-Za-z0-9_=-]+',
+  ).firstMatch(html);
+  expect(match, isNotNull);
+  return match!.group(0)!;
+}
+
+String _apiKeyId(String rawKey) => rawKey.split('.')[1];
+
 Future<TestResponse> _postForm(
   TestClient client,
   String path,
@@ -193,6 +203,75 @@ void main() {
       invalidProfile.body,
       contains('Profile image must be an HTTP or HTTPS URL.'),
     );
+
+    final apiKeysPage = await client.get('/settings/api-keys');
+    apiKeysPage.assertStatus(HttpStatus.ok);
+    expect(apiKeysPage.body, contains('Service keys.'));
+    expect(apiKeysPage.body, contains('Issue service key'));
+
+    final createdApiKey =
+        await _postForm(client, '/settings/api-keys/create', <String, String>{
+          '_csrf': _csrfFromHtml(apiKeysPage.body),
+          'name': 'browser deploy bot',
+          'scopes': 'profile:read, deploy:read',
+        });
+    createdApiKey.assertStatus(HttpStatus.ok);
+    expect(createdApiKey.body, contains('Copy this key now.'));
+    final rawApiKey = _rawApiKeyFromHtml(createdApiKey.body);
+    expect(createdApiKey.body, contains('browser deploy bot'));
+
+    final serviceAccount = await client.get(
+      '/service/account',
+      headers: <String, List<String>>{
+        'x-api-key': [rawApiKey],
+      },
+    );
+    serviceAccount.assertStatus(HttpStatus.ok).assertJson((json) {
+      json
+          .where('authenticated', true)
+          .where('scopes', contains('profile:read'));
+    });
+
+    final listedApiKeys = await client.get('/settings/api-keys');
+    listedApiKeys.assertStatus(HttpStatus.ok);
+    expect(listedApiKeys.body, contains('browser deploy bot'));
+    expect(listedApiKeys.body, isNot(contains(rawApiKey)));
+    final apiKeyId = _apiKeyId(rawApiKey);
+
+    final rotatedApiKey =
+        await _postForm(client, '/settings/api-keys/rotate', <String, String>{
+          '_csrf': _csrfFromHtml(listedApiKeys.body),
+          'id': apiKeyId,
+          'name': 'browser deploy bot rotated',
+        });
+    rotatedApiKey.assertStatus(HttpStatus.ok);
+    final rotatedRawApiKey = _rawApiKeyFromHtml(rotatedApiKey.body);
+    expect(rotatedRawApiKey, isNot(rawApiKey));
+    (await client.get(
+      '/service/account',
+      headers: <String, List<String>>{
+        'x-api-key': [rawApiKey],
+      },
+    )).assertStatus(HttpStatus.unauthorized);
+    (await client.get(
+      '/service/account',
+      headers: <String, List<String>>{
+        'x-api-key': [rotatedRawApiKey],
+      },
+    )).assertStatus(HttpStatus.ok);
+
+    final revokedApiKey =
+        await _postForm(client, '/settings/api-keys/revoke', <String, String>{
+          '_csrf': _csrfFromHtml(rotatedApiKey.body),
+          'id': _apiKeyId(rotatedRawApiKey),
+        });
+    revokedApiKey.assertStatus(HttpStatus.ok);
+    (await client.get(
+      '/service/account',
+      headers: <String, List<String>>{
+        'x-api-key': [rotatedRawApiKey],
+      },
+    )).assertStatus(HttpStatus.unauthorized);
 
     final passwordPage = await client.get('/settings/password');
     passwordPage.assertStatus(HttpStatus.ok);

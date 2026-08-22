@@ -27,6 +27,7 @@ Future<Engine> createCloudflareEngine(CloudflareEnvironment environment) async {
   );
   return createEngine(
     store: store,
+    apiKeyStore: store.apiKeys,
     origin: origin,
     sessionKey: sessionKey,
     socialProviders: _cloudflareSocialProviders(environment, origin),
@@ -41,6 +42,7 @@ Future<Engine> createCloudflareEngine(CloudflareEnvironment environment) async {
 /// the same routes run against D1, SQLite, or an in-memory store.
 Future<Engine> createEngine({
   required AuthStore store,
+  AuthApiKeyStore? apiKeyStore,
   required Uri origin,
   required String sessionKey,
   Iterable<AuthProvider> socialProviders = const [],
@@ -49,6 +51,7 @@ Future<Engine> createEngine({
 }) async {
   final engine = config(
     store: store,
+    apiKeyStore: apiKeyStore,
     origin: origin,
     sessionKey: sessionKey,
     socialProviders: socialProviders,
@@ -153,6 +156,26 @@ void registerRoutes(Engine engine, {String storeLabel = 'cloudflare_d1'}) {
     middlewares: [_browserAuthenticationGuard()],
   );
   engine.get(
+    '/settings/api-keys',
+    _apiKeysPage,
+    middlewares: [_browserAuthenticationGuard()],
+  );
+  engine.post(
+    '/settings/api-keys/create',
+    _createApiKey,
+    middlewares: [_browserAuthenticationGuard()],
+  );
+  engine.post(
+    '/settings/api-keys/rotate',
+    _rotateApiKey,
+    middlewares: [_browserAuthenticationGuard()],
+  );
+  engine.post(
+    '/settings/api-keys/revoke',
+    _revokeApiKey,
+    middlewares: [_browserAuthenticationGuard()],
+  );
+  engine.get(
     '/settings/sessions',
     _sessionsPage,
     middlewares: [_browserAuthenticationGuard()],
@@ -185,6 +208,14 @@ void registerRoutes(Engine engine, {String storeLabel = 'cloudflare_d1'}) {
       guardMiddleware(['authenticated']),
     ],
   );
+  engine.get('/service/account', (context) {
+    final authentication = currentApiKey(context);
+    return context.json(<String, Object?>{
+      'authenticated': authentication != null,
+      'apiKeyId': authentication?.record.id,
+      'scopes': authentication?.scopes ?? const <String>[],
+    });
+  }, middlewares: [_apiKeyAuthenticationGuard()]);
 }
 
 AuthManager _authManager(EngineContext context) =>
@@ -201,6 +232,22 @@ Middleware _browserAuthenticationGuard() {
       return context.redirect('/login');
     }
     return await next();
+  };
+}
+
+Middleware _apiKeyAuthenticationGuard() {
+  return (context, next) async {
+    final manager = _authManager(context);
+    final plugin = manager.apiKeys;
+    if (plugin == null) {
+      return context.json(<String, String>{
+        'error': 'api_key_unavailable',
+      }, statusCode: HttpStatus.notFound);
+    }
+    return apiKeyAuthentication(plugin: plugin, userStore: manager.store.users)(
+      context,
+      next,
+    );
   };
 }
 
@@ -308,6 +355,185 @@ Future<Response> _changePassword(EngineContext context) async {
     );
   }
 }
+
+Future<Response> _apiKeysPage(
+  EngineContext context, {
+  String? error,
+  String? issuedKey,
+  String? issuedName,
+  int statusCode = HttpStatus.ok,
+}) async {
+  final manager = _authManager(context);
+  final session = await manager.resolveSession(context);
+  final plugin = manager.apiKeys;
+  if (session == null) return context.redirect('/login');
+  final keys = plugin == null
+      ? const <AuthApiKey>[]
+      : await plugin.list(session.user.id);
+  return _renderEmbeddedPage(context, 'api_keys.liquid', <String, dynamic>{
+    'csrf_token': manager.csrfToken(context),
+    'keys': keys.map((value) => value.toJson()).toList(),
+    'key_count': keys.length,
+    'issued_key': issuedKey,
+    'issued_name': issuedName,
+    'error':
+        error ??
+        (plugin == null
+            ? 'Service keys are not enabled in this deployment.'
+            : null),
+  }, statusCode: plugin == null ? HttpStatus.notFound : statusCode);
+}
+
+Future<Response> _createApiKey(EngineContext context) async {
+  final manager = _authManager(context);
+  final payload = await context.formCache;
+  final browserError = manager.validateBrowserRequest(context);
+  if (browserError != null || !manager.validateCsrf(context, payload)) {
+    return await _apiKeysPage(
+      context,
+      error: _friendlyAuthError(browserError ?? 'invalid_csrf'),
+      statusCode: HttpStatus.forbidden,
+    );
+  }
+  final session = await manager.resolveSession(context);
+  final plugin = manager.apiKeys;
+  if (session == null) return context.redirect('/login');
+  if (plugin == null) {
+    return _apiKeysPage(context, statusCode: HttpStatus.notFound);
+  }
+  try {
+    final issued = await plugin.issue(
+      userId: session.user.id,
+      name: payload['name']?.toString() ?? '',
+      scopes: _parseApiKeyScopes(payload['scopes']?.toString()),
+    );
+    return await _apiKeysPage(
+      context,
+      issuedKey: issued.key,
+      issuedName: issued.apiKey.name,
+    );
+  } on AuthFlowException catch (error) {
+    return _apiKeysPage(
+      context,
+      error: _friendlyAuthError(error.code),
+      statusCode: HttpStatus.badRequest,
+    );
+  } catch (_) {
+    return _apiKeysPage(
+      context,
+      error: 'We could not create that service key. Please try again.',
+      statusCode: HttpStatus.badRequest,
+    );
+  }
+}
+
+Future<Response> _rotateApiKey(EngineContext context) async {
+  final manager = _authManager(context);
+  final payload = await context.formCache;
+  final validation = await _validateApiKeyMutation(context, manager, payload);
+  if (validation != null) return validation;
+  final session = await manager.resolveSession(context);
+  final plugin = manager.apiKeys;
+  if (session == null) return context.redirect('/login');
+  if (plugin == null) {
+    return await _apiKeysPage(context, statusCode: HttpStatus.notFound);
+  }
+  try {
+    await manager.requireRecentAuthentication(context);
+    final rotated = await plugin.rotate(
+      session.user.id,
+      payload['id']?.toString() ?? '',
+      name: payload['name']?.toString(),
+    );
+    if (rotated == null) {
+      return await _apiKeysPage(
+        context,
+        error: 'That service key is no longer active.',
+        statusCode: HttpStatus.badRequest,
+      );
+    }
+    return await _apiKeysPage(
+      context,
+      issuedKey: rotated.key,
+      issuedName: rotated.apiKey.name,
+    );
+  } on AuthFlowException catch (error) {
+    return _apiKeysPage(
+      context,
+      error: _friendlyAuthError(error.code),
+      statusCode: HttpStatus.badRequest,
+    );
+  } catch (_) {
+    return _apiKeysPage(
+      context,
+      error: 'We could not rotate that service key. Please try again.',
+      statusCode: HttpStatus.badRequest,
+    );
+  }
+}
+
+Future<Response> _revokeApiKey(EngineContext context) async {
+  final manager = _authManager(context);
+  final payload = await context.formCache;
+  final validation = await _validateApiKeyMutation(context, manager, payload);
+  if (validation != null) return validation;
+  final session = await manager.resolveSession(context);
+  final plugin = manager.apiKeys;
+  if (session == null) return context.redirect('/login');
+  if (plugin == null) {
+    return await _apiKeysPage(context, statusCode: HttpStatus.notFound);
+  }
+  try {
+    await manager.requireRecentAuthentication(context);
+    final revoked = await plugin.revoke(
+      session.user.id,
+      payload['id']?.toString() ?? '',
+    );
+    if (revoked == null) {
+      return await _apiKeysPage(
+        context,
+        error: 'That service key could not be found.',
+        statusCode: HttpStatus.badRequest,
+      );
+    }
+    return await _apiKeysPage(context);
+  } on AuthFlowException catch (error) {
+    return _apiKeysPage(
+      context,
+      error: _friendlyAuthError(error.code),
+      statusCode: HttpStatus.badRequest,
+    );
+  } catch (_) {
+    return _apiKeysPage(
+      context,
+      error: 'We could not revoke that service key. Please try again.',
+      statusCode: HttpStatus.badRequest,
+    );
+  }
+}
+
+Future<Response?> _validateApiKeyMutation(
+  EngineContext context,
+  AuthManager manager,
+  Map<String, dynamic> payload,
+) async {
+  final browserError = manager.validateBrowserRequest(context);
+  if (browserError != null || !manager.validateCsrf(context, payload)) {
+    return _apiKeysPage(
+      context,
+      error: _friendlyAuthError(browserError ?? 'invalid_csrf'),
+      statusCode: HttpStatus.forbidden,
+    );
+  }
+  return null;
+}
+
+List<String> _parseApiKeyScopes(String? value) => (value ?? '')
+    .split(',')
+    .map((scope) => scope.trim())
+    .where((scope) => scope.isNotEmpty)
+    .take(16)
+    .toList(growable: false);
 
 Future<Response> _updateProfile(EngineContext context) async {
   final manager = _authManager(context);
