@@ -73,6 +73,10 @@ void main() {
     expect(home.body, contains('D1 for auth storage'));
     expect(home.body, contains('href="/auth/providers"'));
 
+    final serviceWithoutKey = await client.get('/service/account');
+    serviceWithoutKey.assertStatus(HttpStatus.unauthorized);
+    expect(serviceWithoutKey.body, contains('invalid_api_key'));
+
     final health = await client.getJson('/health');
     health.assertStatus(HttpStatus.ok).assertJson((json) {
       json.where('ok', true).where('store', 'cloudflare_d1');

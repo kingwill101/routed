@@ -246,7 +246,18 @@ Middleware _apiKeyAuthenticationGuard() {
     }
     return apiKeyAuthentication(plugin: plugin, userStore: manager.store.users)(
       context,
-      next,
+      () async {
+        if (currentApiKey(context) == null) {
+          context.response.headers.set(
+            HttpHeaders.wwwAuthenticateHeader,
+            'ApiKey realm="service"',
+          );
+          return context.json(<String, String>{
+            'error': 'invalid_api_key',
+          }, statusCode: HttpStatus.unauthorized);
+        }
+        return next();
+      },
     );
   };
 }
