@@ -71,9 +71,7 @@ The six packages prepared in this batch were uploaded successfully:
 - `server_sessions` `0.1.1`
 - `server_storage` `0.1.1`
 
-Pub.dev may take several minutes to expose a newly uploaded version to the
-release audit. Until propagation completes, a temporary `ahead` result for
-one of these versions is expected.
+The release audit now confirms all six versions are current on pub.dev.
 
 `routed_auth_sqlite` `0.1.0` was accepted by pub.dev on 2026-08-21 after its
 zero-warning dry run. `routed_hotwire` was corrected to `0.1.6` and published
@@ -83,8 +81,8 @@ after the earlier `0.1.4`/`0.1.5` entries.
 current version is already published; native assets require a separate
 artifact and metadata release.
 
-Packages whose publishable contents still match their current pub.dev release
-and do not need a release in this batch:
+Other packages whose publishable contents already matched their current pub.dev
+release and were not part of this batch:
 
 - `routed_logging` `0.2.0`
 - `routed_testing` `0.4.0`
