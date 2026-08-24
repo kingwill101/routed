@@ -2,6 +2,8 @@
 
 - Completed public Dartdoc coverage and enabled the `public_member_api_docs`
   analyzer lint.
+- Clarified typed storage configuration, provider lifecycle, static mounts,
+  and the Routed response-sink integration in the public API docs.
 
 ## 0.2.0
 

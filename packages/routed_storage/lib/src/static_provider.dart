@@ -19,6 +19,7 @@ class StaticConfig implements ValidatableConfiguration {
   /// Static mounts to register when the provider boots.
   final List<StaticMountConfig> mounts;
 
+  /// Records validation errors for unsafe or incomplete static mounts.
   @override
   void validate(ConfigValidationContext context) {
     for (var index = 0; index < mounts.length; index++) {
@@ -83,9 +84,15 @@ class RoutedStaticProvider extends ServiceProvider
 
   final List<Object> _registeredRoutes = [];
 
+  /// Does not bind a singleton; static routes are installed during [boot].
   @override
   void register(Container container) {}
 
+  /// Installs enabled static routes when both an engine and storage manager
+  /// are available in [container].
+  ///
+  /// Disabled configuration or a missing dependency is treated as a no-op.
+  /// Registered routes are invalidated after all mounts have been added.
   @override
   Future<void> boot(Container container) async {
     if (!configuration.enabled ||

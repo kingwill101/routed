@@ -1,4 +1,10 @@
-/// Routed integration for storage disks and declarative static files.
+/// Storage-manager access, typed configuration, and static-file integration for
+/// Routed applications.
+///
+/// Use [RoutedStorageProvider] to register a [StorageManager] and configure
+/// local disks. Add [storageMiddleware] when a request context needs an
+/// explicitly selected manager, or use the [StorageEngineContext] extension
+/// to resolve the manager and disks from a handler.
 library;
 
 import 'package:file/file.dart';
@@ -12,11 +18,14 @@ export 'src/engine_static_file_sink.dart';
 export 'src/static_files.dart';
 export 'src/static_provider.dart';
 
-/// Adds storage-manager accessors to a Routed request context.
+/// Adds accessors for the request's configured storage manager and disks.
 extension StorageEngineContext on EngineContext {
-  /// Returns the storage manager registered for this request.
+  /// Returns the storage manager registered in this request's container.
   ///
-  /// Throws [StateError] when the storage provider has not been configured.
+  /// The manager is normally registered by [RoutedStorageProvider] or
+  /// [storageMiddleware]. This getter does not create or configure a manager.
+  ///
+  /// Throws [StateError] when no [StorageManager] has been registered.
   StorageManager get storageManager {
     if (container.has<StorageManager>()) {
       return container.get<StorageManager>();
@@ -24,14 +33,23 @@ extension StorageEngineContext on EngineContext {
     throw StateError('Storage manager not configured');
   }
 
-  /// Returns the named storage disk, or the manager's default disk.
+  /// Returns the named storage disk, or the manager's default disk when [name]
+  /// is omitted or empty.
+  ///
+  /// Throws [StateError] when the selected disk has not been registered.
   StorageDisk storageDisk([String? name]) => storageManager.disk(name);
 
-  /// Whether a [StorageManager] is registered for this request.
+  /// Whether this request has a [StorageManager] in its container.
   bool get hasStorageManager => container.has<StorageManager>();
 }
 
 /// Creates middleware that makes [manager] available to request handlers.
+///
+/// The middleware registers the supplied instance only when the request
+/// container does not already contain a [StorageManager]. This makes it safe
+/// to compose with [RoutedStorageProvider] and preserves a more specific
+/// request binding. It then calls `next` and returns its response; it does not
+/// create disks or modify the manager's configuration.
 Middleware storageMiddleware(StorageManager manager) {
   return (ctx, next) {
     // ensure request-scoped access falls back to container singleton
@@ -42,27 +60,44 @@ Middleware storageMiddleware(StorageManager manager) {
   };
 }
 
-/// A named local storage disk definition.
+/// Optional settings for a named local storage disk.
+///
+/// These settings are consumed by [StorageConfig]. They do not create a disk
+/// until [RoutedStorageProvider] boots.
 final class LocalStorageDiskConfig {
-  /// Creates a local disk definition.
+  /// Creates settings for a local disk.
   ///
-  /// [root] overrides the storage configuration root for this disk. When
-  /// [fileSystem] is omitted, the storage manager's default file system is
-  /// used.
+  /// When [root] is omitted, the provider derives `storage/app` for the
+  /// `local` disk and `storage/<name>` for other disk names. When [fileSystem]
+  /// is omitted, the manager's default file system is used when the disk is
+  /// created.
   const LocalStorageDiskConfig({this.root, this.fileSystem});
 
-  /// Optional directory used as the disk root.
+  /// Optional directory used as this disk's root.
+  ///
+  /// The value must be non-empty when supplied. Relative roots are resolved
+  /// by the selected file system when the disk is created.
   final String? root;
 
   /// Optional file system used by the disk.
+  ///
+  /// When omitted, [StorageManager.defaultFileSystem] is used.
   final FileSystem? fileSystem;
 }
 
-/// Immutable configuration for [RoutedStorageProvider].
+/// Immutable typed configuration for [RoutedStorageProvider].
+///
+/// With the default constructor, the provider creates one `local` disk rooted
+/// at `storage/app` and selects it as the default. Supplying [disks] replaces
+/// that generated disk map, so include the [defaultDisk] entry explicitly when
+/// providing custom disks.
 class StorageConfig implements ValidatableConfiguration {
-  /// Creates typed storage configuration.
+  /// Creates typed storage configuration with local-disk defaults.
   ///
-  /// If [disks] is omitted, a `local` disk rooted at [root] is created.
+  /// [defaultDisk] defaults to `local`, [root] defaults to `storage/app`, and
+  /// [disks] defaults to a single `local` disk using [root]. If [disks] is
+  /// supplied, it is copied into an unmodifiable map and is not merged with
+  /// the default disk.
   StorageConfig({
     this.defaultDisk = 'local',
     this.root = 'storage/app',
@@ -75,14 +110,29 @@ class StorageConfig implements ValidatableConfiguration {
        );
 
   /// Name of the disk used when no disk is specified.
+  ///
+  /// Validation requires this name to be non-empty and present in [disks].
   final String defaultDisk;
 
-  /// Root used by the default local disk.
+  /// Root used by the generated `local` disk.
+  ///
+  /// The value defaults to `storage/app` and is used only when the `local`
+  /// disk does not provide its own [LocalStorageDiskConfig.root].
   final String root;
 
-  /// Named local disk definitions.
+  /// Named disk definitions copied from the constructor input.
+  ///
+  /// The map is unmodifiable. Each entry is validated for a non-empty name;
+  /// supplied disk roots must also be non-empty.
   final Map<String, LocalStorageDiskConfig> disks;
 
+  /// Records configuration errors in [context].
+  ///
+  /// Validation runs while typed provider configuration is assembled. It
+  /// records all of the following issues instead of throwing immediately:
+  /// empty default names or roots, an empty disk map, a missing default disk,
+  /// empty disk names, and empty explicitly supplied disk roots. A later
+  /// [ConfigValidationException] contains the collected issues.
   @override
   void validate(ConfigValidationContext context) {
     context
@@ -125,10 +175,20 @@ class StorageConfig implements ValidatableConfiguration {
   }
 }
 
-/// Registers storage disks and their [StorageManager] with a Routed app.
+/// Registers storage disks and a [StorageManager] with a Routed app.
+///
+/// The provider registers [manager] during the provider registration phase.
+/// During boot, it applies [configuration] only when no manager was injected
+/// into the constructor: existing disks are cleared, configured local disks
+/// are created, and [StorageConfig.defaultDisk] is selected. An injected
+/// manager is registered as-is and is not cleared or reconfigured.
 class RoutedStorageProvider extends ServiceProvider
     with ProvidesTypedConfiguration<StorageConfig> {
-  /// Defaults to a [StorageManager] with a local `storage/app` disk.
+  /// Creates a storage provider with local-disk defaults.
+  ///
+  /// When [configuration] is omitted, [StorageConfig]'s `local` disk rooted at
+  /// `storage/app` is used. When [manager] is supplied, that exact manager is
+  /// registered and [configuration] is not applied during boot.
   RoutedStorageProvider({StorageConfig? configuration, StorageManager? manager})
     : configuration = configuration ?? StorageConfig(),
       manager = manager ?? StorageManager(),
@@ -139,14 +199,24 @@ class RoutedStorageProvider extends ServiceProvider
   final StorageConfig configuration;
 
   /// Storage manager registered with the application container.
+  ///
+  /// The same instance is made available to the container during [register].
+  /// It is rebuilt from [configuration] during [boot] only when it was created
+  /// by this provider rather than injected by the caller.
   final StorageManager manager;
   final bool _configureManager;
 
+  /// Registers [manager] in [container] without creating request state.
   @override
   void register(Container container) {
     container.instance<StorageManager>(manager);
   }
 
+  /// Applies typed disk configuration when this provider owns [manager].
+  ///
+  /// An injected manager is left unchanged. Configuration validation is
+  /// expected to have completed before boot; disk-construction failures from
+  /// the underlying storage package propagate to the application bootstrap.
   @override
   Future<void> boot(Container container) async {
     if (_configureManager) {
@@ -175,6 +245,11 @@ class RoutedStorageProvider extends ServiceProvider
 }
 
 /// Registers storage and static provider factories in the shared registry.
+///
+/// Registration targets [ProviderRegistry.instance] and stores factories, not
+/// provider instances. Repeated calls are safe: the registry keeps an existing
+/// registration for either identifier rather than replacing it. Call this
+/// before resolving providers from the registry.
 void registerRoutedStorageProviders() {
   ProviderRegistry.instance.register(
     'routed.storage',
