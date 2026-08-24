@@ -17,18 +17,31 @@ import 'package:routed_views/src/view/view_extensions.dart';
 import 'package:server_storage/server_storage.dart';
 
 /// Configures the view engine from an immutable typed configuration.
+///
+/// [register] prepares the extension registry and engine manager when the
+/// engine configuration is available. [boot] resolves the optional storage
+/// disk, normalizes the template directory, creates the configured view
+/// engine, and writes the resulting [ViewConfig] and engine name into
+/// [EngineConfig]. The provider is a startup composition step; changing the
+/// original configuration object or storage bindings after boot does not
+/// reconfigure the engine.
 class ViewServiceProvider extends ServiceProvider
     with ProvidesTypedConfiguration<RoutedViewConfig> {
   /// Creates the view provider with [configuration], or Liquid defaults.
+  ///
+  /// Defaults select the `liquid` engine, the `views` directory, enabled view
+  /// caching, and the engine's configured filesystem.
   ViewServiceProvider([RoutedViewConfig? configuration])
     : configuration = configuration ?? RoutedViewConfig();
 
+  /// The immutable configuration consumed during [boot].
   @override
   final RoutedViewConfig configuration;
 
   StorageManager? _storageManager;
   file.FileSystem _fallbackFileSystem = const local.LocalFileSystem();
 
+  /// Prepares view registries and captures the engine filesystem.
   @override
   void register(Container container) {
     if (!container.has<EngineConfig>()) {
@@ -46,6 +59,7 @@ class ViewServiceProvider extends ServiceProvider
     _fallbackFileSystem = container.get<EngineConfig>().fileSystem;
   }
 
+  /// Resolves storage and installs the configured view settings.
   @override
   Future<void> boot(Container container) async {
     if (!container.has<EngineConfig>()) {

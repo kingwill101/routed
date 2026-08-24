@@ -1,4 +1,26 @@
 /// Template rendering and request localization integrations for Routed.
+///
+/// This library is the public entry point for `ViewServiceProvider`,
+/// `LocalizationServiceProvider`, typed view and localization configuration,
+/// locale resolvers, translation loaders, and `EngineContext` rendering
+/// extensions. Applications normally compose the providers directly:
+///
+/// ```dart
+/// import 'package:routed_core/routed_core.dart';
+/// import 'package:routed_views/routed_views.dart';
+///
+/// final engine = await Engine.create(
+///   providers: [
+///     ...Engine.defaultProviders,
+///     ViewServiceProvider(RoutedViewConfig(directory: 'views')),
+///     LocalizationServiceProvider(),
+///   ],
+/// );
+/// ```
+///
+/// Use `registerRoutedViewsProviders` instead when an application composes
+/// providers through `ProviderRegistry`. The exported extensions keep view
+/// rendering and localization host-neutral across Routed's supported servers.
 library;
 
 export 'src/config.dart' show LocalizationConfig, RoutedViewConfig;

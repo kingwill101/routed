@@ -1,14 +1,31 @@
 import 'package:routed_core/routed_core.dart' show EngineContext;
 
-/// Looks up a value by [name] from a particular source (headers, query, etc.).
+/// Looks up a named value from one request source.
+///
+/// Return `null` when the source does not contain [name]. The lookup itself
+/// does not sanitize locale values; the built-in resolvers call
+/// `sanitizeLocale` after reading them.
 typedef LocaleLookup = String? Function(String name);
 
-/// Utilities for exposing header, query, cookie, and session lookups when
-/// resolving locales.
+/// Provides request-source lookups to locale resolvers.
 ///
-/// Encapsulates the data available to locale resolvers.
+/// A context keeps header, query, cookie, and optional session access behind a
+/// small synchronous interface. It does not choose a precedence order; the
+/// order is defined by the locale manager's resolver list.
+///
+/// ```dart
+/// final context = LocaleResolutionContext(
+///   header: (name) => requestHeaders[name],
+///   query: (name) => queryParameters[name],
+///   cookie: (name) => cookies[name],
+/// );
+/// final requested = context.query('lang');
+/// ```
 class LocaleResolutionContext {
-  /// Creates a context with individual lookups for each source.
+  /// Creates a context with lookups for each request source.
+  ///
+  /// [sessionValue] may be omitted when sessions are not available for the
+  /// current request.
   LocaleResolutionContext({
     required this.header,
     required this.query,
@@ -16,10 +33,11 @@ class LocaleResolutionContext {
     this.sessionValue,
   });
 
-  /// Builds a context from the current [EngineContext].
+  /// Builds a context from the request represented by [ctx].
   ///
-  /// Header lookup is case-insensitive and the session lookup gracefully falls
-  /// back to `null` when sessions are not configured.
+  /// Header lookup follows HTTP header name semantics. Cookie and query
+  /// lookups return the first matching request value. The session lookup
+  /// returns `null` when sessions are unavailable or do not contain the key.
   factory LocaleResolutionContext.fromContext(EngineContext ctx) {
     String? headerLookup(String name) {
       final values = ctx.request.headers[name];
@@ -54,15 +72,17 @@ class LocaleResolutionContext {
     );
   }
 
-  /// Header lookup (case-insensitive).
+  /// Looks up a request header by name.
   final LocaleLookup header;
 
-  /// Query parameter lookup.
+  /// Looks up a request query parameter by name.
   final LocaleLookup query;
 
-  /// Cookie lookup.
+  /// Looks up a request cookie by name.
   final LocaleLookup cookie;
 
-  /// Session lookup, if sessions are enabled.
+  /// Looks up a value in the current session, when sessions are enabled.
+  ///
+  /// This callback is `null` when no session integration is available.
   final LocaleLookup? sessionValue;
 }

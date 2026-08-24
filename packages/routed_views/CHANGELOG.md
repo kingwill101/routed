@@ -2,6 +2,8 @@
 
 - Completed public Dartdoc coverage and enabled the `public_member_api_docs`
   analyzer lint.
+- Clarified typed provider configuration, view-engine lifecycle, request
+  rendering, locale resolution, translation loading, and Liquid integration.
 
 ## 0.2.0
 

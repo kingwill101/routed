@@ -1,9 +1,27 @@
-/// Minimal pluralization helper modelled after Laravel's MessageSelector.
+/// Selects a pluralized message branch from a compact message string.
 ///
-/// It supports the most common `singular|plural` syntax along with optional
-/// inline conditions such as `{0} None|{1} One|[2,*] Many`.
+/// The selector supports the common `singular|plural` form and inline exact or
+/// range conditions such as `{0} None|{1} One|[2,*] Many`:
+///
+/// ```dart
+/// final selector = MessageSelector();
+/// selector.choose('{0} No files|{1} One file|[2,*] :count files', 3, 'en');
+/// // ':count files'
+/// ```
+///
+/// The built-in implementation uses an English-like rule for an unconditioned
+/// message: exactly `1` selects the first branch and every other number selects
+/// the last branch. The `locale` argument is accepted for the translator
+/// contract but is not currently used to apply locale-specific plural rules.
 class MessageSelector {
-  /// Picks the appropriate segment from [line] based on [number].
+  /// Picks the branch in [line] that matches [number].
+  ///
+  /// Conditions use `{n}` for an exact number and `[lower,upper]` for an
+  /// inclusive range. Either range bound may be `*`. Branch text is trimmed;
+  /// Placeholder replacement is performed by `Translator` after selection.
+  ///
+  /// [locale] identifies the locale being translated, but the built-in
+  /// selector currently uses the same English-like rule for every locale.
   String choose(String line, num number, String locale) {
     final segments = line.split('|');
     final conditioned = _extractCondition(segments, number);

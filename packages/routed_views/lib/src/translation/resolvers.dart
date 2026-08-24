@@ -2,26 +2,39 @@ import 'dart:io';
 
 import 'package:routed_views/src/translation/locale_resolution.dart';
 
-/// Built-in locale resolvers backed by query params, cookies, sessions, and
-/// headers.
+/// Built-in locale resolvers backed by query parameters, cookies, sessions,
+/// and headers.
 ///
-/// Contract implemented by all locale resolvers.
+/// A resolver returns one candidate locale or `null` when its source does not
+/// provide a usable value. Applications can add their own source by
+/// implementing this interface:
+///
+/// ```dart
+/// class AccountLocaleResolver implements LocaleResolver {
+///   @override
+///   String? resolve(LocaleResolutionContext context) =>
+///       sanitizeLocale(context.sessionValue?.call('account_locale'));
+/// }
+/// ```
 // LocaleResolver is intentionally a public interface so applications can add
 // resolution sources without changing the built-in resolver chain.
 // ignore: one_member_abstracts
 abstract class LocaleResolver {
-  /// Attempts to resolve a locale from the provided [context].
+  /// Attempts to resolve one locale from [context].
   ///
   /// Returns `null` when the resolver cannot produce a value.
   String? resolve(LocaleResolutionContext context);
 }
 
-/// Resolves locales from a query parameter (e.g. `?lang=fr`).
+/// Resolves a locale from a query parameter such as `?lang=fr`.
+///
+/// The value is trimmed and underscores are converted to dashes by
+/// [sanitizeLocale]. An absent or blank parameter produces `null`.
 class QueryLocaleResolver implements LocaleResolver {
-  /// Creates a resolver for [parameter].
+  /// Creates a resolver for the locale query [parameter].
   QueryLocaleResolver({required this.parameter});
 
-  /// Query parameter containing the requested locale.
+  /// Name of the query parameter containing the requested locale.
   final String parameter;
 
   @override
@@ -30,12 +43,14 @@ class QueryLocaleResolver implements LocaleResolver {
   }
 }
 
-/// Resolves locales from a cookie value.
+/// Resolves a locale from a cookie value.
+///
+/// Cookie values are passed through [sanitizeLocale].
 class CookieLocaleResolver implements LocaleResolver {
-  /// Creates a resolver for [cookieName].
+  /// Creates a resolver for the locale [cookieName].
   CookieLocaleResolver({required this.cookieName});
 
-  /// Cookie containing the requested locale.
+  /// Name of the cookie containing the requested locale.
   final String cookieName;
 
   @override
@@ -44,12 +59,15 @@ class CookieLocaleResolver implements LocaleResolver {
   }
 }
 
-/// Resolves locales from a session key.
+/// Resolves a locale from a session value.
+///
+/// If the request has no session integration, or the key is absent, this
+/// resolver returns `null`. Values are passed through [sanitizeLocale].
 class SessionLocaleResolver implements LocaleResolver {
-  /// Creates a resolver for [sessionKey].
+  /// Creates a resolver for the locale [sessionKey].
   SessionLocaleResolver({required this.sessionKey});
 
-  /// Session key containing the requested locale.
+  /// Key containing the requested locale in the current session.
   final String sessionKey;
 
   @override
@@ -62,9 +80,17 @@ class SessionLocaleResolver implements LocaleResolver {
   }
 }
 
-/// Resolves locales from the `Accept-Language` header.
+/// Resolves the highest-weight locale from an `Accept-Language` header.
+///
+/// Entries may include `q` weights, for example
+/// `fr-CA, fr;q=0.8, en;q=0.5`. Weights are clamped to the inclusive range
+/// `0..1`; entries without a weight default to `1`. The first usable entry
+/// after sorting by weight is returned, and its underscores are converted to
+/// dashes by [sanitizeLocale].
 class HeaderLocaleResolver implements LocaleResolver {
   /// Creates a resolver for [headerName].
+  ///
+  /// The default is the standard `Accept-Language` header.
   HeaderLocaleResolver({this.headerName = HttpHeaders.acceptLanguageHeader});
 
   /// Header containing weighted locale preferences.
@@ -119,7 +145,12 @@ class _Weighted {
   final double weight;
 }
 
-/// Normalises incoming locale strings by trimming whitespace and using dashes.
+/// Normalizes an incoming locale string to the package's basic locale form.
+///
+/// Trimming whitespace and replacing `_` with `-` makes values such as
+/// ` es_MX ` resolve as `es-MX`. `null` and blank input return `null`. This
+/// helper does not verify that the result is a valid BCP 47 tag or that the
+/// application has translations for it.
 String? sanitizeLocale(String? input) {
   if (input == null) {
     return null;

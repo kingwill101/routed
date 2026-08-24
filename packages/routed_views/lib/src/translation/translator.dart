@@ -7,9 +7,30 @@ import 'package:routed_core/routed_core.dart'
 import 'package:routed_core/src/utils/dot.dart';
 import 'package:routed_views/src/translation/message_selector.dart';
 
-/// Resolves, interpolates, and pluralizes translations from a loader.
+/// Resolves and formats translations supplied by a [TranslationLoader].
+///
+/// Keys conventionally use `group.item` for grouped files and
+/// `namespace::group.item` for namespaced files. A key without a group can
+/// address a flat JSON dictionary. Resolved strings support `:name`,
+/// `:Name`, and `:NAME` replacements; non-string values and nested maps are
+/// returned as structured data.
+///
+/// ```dart
+/// final translator = Translator(
+///   loader: loader,
+///   locale: 'fr-CA',
+///   fallbackLocale: 'en',
+/// );
+/// final greeting = translator.translate(
+///   'messages.greeting',
+///   replacements: {'name': 'Ada'},
+/// );
+/// ```
 class Translator implements TranslatorContract {
   /// Creates a translator for [locale] and an optional [fallbackLocale].
+  ///
+  /// [loader] supplies uncached translation groups. [selector] controls the
+  /// branch chosen by [choice]; when omitted, [MessageSelector] is used.
   Translator({
     required TranslationLoader loader,
     required String locale,
@@ -29,29 +50,57 @@ class Translator implements TranslatorContract {
   Object? Function(String key, String locale)? _missingKeyHandler;
   bool _handleMissingKeys = true;
 
+  /// The locale used when a lookup does not provide an explicit locale.
+  ///
+  /// Changing this value affects subsequent lookups; it does not clear lines
+  /// already cached by the translator.
   @override
   String get locale => _locale;
 
   @override
   set locale(String value) => _locale = value;
 
+  /// The locale tried after the requested locale does not contain a key.
+  ///
+  /// Set this property to `null` to disable the fallback lookup. Changing it
+  /// affects subsequent lookups and does not clear the existing cache.
   @override
   String? get fallbackLocale => _fallbackLocale;
 
   @override
   set fallbackLocale(String? value) => _fallbackLocale = value;
 
+  /// Reports whether [key] resolves in the selected locale or its fallback.
+  ///
+  /// An explicit [locale] overrides [locale] for this call. Set [fallback] to
+  /// `false` to restrict the check to that locale. A non-null value returned by
+  /// the missing-key handler also counts as a resolution.
   @override
   bool has(String key, {String? locale, bool fallback = true}) {
     final resolved = translate(key, locale: locale, fallback: fallback);
     return !(resolved is String && resolved == key);
   }
 
+  /// Reports whether [key] resolves in [locale] without using a fallback.
   @override
   bool hasForLocale(String key, String locale) {
     return has(key, locale: locale, fallback: false);
   }
 
+  /// Resolves [key] and applies optional [replacements].
+  ///
+  /// [locale] overrides the current [locale] for this call. When [fallback]
+  /// is `true`, [fallbackLocale] is tried after the requested locale. The
+  /// result may be a string, scalar, nested map, or list. If no translation
+  /// exists, the missing-key handler is given a chance to supply a value;
+  /// otherwise the trimmed key is returned.
+  ///
+  /// ```dart
+  /// final value = translator.translate(
+  ///   'messages.welcome',
+  ///   replacements: {'name': 'Ada'},
+  /// );
+  /// ```
   @override
   Object? translate(
     String key, {
@@ -99,6 +148,15 @@ class Translator implements TranslatorContract {
     return _applyReplacements(normalizedKey, replacements);
   }
 
+  /// Selects the pluralized branch for [key] and [count].
+  ///
+  /// The requested locale is used when it contains [key]. Otherwise the
+  /// configured fallback locale is tried. The selected message receives a
+  /// `count` replacement unless [replacements] already provides one.
+  ///
+  /// ```dart
+  /// final label = translator.choice('messages.files', 3);
+  /// ```
   @override
   String choice(
     String key,
@@ -123,6 +181,12 @@ class Translator implements TranslatorContract {
     return _applyReplacements(selected, resolved);
   }
 
+  /// Adds or replaces in-memory lines for [locale] and [namespace].
+  ///
+  /// Each entry in [lines] should use `group.item` notation, for example
+  /// `{'messages.greeting': 'Hello'}`. The default `*` namespace represents
+  /// application translations. Entries without a dot are ignored because no
+  /// group can be inferred from them.
   @override
   void addLines(
     Map<String, dynamic> lines,
@@ -153,6 +217,11 @@ class Translator implements TranslatorContract {
     });
   }
 
+  /// Installs or clears the callback used for missing translation keys.
+  ///
+  /// The callback receives the unresolved key and locale. Returning a non-null
+  /// value makes that value the translation; returning `null` preserves the
+  /// normal behavior of returning the key. Pass `null` to remove the handler.
   @override
   void handleMissingKeysUsing(
     Object? Function(String key, String locale)? callback,

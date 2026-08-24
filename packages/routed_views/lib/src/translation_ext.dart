@@ -1,15 +1,32 @@
 import 'package:routed_core/routed_core.dart';
 
-/// Translation extensions for [EngineContext] — migrated from
-/// `routed` `src/context/helpers.dart` per refactor.md §16.2.
-/// Delegates to the existing `trans`/`transChoice` on `EngineContext` so
-/// callers can `import 'package:routed_views/routed_views.dart'` and get
-/// translation helpers without importing `routed` view internals.
+/// Adds view-oriented translation helpers to [EngineContext].
+///
+/// Import `package:routed_views/routed_views.dart` to use these aliases from a
+/// request handler or view helper:
+///
+/// ```dart
+/// final greeting = ctx.viewTrans(
+///   'messages.greeting',
+///   replacements: {'name': 'Ada'},
+/// );
+/// final itemLabel = ctx.viewTransChoice('messages.items', 3);
+/// ```
 extension RoutedViewTranslation on EngineContext {
-  /// Whether translation support is available in this context.
+  /// Whether this context exposes the translation extension methods.
+  ///
+  /// This is a compile-time capability marker. It does not verify that a
+  /// translator has been registered or that a requested key exists.
   bool get hasTranslationSupport => true;
 
-  /// Alias for `trans` that makes the `routed_views` ownership explicit.
+  /// Resolves [key] using the translator associated with this context.
+  ///
+  /// [replacements] are applied to string values, [locale] overrides the
+  /// context's current locale for this lookup, and [fallback] controls whether
+  /// the configured fallback locale may be consulted.
+  ///
+  /// The result can be a string, scalar, nested map, or the unresolved key,
+  /// depending on the translation data and translator configuration.
   Object? viewTrans(
     String key, {
     Map<String, dynamic>? replacements,
@@ -22,7 +39,10 @@ extension RoutedViewTranslation on EngineContext {
     fallback: fallback,
   );
 
-  /// Alias for `transChoice`.
+  /// Selects the pluralized translation for [key] and [count].
+  ///
+  /// The count is also available as the `count` replacement unless
+  /// [replacements] supplies that key explicitly.
   String viewTransChoice(
     String key,
     num count, {

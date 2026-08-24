@@ -5,19 +5,43 @@ import 'package:routed_core/routed_core.dart';
 import 'package:routed_views/src/view/engine_manager.dart';
 import 'package:routed_views/src/view/view_engine.dart';
 
-/// View helpers for [EngineContext] — moved from `routed` to `routed_views`
-/// per refactor.md §16.2.
+/// Renders file-backed templates from an [EngineContext].
 ///
-/// The extension resolves a template through the configured
-/// [ViewEngineManager] and writes the rendered result as HTML.
+/// The helper first uses a [ViewEngineManager] when one is registered in the
+/// request container. It falls back to the engine in [EngineConfig] when the
+/// manager has no matching extension. The current [EngineContext] is added to
+/// the template data under [kViewEngineContextKey], which lets request-aware
+/// engines such as Liquid expose helpers that read request state.
 extension RoutedViewContext on EngineContext {
-  /// Whether this context has the view helpers available.
+  /// Whether this extension is available on the context.
+  ///
+  /// This value only describes that the package extension is in scope. It does
+  /// not prove that a view engine or [ViewEngineManager] has been configured;
+  /// [template] still throws a [StateError] when neither is available.
   bool get hasViewSupport => true;
 
-  /// Renders [templateName] through the configured view engine.
+  /// Loads and renders the file named [templateName] as HTML.
   ///
-  /// [data] is made available to the template and the current context is
-  /// exposed under [kViewEngineContextKey].
+  /// A relative name is resolved below the configured view directory when the
+  /// file exists there. An absolute path may be used as a fallback when the
+  /// configured directory does not contain the requested file. [data] is
+  /// copied before the current context is inserted under
+  /// [kViewEngineContextKey], so a caller-provided value for that reserved key
+  /// is replaced.
+  ///
+  /// The response is written only after rendering succeeds and is marked as
+  /// `text/html`. A [StateError] is thrown when no engine can be resolved;
+  /// file-system, parsing, and engine-specific failures are propagated to the
+  /// caller.
+  ///
+  /// ```dart
+  /// app.get('/welcome', (ctx) {
+  ///   return ctx.template(
+  ///     templateName: 'welcome.liquid',
+  ///     data: {'name': 'Routed'},
+  ///   );
+  /// });
+  /// ```
   Future<Response> template({
     required String templateName,
     Map<String, dynamic>? data,

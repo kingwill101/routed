@@ -4,9 +4,30 @@ import 'package:file/file.dart' as file;
 import 'package:routed_core/routed_core.dart' show TranslationLoader, deepMerge;
 import 'package:yaml/yaml.dart';
 
-/// Loads grouped and JSON translations from a `fileSystem`.
+/// Loads grouped and flat JSON translations from a `file.FileSystem`.
+///
+/// Grouped files are searched beneath each configured path using the layout
+/// `<path>/<locale>/<group>.<extension>`, where the supported extensions are
+/// `.yaml`, `.yml`, and `.json`. Flat dictionaries use
+/// `<path>/<locale>.json`. Matching maps are deep-merged in path order, so a
+/// later path can override selected values without replacing the whole map.
+///
+/// For example, the default path supports files such as:
+///
+/// ```text
+/// resources/lang/en/messages.yaml
+/// resources/lang/en.json
+/// ```
+///
+/// Namespace lookups use the configured source path and then apply optional
+/// application overrides from `vendor/<namespace>` beneath the grouped search
+/// paths.
 class FileTranslationLoader implements TranslationLoader {
   /// Creates a loader with optional grouped, JSON, and namespace paths.
+  ///
+  /// [paths] defaults to `resources/lang`. [jsonPaths] defaults to an empty
+  /// list, although flat JSON files in [paths] are also considered. Every path
+  /// is trimmed and normalized; blank paths are ignored.
   FileTranslationLoader({
     required file.FileSystem fileSystem,
     Iterable<String>? paths,
@@ -26,15 +47,36 @@ class FileTranslationLoader implements TranslationLoader {
   final List<String> _jsonPaths;
   final Map<String, String> _namespaces;
 
+  /// The ordered grouped-translation search paths.
+  ///
+  /// The returned list is an immutable snapshot. When several paths contain
+  /// the requested file, later paths are merged over earlier paths.
   @override
   List<String> get paths => List.unmodifiable(_paths);
 
+  /// The ordered flat-JSON translation search paths.
+  ///
+  /// The returned list is an immutable snapshot. These paths are searched
+  /// before [paths] when loading a flat dictionary.
   @override
   List<String> get jsonPaths => List.unmodifiable(_jsonPaths);
 
+  /// The configured namespace-to-source-path mappings.
+  ///
+  /// The returned map is immutable. A namespace source is used as the base
+  /// for grouped files before application vendor overrides are merged.
   @override
   Map<String, String> get namespaces => Map.unmodifiable(_namespaces);
 
+  /// Loads the map identified by [locale], [group], and optional [namespace].
+  ///
+  /// Use `group: '*'` and `namespace: '*'` to load a flat JSON dictionary. For
+  /// grouped translations, an omitted or wildcard namespace searches [paths].
+  /// A named namespace must have been registered with [addNamespace]; unknown
+  /// namespaces return an empty map. Missing files also return an empty map.
+  ///
+  /// Malformed JSON or YAML, and translation files whose top-level value is
+  /// not a map, throw [FormatException].
   @override
   Map<String, dynamic> load(String locale, String group, {String? namespace}) {
     final normalizedGroup = group.isEmpty ? '*' : group;
@@ -58,11 +100,18 @@ class FileTranslationLoader implements TranslationLoader {
     );
   }
 
+  /// Registers [namespace] with its source [hint], replacing an existing hint.
+  ///
+  /// For this file-backed implementation, [hint] is normalized as a path and
+  /// used as the base directory for grouped files in that namespace.
   @override
   void addNamespace(String namespace, String hint) {
     _namespaces[namespace] = _normalizePath(hint);
   }
 
+  /// Replaces the ordered grouped-translation search paths with [paths].
+  ///
+  /// Paths are normalized and blank entries are discarded.
   @override
   void setPaths(Iterable<String> paths) {
     _paths
@@ -70,6 +119,9 @@ class FileTranslationLoader implements TranslationLoader {
       ..addAll(paths.map(_normalizePath).where((path) => path.isNotEmpty));
   }
 
+  /// Adds [path] to the grouped-translation search paths if it is new.
+  ///
+  /// Blank paths and normalized duplicates are ignored.
   @override
   void addPath(String path) {
     final normalized = _normalizePath(path);
@@ -82,6 +134,9 @@ class FileTranslationLoader implements TranslationLoader {
     _paths.add(normalized);
   }
 
+  /// Replaces the ordered flat-JSON search paths with [paths].
+  ///
+  /// Paths are normalized and blank entries are discarded.
   @override
   void setJsonPaths(Iterable<String> paths) {
     _jsonPaths
@@ -89,6 +144,9 @@ class FileTranslationLoader implements TranslationLoader {
       ..addAll(paths.map(_normalizePath).where((path) => path.isNotEmpty));
   }
 
+  /// Adds [path] to the flat-JSON search paths if it is new.
+  ///
+  /// Blank paths and normalized duplicates are ignored.
   @override
   void addJsonPath(String path) {
     final normalized = _normalizePath(path);
@@ -101,6 +159,10 @@ class FileTranslationLoader implements TranslationLoader {
     _jsonPaths.add(normalized);
   }
 
+  /// Replaces all namespace-to-source mappings with [namespaces].
+  ///
+  /// Namespace names are retained as supplied; source hints are normalized as
+  /// paths. Namespaces omitted from the map are removed.
   @override
   void setNamespaces(Map<String, String> namespaces) {
     _namespaces

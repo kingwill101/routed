@@ -1,35 +1,53 @@
 import 'package:routed_views/src/translation/locale_resolution.dart';
 import 'package:routed_views/src/translation/resolvers.dart';
 
-/// Coordinates locale resolution across configured resolvers.
+/// Resolves a request locale by walking an ordered resolver chain.
 ///
-/// The manager evaluates resolvers in order until one yields a non-empty
-/// locale. When every resolver fails, the default locale is returned.
+/// The first resolver that returns a non-empty value wins. Built-in resolvers
+/// sanitize their values before returning them; custom [LocaleResolver]
+/// implementations are responsible for returning a suitable locale. When
+/// every resolver returns `null` or an empty string, [defaultLocale] is used.
+///
+/// ```dart
+/// final manager = LocaleManager(
+///   defaultLocale: 'en',
+///   fallbackLocale: 'en',
+///   resolvers: [
+///     QueryLocaleResolver(parameter: 'lang'),
+///     HeaderLocaleResolver(),
+///   ],
+/// );
+/// final locale = manager.resolve(context);
+/// ```
 class LocaleManager {
-  /// Creates a manager with the provided [resolvers].
+  /// Creates a manager with the provided ordered [resolvers].
   ///
-  /// Locales are resolved in order. If none of the resolvers match, the
-  /// [defaultLocale] is returned. When translations are missing, callers can
-  /// fall back to [fallbackLocale].
+  /// If none of the resolvers match, [defaultLocale] is returned. The
+  /// [fallbackLocale] is retained as localization configuration for the
+  /// translator; this manager itself only resolves the request's primary
+  /// locale.
   LocaleManager({
     required this.defaultLocale,
     required this.fallbackLocale,
     required List<LocaleResolver> resolvers,
   }) : _resolvers = List.unmodifiable(resolvers);
 
-  /// Preferred locale when the resolver chain produces no match.
+  /// Locale returned when the resolver chain produces no match.
   final String defaultLocale;
 
-  /// Locale consulted when a translation key is unavailable in the primary
-  /// locale.
+  /// Locale configured for translation lookups after the primary locale.
+  ///
+  /// [LocaleManager] does not perform translation lookup itself. The
+  /// registered translator uses this value when a key is absent from the
+  /// resolved locale.
   final String fallbackLocale;
 
   final List<LocaleResolver> _resolvers;
 
-  /// Resolves the locale for the provided [context].
+  /// Resolves the primary locale for the provided [context].
   ///
-  /// Returns the first non-empty locale or [defaultLocale] when every resolver
-  /// fails.
+  /// Returns the first non-empty resolver result or [defaultLocale] when every
+  /// resolver fails.
   String resolve(LocaleResolutionContext context) {
     for (final resolver in _resolvers) {
       final candidate = resolver.resolve(context);
