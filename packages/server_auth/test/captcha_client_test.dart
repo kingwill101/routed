@@ -9,7 +9,7 @@ void main() {
   test(
     'captcha client sends its token without adding it to attributes',
     () async {
-      final plugin = const AuthCaptchaClientPlugin();
+      const plugin = AuthCaptchaClientPlugin();
       final client = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
         plugins: const [AuthCaptchaClientPlugin()],
@@ -26,7 +26,11 @@ void main() {
           });
           return http.Response(
             jsonEncode({
-              'user': {'id': 'user-1', 'roles': <String>[], 'attributes': {}},
+              'user': {
+                'id': 'user-1',
+                'roles': <String>[],
+                'attributes': <String, dynamic>{},
+              },
               'expires': '2030-01-01T00:00:00.000Z',
               'strategy': 'session',
             }),
@@ -50,7 +54,7 @@ void main() {
   test(
     'captcha client explicit fields override untrusted attributes',
     () async {
-      final plugin = const AuthCaptchaClientPlugin();
+      const plugin = AuthCaptchaClientPlugin();
       final client = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
         plugins: const [AuthCaptchaClientPlugin()],
@@ -66,7 +70,11 @@ void main() {
           expect(body['captchaToken'], 'real-captcha');
           return http.Response(
             jsonEncode({
-              'user': {'id': 'user-1', 'roles': <String>[], 'attributes': {}},
+              'user': {
+                'id': 'user-1',
+                'roles': <String>[],
+                'attributes': <String, dynamic>{},
+              },
               'expires': '2030-01-01T00:00:00.000Z',
               'strategy': 'session',
             }),

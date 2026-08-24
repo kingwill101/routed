@@ -8,8 +8,8 @@ import 'package:test/test.dart';
 void main() {
   test('account and password plugins expose the complete lifecycle', () async {
     var csrfCalls = 0;
-    final accountPlugin = const AuthAccountClientPlugin();
-    final passwordPlugin = const AuthPasswordClientPlugin();
+    const accountPlugin = AuthAccountClientPlugin();
+    const passwordPlugin = AuthPasswordClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [accountPlugin, passwordPlugin],
@@ -131,7 +131,7 @@ void main() {
   });
 
   test('account unlink omits a password when recent auth is used', () async {
-    final accountPlugin = const AuthAccountClientPlugin();
+    const accountPlugin = AuthAccountClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [accountPlugin],

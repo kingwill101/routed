@@ -37,7 +37,6 @@ void main() {
           name: 'OIDC client',
           redirectUris: const ['https://client.example.test/callback'],
           grantTypes: const ['authorization_code', 'refresh_token'],
-          scopes: const ['openid', 'profile', 'email'],
         ),
       );
       codeStore = InMemoryOAuthAuthorizationCodeStore();
@@ -66,10 +65,13 @@ void main() {
       );
       expect(discoveryClient.mount, AuthEndpointMount.root);
       final discovery =
-          await discoveryEndpoint.invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
-                AuthEndpointRequest(body: const <String, dynamic>{}),
-              )
+          (await discoveryEndpoint.invoke(
+                const AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: null,
+                ),
+                AuthEndpointRequest(),
+              ))!
               as Map<String, dynamic>;
       expect(discovery['issuer'], 'https://issuer.example.test');
       expect(
@@ -84,10 +86,13 @@ void main() {
       );
 
       final jwks =
-          await _endpoint(plugin, 'oauth_provider.jwks').invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
-                AuthEndpointRequest(body: const <String, dynamic>{}),
-              )
+          (await _endpoint(plugin, 'oauth_provider.jwks').invoke(
+                const AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: null,
+                ),
+                AuthEndpointRequest(),
+              ))!
               as Map<String, dynamic>;
       final keys = jwks['keys'] as List<dynamic>;
       expect(keys, hasLength(1));
@@ -103,7 +108,7 @@ void main() {
 
     test('authorization code exchange issues a verifiable ID token', () async {
       final redirect =
-          await _endpoint(plugin, 'oauth_provider.authorize').invoke(
+          (await _endpoint(plugin, 'oauth_provider.authorize').invoke(
                 AuthOperationInvocation<Object>(
                   context: Object(),
                   user: AuthUser(id: 'user-1'),
@@ -119,12 +124,15 @@ void main() {
                     'code_challenge_method': 'S256',
                   },
                 ),
-              )
+              ))!
               as AuthEndpointRedirect;
 
       final response =
-          await _endpoint(plugin, 'oauth_provider.token').invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
+          (await _endpoint(plugin, 'oauth_provider.token').invoke(
+                const AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: null,
+                ),
                 AuthEndpointRequest(
                   body: <String, dynamic>{
                     'grant_type': 'authorization_code',
@@ -135,7 +143,7 @@ void main() {
                     'code_verifier': _verifier,
                   },
                 ),
-              )
+              ))!
               as Map<String, dynamic>;
 
       expect(response['access_token'], isNotEmpty);
@@ -159,7 +167,7 @@ void main() {
 
     test('OAuth-only grants do not receive an ID token', () async {
       final redirect =
-          await _endpoint(plugin, 'oauth_provider.authorize').invoke(
+          (await _endpoint(plugin, 'oauth_provider.authorize').invoke(
                 AuthOperationInvocation<Object>(
                   context: Object(),
                   user: AuthUser(id: 'user-1'),
@@ -174,11 +182,14 @@ void main() {
                     'code_challenge_method': 'S256',
                   },
                 ),
-              )
+              ))!
               as AuthEndpointRedirect;
       final response =
-          await _endpoint(plugin, 'oauth_provider.token').invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
+          (await _endpoint(plugin, 'oauth_provider.token').invoke(
+                const AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: null,
+                ),
                 AuthEndpointRequest(
                   body: <String, dynamic>{
                     'grant_type': 'authorization_code',
@@ -189,14 +200,14 @@ void main() {
                     'code_verifier': _verifier,
                   },
                 ),
-              )
+              ))!
               as Map<String, dynamic>;
       expect(response, isNot(contains('id_token')));
     });
 
     test('disabled users cannot exchange an issued code', () async {
       final redirect =
-          await _endpoint(plugin, 'oauth_provider.authorize').invoke(
+          (await _endpoint(plugin, 'oauth_provider.authorize').invoke(
                 AuthOperationInvocation<Object>(
                   context: Object(),
                   user: AuthUser(id: 'user-1'),
@@ -211,7 +222,7 @@ void main() {
                     'code_challenge_method': 'S256',
                   },
                 ),
-              )
+              ))!
               as AuthEndpointRedirect;
       await authStore.disable('user-1', reason: 'security');
       final request = <String, dynamic>{
@@ -225,24 +236,27 @@ void main() {
 
       await expectLater(
         _endpoint(plugin, 'oauth_provider.token').invoke(
-          AuthOperationInvocation<Object>(context: Object(), user: null),
+          const AuthOperationInvocation<Object>(context: Object(), user: null),
           AuthEndpointRequest(body: request),
         ),
         _flow('invalid_grant'),
       );
       await authStore.enable('user-1');
       final response =
-          await _endpoint(plugin, 'oauth_provider.token').invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
+          (await _endpoint(plugin, 'oauth_provider.token').invoke(
+                const AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: null,
+                ),
                 AuthEndpointRequest(body: request),
-              )
+              ))!
               as Map<String, dynamic>;
       expect(response['access_token'], isNotEmpty);
     });
 
     test('disabled clients do not burn an otherwise valid code', () async {
       final redirect =
-          await _endpoint(plugin, 'oauth_provider.authorize').invoke(
+          (await _endpoint(plugin, 'oauth_provider.authorize').invoke(
                 AuthOperationInvocation<Object>(
                   context: Object(),
                   user: AuthUser(id: 'user-1'),
@@ -257,7 +271,7 @@ void main() {
                     'code_challenge_method': 'S256',
                   },
                 ),
-              )
+              ))!
               as AuthEndpointRedirect;
       final client = (await clientStore.findById('client-1'))!;
       await clientStore.update(client.copyWith(enabled: false));
@@ -272,24 +286,27 @@ void main() {
 
       await expectLater(
         _endpoint(plugin, 'oauth_provider.token').invoke(
-          AuthOperationInvocation<Object>(context: Object(), user: null),
+          const AuthOperationInvocation<Object>(context: Object(), user: null),
           AuthEndpointRequest(body: request),
         ),
         _flow('invalid_client'),
       );
       await clientStore.update(client.copyWith(enabled: true));
       final response =
-          await _endpoint(plugin, 'oauth_provider.token').invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
+          (await _endpoint(plugin, 'oauth_provider.token').invoke(
+                const AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: null,
+                ),
                 AuthEndpointRequest(body: request),
-              )
+              ))!
               as Map<String, dynamic>;
       expect(response['access_token'], isNotEmpty);
     });
 
     test('locked accounts do not burn an otherwise valid code', () async {
       final redirect =
-          await _endpoint(plugin, 'oauth_provider.authorize').invoke(
+          (await _endpoint(plugin, 'oauth_provider.authorize').invoke(
                 AuthOperationInvocation<Object>(
                   context: Object(),
                   user: AuthUser(id: 'user-1'),
@@ -304,7 +321,7 @@ void main() {
                     'code_challenge_method': 'S256',
                   },
                 ),
-              )
+              ))!
               as AuthEndpointRedirect;
       await authStore.upsert(
         AuthAccountState(
@@ -323,17 +340,20 @@ void main() {
 
       await expectLater(
         _endpoint(plugin, 'oauth_provider.token').invoke(
-          AuthOperationInvocation<Object>(context: Object(), user: null),
+          const AuthOperationInvocation<Object>(context: Object(), user: null),
           AuthEndpointRequest(body: request),
         ),
         _flow('invalid_grant'),
       );
       await authStore.unlock('user-1');
       final response =
-          await _endpoint(plugin, 'oauth_provider.token').invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
+          (await _endpoint(plugin, 'oauth_provider.token').invoke(
+                const AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: null,
+                ),
                 AuthEndpointRequest(body: request),
-              )
+              ))!
               as Map<String, dynamic>;
       expect(response['access_token'], isNotEmpty);
     });
@@ -480,7 +500,7 @@ void main() {
 
       await expectLater(
         _endpoint(plugin, 'oauth_provider.token').invoke(
-          AuthOperationInvocation<Object>(context: Object(), user: null),
+          const AuthOperationInvocation<Object>(context: Object(), user: null),
           AuthEndpointRequest(
             body: const <String, dynamic>{
               'grant_type': 'client_credentials',

@@ -81,7 +81,7 @@ String signSamlXmlDsigFixture({
         (element) => element.name.local == 'Assertion',
       ),
   };
-  final targetId = targetElement.getAttribute('ID')!;
+  final targetId = targetElement.getAttribute('ID');
   _element(signature, 'Reference').setAttribute('URI', '#$targetId');
   _element(signature, 'DigestValue').innerText = '';
   _element(signature, 'SignatureValue').innerText = '';
@@ -129,7 +129,7 @@ String signSamlXmlDsigFixture({
   _element(signature, 'SignatureValue').innerText = base64.encode(
     signatureBytes,
   );
-  return document.toXmlString(pretty: false);
+  return document.toXmlString();
 }
 
 String mutateSamlXmlDsig(
@@ -138,7 +138,7 @@ String mutateSamlXmlDsig(
 ) {
   final document = XmlDocument.parse(source);
   mutate(document);
-  return document.toXmlString(pretty: false);
+  return document.toXmlString();
 }
 
 XmlElement samlXmlDsigElement(XmlNode root, String local) =>

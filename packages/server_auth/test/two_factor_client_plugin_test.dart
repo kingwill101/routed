@@ -8,7 +8,7 @@ import 'package:test/test.dart';
 void main() {
   test('two-factor plugin exposes its complete typed client API', () async {
     final seen = <String>[];
-    final plugin = const AuthTwoFactorClientPlugin();
+    const plugin = AuthTwoFactorClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [plugin],

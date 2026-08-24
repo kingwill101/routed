@@ -73,7 +73,7 @@ void main() {
           email: 'property@example.test',
           codeHash: digest,
           type: AuthEmailOtpType.signIn,
-          createdAt: DateTime.utc(2030, 1, 1),
+          createdAt: DateTime.utc(2030),
           expiresAt: DateTime.utc(2030, 1, 1, 0, 5),
           maxAttempts: 3,
         );
@@ -96,7 +96,7 @@ void main() {
       ).list(minLength: 1, maxLength: 100);
       final runner = PropertyTestRunner<List<int>>(operations, (values) async {
         final store = InMemoryAuthStore();
-        final now = DateTime.utc(2030, 1, 1);
+        final now = DateTime.utc(2030);
         String? magicToken;
         String? otpCode;
         var otpAttempts = 0;

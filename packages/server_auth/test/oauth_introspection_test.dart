@@ -372,7 +372,6 @@ void main() {
       final introspector = OAuth2TokenIntrospector(
         OAuthIntrospectionOptions(
           endpoint: Uri.parse('https://auth.test/introspect'),
-          cacheTtl: Duration.zero,
           clockSkew: Duration.zero,
         ),
         httpClient: MockClient((request) async {

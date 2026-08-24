@@ -119,7 +119,6 @@ void main() {
     final allGuard = requireRolesGuard<_Ctx, String>(
       ['admin', 'support'],
       principalResolver: (ctx) => ctx.principal,
-      any: false,
       onUnauthenticated: (_) => 'unauthorized',
       onForbidden: (_) => 'forbidden',
     );

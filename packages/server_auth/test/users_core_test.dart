@@ -78,7 +78,7 @@ void main() {
   test(
     'resolveAuthAccountId falls back when profile and user fields are empty',
     () {
-      final user = AuthUser(id: '', email: null);
+      final user = AuthUser(id: '');
       expect(
         resolveAuthAccountId(
           <String, dynamic>{},
@@ -101,9 +101,7 @@ void main() {
     );
     final incoming = AuthUser(
       id: 'different-id-ignored',
-      email: null,
       name: 'New',
-      image: null,
       roles: const <String>['admin'],
       attributes: const <String, dynamic>{'active': false, 'locale': 'en'},
     );

@@ -141,7 +141,7 @@ void main() {
     test('unsupported provider returns unsupported_provider', () {
       final decision = resolveAuthSignInRouteDecision(
         providerId: 'webauthn',
-        provider: AuthProvider(
+        provider: const AuthProvider(
           id: 'webauthn',
           name: 'WebAuthn',
           type: AuthProviderType.webauthn,

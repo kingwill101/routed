@@ -27,7 +27,7 @@ const _sensitiveNames = <String>{
 };
 
 String _normalizeName(Object? name) =>
-    name.toString().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    name.toString().toLowerCase().replaceAll(RegExp('[^a-z0-9]'), '');
 
 Generator<Object?> _leafValue() {
   return Gen.frequency<Object?>([
@@ -175,7 +175,7 @@ void main() {
           ]) {
             _expectNoSensitiveKeys(projection);
             expect(
-              (projection as Map)['publicField'],
+              (projection! as Map)['publicField'],
               equals(attributes['publicField']),
             );
           }

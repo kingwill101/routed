@@ -7,7 +7,7 @@ import 'package:test/test.dart';
 
 void main() {
   test('email OTP client plugin exposes typed response parsing', () async {
-    final plugin = const AuthEmailOtpClientPlugin();
+    const plugin = AuthEmailOtpClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [plugin],
@@ -32,8 +32,8 @@ void main() {
               'user': {
                 'id': 'user-1',
                 'email': 'ada@example.com',
-                'roles': [],
-                'attributes': {'emailVerified': true},
+                'roles': <String>[],
+                'attributes': <String, dynamic>{'emailVerified': true},
               },
               'expires': '2030-01-01T00:00:00Z',
               'strategy': 'jwt',
@@ -62,8 +62,8 @@ void main() {
             'user': {
               'id': 'user-1',
               'email': 'ada@example.com',
-              'roles': [],
-              'attributes': {'emailVerified': true},
+              'roles': <String>[],
+              'attributes': <String, dynamic>{'emailVerified': true},
             },
           }),
           200,

@@ -38,7 +38,7 @@ void main() {
       final runner = PropertyTestRunner<String>(
         Chaos.string(minLength: 0, maxLength: 512),
         (candidate) {
-          final expected = '#$samlXmlDsigAssertionId';
+          const expected = '#$samlXmlDsigAssertionId';
           final uri = candidate == expected ? '$candidate-attacker' : candidate;
           final xml = mutateSamlXmlDsig(
             samlXmlDsigSignedAssertion,

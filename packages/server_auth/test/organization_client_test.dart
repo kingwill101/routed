@@ -10,7 +10,7 @@ void main() {
     'organization client shares transport and sends explicit active IDs',
     () async {
       final requests = <http.Request>[];
-      final plugin = const AuthOrganizationClientPlugin();
+      const plugin = AuthOrganizationClientPlugin();
       final auth = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
         bearerToken: 'jwt-1',
@@ -121,7 +121,7 @@ void main() {
   test(
     'leaving and removing a team clear matching active selections',
     () async {
-      final plugin = const AuthOrganizationClientPlugin();
+      const plugin = AuthOrganizationClientPlugin();
       final auth = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
         plugins: [plugin],
@@ -132,13 +132,13 @@ void main() {
             case '/auth/organization/leave':
               expect(jsonDecode(request.body)['organizationId'], 'org-1');
               return http.Response(
-                jsonEncode({'data': _memberJson, 'warnings': const []}),
+                jsonEncode({'data': _memberJson, 'warnings': const <String>[]}),
                 200,
               );
             case '/auth/organization/remove-team':
               expect(jsonDecode(request.body)['teamId'], 'team-1');
               return http.Response(
-                jsonEncode({'data': _teamJson, 'warnings': const []}),
+                jsonEncode({'data': _teamJson, 'warnings': const <String>[]}),
                 200,
               );
             default:

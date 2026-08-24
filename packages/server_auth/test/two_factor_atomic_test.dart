@@ -26,7 +26,7 @@ void main() {
     test(
       'serializes concurrent disable, regenerate, and recovery use',
       () async {
-        final now = DateTime.utc(2030, 1, 1);
+        final now = DateTime.utc(2030);
         for (final order in <List<String>>[
           <String>['disable', 'regenerate', 'recover'],
           <String>['regenerate', 'recover', 'disable'],
@@ -88,7 +88,7 @@ void main() {
     test(
       'rejects stale pending challenges without consuming recovery',
       () async {
-        final now = DateTime.utc(2030, 1, 1);
+        final now = DateTime.utc(2030);
         final backend = InMemoryAuthTwoFactorBackend();
         const userId = 'stale-user';
         backend.factorStore.save(
@@ -125,7 +125,7 @@ void main() {
     );
 
     test('rolls back every disable write after an injected fault', () async {
-      final now = DateTime.utc(2030, 1, 1);
+      final now = DateTime.utc(2030);
       final faults = AuthTwoFactorFaultInjector();
       final backend = InMemoryAuthTwoFactorBackend(faultInjector: faults);
       const userId = 'rollback-user';
@@ -170,7 +170,7 @@ void main() {
     test(
       'rolls back challenge consumption and trusted-device issuance together',
       () async {
-        final now = DateTime.utc(2030, 1, 1);
+        final now = DateTime.utc(2030);
         final faults = AuthTwoFactorFaultInjector();
         final backend = InMemoryAuthTwoFactorBackend(faultInjector: faults);
         final plugin = TwoFactorPlugin<Object>(
@@ -217,7 +217,7 @@ void main() {
     test(
       'rolls back recovery digest and pending challenge consumption together',
       () async {
-        final now = DateTime.utc(2030, 1, 1);
+        final now = DateTime.utc(2030);
         final faults = AuthTwoFactorFaultInjector();
         final backend = InMemoryAuthTwoFactorBackend(faultInjector: faults);
         final plugin = TwoFactorPlugin<Object>(
@@ -365,9 +365,9 @@ void main() {
       'public serialization excludes protected and hashed material',
       () async {
         final fixture = await _enrolledFixture();
-        final factor = (fixture.backend.factorStore.findByUserId(
+        final factor = fixture.backend.factorStore.findByUserId(
           fixture.userId,
-        ))!;
+        )!;
         final trusted = await fixture.plugin.issueTrustedDevice(
           fixture.userId,
           fixture.code,
@@ -413,7 +413,7 @@ final class _Fixture {
 }
 
 Future<_Fixture> _enrolledFixture({String userId = 'user-1'}) async {
-  final now = DateTime.utc(2030, 1, 1);
+  final now = DateTime.utc(2030);
   final backend = InMemoryAuthTwoFactorBackend();
   final plugin = TwoFactorPlugin<Object>(
     backend: backend,

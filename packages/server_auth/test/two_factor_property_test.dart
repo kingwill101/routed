@@ -42,7 +42,7 @@ void _expectNoSensitiveKeys(Object? value) {
   if (value is Map) {
     for (final entry in value.entries) {
       final normalized = entry.key.toString().toLowerCase().replaceAll(
-        RegExp(r'[^a-z0-9]'),
+        RegExp('[^a-z0-9]'),
         '',
       );
       expect(
@@ -82,7 +82,7 @@ void main() {
   });
 
   test('hostile TOTP and recovery inputs stay inside auth errors', () async {
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     final runner = PropertyTestRunner<String>(_hostileCodes(), (code) async {
       final feature = TwoFactorPlugin<Object>(
         backend: InMemoryAuthTwoFactorBackend(),
@@ -129,7 +129,7 @@ void main() {
   });
 
   test('hostile persisted secrets never escape verification errors', () async {
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     final runner = PropertyTestRunner<String>(_hostileCodes(), (secret) async {
       final store = InMemoryAuthTwoFactorStore();
       store.save(
@@ -164,7 +164,7 @@ void main() {
   test(
     'stateful atomic command sequences preserve factor invariants',
     () async {
-      final now = DateTime.utc(2030, 1, 1);
+      final now = DateTime.utc(2030);
       final runner = PropertyTestRunner<List<int>>(_commandSequences(), (
         operations,
       ) async {

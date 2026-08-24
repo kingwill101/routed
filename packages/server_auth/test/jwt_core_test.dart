@@ -60,7 +60,7 @@ void main() {
     expect(issuedAt, isNotNull);
     expect(issuedAt!.isUtc, isTrue);
     expect(jwtIssuedAtUtc('1700000000'), isNull);
-    expect(jwtIssuedAtUtc(999999999999999999), isNull);
+    expect(jwtIssuedAtUtc(int.parse('999999999999999999')), isNull);
   });
 
   test('jwtAuthenticationTimeUtc prefers auth_time and fails closed', () {
@@ -228,7 +228,8 @@ void main() {
   });
 
   test('JwtVerifier bounds unrepresentable timestamp claims', () async {
-    final claims = _claims(now: DateTime.now())..['exp'] = 999999999999999999;
+    final claims = _claims(now: DateTime.now())
+      ..['exp'] = int.parse('999999999999999999');
     final verifier = JwtVerifier(
       options: JwtOptions(inlineKeys: [_testJwk], algorithms: const ['HS256']),
     );
@@ -609,11 +610,11 @@ void main() {
 
   test('JwtVerifier normalizes signature-library failures', () async {
     final verifier = JwtVerifier(
-      options: JwtOptions(
+      options: const JwtOptions(
         inlineKeys: <Map<String, dynamic>>[
           <String, dynamic>{'kty': 'oct', 'k': '%%%invalid%%%'},
         ],
-        algorithms: const ['HS256'],
+        algorithms: ['HS256'],
       ),
     );
 
@@ -723,17 +724,12 @@ void main() {
 
   test('JwtOptions copyWith applies overrides', () {
     const options = JwtOptions(
-      enabled: true,
       issuer: 'server_auth',
       audience: ['demo'],
       requiredClaims: ['role'],
-      jwksUri: null,
-      inlineKeys: [],
       algorithms: ['HS256'],
       clockSkew: Duration(seconds: 15),
       jwksCacheTtl: Duration(minutes: 1),
-      header: 'Authorization',
-      bearerPrefix: 'Bearer ',
       cookieName: 'auth',
     );
 

@@ -119,8 +119,8 @@ void main() {
 
     test('requires typed JSON-compatible endpoint contracts', () async {
       final untypedSuite = _suite(
-        _FixturePlugin(
-          endpoints: const <AuthEndpointDescriptor<Object>>[_UntypedEndpoint()],
+        const _FixturePlugin(
+          endpoints: <AuthEndpointDescriptor<Object>>[_UntypedEndpoint()],
         ),
       );
       await _expectCaseFailure(untypedSuite, 'endpoints.typed-contracts');
@@ -188,7 +188,7 @@ void main() {
             _endpoint(
               id: 'sample.status',
               method: AuthOperationMethod.get,
-              path: AuthRoutePath('/sample/status'),
+              path: const AuthRoutePath('/sample/status'),
             ),
           ],
           rateLimitOperations: const <AuthRateLimitOperation>[missing],
@@ -277,7 +277,6 @@ void main() {
               path: const AuthRoutePath('/sample/update'),
               authentication: AuthOperationAuthentication.session,
               originPolicy: AuthOperationOriginPolicy.browser,
-              csrfPolicy: AuthOperationCsrfPolicy.none,
               rateLimitOperation: operation,
             ),
           ],

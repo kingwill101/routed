@@ -262,7 +262,7 @@ void main() {
         context: Object(),
         clientId: ' cli-1 ',
         scopes: const ['openid', 'profile', 'openid'],
-        now: DateTime.utc(2026, 1, 1),
+        now: DateTime.utc(2026),
       );
       expect(request.userCode, matches(RegExp(r'^[A-Z2-9]{4}-[A-Z2-9]{4}$')));
       expect(request.toJson()['device_code'], request.deviceCode);
@@ -367,7 +367,7 @@ void main() {
             plugins: [feature],
           ),
         );
-        final start = DateTime.utc(2026, 1, 1);
+        final start = DateTime.utc(2026);
         final request = await feature.authorizeDevice(
           context: Object(),
           clientId: 'cli-1',
@@ -426,7 +426,7 @@ void main() {
           plugins: [feature],
         ),
       );
-      final start = DateTime.utc(2026, 1, 1);
+      final start = DateTime.utc(2026);
       final request = await feature.authorizeDevice(
         context: Object(),
         clientId: 'cli-1',
@@ -490,7 +490,7 @@ void main() {
           plugins: [feature],
         ),
       );
-      final start = DateTime.utc(2026, 1, 1);
+      final start = DateTime.utc(2026);
       final denied = await feature.authorizeDevice(
         context: Object(),
         clientId: 'cli-1',
@@ -566,7 +566,7 @@ void main() {
             plugins: [feature],
           ),
         );
-        final start = DateTime.utc(2026, 1, 1);
+        final start = DateTime.utc(2026);
         final request = await feature.authorizeDevice(
           context: Object(),
           clientId: 'cli-1',
@@ -678,7 +678,7 @@ void main() {
             plugins: [feature],
           ),
         );
-        final start = DateTime.utc(2026, 1, 1);
+        final start = DateTime.utc(2026);
         final request = await feature.authorizeDevice(
           context: Object(),
           clientId: 'cli-1',
@@ -788,8 +788,11 @@ void main() {
       await device.approveDevice(userId: 'user-1', userCode: request.userCode);
 
       final response =
-          await tokenEndpoints.single.invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
+          (await tokenEndpoints.single.invoke(
+                const AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: null,
+                ),
                 AuthEndpointRequest(
                   body: <String, dynamic>{
                     'grant_type':
@@ -798,7 +801,7 @@ void main() {
                     'device_code': request.deviceCode,
                   },
                 ),
-              )
+              ))!
               as Map<String, dynamic>;
       expect(response['access_token'], 'device-access-token');
     });
@@ -867,8 +870,8 @@ final class _FaultAfterMintDeviceTokenIssuer<TContext>
     implements AuthDeviceAuthorizationTokenIssuer<TContext> {
   final Map<String, AuthDeviceAccessToken> _tokens = {};
   final List<String> authorizationIds = [];
-  var calls = 0;
-  var mints = 0;
+  int calls = 0;
+  int mints = 0;
 
   @override
   AuthDeviceAccessToken issue(
@@ -891,7 +894,7 @@ final class _FaultAfterMintDeviceTokenIssuer<TContext>
 
 final class _CountingDeviceTokenIssuer<TContext>
     implements AuthDeviceAuthorizationTokenIssuer<TContext> {
-  var calls = 0;
+  int calls = 0;
 
   @override
   AuthDeviceAccessToken issue(

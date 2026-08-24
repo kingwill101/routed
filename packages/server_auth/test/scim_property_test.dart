@@ -44,8 +44,10 @@ void main() {
         );
         final fixture = AuthPluginEndpointFixture<Object>(
           endpoints: runtime.registry.endpoints,
-          invocation: (_) =>
-              AuthOperationInvocation<Object>(context: Object(), user: null),
+          invocation: (_) => const AuthOperationInvocation<Object>(
+            context: Object(),
+            user: null,
+          ),
         );
         final response = await fixture.respond(
           AuthTestHttpRequest(

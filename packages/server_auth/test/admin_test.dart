@@ -519,9 +519,9 @@ void main() {
         await core.sessions.create(_session(admin.id));
         control.currentSessionId = 'session-${admin.id}';
         final startedIntent =
-            await _invokeWithControl(feature, 'admin.impersonateUser', admin, {
+            (await _invokeWithControl(feature, 'admin.impersonateUser', admin, {
                   'userId': member.id,
-                }, control)
+                }, control))!
                 as AuthEndpointAuthenticationIntent;
         final started = _map(
           await startedIntent.projectResponse(
@@ -551,13 +551,13 @@ void main() {
         );
         control.currentSessionId = 'impersonated-session';
         final stoppedIntent =
-            await _invokeWithControl(
+            (await _invokeWithControl(
                   feature,
                   'admin.stopImpersonating',
                   member,
                   const {},
                   control,
-                )
+                ))!
                 as AuthEndpointAuthenticationIntent;
         final stopped = _map(
           await stoppedIntent.projectResponse(
@@ -702,7 +702,7 @@ Map<String, dynamic> _map(Object? value) =>
     Map<String, dynamic>.from(value! as Map);
 
 List<Map<String, dynamic>> _mapList(Object? value) =>
-    (value! as List).map((item) => _map(item)).toList();
+    (value! as List).map(_map).toList();
 
 Matcher _flow(String code) => throwsA(
   isA<AuthFlowException>().having((error) => error.code, 'code', code),

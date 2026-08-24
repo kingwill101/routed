@@ -8,7 +8,7 @@ import 'package:test/test.dart';
 void main() {
   test('credentials sign-in handles CSRF and session cookies', () async {
     final requests = <http.BaseRequest>[];
-    final plugin = const AuthCredentialsClientPlugin();
+    const plugin = AuthCredentialsClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test/api'),
       plugins: [plugin],
@@ -39,8 +39,8 @@ void main() {
               'id': 'user-1',
               'email': 'ada@example.com',
               'name': 'Ada',
-              'roles': ['member'],
-              'attributes': {},
+              'roles': <String>['member'],
+              'attributes': <String, dynamic>{},
             },
             'expires': '2030-01-01T00:00:00.000Z',
             'strategy': 'session',
@@ -67,8 +67,8 @@ void main() {
   });
 
   test('provider metadata and signed-out sessions are typed', () async {
-    final providerPlugin = const AuthProviderClientPlugin();
-    final sessionPlugin = const AuthSessionClientPlugin();
+    const providerPlugin = AuthProviderClientPlugin();
+    const sessionPlugin = AuthSessionClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [providerPlugin, sessionPlugin],
@@ -106,7 +106,7 @@ void main() {
   test(
     'OAuth start returns the server redirect without following it',
     () async {
-      final plugin = const AuthOAuthClientPlugin();
+      const plugin = AuthOAuthClientPlugin();
       final auth = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
         plugins: [plugin],
@@ -136,7 +136,7 @@ void main() {
   );
 
   test('auth failures preserve sanitized code and retry information', () async {
-    final plugin = const AuthSessionClientPlugin();
+    const plugin = AuthSessionClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [plugin],
@@ -151,7 +151,7 @@ void main() {
     final client = auth.plugins.use(plugin);
 
     expect(
-      () => client.current(),
+      client.current,
       throwsA(
         isA<AuthClientException>()
             .having((error) => error.statusCode, 'status', 401)
@@ -184,7 +184,7 @@ void main() {
   });
 
   test('cookie Max-Age becomes an absolute expiry deadline', () {
-    final receivedAt = DateTime.utc(2030, 1, 1);
+    final receivedAt = DateTime.utc(2030);
     final cookie = AuthClientCookie.fromSetCookie(
       'session=secret; Max-Age=60; Path=/',
       now: receivedAt,
@@ -290,7 +290,7 @@ void main() {
     () async {
       var csrfRequests = 0;
       var changeRequests = 0;
-      final plugin = const AuthPasswordClientPlugin();
+      const plugin = AuthPasswordClientPlugin();
       final auth = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
         plugins: [plugin],
@@ -339,7 +339,7 @@ void main() {
 
   test('session helpers parse metadata and send revocation requests', () async {
     var csrfRequests = 0;
-    final plugin = const AuthSessionClientPlugin();
+    const plugin = AuthSessionClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [plugin],
@@ -398,7 +398,7 @@ void main() {
 
   test('two-factor helpers parse enrollment and send typed actions', () async {
     var csrfRequests = 0;
-    final plugin = const AuthTwoFactorClientPlugin();
+    const plugin = AuthTwoFactorClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [plugin],
@@ -455,8 +455,8 @@ void main() {
   });
 
   test('credentials sign-in surfaces and completes a TOTP challenge', () async {
-    final credentialsPlugin = const AuthCredentialsClientPlugin();
-    final twoFactorPlugin = const AuthTwoFactorClientPlugin();
+    const credentialsPlugin = AuthCredentialsClientPlugin();
+    const twoFactorPlugin = AuthTwoFactorClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [credentialsPlugin, twoFactorPlugin],
@@ -490,8 +490,8 @@ void main() {
             'user': {
               'id': 'user-1',
               'email': 'ada@example.com',
-              'roles': [],
-              'attributes': {},
+              'roles': <String>[],
+              'attributes': <String, dynamic>{},
             },
             'expires': '2030-01-01T01:00:00Z',
             'strategy': 'session',
@@ -522,8 +522,8 @@ void main() {
   });
 
   test('completes a pending sign-in with a recovery code', () async {
-    final credentialsPlugin = const AuthCredentialsClientPlugin();
-    final twoFactorPlugin = const AuthTwoFactorClientPlugin();
+    const credentialsPlugin = AuthCredentialsClientPlugin();
+    const twoFactorPlugin = AuthTwoFactorClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [credentialsPlugin, twoFactorPlugin],
@@ -556,8 +556,8 @@ void main() {
             'user': {
               'id': 'user-1',
               'email': 'ada@example.com',
-              'roles': [],
-              'attributes': {},
+              'roles': <String>[],
+              'attributes': <String, dynamic>{},
             },
             'expires': '2030-01-01T01:00:00Z',
             'strategy': 'session',
@@ -587,7 +587,7 @@ void main() {
   });
 
   test('verifies and revokes a two-factor step-up proof', () async {
-    final plugin = const AuthTwoFactorClientPlugin();
+    const plugin = AuthTwoFactorClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [plugin],

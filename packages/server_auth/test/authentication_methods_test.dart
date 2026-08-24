@@ -321,8 +321,7 @@ void main() {
       isFalse,
     );
     await expectLater(
-      (runtime.store as AuthUserDeletionCoordinatorHost)
-          .userDeletionCoordinator
+      (runtime.store as AuthUserDeletionCoordinatorHost).userDeletionCoordinator
           .deleteUser('user-1'),
       throwsA(isA<AuthUserDeletionPreflightException>()),
     );
@@ -509,9 +508,7 @@ void main() {
   );
 
   test('sensitive-action policy accepts only explicit fresh proofs', () {
-    const policy = AuthAccountPolicy(
-      reauthenticationWindow: Duration(minutes: 5),
-    );
+    const policy = AuthAccountPolicy();
     final now = DateTime.utc(2026, 8, 20, 12);
 
     expect(

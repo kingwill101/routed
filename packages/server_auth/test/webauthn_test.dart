@@ -81,7 +81,7 @@ void main() {
   group('WebAuthn stores', () {
     test('challenge consumption is bound and one-time', () async {
       final store = InMemoryAuthWebAuthnChallengeStore();
-      final created = DateTime.utc(2030, 1, 1);
+      final created = DateTime.utc(2030);
       final challenge = AuthWebAuthnChallenge(
         id: 'challenge-1',
         challengeHash: 'hash-1',
@@ -131,7 +131,7 @@ void main() {
 
     test('counter writes use compare-and-set semantics', () async {
       final store = InMemoryAuthWebAuthnAuthenticatorStore();
-      final created = DateTime.utc(2030, 1, 1);
+      final created = DateTime.utc(2030);
       await store.create(
         WebAuthnAuthenticator(
           credentialId: 'credential-1',
@@ -173,7 +173,7 @@ void main() {
       'renames only the owning credential and preserves ceremony state',
       () async {
         final store = InMemoryAuthWebAuthnAuthenticatorStore();
-        final created = DateTime.utc(2030, 1, 1);
+        final created = DateTime.utc(2030);
         final authenticator = WebAuthnAuthenticator(
           credentialId: 'credential-1',
           publicKey: 'cose-key',
@@ -330,7 +330,7 @@ void main() {
                 context: fixture.context,
                 user: fixture.user,
               ),
-              AuthEndpointRequest(body: const <String, dynamic>{}),
+              AuthEndpointRequest(),
             ))!
             as Map,
       );
@@ -2774,8 +2774,9 @@ void main() {
             strategy: AuthSessionStrategy.session,
           ).toJson(),
         );
-        expect((payload as Map<String, dynamic>)['status'], 'authenticated');
-        expect(payload['credential'], isA<Map<String, dynamic>>());
+        final payloadMap = payload! as Map<String, dynamic>;
+        expect(payloadMap['status'], 'authenticated');
+        expect(payloadMap['credential'], isA<Map<String, dynamic>>());
       },
     );
 
@@ -4199,8 +4200,8 @@ Uint8List _packedAttestationCertificate(
     ..add(subject)
     ..add(
       ASN1Sequence()
-        ..add(ASN1UtcTime(DateTime.utc(2020, 1, 1)))
-        ..add(ASN1UtcTime(DateTime.utc(2040, 1, 1))),
+        ..add(ASN1UtcTime(DateTime.utc(2020)))
+        ..add(ASN1UtcTime(DateTime.utc(2040))),
     )
     ..add(subject)
     ..add(subjectPublicKeyInfo)
@@ -4257,8 +4258,8 @@ Uint8List _tpmEcCertificate({
     ..add(issuer)
     ..add(
       ASN1Sequence()
-        ..add(ASN1UtcTime(DateTime.utc(2020, 1, 1)))
-        ..add(ASN1UtcTime(DateTime.utc(2040, 1, 1))),
+        ..add(ASN1UtcTime(DateTime.utc(2020)))
+        ..add(ASN1UtcTime(DateTime.utc(2040))),
     )
     ..add(subject)
     ..add(subjectPublicKeyInfo)
@@ -4290,8 +4291,8 @@ Uint8List _tpmRsaCertificate({
     ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.113549.1.1.1'))
     ..add(ASN1Null());
   final rsaPublicKey = ASN1Sequence()
-    ..add(ASN1Integer(subjectKey.publicKey.modulus!))
-    ..add(ASN1Integer(subjectKey.publicKey.publicExponent!));
+    ..add(ASN1Integer(subjectKey.publicKey.modulus))
+    ..add(ASN1Integer(subjectKey.publicKey.publicExponent));
   final subjectPublicKeyInfo = ASN1Sequence()
     ..add(publicKeyAlgorithm)
     ..add(ASN1BitString(stringValues: rsaPublicKey.encode()));
@@ -4310,8 +4311,8 @@ Uint8List _tpmRsaCertificate({
     ..add(issuer)
     ..add(
       ASN1Sequence()
-        ..add(ASN1UtcTime(DateTime.utc(2020, 1, 1)))
-        ..add(ASN1UtcTime(DateTime.utc(2040, 1, 1))),
+        ..add(ASN1UtcTime(DateTime.utc(2020)))
+        ..add(ASN1UtcTime(DateTime.utc(2040))),
     )
     ..add(subject)
     ..add(subjectPublicKeyInfo)
@@ -4491,8 +4492,8 @@ Uint8List _androidTestCertificate({
     ..add(issuer)
     ..add(
       ASN1Sequence()
-        ..add(ASN1UtcTime(DateTime.utc(2020, 1, 1)))
-        ..add(ASN1UtcTime(DateTime.utc(2040, 1, 1))),
+        ..add(ASN1UtcTime(DateTime.utc(2020)))
+        ..add(ASN1UtcTime(DateTime.utc(2040))),
     )
     ..add(subject)
     ..add(subjectPublicKeyInfo)
@@ -4554,8 +4555,8 @@ Uint8List _appleTestCertificate({
     ..add(issuer)
     ..add(
       ASN1Sequence()
-        ..add(ASN1UtcTime(DateTime.utc(2020, 1, 1)))
-        ..add(ASN1UtcTime(DateTime.utc(2040, 1, 1))),
+        ..add(ASN1UtcTime(DateTime.utc(2020)))
+        ..add(ASN1UtcTime(DateTime.utc(2040))),
     )
     ..add(subject)
     ..add(subjectPublicKeyInfo)
@@ -4613,8 +4614,8 @@ Uint8List _packedRsaAttestationCertificate(_RsaKeyPair keyPair) {
     ..add(ASN1ObjectIdentifier.fromIdentifierString('1.2.840.113549.1.1.1'))
     ..add(ASN1Null());
   final rsaPublicKey = ASN1Sequence()
-    ..add(ASN1Integer(keyPair.publicKey.modulus!))
-    ..add(ASN1Integer(keyPair.publicKey.publicExponent!));
+    ..add(ASN1Integer(keyPair.publicKey.modulus))
+    ..add(ASN1Integer(keyPair.publicKey.publicExponent));
   final subjectPublicKeyInfo = ASN1Sequence()
     ..add(publicKeyAlgorithm)
     ..add(ASN1BitString(stringValues: rsaPublicKey.encode()));
@@ -4645,8 +4646,8 @@ Uint8List _packedRsaAttestationCertificate(_RsaKeyPair keyPair) {
     ..add(subject)
     ..add(
       ASN1Sequence()
-        ..add(ASN1UtcTime(DateTime.utc(2020, 1, 1)))
-        ..add(ASN1UtcTime(DateTime.utc(2040, 1, 1))),
+        ..add(ASN1UtcTime(DateTime.utc(2020)))
+        ..add(ASN1UtcTime(DateTime.utc(2040))),
     )
     ..add(subject)
     ..add(subjectPublicKeyInfo)

@@ -191,7 +191,7 @@ void main() {
           (e) => e.id == 'oauth_provider.authorize',
         );
         final response =
-            await result.invoke(
+            (await result.invoke(
                   AuthOperationInvocation<Object>(
                     context: Object(),
                     user: AuthUser(id: 'user-1'),
@@ -205,7 +205,7 @@ void main() {
                       'state': 'client-state',
                     },
                   ),
-                )
+                ))!
                 as AuthEndpointRedirect;
         expect(result.method, AuthOperationMethod.get);
         expect(response.location.host, 'app.example.com');
@@ -229,7 +229,7 @@ void main() {
       );
       expect(
         () => result.invoke(
-          AuthOperationInvocation<Object>(context: Object(), user: null),
+          const AuthOperationInvocation<Object>(context: Object(), user: null),
           AuthEndpointRequest(
             body: {
               'grant_type': 'client_credentials',
@@ -292,8 +292,8 @@ void main() {
         );
 
         final tokenResult =
-            await tokenEndpoint.invoke(
-                  AuthOperationInvocation<Object>(
+            (await tokenEndpoint.invoke(
+                  const AuthOperationInvocation<Object>(
                     context: Object(),
                     user: null,
                   ),
@@ -305,7 +305,7 @@ void main() {
                       'scope': 'api:read',
                     },
                   ),
-                )
+                ))!
                 as Map<String, dynamic>;
 
         final refreshToken = tokenResult['refresh_token'] as String;
@@ -315,8 +315,8 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 50));
 
         final refreshResult =
-            await tokenEndpoint.invoke(
-                  AuthOperationInvocation<Object>(
+            (await tokenEndpoint.invoke(
+                  const AuthOperationInvocation<Object>(
                     context: Object(),
                     user: null,
                   ),
@@ -328,7 +328,7 @@ void main() {
                       'refresh_token': refreshToken,
                     },
                   ),
-                )
+                ))!
                 as Map<String, dynamic>;
 
         expect(refreshResult['access_token'], isNotNull);
@@ -341,8 +341,11 @@ void main() {
         (endpoint) => endpoint.id == 'oauth_provider.token',
       );
       final issued =
-          await tokenEndpoint.invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
+          (await tokenEndpoint.invoke(
+                const AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: null,
+                ),
                 AuthEndpointRequest(
                   body: {
                     'grant_type': 'client_credentials',
@@ -351,14 +354,17 @@ void main() {
                     'scope': 'api:read',
                   },
                 ),
-              )
+              ))!
               as Map<String, dynamic>;
       final refreshToken = issued['refresh_token'] as String;
 
       Future<Object> refresh() async {
         try {
           return await tokenEndpoint.invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
+                const AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: null,
+                ),
                 AuthEndpointRequest(
                   body: {
                     'grant_type': 'refresh_token',
@@ -410,8 +416,11 @@ void main() {
         (value) => value.id == 'oauth_provider.token',
       );
       final issued =
-          await endpoint.invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
+          (await endpoint.invoke(
+                const AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: null,
+                ),
                 AuthEndpointRequest(
                   body: {
                     'grant_type': 'client_credentials',
@@ -420,11 +429,14 @@ void main() {
                     'scope': 'api:read',
                   },
                 ),
-              )
+              ))!
               as Map<String, dynamic>;
       final refreshed =
-          await endpoint.invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
+          (await endpoint.invoke(
+                const AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: null,
+                ),
                 AuthEndpointRequest(
                   body: {
                     'grant_type': 'refresh_token',
@@ -433,11 +445,11 @@ void main() {
                     'refresh_token': issued['refresh_token'],
                   },
                 ),
-              )
+              ))!
               as Map<String, dynamic>;
       expect(
         () => endpoint.invoke(
-          AuthOperationInvocation<Object>(context: Object(), user: null),
+          const AuthOperationInvocation<Object>(context: Object(), user: null),
           AuthEndpointRequest(
             body: {
               'grant_type': 'refresh_token',
@@ -504,7 +516,7 @@ void main() {
       );
       expect(
         () => tokenEndpoint.invoke(
-          AuthOperationInvocation<Object>(context: Object(), user: null),
+          const AuthOperationInvocation<Object>(context: Object(), user: null),
           AuthEndpointRequest(
             body: {
               'grant_type': 'client_credentials',
@@ -613,12 +625,15 @@ void main() {
         (value) => value.id == 'oauth_provider.userinfo',
       );
       final response =
-          await endpoint.invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
+          (await endpoint.invoke(
+                const AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: null,
+                ),
                 AuthEndpointRequest(
                   headers: {'authorization': 'Bearer access-token'},
                 ),
-              )
+              ))!
               as Map<String, dynamic>;
       expect(response['sub'], equals('user-1'));
       expect(response['email'], equals('real@example.com'));
@@ -634,7 +649,7 @@ void main() {
       );
       expect(
         () => endpoint.invoke(
-          AuthOperationInvocation<Object>(context: Object(), user: null),
+          const AuthOperationInvocation<Object>(context: Object(), user: null),
           AuthEndpointRequest(
             headers: {'authorization': 'Bearer access-token'},
           ),
@@ -674,12 +689,15 @@ void main() {
       );
 
       final profile =
-          await endpoint.invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
+          (await endpoint.invoke(
+                const AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: null,
+                ),
                 AuthEndpointRequest(
                   headers: {'authorization': 'Bearer profile-token'},
                 ),
-              )
+              ))!
               as Map<String, dynamic>;
       expect(profile['sub'], equals('user-1'));
       expect(profile['name'], equals('Real Name'));
@@ -687,12 +705,15 @@ void main() {
       expect(profile, isNot(contains('email')));
 
       final email =
-          await endpoint.invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
+          (await endpoint.invoke(
+                const AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: null,
+                ),
                 AuthEndpointRequest(
                   headers: {'authorization': 'Bearer email-token'},
                 ),
-              )
+              ))!
               as Map<String, dynamic>;
       expect(email['sub'], equals('user-1'));
       expect(email['email'], equals('real@example.com'));
@@ -847,7 +868,7 @@ void main() {
     });
 
     test('copyWith allows overriding SameSite', () {
-      const policy = AuthCookiePolicy(sameSite: SameSite.lax);
+      const policy = AuthCookiePolicy.production;
       final copied = policy.copyWith(sameSite: SameSite.strict);
       expect(copied.sameSite, equals(SameSite.strict));
     });

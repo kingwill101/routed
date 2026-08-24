@@ -33,7 +33,7 @@ void main() {
     test('preserves verification after namespace-safe DOM serialization', () {
       final serialized = XmlDocument.parse(
         samlXmlDsigSignedAssertion,
-      ).toXmlString(pretty: false);
+      ).toXmlString();
 
       expect(
         verifier.verify(samlXmlDsigInput(serialized)).signedAssertionId,
@@ -294,7 +294,7 @@ void main() {
         'doctype-entity': samlXmlDsigInput(
           samlXmlDsigSignedAssertion.replaceFirst(
             '<samlp:Response',
-            '<!DOCTYPE samlp:Response [<!ENTITY injected "x">]>'
+            '<!DOCTYPE samlp:Response [<!ENTITY injected "x">]>\n'
                 '<samlp:Response',
           ),
         ),

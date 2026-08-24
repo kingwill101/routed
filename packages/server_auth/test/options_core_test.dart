@@ -69,7 +69,7 @@ void main() {
           providers: const <AuthProvider>[],
           store: _DurableAuthStore(),
           productionBoundary: _productionBoundary(),
-          browserProtection: const AuthBrowserProtectionOptions(),
+          browserProtection: AuthBrowserProtectionOptions.localDevelopment,
         ),
         throwsArgumentError,
       );
@@ -205,13 +205,13 @@ void main() {
 
     expect(
       () => options([
-        AuthProvider(id: '', name: 'Empty', type: AuthProviderType.oauth),
+        const AuthProvider(id: '', name: 'Empty', type: AuthProviderType.oauth),
       ]),
       throwsArgumentError,
     );
     expect(
       () => options([
-        AuthProvider(
+        const AuthProvider(
           id: ' google',
           name: 'Padded',
           type: AuthProviderType.oauth,
@@ -221,12 +221,12 @@ void main() {
     );
     expect(
       () => options([
-        AuthProvider(
+        const AuthProvider(
           id: 'google',
           name: 'Google',
           type: AuthProviderType.oauth,
         ),
-        AuthProvider(
+        const AuthProvider(
           id: 'google',
           name: 'Google duplicate',
           type: AuthProviderType.oidc,
@@ -245,7 +245,11 @@ void main() {
 
     expect(
       () => options.providers.add(
-        AuthProvider(id: 'google', name: 'Google', type: AuthProviderType.oidc),
+        const AuthProvider(
+          id: 'google',
+          name: 'Google',
+          type: AuthProviderType.oidc,
+        ),
       ),
       throwsUnsupportedError,
     );
@@ -393,7 +397,6 @@ void main() {
       ],
       store: store,
       storeMode: AuthStoreMode.ephemeral,
-      sessionStrategy: AuthSessionStrategy.session,
     );
 
     final resolved = resolveAuthOptions<String>(
@@ -421,8 +424,8 @@ void main() {
 
   test('resolveAuthOptions preserves explicit option-level values', () {
     final explicitClient = http.Client();
-    final explicitMaxAge = const Duration(minutes: 30);
-    final explicitUpdateAge = const Duration(minutes: 2);
+    const explicitMaxAge = Duration(minutes: 30);
+    const explicitUpdateAge = Duration(minutes: 2);
     final base = AuthOptions<String>(
       providers: const <AuthProvider>[
         AuthProvider(

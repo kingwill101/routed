@@ -143,7 +143,7 @@ void main() {
     test(
       'collapses provider exceptions and timeouts to a generic error',
       () async {
-        final secretToken = 'captcha-vendor-token';
+        const secretToken = 'captcha-vendor-token';
         final exceptionPlugin = CaptchaPlugin<String>(
           verifier: _CaptchaVerifier((_) {
             throw StateError('vendor leaked $secretToken');
@@ -185,7 +185,7 @@ void main() {
     );
 
     test('one-time mode rejects sequential and concurrent replays', () async {
-      var now = DateTime.utc(2030, 1, 1);
+      var now = DateTime.utc(2030);
       final verifier = _CaptchaVerifier((_) async {
         await Future<void>.delayed(Duration.zero);
         return const AuthCaptchaVerificationResult.accepted();
@@ -236,7 +236,7 @@ void main() {
     test(
       'one-time retention begins after delayed provider acceptance',
       () async {
-        var now = DateTime.utc(2030, 1, 1);
+        var now = DateTime.utc(2030);
         final verifier = _CaptchaVerifier((_) async {
           now = now.add(const Duration(milliseconds: 20));
           await Future<void>.delayed(Duration.zero);
@@ -324,7 +324,7 @@ void main() {
         );
         final exception = await catchError(
           _runtimeWith(exceptionPlugin).registry.enforcePasswordPolicy(
-            _passwordRequest(password: password),
+            _passwordRequest(),
           ),
         );
         expect(exception.code, authBreachedPasswordRejectedErrorCode);
@@ -362,7 +362,7 @@ void main() {
         );
         await expectLater(
           _runtimeWith(oversized).registry.enforcePasswordPolicy(
-            _passwordRequest(password: password),
+            _passwordRequest(),
           ),
           throwsA(
             isA<AuthFlowException>().having(

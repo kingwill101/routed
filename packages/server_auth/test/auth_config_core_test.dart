@@ -37,7 +37,7 @@ void main() {
         clientSecret: null,
         tokenTypeHint: null,
         cacheTtl: Duration.zero,
-        clockSkew: Duration(seconds: 60),
+        clockSkew: const Duration(seconds: 60),
         additionalParameters: {'resource': 'api'},
       ),
       session: const AuthSessionConfig(
@@ -94,12 +94,12 @@ void main() {
       authenticatedGuard: (realm) =>
           (_) => GuardResult<String>.deny('auth:$realm'),
       rolesGuard: (roles, any) =>
-          (_) => GuardResult<String>.allow(),
+          (_) => const GuardResult<String>.allow(),
     );
     final rolesGuard = resolveConfiguredGuard<String, String>(
       definition: const GuardDefinition.roles(roles: ['admin'], any: true),
       authenticatedGuard: (_) =>
-          (_) => GuardResult<String>.allow(),
+          (_) => const GuardResult<String>.allow(),
       rolesGuard: (roles, any) =>
           (_) => GuardResult<String>.deny('roles:${roles.join(',')}:$any'),
     );
@@ -119,9 +119,9 @@ void main() {
       final guard = resolveConfiguredGuard<String, String>(
         definition: const GuardDefinition.roles(roles: []),
         authenticatedGuard: (_) =>
-            (_) => GuardResult<String>.allow(),
+            (_) => const GuardResult<String>.allow(),
         rolesGuard: (roles, any) =>
-            (_) => GuardResult<String>.allow(),
+            (_) => const GuardResult<String>.allow(),
       );
 
       expect(guard, isNull);

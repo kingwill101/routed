@@ -18,7 +18,6 @@ void main() {
       final versions = InMemoryAuthJwtVersionStore();
       const sessionOptions = JwtSessionOptions(
         secret: 'version-test-secret',
-        maxAge: Duration(hours: 1),
       );
       final token = issueAuthJwtToken(
         options: sessionOptions,

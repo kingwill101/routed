@@ -10,7 +10,7 @@ void main() {
     'device client uses unconstrained endpoints and parses RFC 8628 data',
     () async {
       final requests = <http.BaseRequest>[];
-      final plugin = const AuthDeviceAuthorizationClientPlugin();
+      const plugin = AuthDeviceAuthorizationClientPlugin();
       final auth = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
         plugins: [plugin],
@@ -79,7 +79,7 @@ void main() {
   );
 
   test('device approval and denial use the CSRF mutation contract', () async {
-    final plugin = const AuthDeviceAuthorizationClientPlugin();
+    const plugin = AuthDeviceAuthorizationClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [plugin],
@@ -106,7 +106,7 @@ void main() {
   });
 
   test('device client preserves RFC error codes', () async {
-    final plugin = const AuthDeviceAuthorizationClientPlugin();
+    const plugin = AuthDeviceAuthorizationClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [plugin],
@@ -132,9 +132,9 @@ void main() {
   test(
     'automatic polling honors interval, pending, slow_down, and Retry-After',
     () async {
-      final time = _FakePollingTime(DateTime.utc(2026, 1, 1));
+      final time = _FakePollingTime(DateTime.utc(2026));
       var polls = 0;
-      final plugin = const AuthDeviceAuthorizationClientPlugin();
+      const plugin = AuthDeviceAuthorizationClientPlugin();
       final auth = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
         plugins: [plugin],
@@ -187,9 +187,9 @@ void main() {
   );
 
   test('automatic polling stops at authorization expiry', () async {
-    final time = _FakePollingTime(DateTime.utc(2026, 1, 1));
+    final time = _FakePollingTime(DateTime.utc(2026));
     var polls = 0;
-    final plugin = const AuthDeviceAuthorizationClientPlugin();
+    const plugin = AuthDeviceAuthorizationClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [plugin],
@@ -235,9 +235,9 @@ void main() {
   });
 
   test('automatic polling honors a caller deadline before expiry', () async {
-    final time = _FakePollingTime(DateTime.utc(2026, 1, 1));
+    final time = _FakePollingTime(DateTime.utc(2026));
     var polls = 0;
-    final plugin = const AuthDeviceAuthorizationClientPlugin();
+    const plugin = AuthDeviceAuthorizationClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [plugin],
@@ -272,10 +272,10 @@ void main() {
   });
 
   test('automatic polling can be cancelled during a wait', () async {
-    final time = _FakePollingTime(DateTime.utc(2026, 1, 1));
+    final time = _FakePollingTime(DateTime.utc(2026));
     final controller = AuthDeviceAuthorizationPollingController();
     var polls = 0;
-    final plugin = const AuthDeviceAuthorizationClientPlugin();
+    const plugin = AuthDeviceAuthorizationClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [plugin],
@@ -313,10 +313,10 @@ void main() {
   });
 
   test('automatic polling supports caller-controlled stopping', () async {
-    final time = _FakePollingTime(DateTime.utc(2026, 1, 1));
+    final time = _FakePollingTime(DateTime.utc(2026));
     final contexts = <AuthDeviceAuthorizationPollingContext>[];
     var polls = 0;
-    final plugin = const AuthDeviceAuthorizationClientPlugin();
+    const plugin = AuthDeviceAuthorizationClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [plugin],

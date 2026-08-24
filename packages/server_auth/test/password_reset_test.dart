@@ -1,7 +1,7 @@
 import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
-final _resetNow = DateTime.now().toUtc();
+final DateTime _resetNow = DateTime.now().toUtc();
 
 Argon2idPasswordHasher _testHasher() =>
     Argon2idPasswordHasher(iterations: 1, memoryKiB: 8, derivedKeyLength: 16);

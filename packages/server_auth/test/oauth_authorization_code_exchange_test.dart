@@ -11,7 +11,7 @@ void main() {
   group('InMemoryOAuthAuthorizationCodeExchangeStore', () {
     test('passes public adapter conformance', () async {
       await verifyOAuthAuthorizationCodeExchangeStoreConformance(
-        () => InMemoryOAuthAuthorizationCodeExchangeStore(),
+        InMemoryOAuthAuthorizationCodeExchangeStore.new,
       );
     });
 
@@ -134,7 +134,7 @@ void main() {
     }
 
     test('expired code cannot create a token', () async {
-      final now = DateTime.utc(2030, 1, 1);
+      final now = DateTime.utc(2030);
       final fixture = await _fixture(
         now: now,
         expiresAt: now.add(const Duration(seconds: 1)),
@@ -203,7 +203,7 @@ void main() {
       () async {
         final secrets = Chaos.string(minLength: 24, maxLength: 96);
         final runner = PropertyTestRunner<String>(secrets, (secret) async {
-          final now = DateTime.utc(2030, 1, 1);
+          final now = DateTime.utc(2030);
           final codes = InMemoryOAuthAuthorizationCodeStore();
           final tokens = InMemoryOAuthAccessTokenStore();
           final store = InMemoryOAuthAuthorizationCodeExchangeStore(
@@ -267,7 +267,7 @@ _fixture({
   DateTime? expiresAt,
   InMemoryOAuthCodeExchangeFaultInjector? faultInjector,
 }) async {
-  final current = now ?? DateTime.utc(2030, 1, 1);
+  final current = now ?? DateTime.utc(2030);
   const rawAccessToken = 'delivery-only-access-token';
   final codes = InMemoryOAuthAuthorizationCodeStore();
   final tokens = InMemoryOAuthAccessTokenStore();

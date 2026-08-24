@@ -37,7 +37,7 @@ void main() {
         keyIdGenerator: _queuedGenerator(['expired', 'active']),
         secretGenerator: _queuedGenerator(['expired-secret', 'active-secret']),
       );
-      final issuedAt = DateTime.utc(2026, 1, 1);
+      final issuedAt = DateTime.utc(2026);
       final expired = await feature.issue(
         userId: 'user-1',
         name: 'expired',
@@ -83,7 +83,7 @@ void main() {
         (await feature.authenticate(rotated.key))?.record.userId,
         'user-1',
       );
-      expect((await feature.list('user-1')), hasLength(2));
+      expect(await feature.list('user-1'), hasLength(2));
     });
 
     test('rotation never exceeds the configured record bound', () async {
@@ -130,7 +130,7 @@ void main() {
     });
 
     test('uses the feature clock for public active metadata', () async {
-      final clockTime = DateTime.utc(2026, 1, 1);
+      final clockTime = DateTime.utc(2026);
       var current = clockTime;
       final feature = AuthApiKeyPlugin<Never>(
         store: InMemoryAuthApiKeyStore(),

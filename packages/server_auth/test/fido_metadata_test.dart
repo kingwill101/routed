@@ -42,7 +42,6 @@ void main() {
           _compactBlob(
             certificate: certificate,
             now: now,
-            aaguid: '0132d110bf4e4208a403ab4f5f12efe5',
           ),
           now: now,
         );
@@ -201,7 +200,7 @@ void main() {
         );
         for (final value in <String>[
           duplicateHeader,
-          'PK\\x03\\x04',
+          r'PK\x03\x04',
           _compactFromJson(_headerJson(), <String, dynamic>{
             ...payload,
             'nextUpdate': '2030-02-31',
@@ -254,7 +253,7 @@ void main() {
       );
       await expectLater(
         loader.load(
-          _compactBlob(certificate: certificate, now: now, number: 1234),
+          _compactBlob(certificate: certificate, now: now),
           now: now,
           previousBlobNumber: 1234,
         ),

@@ -219,7 +219,7 @@ void main() {
           token: 'read-a',
         );
         expect(capped.statusCode, 200);
-        expect((_json(capped)['Resources'] as List), hasLength(2));
+        expect(_json(capped)['Resources'] as List, hasLength(2));
         expect(_json(capped)['totalResults'], 5);
         expect(harness.store.lastQuery!.count, 2);
 
@@ -229,7 +229,7 @@ void main() {
           token: 'read-a',
         );
         expect(filtered.statusCode, 200);
-        expect((_json(filtered)['Resources'] as List), hasLength(1));
+        expect(_json(filtered)['Resources'] as List, hasLength(1));
 
         final unsupported = await harness.request(
           'GET',
@@ -452,7 +452,7 @@ final class _Harness {
     store = _MemoryScimStore();
     plugin = ScimPlugin<Object>(
       store: store,
-      tokenResolver: resolver ?? _Resolver(_resolveToken),
+      tokenResolver: resolver ?? const _Resolver(_resolveToken),
       options: options,
       reportFailure: reportFailure,
     );
@@ -467,7 +467,7 @@ final class _Harness {
     fixture = AuthPluginEndpointFixture<Object>(
       endpoints: runtime.registry.endpoints,
       invocation: (_) =>
-          AuthOperationInvocation<Object>(context: Object(), user: null),
+          const AuthOperationInvocation<Object>(context: Object(), user: null),
     );
   }
 

@@ -62,7 +62,7 @@ void main() {
       final plugin = _plugin();
       final signIn = _endpoint(plugin, 'saml.signIn');
       final first =
-          await signIn.invoke(
+          (await signIn.invoke(
                 _invocation('browser-binding-value-0001'),
                 AuthEndpointRequest(
                   body: const {
@@ -70,7 +70,7 @@ void main() {
                     'callbackUrl': '/dashboard',
                   },
                 ),
-              )
+              ))!
               as Map<String, dynamic>;
 
       expect(first['providerId'], 'enterprise');
@@ -95,7 +95,7 @@ void main() {
           ),
         );
         expect(response, isA<AuthEndpointHttpResponse>());
-        final metadata = response as AuthEndpointHttpResponse;
+        final metadata = response! as AuthEndpointHttpResponse;
         expect(
           metadata.headers['content-type'],
           startsWith('application/samlmetadata+xml'),
@@ -138,7 +138,7 @@ void main() {
         );
 
         expect(result, isA<AuthEndpointAuthenticationIntent>());
-        final intent = result as AuthEndpointAuthenticationIntent;
+        final intent = result! as AuthEndpointAuthenticationIntent;
         expect(intent.authenticationMethod, 'saml:enterprise');
         expect(resolved!.stableKey, contains('signed-name-id'));
         expect(resolved!.stableKey, isNot(contains('unverified@example.test')));
@@ -226,7 +226,7 @@ void main() {
           ),
         );
         final intent =
-            await _endpoint(enabled, 'saml.acs').invoke(
+            (await _endpoint(enabled, 'saml.acs').invoke(
                   _invocation('browser-binding-value-0001'),
                   AuthEndpointRequest(
                     path: <AuthRouteParameterKey, String>{
@@ -237,11 +237,11 @@ void main() {
                       'SAMLResponse': base64.encode(utf8.encode(xml)),
                     },
                   ),
-                )
+                ))!
                 as AuthEndpointAuthenticationIntent;
         final projected = await intent.projectResponse(const {});
         expect(
-          (projected as AuthEndpointRedirect).location.path,
+          (projected! as AuthEndpointRedirect).location.path,
           '/idp-complete',
         );
       },
@@ -366,7 +366,7 @@ AuthEndpointDescriptor<String> _endpoint(
 
 Future<_Started> _start(AuthSamlPlugin<String> plugin) async {
   final response =
-      await _endpoint(plugin, 'saml.signIn').invoke(
+      (await _endpoint(plugin, 'saml.signIn').invoke(
             _invocation('browser-binding-value-0001'),
             AuthEndpointRequest(
               body: const {
@@ -374,11 +374,11 @@ Future<_Started> _start(AuthSamlPlugin<String> plugin) async {
                 'callbackUrl': '/dashboard',
               },
             ),
-          )
+          ))!
           as Map<String, dynamic>;
   final fields = Map<String, dynamic>.from(response['fields'] as Map);
   final xml = utf8.decode(base64.decode(fields['SAMLRequest'] as String));
-  final requestId = RegExp(r' ID="([^"]+)"').firstMatch(xml)!.group(1)!;
+  final requestId = RegExp(' ID="([^"]+)"').firstMatch(xml)!.group(1)!;
   return _Started(requestId, fields['RelayState'] as String);
 }
 
@@ -414,7 +414,8 @@ String _response({
   required String assertionId,
   String email = 'user@example.test',
 }) =>
-    '''<?xml version="1.0" encoding="UTF-8"?>
+    '''
+<?xml version="1.0" encoding="UTF-8"?>
 <samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_response-$assertionId" Version="2.0" IssueInstant="2030-01-01T12:00:00Z" Destination="https://sp.example.test/auth/sso/saml/acs/enterprise" InResponseTo="$requestId">
   <saml:Issuer>https://idp.example.test/entity</saml:Issuer>
   <samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>

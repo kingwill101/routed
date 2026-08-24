@@ -58,7 +58,7 @@ void main() {
         const AuthRoutePath('/users/:id'),
         const AuthRoutePath('/users/prefix-{id}', parameters: [_id]),
         const AuthRoutePath('/users/{bad-name}'),
-        const AuthRoutePath('/users/{id}', parameters: []),
+        const AuthRoutePath('/users/{id}'),
         const AuthRoutePath('/users', parameters: [_id]),
         const AuthRoutePath('/users/{id}/{id}', parameters: [_id]),
         const AuthRoutePath('/users/{id}', parameters: [_id, _id]),
@@ -104,7 +104,6 @@ void main() {
     test('transport preserves host base paths and root mounts', () async {
       final transport = AuthClientTransport(
         baseUrl: Uri.parse('https://example.test/gateway'),
-        basePath: '/auth',
         httpClient: MockClient((_) async => http.Response('{}', 200)),
       );
       final values = <AuthRouteParameterKey, String>{_id: 'a/b?c'};
@@ -124,7 +123,6 @@ void main() {
     test('client encodes hostile parameter values as one path segment', () {
       final transport = AuthClientTransport(
         baseUrl: Uri.parse('https://example.test/gateway'),
-        basePath: '/auth',
         httpClient: MockClient((_) async => http.Response('{}', 200)),
       );
       final cases = <String, String>{

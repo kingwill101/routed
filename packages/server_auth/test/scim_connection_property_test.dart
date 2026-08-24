@@ -128,7 +128,7 @@ void main() {
   });
 }
 
-final DateTime _now = DateTime.utc(2030, 1, 1);
+final DateTime _now = DateTime.utc(2030);
 
 AuthScimCreateConnectionTransaction _transaction() {
   final connection = AuthScimManagedConnection(

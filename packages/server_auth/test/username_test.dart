@@ -94,7 +94,7 @@ void main() {
         caseCanonicalization: AuthUsernameCaseCanonicalization.preserve,
         minimumLength: 2,
         maximumLength: 8,
-        allowedCharactersPattern: r'[A-Za-z0-9]',
+        allowedCharactersPattern: '[A-Za-z0-9]',
       );
       expect(policy.normalizeUsername('Ada7'), 'Ada7');
       expect(policy.normalizeUsername('ada-seven'), isNull);

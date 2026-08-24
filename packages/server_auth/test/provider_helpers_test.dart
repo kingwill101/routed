@@ -96,8 +96,16 @@ void main() {
 
   test('resolveAuthProviderById finds provider by exact id', () {
     final providers = <AuthProvider>[
-      AuthProvider(id: 'google', name: 'Google', type: AuthProviderType.oidc),
-      AuthProvider(id: 'github', name: 'GitHub', type: AuthProviderType.oauth),
+      const AuthProvider(
+        id: 'google',
+        name: 'Google',
+        type: AuthProviderType.oidc,
+      ),
+      const AuthProvider(
+        id: 'github',
+        name: 'GitHub',
+        type: AuthProviderType.oauth,
+      ),
     ];
 
     expect(resolveAuthProviderById(providers, 'google')?.name, 'Google');
@@ -107,7 +115,11 @@ void main() {
 
   test('resolveAuthProviderByOptionalId handles null and delegates lookup', () {
     final providers = <AuthProvider>[
-      AuthProvider(id: 'google', name: 'Google', type: AuthProviderType.oidc),
+      const AuthProvider(
+        id: 'google',
+        name: 'Google',
+        type: AuthProviderType.oidc,
+      ),
     ];
 
     expect(resolveAuthProviderByOptionalId(providers, null), isNull);
@@ -119,7 +131,11 @@ void main() {
 
   test('authProviderSummaries returns stable provider payloads', () {
     final providers = <AuthProvider>[
-      AuthProvider(id: 'google', name: 'Google', type: AuthProviderType.oidc),
+      const AuthProvider(
+        id: 'google',
+        name: 'Google',
+        type: AuthProviderType.oidc,
+      ),
     ];
 
     expect(
@@ -132,11 +148,23 @@ void main() {
 
   test('mergeAuthProvidersById appends only missing providers', () {
     final base = <AuthProvider>[
-      AuthProvider(id: 'google', name: 'Google', type: AuthProviderType.oidc),
+      const AuthProvider(
+        id: 'google',
+        name: 'Google',
+        type: AuthProviderType.oidc,
+      ),
     ];
     final additional = <AuthProvider>[
-      AuthProvider(id: 'google', name: 'Google 2', type: AuthProviderType.oidc),
-      AuthProvider(id: 'github', name: 'GitHub', type: AuthProviderType.oauth),
+      const AuthProvider(
+        id: 'google',
+        name: 'Google 2',
+        type: AuthProviderType.oidc,
+      ),
+      const AuthProvider(
+        id: 'github',
+        name: 'GitHub',
+        type: AuthProviderType.oauth,
+      ),
     ];
 
     final merged = mergeAuthProvidersById(base, additional);
@@ -150,7 +178,7 @@ void main() {
 
   test('mergeAuthProvidersById preserves lazy provider iterables', () {
     Iterable<AuthProvider> additional() sync* {
-      yield AuthProvider(
+      yield const AuthProvider(
         id: 'github',
         name: 'GitHub',
         type: AuthProviderType.oauth,
@@ -158,7 +186,11 @@ void main() {
     }
 
     final merged = mergeAuthProvidersById(<AuthProvider>[
-      AuthProvider(id: 'google', name: 'Google', type: AuthProviderType.oidc),
+      const AuthProvider(
+        id: 'google',
+        name: 'Google',
+        type: AuthProviderType.oidc,
+      ),
     ], additional());
 
     expect(merged.map((provider) => provider.id), <String>['google', 'github']);
@@ -541,9 +573,6 @@ void main() {
           id: 'discord-uid-999',
           email: 'victim@example.com',
         ),
-        // Discord forwards the email regardless of verification; without an
-        // explicit verified assertion we must not match the local victim.
-        emailVerified: false,
       );
 
       expect(linkedByEmail, isFalse);
@@ -777,7 +806,6 @@ void main() {
       final now = DateTime.utc(2026, 2, 24, 12);
       final provider = MagicLinkPlugin<Object>(
         tokenGenerator: () => 'generated-token',
-        tokenExpiry: const Duration(minutes: 15),
         sendMagicLink: (_) async {},
       );
 
@@ -1704,7 +1732,6 @@ void main() {
       tokenEndpoint: Uri.parse('https://auth.test/token'),
       redirectUri: 'https://app.test/callback/example',
       scopes: const <String>['openid'],
-      usePkce: true,
       profile: (profile) => AuthUser(id: profile['sub']?.toString() ?? ''),
     );
 
@@ -1754,7 +1781,6 @@ void main() {
         tokenEndpoint: Uri.parse('https://auth.test/token'),
         redirectUri: 'https://app.test/callback/example',
         scopes: const <String>['openid'],
-        usePkce: true,
         onStateGenerated: (_, _, state) {
           seenState = state;
         },

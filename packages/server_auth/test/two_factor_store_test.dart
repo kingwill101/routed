@@ -2,7 +2,7 @@ import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 void main() {
-  final now = DateTime.utc(2030, 1, 1);
+  final now = DateTime.utc(2030);
 
   test('pending two-factor challenges are bounded and expire on access', () {
     final store = InMemoryAuthTwoFactorChallengeStore(
@@ -118,7 +118,7 @@ void main() {
 
   test('recovery-code consumption enforces lockout atomically', () {
     final store = InMemoryAuthTwoFactorStore();
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     final codeHash = hashOpaqueToken('RECOVERY-CODE');
     store.save(
       AuthTwoFactorRecord(

@@ -177,7 +177,7 @@ Future<Object?> _capture(Future<Object?> Function() operation) async {
 AuthUser _user(String id, {bool admin = false}) => AuthUser(
   id: id,
   email: '$id@example.test',
-  roles: <String>[admin ? 'admin' : 'user'],
+  roles: <String>[if (admin) 'admin' else 'user'],
 );
 
 Future<void> _seed(InMemoryAuthStore core, AuthUser user) async {

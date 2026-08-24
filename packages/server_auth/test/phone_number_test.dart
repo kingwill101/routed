@@ -6,7 +6,7 @@ import 'package:server_auth/server_auth.dart';
 import 'package:test/test.dart';
 
 const _hashKey = '0123456789abcdef0123456789abcdef';
-final _now = DateTime.utc(2030, 1, 1);
+final _now = DateTime.utc(2030);
 
 void main() {
   group('AuthPhoneNumberBackend', () {
@@ -19,12 +19,12 @@ void main() {
 
     test('persists only a digest and binds issue replays to payload', () async {
       final backend = InMemoryAuthStore();
-      final command = _issue(id: 'issue-1', digest: 'digest-secret');
+      final command = _issue(digest: 'digest-secret');
 
       final first = await backend.issuePhoneNumberCode(command);
       final replay = await backend.issuePhoneNumberCode(command);
       final mismatch = await backend.issuePhoneNumberCode(
-        _issue(id: 'issue-1', digest: 'different-digest'),
+        _issue(digest: 'different-digest'),
       );
 
       expect(first.status, AuthPhoneNumberIssueStatus.issued);
@@ -349,7 +349,7 @@ void main() {
       );
 
       expect(intent.authenticationMethod, authPhoneNumberAuthenticationMethod);
-      expect((response as Map<String, dynamic>)['user'], isNotNull);
+      expect((response! as Map<String, dynamic>)['user'], isNotNull);
       expect(response, isNot(contains('token')));
       expect(response.toString(), isNot(contains('secret-jwt')));
     });

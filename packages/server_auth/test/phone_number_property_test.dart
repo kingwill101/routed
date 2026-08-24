@@ -189,7 +189,7 @@ void main() {
       ) async {
         final backend = InMemoryAuthStore(maxPhoneNumberVerifications: 16);
         backend.bindUserDeletionPlanContributors(const []);
-        final now = DateTime.utc(2030, 1, 1);
+        final now = DateTime.utc(2030);
         var activeDigest = 'digest-initial';
         var issueSequence = 0;
         var verifiedForActiveIssue = 0;

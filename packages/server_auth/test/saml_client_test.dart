@@ -8,7 +8,7 @@ import 'package:test/test.dart';
 void main() {
   test('SAML client API is independently selected and typed', () async {
     final requests = <http.Request>[];
-    final clientPlugin = const AuthSamlClientPlugin();
+    const clientPlugin = AuthSamlClientPlugin();
     final client = AuthClient(
       baseUrl: Uri.parse('https://app.example.test'),
       plugins: [clientPlugin],

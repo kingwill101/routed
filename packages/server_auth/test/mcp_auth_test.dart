@@ -34,13 +34,13 @@ void main() {
       );
       expect(protectedEndpoint.mount, AuthEndpointMount.root);
       final protectedPayload = Map<String, dynamic>.from(
-        await protectedEndpoint.invoke(
+        (await protectedEndpoint.invoke(
               const AuthOperationInvocation<Object>(
                 context: Object(),
                 user: null,
               ),
-              AuthEndpointRequest(body: const <String, dynamic>{}),
-            )
+              AuthEndpointRequest(),
+            ))!
             as Map,
       );
       expect(protectedPayload['resource'], 'https://mcp.example.test/mcp');
@@ -54,13 +54,13 @@ void main() {
       );
       expect(serverEndpoint.mount, AuthEndpointMount.root);
       final serverPayload = Map<String, dynamic>.from(
-        await serverEndpoint.invoke(
+        (await serverEndpoint.invoke(
               const AuthOperationInvocation<Object>(
                 context: Object(),
                 user: null,
               ),
-              AuthEndpointRequest(body: const <String, dynamic>{}),
-            )
+              AuthEndpointRequest(),
+            ))!
             as Map,
       );
       expect(serverPayload['issuer'], 'https://auth.example.test');
@@ -136,7 +136,7 @@ void main() {
       (endpoint) => endpoint.id == 'mcpAuth.registerClient',
     );
     final payload = Map<String, dynamic>.from(
-      await endpoint.invoke(
+      (await endpoint.invoke(
             const AuthOperationInvocation<String>(
               context: 'request-context',
               user: null,
@@ -151,7 +151,7 @@ void main() {
                 'scope': 'mcp:read',
               },
             ),
-          )
+          ))!
           as Map,
     );
 

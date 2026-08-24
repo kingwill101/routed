@@ -7,7 +7,7 @@ import 'package:test/test.dart';
 
 void main() {
   test('anonymous client plugin exposes sign-in and deletion', () async {
-    final plugin = const AuthAnonymousClientPlugin();
+    const plugin = AuthAnonymousClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [plugin],
@@ -19,9 +19,9 @@ void main() {
               'user': {
                 'id': 'anon-1',
                 'email': null,
-                'roles': [],
+                'roles': <String>[],
                 'isAnonymous': true,
-                'attributes': {},
+                'attributes': <String, dynamic>{},
               },
               'expires': '2030-01-01T00:00:00Z',
               'strategy': 'jwt',

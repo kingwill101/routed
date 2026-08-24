@@ -19,7 +19,7 @@ void main() {
     });
 
     test('AuthAccountState serializes and deserializes', () {
-      final state = AuthAccountState(
+      const state = AuthAccountState(
         userId: 'u1',
         emailVerified: true,
         disabled: true,
@@ -57,10 +57,10 @@ void main() {
       const policy = AuthAccountPolicy();
       final now = DateTime.now().toUtc();
 
-      final active = AuthAccountState(userId: 'u1');
+      const active = AuthAccountState(userId: 'u1');
       expect(active.canAuthenticate(now: now, policy: policy), isTrue);
 
-      final disabled = AuthAccountState(userId: 'u2', disabled: true);
+      const disabled = AuthAccountState(userId: 'u2', disabled: true);
       expect(disabled.canAuthenticate(now: now, policy: policy), isFalse);
 
       final locked = AuthAccountState(
@@ -136,7 +136,7 @@ void main() {
 
     test('findInactiveAccounts returns users with no recent login', () async {
       // Create a user that never logged in
-      await store.upsert(AuthAccountState(userId: 'u2'));
+      await store.upsert(const AuthAccountState(userId: 'u2'));
       final inactive = await store.findInactiveAccounts(inactiveDays: 1);
       // u2 never logged in, should be inactive
       expect(inactive.map((s) => s.userId), contains('u2'));
@@ -574,7 +574,7 @@ void main() {
           'provider_account_already_linked',
         );
         expect(
-          (results.whereType<AuthAccountLinked>().single).isNewLink,
+          results.whereType<AuthAccountLinked>().single.isNewLink,
           isTrue,
         );
       },
@@ -752,7 +752,7 @@ void main() {
         ),
         AuthEndpointRequest(query: {'userId': 'user-1'}),
       );
-      final state = result as Map<String, dynamic>;
+      final state = result! as Map<String, dynamic>;
       expect(state['userId'], equals('user-1'));
       expect(state['disabled'], isFalse);
     });
@@ -772,7 +772,7 @@ void main() {
         ),
         AuthEndpointRequest(query: {'userId': 'user-1'}),
       );
-      final state = result as Map<String, dynamic>;
+      final state = result! as Map<String, dynamic>;
       expect(state['failedLoginAttempts'], equals(1));
       expect(state['lockedUntil'], isNotNull);
     });
@@ -780,7 +780,7 @@ void main() {
 
   group('Browser protection', () {
     test('AuthBrowserProtectionOptions defaults', () {
-      const opts = AuthBrowserProtectionOptions();
+      const opts = AuthBrowserProtectionOptions.localDevelopment;
       expect(opts.enabled, isTrue);
       expect(opts.allowedOrigins, isEmpty);
       expect(opts.trustedOrigins, isEmpty);
@@ -790,7 +790,7 @@ void main() {
     });
 
     test('copyWith preserves values', () {
-      const opts = AuthBrowserProtectionOptions();
+      const opts = AuthBrowserProtectionOptions.localDevelopment;
       final copied = opts.copyWith(
         enabled: false,
         trustedOrigins: ['https://example.com'],
@@ -801,14 +801,14 @@ void main() {
     });
 
     test('AuthCookiePolicy defaults', () {
-      const policy = AuthCookiePolicy();
+      const policy = AuthCookiePolicy.production;
       expect(policy.httpOnly, isTrue);
       expect(policy.secure, isTrue);
       expect(policy.path, equals('/'));
     });
 
     test('AuthCookiePolicy.copyWith preserves values', () {
-      const policy = AuthCookiePolicy();
+      const policy = AuthCookiePolicy.production;
       final copied = policy.copyWith(httpOnly: false);
       expect(copied.httpOnly, isFalse);
       expect(copied.secure, isTrue); // preserved
@@ -816,9 +816,8 @@ void main() {
     });
 
     test('AuthBrowserProtectionValidator rejects bad origin when enabled', () {
-      final validator = AuthBrowserProtectionValidator(
-        options: const AuthBrowserProtectionOptions(
-          enabled: true,
+      const validator = AuthBrowserProtectionValidator(
+        options: AuthBrowserProtectionOptions(
           requireOrigin: true,
         ),
       );
@@ -832,9 +831,8 @@ void main() {
     });
 
     test('AuthBrowserProtectionValidator accepts same-origin', () {
-      final validator = AuthBrowserProtectionValidator(
-        options: const AuthBrowserProtectionOptions(
-          enabled: true,
+      const validator = AuthBrowserProtectionValidator(
+        options: AuthBrowserProtectionOptions(
           requireOrigin: true,
         ),
       );
@@ -847,9 +845,8 @@ void main() {
     });
 
     test('AuthBrowserProtectionValidator accepts trusted origin', () {
-      final validator = AuthBrowserProtectionValidator(
-        options: const AuthBrowserProtectionOptions(
-          enabled: true,
+      const validator = AuthBrowserProtectionValidator(
+        options: AuthBrowserProtectionOptions(
           requireOrigin: true,
           trustedOrigins: ['https://trusted.example.com'],
         ),
@@ -863,8 +860,8 @@ void main() {
     });
 
     test('rejects cross-site metadata without an allowed origin', () {
-      final validator = AuthBrowserProtectionValidator(
-        options: const AuthBrowserProtectionOptions(enabled: true),
+      const validator = AuthBrowserProtectionValidator(
+        options: AuthBrowserProtectionOptions.localDevelopment,
       );
       final result = validator.validate(
         requestUri: Uri.parse('https://app.example.com/auth/signin'),
@@ -876,9 +873,8 @@ void main() {
     });
 
     test('accepts cross-site metadata only with an allowed origin', () {
-      final validator = AuthBrowserProtectionValidator(
-        options: const AuthBrowserProtectionOptions(
-          enabled: true,
+      const validator = AuthBrowserProtectionValidator(
+        options: AuthBrowserProtectionOptions(
           allowedOrigins: ['https://frontend.example.com'],
         ),
       );
@@ -894,9 +890,8 @@ void main() {
     });
 
     test('rejects methods outside the configured allowlist', () {
-      final validator = AuthBrowserProtectionValidator(
-        options: const AuthBrowserProtectionOptions(
-          enabled: true,
+      const validator = AuthBrowserProtectionValidator(
+        options: AuthBrowserProtectionOptions(
           allowedMethods: {'GET', 'POST'},
         ),
       );
@@ -912,9 +907,8 @@ void main() {
     test(
       'content-type validation rejects when requireContentType is enabled',
       () {
-        final validator = AuthBrowserProtectionValidator(
-          options: const AuthBrowserProtectionOptions(
-            enabled: true,
+        const validator = AuthBrowserProtectionValidator(
+          options: AuthBrowserProtectionOptions(
             requireContentType: true,
           ),
         );
@@ -932,11 +926,8 @@ void main() {
     test(
       'content-type validation accepts when requireContentType is disabled',
       () {
-        final validator = AuthBrowserProtectionValidator(
-          options: const AuthBrowserProtectionOptions(
-            enabled: true,
-            requireContentType: false,
-          ),
+        const validator = AuthBrowserProtectionValidator(
+          options: AuthBrowserProtectionOptions.localDevelopment,
         );
         final result = validator.validate(
           requestUri: Uri.parse('https://app.example.com/auth/signin'),
@@ -977,12 +968,11 @@ void main() {
     });
 
     test('OAuthClient grant types are preserved', () async {
-      final client = OAuthClient(
+      const client = OAuthClient(
         clientId: 'c1',
         clientSecretHash: 'hash',
         name: 'Test',
         redirectUris: ['https://example.com/callback'],
-        grantTypes: const ['authorization_code'],
       );
       await clientStore.create(client);
       final found = await clientStore.findById('c1');
@@ -1317,8 +1307,8 @@ class _Hasher implements PasswordHasher {
 }
 
 class _MockHeaders implements HttpHeaders {
-  final Map<String, String> _headers;
   _MockHeaders(this._headers);
+  final Map<String, String> _headers;
 
   @override
   String? value(String name) => _headers[name.toLowerCase()];

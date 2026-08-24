@@ -8,7 +8,6 @@ void main() {
       () {
         final plugin = _InventoryPlugin(
           contract: const AuthServerPluginDataContract.none(),
-          recentAuthentication: true,
         );
 
         expect(() => _freeze(plugin), throwsA(isA<StateError>()));
@@ -41,7 +40,6 @@ void main() {
           authenticationMethodNamespace: 'external_device',
           removalEndpointIds: <String>['external_device.remove'],
         ),
-        recentAuthentication: true,
       );
 
       final registry = _freeze(plugin);
@@ -131,7 +129,6 @@ final class _InventoryPlugin
         decode: (value) => value,
         encode: (value) => value,
       ),
-      authentication: AuthOperationAuthentication.session,
       csrfPolicy: AuthOperationCsrfPolicy.required,
       requiresRecentAuthentication: recentAuthentication,
       handler: (_, _) => const <String, dynamic>{'status': 'removed'},

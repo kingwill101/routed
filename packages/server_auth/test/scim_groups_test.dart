@@ -117,7 +117,7 @@ void main() {
           },
         );
         expect(patched.statusCode, 200);
-        expect((_json(patched)['members']! as List), hasLength(2));
+        expect(_json(patched)['members']! as List, hasLength(2));
 
         final deleted = await harness.request(
           'DELETE',
@@ -391,7 +391,7 @@ final class _GroupHarness {
     fixture = AuthPluginEndpointFixture<Object>(
       endpoints: runtime.registry.endpoints,
       invocation: (_) =>
-          AuthOperationInvocation<Object>(context: Object(), user: null),
+          const AuthOperationInvocation<Object>(context: Object(), user: null),
     );
   }
 

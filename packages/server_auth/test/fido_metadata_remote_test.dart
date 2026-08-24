@@ -298,7 +298,7 @@ void main() {
           issuerName: 'MDS Intermediate',
           serial: 30,
           keyUsage: 0x80,
-          notAfter: DateTime.utc(2029, 1, 1),
+          notAfter: DateTime.utc(2029),
         );
         final differentRootKey = _EcKey.create(BigInt.from(9));
         final differentRoot = _certificate(
@@ -827,7 +827,7 @@ final class _QueueTransport implements FidoMetadataHttpTransport {
 
   final List<_TransportStep> _steps;
   final List<FidoMetadataHttpRequest> requests = <FidoMetadataHttpRequest>[];
-  var closed = false;
+  bool closed = false;
 
   @override
   Future<FidoMetadataHttpResponse> get(FidoMetadataHttpRequest request) async {
@@ -844,7 +844,7 @@ final class _DelayedClient extends http.BaseClient {
   _DelayedClient(this._send);
 
   final Future<http.StreamedResponse> Function(http.BaseRequest request) _send;
-  var requests = 0;
+  int requests = 0;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) {
@@ -1034,8 +1034,8 @@ final class _RsaKey extends _CertificateKey {
       ASN1BitString(
         stringValues:
             (ASN1Sequence()
-                  ..add(ASN1Integer(publicKey.modulus!))
-                  ..add(ASN1Integer(publicKey.publicExponent!)))
+                  ..add(ASN1Integer(publicKey.modulus))
+                  ..add(ASN1Integer(publicKey.publicExponent)))
                 .encode(),
       ),
     );
@@ -1099,8 +1099,8 @@ Uint8List _certificate({
     ..add(_name(issuerName))
     ..add(
       ASN1Sequence()
-        ..add(ASN1UtcTime(notBefore ?? DateTime.utc(2029, 1, 1)))
-        ..add(ASN1UtcTime(notAfter ?? DateTime.utc(2031, 1, 1))),
+        ..add(ASN1UtcTime(notBefore ?? DateTime.utc(2029)))
+        ..add(ASN1UtcTime(notAfter ?? DateTime.utc(2031))),
     )
     ..add(_name(subjectName))
     ..add(subjectKey.subjectPublicKeyInfo())

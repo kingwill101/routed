@@ -31,7 +31,7 @@ void main() {
                   response: AuthClientConformanceResponse.json(_sessionJson),
                   malformedResponses: _malformed,
                   verifyResponse: (value) =>
-                      expect((value as AuthSession).user.id, 'user-1'),
+                      expect((value! as AuthSession).user.id, 'user-1'),
                 ),
               ),
               (
@@ -490,7 +490,7 @@ final class _EchoServerPlugin
         >(
           id: 'echo.read',
           method: AuthOperationMethod.post,
-          path: AuthRoutePath('/echo'),
+          path: const AuthRoutePath('/echo'),
           semantics: const AuthOperationSemantics.readOnly(),
           requestCodec: AuthOperationCodec<Map<String, dynamic>>(
             decode: (value) {

@@ -33,7 +33,7 @@ void _expectNoSensitiveKeys(Object? value) {
   if (value is Map) {
     for (final entry in value.entries) {
       final normalized = entry.key.toString().toLowerCase().replaceAll(
-        RegExp(r'[^a-z0-9]'),
+        RegExp('[^a-z0-9]'),
         '',
       );
       expect(
@@ -140,7 +140,7 @@ void main() {
       final runner = PropertyTestRunner<int>(Gen.integer(min: 2, max: 10000), (
         providerLatencyMilliseconds,
       ) async {
-        var now = DateTime.utc(2030, 1, 1);
+        var now = DateTime.utc(2030);
         var calls = 0;
         final plugin = CaptchaPlugin<String>(
           verifier: _PropertyCaptchaVerifier(() async {
@@ -184,7 +184,7 @@ void main() {
           throwsA(isA<AuthFlowException>()),
         );
         expect(calls, 1);
-      }, PropertyConfig(numTests: 100, seed: 20260820));
+      }, PropertyConfig(seed: 20260820));
 
       final result = await runner.run();
       expect(result.success, isTrue, reason: _propertyReport(result));

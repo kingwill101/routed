@@ -7,8 +7,8 @@ import 'package:test/test.dart';
 
 void main() {
   test('client installs only the selected typed plugins', () {
-    final organization = AuthOrganizationClientPlugin();
-    final admin = AuthAdminClientPlugin();
+    const organization = AuthOrganizationClientPlugin();
+    const admin = AuthAdminClientPlugin();
     final client = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [organization],
@@ -97,7 +97,7 @@ void main() {
   });
 
   test('magic-link plugin owns the email provider client contract', () async {
-    final plugin = AuthMagicLinkClientPlugin();
+    const plugin = AuthMagicLinkClientPlugin();
     final client = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [plugin],
@@ -127,8 +127,8 @@ void main() {
             'user': {
               'id': 'user-1',
               'email': 'ada@example.com',
-              'roles': [],
-              'attributes': {'emailVerified': true},
+              'roles': <String>[],
+              'attributes': <String, dynamic>{'emailVerified': true},
             },
             'expires': '2030-01-01T00:00:00Z',
             'strategy': 'session',

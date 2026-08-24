@@ -387,7 +387,7 @@ void main() {
 
     await runtime.login(context, principal, rememberMe: true);
     expect(context.session['session.principal'], isA<Map<String, dynamic>>());
-    expect((runtime.current(context))?.id, equals('user-1'));
+    expect(runtime.current(context)?.id, equals('user-1'));
     expect(context.responseCookies.last.value, equals('token-1'));
     expect((await store.read('token-1'))?.id, equals('user-1'));
 
@@ -424,7 +424,7 @@ void main() {
 
       expect(await store.read('old-token'), isNull);
       expect(context.responseCookies.last.maxAge, equals(0));
-      expect((runtime.current(context))?.id, equals('new-user'));
+      expect(runtime.current(context)?.id, equals('new-user'));
     },
   );
 
@@ -477,7 +477,7 @@ void main() {
       );
 
       await runtime.hydrate(context);
-      expect((runtime.current(context))?.id, equals('user-2'));
+      expect(runtime.current(context)?.id, equals('user-2'));
       expect(await store.read('token-old'), isNull);
       expect((await store.read('token-new'))?.id, equals('user-2'));
       expect(context.responseCookies.last.value, equals('token-new'));
@@ -562,7 +562,7 @@ class _FakeSessionAdapter
     _FakeSessionContext context,
     String cookieName,
   ) {
-    return buildExpiredRememberTokenCookie(cookieName, path: '/');
+    return buildExpiredRememberTokenCookie(cookieName);
   }
 
   @override
@@ -576,7 +576,6 @@ class _FakeSessionAdapter
       cookieName,
       token,
       expiresAt: expiresAt,
-      path: '/',
     );
   }
 

@@ -56,9 +56,7 @@ void main() {
         derivedKeyLength: 16,
       );
       final currentHasher = Argon2idPasswordHasher(
-        iterations: 2,
         memoryKiB: 16,
-        derivedKeyLength: 32,
       );
       final result = currentHasher.verify(
         'password',

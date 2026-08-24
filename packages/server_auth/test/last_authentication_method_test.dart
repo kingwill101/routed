@@ -127,7 +127,6 @@ void main() {
             AuthLastAuthenticationMethodId.oauthProvider('google'),
           },
           retention: const Duration(minutes: 5),
-          maximumStateBytes: 512,
         ),
         clock: () => now,
       );

@@ -9,8 +9,8 @@ void main() {
   test(
     'credentials and session APIs compose through the public host',
     () async {
-      final credentialsPlugin = const AuthCredentialsClientPlugin();
-      final sessionPlugin = const AuthSessionClientPlugin();
+      const credentialsPlugin = AuthCredentialsClientPlugin();
+      const sessionPlugin = AuthSessionClientPlugin();
       final auth = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
         plugins: [credentialsPlugin, sessionPlugin],
@@ -104,7 +104,7 @@ void main() {
   );
 
   test('API-key plugin covers the complete service-client lifecycle', () async {
-    final plugin = const AuthApiKeyClientPlugin();
+    const plugin = AuthApiKeyClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       apiKey: 'rk_live_service',
@@ -163,7 +163,7 @@ void main() {
     final created = await client.create(
       name: 'deploy',
       scopes: const ['deploy:read'],
-      expiresAt: DateTime.utc(2030, 2, 1),
+      expiresAt: DateTime.utc(2030, 2),
     );
     final rotated = await client.rotate(
       id: 'key-1',
@@ -180,8 +180,8 @@ void main() {
   });
 
   test('provider and OAuth plugins compose through the public host', () async {
-    final providerPlugin = const AuthProviderClientPlugin();
-    final oauthPlugin = const AuthOAuthClientPlugin();
+    const providerPlugin = AuthProviderClientPlugin();
+    const oauthPlugin = AuthOAuthClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [providerPlugin, oauthPlugin],

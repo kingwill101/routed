@@ -22,7 +22,7 @@ void main() {
 
     test('escapes challenge parameters', () {
       final header = buildBearerAuthenticateHeader(
-        realm: 'My "Realm" \\ x',
+        realm: r'My "Realm" \ x',
         errorDescription: 'bad "token"',
       );
       expect(

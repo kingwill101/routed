@@ -20,7 +20,7 @@ void main() {
       final faults = AuthEmailBackendFaultInjector()
         ..failNext(AuthEmailBackendFaultPoint.afterMagicLinkWrite);
       final store = InMemoryAuthStore(emailBackendFaultInjector: faults);
-      final now = DateTime.utc(2030, 1, 1);
+      final now = DateTime.utc(2030);
       await expectLater(
         store.issueMagicLink(
           AuthMagicLinkIssueCommand(_magicRecord('token-1', now)),
@@ -36,7 +36,7 @@ void main() {
     test('magic-link consume rollback restores credential and user', () async {
       final faults = AuthEmailBackendFaultInjector();
       final store = InMemoryAuthStore(emailBackendFaultInjector: faults);
-      final now = DateTime.utc(2030, 1, 1);
+      final now = DateTime.utc(2030);
       await store.issueMagicLink(
         AuthMagicLinkIssueCommand(_magicRecord('token-2', now)),
       );
@@ -56,7 +56,7 @@ void main() {
       final faults = AuthEmailBackendFaultInjector()
         ..failNext(AuthEmailBackendFaultPoint.afterEmailOtpWrite);
       final store = InMemoryAuthStore(emailBackendFaultInjector: faults);
-      final now = DateTime.utc(2030, 1, 1);
+      final now = DateTime.utc(2030);
       await expectLater(
         store.issueEmailOtp(AuthEmailOtpIssueCommand(_otp('123456', now))),
         throwsA(isA<AuthEmailBackendInjectedFault>()),
@@ -72,7 +72,7 @@ void main() {
       () async {
         final faults = AuthEmailBackendFaultInjector();
         final store = InMemoryAuthStore(emailBackendFaultInjector: faults);
-        final now = DateTime.utc(2030, 1, 1);
+        final now = DateTime.utc(2030);
         await store.issueEmailOtp(
           AuthEmailOtpIssueCommand(_otp('654321', now)),
         );
@@ -98,7 +98,7 @@ void main() {
         tokenGenerator: () => 'delivery-token',
         sendMagicLink: (_) => throw StateError('delivery unavailable'),
       );
-      final now = DateTime.utc(2030, 1, 1);
+      final now = DateTime.utc(2030);
       await expectLater(
         startAuthEmailSignIn<Object>(
           backend: store,
@@ -135,7 +135,7 @@ void main() {
         plugins: [plugin],
       ),
     );
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
 
     await expectLater(
       plugin.sendVerificationOtp(

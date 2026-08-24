@@ -39,12 +39,10 @@ void main() {
           path: const AuthRoutePath('/sample'),
           semantics: const AuthOperationSemantics.readOnly(),
           requestCodec: AuthOperationCodec<_LimiterInput>(
-            schema: const <String, Object?>{},
             decode: (json) => _LimiterInput(json['value'] as String),
             encode: (value) => <String, dynamic>{'value': value.value},
           ),
           responseCodec: AuthOperationCodec<Object?>(
-            schema: const <String, Object?>{},
             decode: (json) => json,
             encode: (value) => value,
           ),
@@ -68,8 +66,8 @@ void main() {
   });
 
   test('rate-limit requests expose only non-secret auth context', () async {
-    final request = const AuthRateLimitRequest<String>(
-      action: AuthRateLimitAction.signIn,
+    const request = AuthRateLimitRequest<String>.operation(
+      operation: AuthRateLimitOperation('core', 'signIn'),
       providerId: 'credentials',
       context: 'request-context',
       identifier: 'alice@example.test',
@@ -83,7 +81,10 @@ void main() {
 
     await enforceAuthRateLimit(limiter: limiter, request: request);
 
-    expect(observed?.action, AuthRateLimitAction.signIn);
+    expect(
+      observed?.operation,
+      const AuthRateLimitOperation('core', 'signIn'),
+    );
     expect(observed?.providerId, 'credentials');
     expect(observed?.context, 'request-context');
     expect(observed?.identifier, 'alice@example.test');
@@ -93,8 +94,8 @@ void main() {
     expect(
       () => enforceAuthRateLimit(
         limiter: _BlockingLimiter(),
-        request: const AuthRateLimitRequest<String>(
-          action: AuthRateLimitAction.oauthCallback,
+        request: const AuthRateLimitRequest<String>.operation(
+          operation: AuthRateLimitOperation('core', 'oauthCallback'),
           providerId: 'github',
           context: 'request-context',
         ),

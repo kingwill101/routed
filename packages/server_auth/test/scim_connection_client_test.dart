@@ -10,7 +10,7 @@ void main() {
     'managed SCIM client is installed only through its client plugin',
     () async {
       final requests = <http.Request>[];
-      final plugin = const AuthScimConnectionClientPlugin();
+      const plugin = AuthScimConnectionClientPlugin();
       final auth = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
         plugins: <AuthClientPlugin<dynamic>>[plugin],
@@ -88,7 +88,7 @@ void main() {
   );
 }
 
-final DateTime _now = DateTime.utc(2030, 1, 1);
+final DateTime _now = DateTime.utc(2030);
 
 final Map<String, Object?> _connectionJson = <String, Object?>{
   'id': 'connection-a',

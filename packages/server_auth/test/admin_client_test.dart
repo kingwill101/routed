@@ -10,7 +10,7 @@ void main() {
     'admin client shares transport, CSRF state, bearer auth, and warnings',
     () async {
       final requests = <http.Request>[];
-      final plugin = const AuthAdminClientPlugin();
+      const plugin = AuthAdminClientPlugin();
       final auth = AuthClient(
         baseUrl: Uri.parse('https://example.test'),
         bearerToken: 'jwt-1',
@@ -87,7 +87,7 @@ final Map<String, dynamic> _adminUser = {
   'name': 'User',
   'image': null,
   'roles': ['user'],
-  'attributes': {},
+  'attributes': <String, dynamic>{},
   'userId': 'user-1',
   'banned': false,
   'banReason': null,

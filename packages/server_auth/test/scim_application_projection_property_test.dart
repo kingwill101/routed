@@ -57,7 +57,7 @@ void main() {
     ) async {
       final store = InMemoryAuthScimApplicationProjectionStore();
       final resourceId = 'resource-${value.abs()}';
-      final first = _subject(resourceId, connectionId: 'connection-a');
+      final first = _subject(resourceId);
       final second = _subject(resourceId, connectionId: 'connection-b');
       await store.apply(_create('create-a-$value', first));
       await store.apply(_create('create-b-$value', second));

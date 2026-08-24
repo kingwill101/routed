@@ -8,12 +8,11 @@ void main() {
     test('local development composes explicit providers and plugins', () {
       final plugin = _ExamplePlugin();
 
-      final AuthDeployment<String> deployment =
-          AuthDeploymentPresets.localDevelopment<String>(
-            providers: [CredentialsProvider()],
-            plugins: [plugin],
-            trustedOrigins: [Uri.parse('http://localhost:3000')],
-          );
+      final deployment = AuthDeploymentPresets.localDevelopment<String>(
+        providers: [CredentialsProvider()],
+        plugins: [plugin],
+        trustedOrigins: [Uri.parse('http://localhost:3000')],
+      );
 
       expect(deployment.options.store, isA<InMemoryAuthStore>());
       expect(deployment.options.storeMode, AuthStoreMode.ephemeral);
@@ -45,19 +44,18 @@ void main() {
         ),
       );
 
-      final AuthDeployment<String> deployment =
-          AuthDeploymentPresets.secureSessionProduction<String>(
-            store: store,
-            providers: [CredentialsProvider()],
-            plugins: [_ExamplePlugin()],
-            boundary: boundary,
-            lifecycleDelivery: delivery,
-            rateLimiter: limiter,
-            requireVerifiedEmail: true,
-            sessionMaxAge: const Duration(days: 14),
-            sessionUpdateAge: const Duration(hours: 12),
-            cookieDomain: 'example.com',
-          );
+      final deployment = AuthDeploymentPresets.secureSessionProduction<String>(
+        store: store,
+        providers: [CredentialsProvider()],
+        plugins: [_ExamplePlugin()],
+        boundary: boundary,
+        lifecycleDelivery: delivery,
+        rateLimiter: limiter,
+        requireVerifiedEmail: true,
+        sessionMaxAge: const Duration(days: 14),
+        sessionUpdateAge: const Duration(hours: 12),
+        cookieDomain: 'example.com',
+      );
 
       expect(deployment.options.store, same(store));
       expect(deployment.options.storeMode, AuthStoreMode.durable);
@@ -90,21 +88,20 @@ void main() {
     });
 
     test('JWT API production configures issuance and adapter verification', () {
-      final AuthDeployment<String> deployment =
-          AuthDeploymentPresets.jwtApiProduction<String>(
-            store: _DurableAuthStore(),
-            providers: [CredentialsProvider()],
-            plugins: [_ExamplePlugin()],
-            boundary: _directBoundary(),
-            lifecycleDelivery: _delivery(),
-            rateLimiter: _AllowAllRateLimiter(),
-            requireVerifiedEmail: true,
-            exposeJwtTokenInSessionResponse: true,
-            jwtSecret: 'a-production-secret-with-at-least-32-bytes',
-            issuer: Uri.parse('https://identity.example.com'),
-            audience: ['orders-api'],
-            tokenMaxAge: const Duration(minutes: 20),
-          );
+      final deployment = AuthDeploymentPresets.jwtApiProduction<String>(
+        store: _DurableAuthStore(),
+        providers: [CredentialsProvider()],
+        plugins: [_ExamplePlugin()],
+        boundary: _directBoundary(),
+        lifecycleDelivery: _delivery(),
+        rateLimiter: _AllowAllRateLimiter(),
+        requireVerifiedEmail: true,
+        exposeJwtTokenInSessionResponse: true,
+        jwtSecret: 'a-production-secret-with-at-least-32-bytes',
+        issuer: Uri.parse('https://identity.example.com'),
+        audience: ['orders-api'],
+        tokenMaxAge: const Duration(minutes: 20),
+      );
 
       expect(deployment.options.sessionStrategy, AuthSessionStrategy.jwt);
       expect(
@@ -126,19 +123,18 @@ void main() {
     test('service preset returns the exact API-key plugin for middleware', () {
       final apiKeyStore = _DurableApiKeyStore();
 
-      final AuthApiKeyDeployment<String> deployment =
-          AuthDeploymentPresets.serviceApiKeyProduction<String>(
-            store: _DurableAuthStore(),
-            apiKeyStore: apiKeyStore,
-            providers: [CredentialsProvider()],
-            plugins: [_ExamplePlugin()],
-            boundary: _directBoundary(),
-            lifecycleDelivery: _delivery(),
-            rateLimiter: _AllowAllRateLimiter(),
-            requireVerifiedEmail: true,
-            allowSessionExchange: false,
-            keyPrefix: 'orders',
-          );
+      final deployment = AuthDeploymentPresets.serviceApiKeyProduction<String>(
+        store: _DurableAuthStore(),
+        apiKeyStore: apiKeyStore,
+        providers: [CredentialsProvider()],
+        plugins: [_ExamplePlugin()],
+        boundary: _directBoundary(),
+        lifecycleDelivery: _delivery(),
+        rateLimiter: _AllowAllRateLimiter(),
+        requireVerifiedEmail: true,
+        allowSessionExchange: false,
+        keyPrefix: 'orders',
+      );
 
       expect(deployment.apiKeys.store, same(apiKeyStore));
       expect(deployment.apiKeys.keyPrefix, 'orders');

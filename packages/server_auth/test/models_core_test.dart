@@ -195,7 +195,10 @@ void main() {
       expect(redacted.refreshToken, isNull);
       expect(
         redacted.metadata,
-        equals({'display_name': 'Alice', 'nested': {}}),
+        equals(<String, dynamic>{
+          'display_name': 'Alice',
+          'nested': <String, dynamic>{},
+        }),
       );
     },
   );
@@ -216,7 +219,10 @@ void main() {
     final redacted = session.redacted();
 
     expect(redacted.token, isNull);
-    expect(redacted.user.attributes, equals({'nested': {}}));
+    expect(
+      redacted.user.attributes,
+      equals(<String, dynamic>{'nested': <String, dynamic>{}}),
+    );
   });
 
   test('credential attributes do not duplicate the submitted password', () {

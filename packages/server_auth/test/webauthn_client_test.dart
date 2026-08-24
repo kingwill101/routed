@@ -8,7 +8,7 @@ import 'package:test/test.dart';
 void main() {
   test('WebAuthn plugin exposes typed ceremony helpers', () async {
     final requests = <http.BaseRequest>[];
-    final plugin = const AuthWebAuthnClientPlugin();
+    const plugin = AuthWebAuthnClientPlugin();
     final auth = AuthClient(
       baseUrl: Uri.parse('https://example.test'),
       plugins: [plugin],
