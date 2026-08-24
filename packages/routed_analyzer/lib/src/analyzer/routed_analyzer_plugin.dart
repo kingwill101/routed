@@ -23,15 +23,21 @@ import 'package:routed_analyzer/src/analyzer/rules/schema_deprecated_without_des
 /// - `schema_deprecated_without_description` — deprecated route without
 ///   explaining why
 class RoutedAnalyzerPlugin extends Plugin {
+  /// Creates the Routed analyzer plugin.
+  RoutedAnalyzerPlugin();
+
+  /// The name used to identify this plugin in analyzer diagnostics.
   @override
   String get name => 'routed';
 
+  /// Registers Routed's built-in analyzer rules.
   @override
   void register(PluginRegistry registry) {
-    registry.registerWarningRule(MissingRouteSchemaRule());
-    registry.registerWarningRule(MissingSchemaSummaryRule());
-    registry.registerWarningRule(MissingSchemaResponseRule());
-    registry.registerWarningRule(InvalidValidationRuleRule());
-    registry.registerWarningRule(SchemaDeprecatedWithoutDescriptionRule());
+    registry
+      ..registerWarningRule(MissingRouteSchemaRule())
+      ..registerWarningRule(MissingSchemaSummaryRule())
+      ..registerWarningRule(MissingSchemaResponseRule())
+      ..registerWarningRule(InvalidValidationRuleRule())
+      ..registerWarningRule(SchemaDeprecatedWithoutDescriptionRule());
   }
 }

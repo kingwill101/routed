@@ -26,6 +26,13 @@ import 'package:routed_analyzer/src/analyzer/utils.dart';
 /// router.get('/users', handler, schema: RouteSchema(summary: 'List users'));
 /// ```
 class MissingRouteSchemaRule extends AnalysisRule {
+  /// Creates the missing route schema analyzer rule.
+  MissingRouteSchemaRule()
+    : super(
+        name: 'missing_route_schema',
+        description: 'Warn when a route is registered without schema metadata.',
+      );
+
   static const _code = LintCode(
     'missing_route_schema',
     'Route registration is missing a schema: argument.',
@@ -33,12 +40,6 @@ class MissingRouteSchemaRule extends AnalysisRule {
         'Add a schema: RouteSchema(...) argument to include this route in '
         'the OpenAPI specification.',
   );
-
-  MissingRouteSchemaRule()
-    : super(
-        name: 'missing_route_schema',
-        description: 'Warn when a route is registered without schema metadata.',
-      );
 
   @override
   DiagnosticCode get diagnosticCode => _code;
@@ -54,8 +55,9 @@ class MissingRouteSchemaRule extends AnalysisRule {
 }
 
 class _Visitor extends SimpleAstVisitor<void> {
-  final MissingRouteSchemaRule rule;
   _Visitor(this.rule);
+
+  final MissingRouteSchemaRule rule;
 
   @override
   void visitMethodInvocation(MethodInvocation node) {

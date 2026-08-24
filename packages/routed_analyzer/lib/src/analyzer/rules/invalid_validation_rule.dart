@@ -36,14 +36,7 @@ const _aliasRuleNames = <String>{'integer', 'min_length', 'maxLength', 'regex'};
 /// )
 /// ```
 class InvalidValidationRuleRule extends AnalysisRule {
-  static const _code = LintCode(
-    'invalid_validation_rule',
-    "Unknown validation rule '{0}' in pipe string.",
-    correctionMessage:
-        'Check the spelling. See the routed validation docs for the list '
-        'of supported rules.',
-  );
-
+  /// Creates the invalid validation rule analyzer rule.
   InvalidValidationRuleRule()
     : super(
         name: 'invalid_validation_rule',
@@ -51,6 +44,14 @@ class InvalidValidationRuleRule extends AnalysisRule {
             'Warn when a validationRules pipe string contains an '
             'unrecognized rule name.',
       );
+
+  static const _code = LintCode(
+    'invalid_validation_rule',
+    "Unknown validation rule '{0}' in pipe string.",
+    correctionMessage:
+        'Check the spelling. See the routed validation docs for the list '
+        'of supported rules.',
+  );
 
   @override
   DiagnosticCode get diagnosticCode => _code;
@@ -67,9 +68,10 @@ class InvalidValidationRuleRule extends AnalysisRule {
 }
 
 class _Visitor extends SimpleAstVisitor<void> {
+  _Visitor(this.rule, this.knownRuleNames);
+
   final InvalidValidationRuleRule rule;
   final Set<String>? knownRuleNames;
-  _Visitor(this.rule, this.knownRuleNames);
 
   @override
   void visitInstanceCreationExpression(InstanceCreationExpression node) {
@@ -132,18 +134,16 @@ class _ValidationRuleCache {
       final rawNames = decoded['validationRuleNames'];
       if (rawNames is! List) return null;
 
-      final names = rawNames
-          .whereType<Object>()
-          .map((value) => value.toString())
-          .toSet();
-      names.addAll(_aliasRuleNames);
+      final names =
+          rawNames.whereType<Object>().map((value) => value.toString()).toSet()
+            ..addAll(_aliasRuleNames);
 
       _cache[manifestFile.path] = _CachedValidationRules(
         modificationStamp,
         names,
       );
       return names;
-    } catch (_) {
+    } on Object {
       return null;
     }
   }

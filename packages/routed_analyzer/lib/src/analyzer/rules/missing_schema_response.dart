@@ -30,6 +30,13 @@ import 'package:routed_analyzer/src/analyzer/utils.dart';
 /// )
 /// ```
 class MissingSchemaResponseRule extends AnalysisRule {
+  /// Creates the missing schema response analyzer rule.
+  MissingSchemaResponseRule()
+    : super(
+        name: 'missing_schema_response',
+        description: 'Warn when a RouteSchema lacks response documentation.',
+      );
+
   static const _code = LintCode(
     'missing_schema_response',
     "RouteSchema is missing a 'responses' argument.",
@@ -37,12 +44,6 @@ class MissingSchemaResponseRule extends AnalysisRule {
         'Add a responses: {200: ResponseSchema(description: ...)} argument '
         'to document the response contract.',
   );
-
-  MissingSchemaResponseRule()
-    : super(
-        name: 'missing_schema_response',
-        description: 'Warn when a RouteSchema lacks response documentation.',
-      );
 
   @override
   DiagnosticCode get diagnosticCode => _code;
@@ -58,8 +59,9 @@ class MissingSchemaResponseRule extends AnalysisRule {
 }
 
 class _Visitor extends SimpleAstVisitor<void> {
-  final MissingSchemaResponseRule rule;
   _Visitor(this.rule);
+
+  final MissingSchemaResponseRule rule;
 
   @override
   void visitInstanceCreationExpression(InstanceCreationExpression node) {

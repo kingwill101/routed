@@ -8,6 +8,7 @@ import 'package:routed_core/routed_core.dart'
 /// the source of truth for configuration and performs its own validation at
 /// engine startup.
 class ProviderMetadata {
+  /// Creates metadata for a registered provider.
   ProviderMetadata({
     required this.id,
     required this.description,
@@ -15,6 +16,10 @@ class ProviderMetadata {
     this.configurationType,
   });
 
+  /// Creates metadata from a serialized JSON object.
+  ///
+  /// Missing fields are represented by empty strings, except for the optional
+  /// [configurationType] field.
   factory ProviderMetadata.fromJson(Map<String, Object?> json) {
     return ProviderMetadata(
       id: json['id']?.toString() ?? '',
@@ -24,11 +29,19 @@ class ProviderMetadata {
     );
   }
 
+  /// The stable identifier assigned to the provider registration.
   final String id;
+
+  /// The human-readable description supplied by the provider registration.
   final String description;
+
+  /// The runtime type name of the provider instance.
   final String providerType;
+
+  /// The runtime type name of the provider's typed configuration, if any.
   final String? configurationType;
 
+  /// Serializes this metadata to a JSON-compatible map.
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'id': id,
@@ -40,6 +53,10 @@ class ProviderMetadata {
 }
 
 /// Collects registered providers and their typed configuration metadata.
+///
+/// The returned list reflects the registrations currently held by
+/// [ProviderRegistry]. Each registration factory is invoked to determine the
+/// provider and configuration type names.
 List<ProviderMetadata> inspectProviders() {
   final providers = <ProviderMetadata>[];
   for (final registration in ProviderRegistry.instance.registrations) {

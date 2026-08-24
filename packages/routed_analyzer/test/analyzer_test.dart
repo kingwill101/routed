@@ -1,5 +1,5 @@
-import 'package:test/test.dart';
 import 'package:routed_analyzer/routed_analyzer.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('RoutedAnalyzer', () {

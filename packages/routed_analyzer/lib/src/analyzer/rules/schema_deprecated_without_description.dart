@@ -30,6 +30,14 @@ import 'package:routed_analyzer/src/analyzer/utils.dart';
 /// )
 /// ```
 class SchemaDeprecatedWithoutDescriptionRule extends AnalysisRule {
+  /// Creates the deprecated schema description analyzer rule.
+  SchemaDeprecatedWithoutDescriptionRule()
+    : super(
+        name: 'schema_deprecated_without_description',
+        description:
+            'Warn when a deprecated route lacks a deprecation description.',
+      );
+
   static const _code = LintCode(
     'schema_deprecated_without_description',
     "Deprecated RouteSchema is missing a 'description' explaining why.",
@@ -37,13 +45,6 @@ class SchemaDeprecatedWithoutDescriptionRule extends AnalysisRule {
         'Add a description explaining why the route is deprecated and what '
         'to use instead.',
   );
-
-  SchemaDeprecatedWithoutDescriptionRule()
-    : super(
-        name: 'schema_deprecated_without_description',
-        description:
-            'Warn when a deprecated route lacks a deprecation description.',
-      );
 
   @override
   DiagnosticCode get diagnosticCode => _code;
@@ -59,8 +60,9 @@ class SchemaDeprecatedWithoutDescriptionRule extends AnalysisRule {
 }
 
 class _Visitor extends SimpleAstVisitor<void> {
-  final SchemaDeprecatedWithoutDescriptionRule rule;
   _Visitor(this.rule);
+
+  final SchemaDeprecatedWithoutDescriptionRule rule;
 
   @override
   void visitInstanceCreationExpression(InstanceCreationExpression node) {

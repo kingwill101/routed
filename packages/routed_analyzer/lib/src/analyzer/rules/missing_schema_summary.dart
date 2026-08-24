@@ -27,6 +27,14 @@ import 'package:routed_analyzer/src/analyzer/utils.dart';
 /// schema: RouteSchema(summary: 'List all users', tags: ['users'])
 /// ```
 class MissingSchemaSummaryRule extends AnalysisRule {
+  /// Creates the missing schema summary analyzer rule.
+  MissingSchemaSummaryRule()
+    : super(
+        name: 'missing_schema_summary',
+        description:
+            'Warn when a RouteSchema lacks a summary for OpenAPI output.',
+      );
+
   static const _code = LintCode(
     'missing_schema_summary',
     "RouteSchema is missing a 'summary' argument.",
@@ -34,13 +42,6 @@ class MissingSchemaSummaryRule extends AnalysisRule {
         "Add a summary: 'Description of this endpoint' argument to provide "
         'human-readable API documentation.',
   );
-
-  MissingSchemaSummaryRule()
-    : super(
-        name: 'missing_schema_summary',
-        description:
-            'Warn when a RouteSchema lacks a summary for OpenAPI output.',
-      );
 
   @override
   DiagnosticCode get diagnosticCode => _code;
@@ -56,8 +57,9 @@ class MissingSchemaSummaryRule extends AnalysisRule {
 }
 
 class _Visitor extends SimpleAstVisitor<void> {
-  final MissingSchemaSummaryRule rule;
   _Visitor(this.rule);
+
+  final MissingSchemaSummaryRule rule;
 
   @override
   void visitInstanceCreationExpression(InstanceCreationExpression node) {

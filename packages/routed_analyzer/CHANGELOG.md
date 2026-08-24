@@ -1,3 +1,7 @@
+## Unreleased
+
+- Adopt `very_good_analysis` and complete public API documentation.
+
 ## 0.1.1
 
 - Replace generated schema/default/field inspection with the Dart type of each

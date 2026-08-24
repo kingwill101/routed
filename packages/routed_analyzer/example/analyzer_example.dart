@@ -1,3 +1,6 @@
+import 'package:routed_analyzer/routed_analyzer.dart';
+
 void main() {
-  print('routed_analyzer example: lint rules for routed');
+  final plugin = RoutedAnalyzerPlugin();
+  assert(plugin.name == 'routed', 'The plugin name should be routed.');
 }
