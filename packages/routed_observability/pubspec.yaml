@@ -8,8 +8,8 @@ environment:
   sdk: ">=3.9.0 <4.0.0"
 resolution: workspace
 dependencies:
-  dartastic_opentelemetry: ^0.9.3
-  dartastic_opentelemetry_api: ^0.8.7
+  dartastic_opentelemetry: ^0.9.8
+  dartastic_opentelemetry_api: ^0.9.1
   routed_core: ">=0.4.0 <1.0.0"
   sentry: ^9.10.0
 dev_dependencies:

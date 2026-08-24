@@ -52,7 +52,8 @@ workspace:
   - examples/rate_limiting
   - examples/openapi_demo
   - examples/full_stack
-  - examples/routed_platform
+  # Keep this example standalone until Stem publishes a release compatible
+  # with dartastic_opentelemetry_api 0.9.x.
 
 funding:
   - https://www.buymeacoffee.com/kingwill101

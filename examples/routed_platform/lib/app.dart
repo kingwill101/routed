@@ -1,4 +1,5 @@
-import 'package:routed/routed.dart';
+import 'package:routed_core/routed_core.dart';
+import 'package:routed_http/routed_http.dart';
 
 import 'config.dart';
 import 'platform/platform_config.dart';
