@@ -1,7 +1,19 @@
 import 'providers.dart';
 
 /// Sign-in route branch selected for a request.
-enum AuthSignInRouteKind { oauth, email, credentials, error }
+enum AuthSignInRouteKind {
+  /// Delegates sign-in to an OAuth provider.
+  oauth,
+
+  /// Sends a magic-link sign-in request.
+  email,
+
+  /// Processes credentials sign-in.
+  credentials,
+
+  /// Reports a sign-in routing error.
+  error,
+}
 
 /// Concrete sign-in routing decision used by framework adapters.
 class AuthSignInRouteDecision {
@@ -12,15 +24,22 @@ class AuthSignInRouteDecision {
     this.email,
   });
 
+  /// Creates an OAuth decision that does not require adapter CSRF handling.
   const AuthSignInRouteDecision.oauth()
     : this._(kind: AuthSignInRouteKind.oauth, requiresCsrf: false);
 
+  /// Creates a magic-link decision for [email] that requires CSRF handling.
   const AuthSignInRouteDecision.email(String email)
     : this._(kind: AuthSignInRouteKind.email, requiresCsrf: true, email: email);
 
+  /// Creates a credentials decision that requires CSRF handling.
   const AuthSignInRouteDecision.credentials()
     : this._(kind: AuthSignInRouteKind.credentials, requiresCsrf: true);
 
+  /// Creates an error decision carrying [errorCode].
+  ///
+  /// [requiresCsrf] tells an adapter whether CSRF handling applies; it is not
+  /// the result of validating a CSRF token.
   const AuthSignInRouteDecision.error(
     String errorCode, {
     bool requiresCsrf = false,
@@ -30,14 +49,27 @@ class AuthSignInRouteDecision {
          requiresCsrf: requiresCsrf,
        );
 
+  /// Selected sign-in branch.
   final AuthSignInRouteKind kind;
+
+  /// Stable error code, present for [AuthSignInRouteKind.error].
   final String? errorCode;
+
+  /// Whether the adapter should perform CSRF handling for this branch.
   final bool requiresCsrf;
+
+  /// Email selected for [AuthSignInRouteKind.email].
   final String? email;
 }
 
 /// Register route branch selected for a request.
-enum AuthRegisterRouteKind { credentials, error }
+enum AuthRegisterRouteKind {
+  /// Processes credentials registration.
+  credentials,
+
+  /// Reports a registration routing error.
+  error,
+}
 
 /// Concrete register routing decision used by framework adapters.
 class AuthRegisterRouteDecision {
@@ -47,9 +79,13 @@ class AuthRegisterRouteDecision {
     required this.requiresCsrf,
   });
 
+  /// Creates a credentials decision that requires CSRF handling.
   const AuthRegisterRouteDecision.credentials()
     : this._(kind: AuthRegisterRouteKind.credentials, requiresCsrf: true);
 
+  /// Creates an error decision carrying [errorCode].
+  ///
+  /// [requiresCsrf] tells an adapter whether CSRF handling applies.
   const AuthRegisterRouteDecision.error(
     String errorCode, {
     bool requiresCsrf = false,
@@ -59,13 +95,30 @@ class AuthRegisterRouteDecision {
          requiresCsrf: requiresCsrf,
        );
 
+  /// Selected registration branch.
   final AuthRegisterRouteKind kind;
+
+  /// Stable error code, present for [AuthRegisterRouteKind.error].
   final String? errorCode;
+
+  /// Whether the adapter should perform CSRF handling for this branch.
   final bool requiresCsrf;
 }
 
 /// Callback route branch selected for a request.
-enum AuthCallbackRouteKind { oauth, email, custom, error }
+enum AuthCallbackRouteKind {
+  /// Completes an OAuth callback.
+  oauth,
+
+  /// Completes a magic-link callback.
+  email,
+
+  /// Delegates callback handling to a custom provider.
+  custom,
+
+  /// Reports a callback routing error.
+  error,
+}
 
 /// Concrete callback routing decision used by framework adapters.
 class AuthCallbackRouteDecision {
@@ -78,29 +131,52 @@ class AuthCallbackRouteDecision {
     this.email,
   });
 
+  /// Creates an OAuth callback decision with [code] and optional [state].
   const AuthCallbackRouteDecision.oauth({required String code, String? state})
     : this._(kind: AuthCallbackRouteKind.oauth, code: code, state: state);
 
+  /// Creates a magic-link callback decision with [token] and [email].
   const AuthCallbackRouteDecision.email({
     required String token,
     required String email,
   }) : this._(kind: AuthCallbackRouteKind.email, token: token, email: email);
 
+  /// Creates a custom-provider callback decision.
   const AuthCallbackRouteDecision.custom()
     : this._(kind: AuthCallbackRouteKind.custom);
 
+  /// Creates an error decision carrying [errorCode].
   const AuthCallbackRouteDecision.error(String errorCode)
     : this._(kind: AuthCallbackRouteKind.error, errorCode: errorCode);
 
+  /// Selected callback branch.
   final AuthCallbackRouteKind kind;
+
+  /// Stable error code, present for [AuthCallbackRouteKind.error].
   final String? errorCode;
+
+  /// OAuth authorization code, present for [AuthCallbackRouteKind.oauth].
   final String? code;
+
+  /// Optional OAuth state value, preserved as supplied.
   final String? state;
+
+  /// Magic-link token, present for [AuthCallbackRouteKind.email].
   final String? token;
+
+  /// Email or identifier selected for [AuthCallbackRouteKind.email].
   final String? email;
 }
 
 /// Resolves sign-in branching decisions used by auth route handlers.
+///
+/// Missing or empty [providerId] returns `missing_provider`; a null [provider]
+/// returns `unknown_provider`. OAuth takes precedence over method and CSRF
+/// checks. Other providers reject exact `GET` with `method_not_allowed`, then
+/// invalid CSRF with `invalid_csrf`. Magic-link requests require a non-empty
+/// `email` payload and credentials providers select credentials. Other types
+/// return `unsupported_provider` with CSRF required. Values are converted with
+/// `toString()` and are not trimmed.
 AuthSignInRouteDecision resolveAuthSignInRouteDecision({
   required String? providerId,
   required AuthProvider? provider,
@@ -153,6 +229,11 @@ AuthSignInRouteDecision resolveAuthSignInRouteDecision({
 }
 
 /// Resolves register branching decisions used by auth route handlers.
+///
+/// Missing or empty [providerId] returns `missing_provider`, and a null
+/// [provider] returns `unknown_provider`. CSRF is checked next, followed by
+/// credentials-provider selection. Other types return `unsupported_provider`
+/// with CSRF required.
 AuthRegisterRouteDecision resolveAuthRegisterRouteDecision({
   required String? providerId,
   required AuthProvider? provider,
@@ -184,6 +265,13 @@ AuthRegisterRouteDecision resolveAuthRegisterRouteDecision({
 }
 
 /// Resolves callback branching decisions used by auth route handlers.
+///
+/// Missing or empty [providerId] returns `missing_provider`; a null [provider]
+/// returns `unknown_provider`. OAuth requires a non-empty `code` and preserves
+/// optional `state`. Magic-link callbacks require a non-empty `token` and an
+/// `email`, falling back to `identifier` only when email is null. A
+/// [CallbackProvider] selects the custom branch; other types return
+/// `unsupported_provider`. Query values use `toString()` and are not trimmed.
 AuthCallbackRouteDecision resolveAuthCallbackRouteDecision({
   required String? providerId,
   required AuthProvider? provider,

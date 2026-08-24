@@ -8,11 +8,15 @@ import 'rate_limit.dart';
 import 'store.dart';
 import 'users.dart' show authUserIsDisabled;
 
+/// Rate-limit operation for requesting magic links.
 const AuthRateLimitOperation authMagicLinkSendRateLimitOperation =
     AuthRateLimitOperation('magic_link', 'send');
+
+/// Rate-limit operation for consuming magic links.
 const AuthRateLimitOperation authMagicLinkVerifyRateLimitOperation =
     AuthRateLimitOperation('magic_link', 'verify');
 
+/// Delivers a transient raw magic-link token after persistence commits.
 typedef AuthMagicLinkSender<TContext> =
     FutureOr<void> Function(AuthMagicLinkDelivery<TContext> delivery);
 
@@ -21,6 +25,10 @@ typedef AuthMagicLinkSender<TContext> =
 /// Delivery implementations must not log or persist [token]. The backend has
 /// already committed a digest-only record when this callback runs.
 final class AuthMagicLinkDelivery<TContext> {
+  /// Creates the transient payload passed to [AuthMagicLinkSender].
+  ///
+  /// [token] is a raw one-time secret. Delivery must not log or persist it;
+  /// the backend stores only its digest before this callback runs.
   const AuthMagicLinkDelivery({
     required this.context,
     required this.providerId,
@@ -30,11 +38,22 @@ final class AuthMagicLinkDelivery<TContext> {
     required this.expiresAt,
   });
 
+  /// Application context for the delivery operation.
   final TContext context;
+
+  /// Provider identifier used by the callback route.
   final String providerId;
+
+  /// Canonical recipient email address.
   final String email;
+
+  /// Raw one-time token for the message link.
   final String token;
+
+  /// Callback URL to embed in the message.
   final String callbackUrl;
+
+  /// UTC time after which [token] is invalid.
   final DateTime expiresAt;
 }
 
@@ -55,6 +74,11 @@ final class MagicLinkPlugin<TContext> extends AuthProvider
         AuthRateLimitContributor,
         AuthAuthenticationMethodInventoryContributor,
         AuthAuthenticationMethodInventoryBinding {
+  /// Creates an email magic-link provider.
+  ///
+  /// [sendMagicLink] runs after the digest record is committed. [id] must be
+  /// route-safe and [tokenExpiry] must be positive; [tokenGenerator] is useful
+  /// for controlled tests and must return a non-empty token.
   MagicLinkPlugin({
     super.id = 'email',
     super.name = 'Email',
@@ -78,9 +102,14 @@ final class MagicLinkPlugin<TContext> extends AuthProvider
     }
   }
 
+  /// Callback that delivers the raw token after backend persistence.
   final AuthMagicLinkSender<TContext> sendMagicLink;
+
+  /// Lifetime assigned to newly issued links.
   @override
   final Duration tokenExpiry;
+
+  /// Optional token source used instead of secure random generation.
   @override
   final String Function()? tokenGenerator;
 
@@ -88,30 +117,39 @@ final class MagicLinkPlugin<TContext> extends AuthProvider
   late AuthUserStore _users;
   bool _configured = false;
 
+  /// Configured backend for atomic issue and consume operations.
   AuthMagicLinkBackend get backend {
     _ensureConfigured();
     return _backend;
   }
 
+  /// Namespace used to inventory email-link authentication methods.
   @override
   String get authenticationMethodNamespace => 'email:$id';
 
+  /// Declares the authentication-method data contributed by this plugin.
   @override
   AuthServerPluginDataContract get dataContract => AuthServerPluginDataContract(
     authenticationMethodNamespace: authenticationMethodNamespace,
   );
 
+  /// Store used by authentication-method inventory queries.
   @override
   Object get authenticationMethodStore {
     _ensureConfigured();
     return _users;
   }
 
+  /// Authentication-method kinds exposed by this provider.
   @override
   Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
     AuthAuthenticationMethodKind.emailLink,
   };
 
+  /// Configures the required typed backend and user store.
+  ///
+  /// Throws [StateError] when the host store does not implement
+  /// [AuthMagicLinkBackend].
   @override
   void configure(AuthServerPluginContext<TContext> context) {
     final store = context.store;
@@ -126,11 +164,13 @@ final class MagicLinkPlugin<TContext> extends AuthProvider
     _configured = true;
   }
 
+  /// Returns this plugin as the authentication-method inventory contributor.
   @override
   AuthAuthenticationMethodInventoryContributor authenticationMethodInventory(
     AuthStore store,
   ) => this;
 
+  /// Lists the active email-link method for [userId], when eligible.
   @override
   Future<AuthAuthenticationMethodSnapshot> authenticationMethodsForUser(
     String userId,
@@ -143,6 +183,10 @@ final class MagicLinkPlugin<TContext> extends AuthProvider
     ]);
   }
 
+  /// Delivers a verification token supplied by the host email flow.
+  ///
+  /// The callback receives the raw token only after backend persistence has
+  /// committed it.
   @override
   Future<void> sendVerification(
     AuthContext context,
@@ -160,6 +204,10 @@ final class MagicLinkPlugin<TContext> extends AuthProvider
     ),
   );
 
+  /// Host-owned POST request and GET callback route contracts.
+  ///
+  /// The host must implement transport and session issuance. The POST route is
+  /// repeatable and CSRF-protected; the GET callback is single-use.
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get hostEndpoints => [
     _hostEndpoint(
@@ -209,6 +257,7 @@ final class MagicLinkPlugin<TContext> extends AuthProvider
     ),
   );
 
+  /// Client operation descriptors derived from [hostEndpoints].
   @override
   Iterable<AuthClientOperationDescriptor> get clientOperations =>
       hostEndpoints.map(
@@ -219,12 +268,14 @@ final class MagicLinkPlugin<TContext> extends AuthProvider
         ),
       );
 
+  /// Rate-limit operations required by the contributed routes.
   @override
   Iterable<AuthRateLimitOperation> get rateLimitOperations => const [
     authMagicLinkSendRateLimitOperation,
     authMagicLinkVerifyRateLimitOperation,
   ];
 
+  /// Digest-only persistence schema and atomic operation declarations.
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
     AuthPersistenceSchema(

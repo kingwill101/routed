@@ -106,7 +106,7 @@ final class AuthSamlSignInForm {
 
 /// Client operations exposed by the SAML server plugin.
 final class AuthSamlClient {
-  /// Creates a client using [transport] for HTTP operations.
+  /// Creates a client using `transport` for HTTP operations.
   const AuthSamlClient(this._transport);
 
   final AuthClientTransport _transport;

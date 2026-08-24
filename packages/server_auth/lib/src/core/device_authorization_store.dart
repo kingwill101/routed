@@ -4,10 +4,31 @@ import 'deletion_transaction.dart';
 import 'tokens.dart' show hashOpaqueToken;
 
 /// State of an RFC 8628 device authorization transaction.
-enum AuthDeviceAuthorizationStatus { pending, approved, denied, consumed }
+enum AuthDeviceAuthorizationStatus {
+  /// The user has not approved or denied the request.
+  pending,
+
+  /// The user approved the request and it may be exchanged once.
+  approved,
+
+  /// The user denied the request and it cannot be exchanged.
+  denied,
+
+  /// Token issuance completed and the request cannot be replayed.
+  consumed,
+}
 
 /// Outcome of trying to acquire the bounded token-issuance lease.
-enum AuthDeviceAuthorizationIssuanceLeaseStatus { acquired, busy, invalid }
+enum AuthDeviceAuthorizationIssuanceLeaseStatus {
+  /// A lease was acquired by the caller.
+  acquired,
+
+  /// Another unexpired lease currently owns the request.
+  busy,
+
+  /// The request, client binding, or lease inputs are not valid.
+  invalid,
+}
 
 /// A persisted device authorization request.
 ///
@@ -15,6 +36,10 @@ enum AuthDeviceAuthorizationIssuanceLeaseStatus { acquired, busy, invalid }
 /// exist only in the response that starts the flow and in the user-entered
 /// approval request.
 final class AuthDeviceAuthorization {
+  /// Creates a persisted device authorization record.
+  ///
+  /// Code values must already be digests. Timestamps should be UTC and the
+  /// status fields describe the single-use approval and issuance lifecycle.
   AuthDeviceAuthorization({
     required this.id,
     required this.deviceCodeHash,
@@ -34,26 +59,62 @@ final class AuthDeviceAuthorization {
     this.consumedAt,
   });
 
+  /// Durable identifier for this authorization transaction.
   final String id;
+
+  /// Digest of the raw device code used for polling.
   final String deviceCodeHash;
+
+  /// Digest of the user-entered verification code.
   final String userCodeHash;
+
+  /// OAuth client bound to the request.
   final String clientId;
+
+  /// Scopes requested by the client.
   final List<String> scopes;
+
+  /// Time at which the request was created.
   final DateTime createdAt;
+
+  /// Expiry deadline; polling and approval fail at or after this time.
   final DateTime expiresAt;
+
+  /// Current minimum polling interval.
   final Duration interval;
+
+  /// Approval and issuance state of the request.
   final AuthDeviceAuthorizationStatus status;
+
+  /// User who approved the request, when approved.
   final String? userId;
+
+  /// Time at which the request was approved.
   final DateTime? approvedAt;
+
+  /// Time at which the request was denied.
   final DateTime? deniedAt;
+
+  /// Time of the latest accepted poll.
   final DateTime? lastPolledAt;
+
+  /// Digest identifying the active issuance lease, when present.
   final String? issuanceLeaseDigest;
+
+  /// Expiry of the active issuance lease, bounded by [expiresAt].
   final DateTime? issuanceLeaseExpiresAt;
+
+  /// Time at which token issuance consumed the request.
   final DateTime? consumedAt;
 
+  /// Whether [now] is at or after [expiresAt].
   bool isExpired({DateTime? now}) =>
       !(now ?? DateTime.now()).toUtc().isBefore(expiresAt.toUtc());
 
+  /// Creates a copy with selected lifecycle fields replaced.
+  ///
+  /// Immutable identity, code digests, client, scopes, and timestamps are
+  /// retained. Set [clearIssuanceLease] to remove both lease fields together.
   AuthDeviceAuthorization copyWith({
     AuthDeviceAuthorizationStatus? status,
     String? userId,
@@ -118,56 +179,97 @@ final class AuthDeviceAuthorization {
 /// [leaseDigest] is a digest of a process-local random value. Neither the raw
 /// lease value nor issued access or refresh tokens cross this store boundary.
 final class AuthDeviceAuthorizationIssuanceLease {
+  /// Creates a secret-free claim on an approved authorization.
+  ///
+  /// [expiresAt] is bounded by the authorization expiry and the lease policy.
   const AuthDeviceAuthorizationIssuanceLease({
     required this.authorization,
     required this.leaseDigest,
     required this.expiresAt,
   });
 
+  /// Approved authorization held by this lease.
   final AuthDeviceAuthorization authorization;
+
+  /// Store-side digest identifying the lease owner.
   final String leaseDigest;
+
+  /// Deadline after which another caller may recover the lease.
   final DateTime expiresAt;
 }
 
+/// Result of attempting to acquire an issuance lease.
 final class AuthDeviceAuthorizationIssuanceLeaseResult {
+  /// Creates a result with [status] and an optional acquired [lease].
   const AuthDeviceAuthorizationIssuanceLeaseResult(this.status, [this.lease]);
 
+  /// Whether the lease was acquired, busy, or invalid.
   final AuthDeviceAuthorizationIssuanceLeaseStatus status;
+
+  /// Acquired lease, or null for busy and invalid results.
   final AuthDeviceAuthorizationIssuanceLease? lease;
 }
 
 /// Result of atomically polling a device authorization request.
 enum AuthDeviceAuthorizationPollStatus {
+  /// The request exists but has not been approved.
   pending,
+
+  /// The request is approved and ready for issuance.
   approved,
+
+  /// The user denied the request.
   denied,
+
+  /// The request was already exchanged successfully.
   consumed,
+
+  /// The request passed its expiry deadline.
   expired,
+
+  /// The request was polled too early and its interval increased.
   slowDown,
+
+  /// No matching device-code record exists.
   invalid,
 }
 
+/// Result of atomically polling a device authorization request.
 final class AuthDeviceAuthorizationPollResult {
+  /// Creates a poll result with [status] and optional [authorization].
   const AuthDeviceAuthorizationPollResult(this.status, [this.authorization]);
 
+  /// Store outcome mapped by the plugin to an RFC 8628 response.
   final AuthDeviceAuthorizationPollStatus status;
+
+  /// Matching record, when one exists; null for an invalid lookup.
   final AuthDeviceAuthorization? authorization;
 }
 
 /// Persistence boundary for RFC 8628 device authorization transactions.
 abstract interface class AuthDeviceAuthorizationStore {
-  /// Creates a request and rejects duplicate hashes.
+  /// Validates and creates [authorization], rejecting duplicate code digests.
+  ///
+  /// Returns the stored record. Implementations should reject invalid
+  /// timestamps, blank identifiers, and non-positive intervals. An expiry in
+  /// the past may still be stored if it is otherwise structurally valid.
   FutureOr<AuthDeviceAuthorization> create(
     AuthDeviceAuthorization authorization,
   );
 
   /// Atomically records a poll and enforces the current polling interval.
+  ///
+  /// Returns `pending`, `approved`, `denied`, `consumed`, `expired`, or
+  /// `invalid`; an early poll returns `slowDown` and increases the interval.
   FutureOr<AuthDeviceAuthorizationPollResult> poll(
     String deviceCodeHash, {
     DateTime? now,
   });
 
   /// Atomically approves a pending request for [userId].
+  ///
+  /// Returns the transitioned record, or null when the user code is missing,
+  /// expired, blank, or no longer pending.
   FutureOr<AuthDeviceAuthorization?> approve(
     String userCodeHash,
     String userId, {
@@ -175,9 +277,17 @@ abstract interface class AuthDeviceAuthorizationStore {
   });
 
   /// Atomically denies a pending request.
+  ///
+  /// Returns the transitioned record, or null when the user code is missing,
+  /// expired, or no longer pending.
   FutureOr<AuthDeviceAuthorization?> deny(String userCodeHash, {DateTime? now});
 
   /// Atomically acquires a bounded issuance lease for an approved request.
+  ///
+  /// The request must belong to [clientId]. Returns `acquired` with a lease,
+  /// `busy` while another unexpired lease owns it, or `invalid` for missing,
+  /// expired, consumed, mismatched, or malformed inputs. Lease expiry must not
+  /// exceed the authorization expiry.
   FutureOr<AuthDeviceAuthorizationIssuanceLeaseResult> beginIssuance(
     String deviceCodeHash, {
     required String clientId,
@@ -187,6 +297,9 @@ abstract interface class AuthDeviceAuthorizationStore {
   });
 
   /// Atomically consumes the request only when [leaseDigest] still owns it.
+  ///
+  /// Returns true only for an active lease bound to [clientId]; stale, expired,
+  /// mismatched, or already terminal leases return false.
   FutureOr<bool> completeIssuance(
     String deviceCodeHash, {
     required String clientId,
@@ -195,6 +308,10 @@ abstract interface class AuthDeviceAuthorizationStore {
   });
 
   /// Releases only the matching lease after an issuer failure.
+  ///
+  /// Returns true when an approved record belongs to [clientId] and
+  /// [leaseDigest]. Implementations may release a lease after its deadline;
+  /// stale or mismatched owners return false.
   FutureOr<bool> releaseIssuance(
     String deviceCodeHash, {
     required String clientId,
@@ -202,24 +319,34 @@ abstract interface class AuthDeviceAuthorizationStore {
     DateTime? now,
   });
 
-  /// Deletes approvals owned by a user as part of account deletion.
+  /// Deletes all device authorizations whose user ID matches [userId].
+  ///
+  /// Used by account deletion and access revocation; blank IDs should perform
+  /// no deletion.
   FutureOr<void> deleteForUser(String userId);
 }
 
 /// In-memory device authorization store for tests and local development.
 final class InMemoryAuthDeviceAuthorizationStore
     implements AuthDeviceAuthorizationStore, AuthInMemoryUserDeletionStore {
+  /// Creates a bounded reference store for tests and local development.
+  ///
+  /// [maxEntries] must be positive; oldest insertion-order records are evicted
+  /// when capacity is reached.
   InMemoryAuthDeviceAuthorizationStore({this.maxEntries = 1024})
     : assert(maxEntries > 0);
 
+  /// Maximum number of unexpired records retained in memory.
   final int maxEntries;
   final Map<String, AuthDeviceAuthorization> _records =
       <String, AuthDeviceAuthorization>{};
 
+  /// Captures a checkpoint for coordinated deletion rollback.
   @override
   Object captureDeletionState() =>
       Map<String, AuthDeviceAuthorization>.of(_records);
 
+  /// Restores a checkpoint produced by [captureDeletionState].
   @override
   void restoreDeletionState(Object checkpoint) {
     final records = checkpoint as Map<String, AuthDeviceAuthorization>;
@@ -228,6 +355,10 @@ final class InMemoryAuthDeviceAuthorizationStore
       ..addAll(records);
   }
 
+  /// Validates and stores a record, pruning expired entries first.
+  ///
+  /// Duplicate device or user-code digests throw [StateError]. At capacity,
+  /// the oldest insertion-order record is evicted.
   @override
   Future<AuthDeviceAuthorization> create(
     AuthDeviceAuthorization authorization,
@@ -247,6 +378,11 @@ final class InMemoryAuthDeviceAuthorizationStore
     return authorization;
   }
 
+  /// Polls a record using UTC time and updates its last-poll timestamp.
+  ///
+  /// Polling before the current interval returns `slowDown` and adds five
+  /// seconds to that interval. Terminal and expired states are returned
+  /// without reopening the request.
   @override
   Future<AuthDeviceAuthorizationPollResult> poll(
     String deviceCodeHash, {
@@ -300,6 +436,10 @@ final class InMemoryAuthDeviceAuthorizationStore
     );
   }
 
+  /// Transitions one pending, unexpired record to approved.
+  ///
+  /// Approval is terminal with respect to the pending state and returns null
+  /// for missing, expired, blank, or already transitioned records.
   @override
   Future<AuthDeviceAuthorization?> approve(
     String userCodeHash,
@@ -325,6 +465,10 @@ final class InMemoryAuthDeviceAuthorizationStore
     return updated;
   }
 
+  /// Transitions one pending, unexpired record to denied.
+  ///
+  /// Denial is terminal and returns null when the code is missing, expired, or
+  /// already transitioned.
   @override
   Future<AuthDeviceAuthorization?> deny(
     String userCodeHash, {
@@ -345,6 +489,10 @@ final class InMemoryAuthDeviceAuthorizationStore
     return updated;
   }
 
+  /// Acquires a client-bound lease for an approved record.
+  ///
+  /// An unexpired existing lease returns `busy`; an expired lease can be
+  /// recovered. The requested expiry is bounded by the authorization expiry.
   @override
   Future<AuthDeviceAuthorizationIssuanceLeaseResult> beginIssuance(
     String deviceCodeHash, {
@@ -397,6 +545,9 @@ final class InMemoryAuthDeviceAuthorizationStore
     );
   }
 
+  /// Marks a record consumed when the active lease owner completes issuance.
+  ///
+  /// Stale, expired, or mismatched lease owners return false.
   @override
   Future<bool> completeIssuance(
     String deviceCodeHash, {
@@ -416,6 +567,9 @@ final class InMemoryAuthDeviceAuthorizationStore
     return true;
   }
 
+  /// Clears an active lease after a failed token issuance.
+  ///
+  /// Only the matching client and lease digest can release it.
   @override
   Future<bool> releaseIssuance(
     String deviceCodeHash, {
@@ -435,6 +589,7 @@ final class InMemoryAuthDeviceAuthorizationStore
     return true;
   }
 
+  /// Removes all records whose approved user matches [userId].
   @override
   Future<void> deleteForUser(String userId) async {
     final id = userId.trim();
@@ -442,6 +597,7 @@ final class InMemoryAuthDeviceAuthorizationStore
     _records.removeWhere((_, value) => value.userId == id);
   }
 
+  /// Adapts [deleteForUser] to the deletion coordinator contract.
   @override
   Future<void> deleteUserDataForDeletion(String userId) =>
       deleteForUser(userId);
@@ -472,10 +628,16 @@ final class InMemoryAuthDeviceAuthorizationStore
       !entry.isExpired(now: now);
 }
 
-/// Builds a digest suitable for [AuthDeviceAuthorizationStore].
+/// Builds the opaque digest stored for a raw device or user code.
+///
+/// Callers may pass the raw delivery or approval value; only the returned
+/// digest should cross the [AuthDeviceAuthorizationStore] boundary.
 String hashAuthDeviceAuthorizationCode(String code) => hashOpaqueToken(code);
 
 /// Builds a digest for a process-local random issuance lease identity.
+///
+/// Store only the returned digest; the raw lease value is not a persistence
+/// credential and is not returned by the store.
 String hashAuthDeviceAuthorizationIssuanceLease(String lease) =>
     hashOpaqueToken(lease);
 

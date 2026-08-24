@@ -10,6 +10,10 @@ import 'users.dart' show normalizeAuthEmail;
 
 /// Delivery payload for an email-change confirmation.
 final class AuthEmailChangeRequest<TContext> {
+  /// Creates the transient delivery payload for an email-change message.
+  ///
+  /// [token] is a raw one-time secret and must be delivered without logging or
+  /// persistence. [expiresAt] is the UTC expiry deadline.
   const AuthEmailChangeRequest({
     required this.context,
     required this.user,
@@ -18,19 +22,30 @@ final class AuthEmailChangeRequest<TContext> {
     required this.expiresAt,
   });
 
+  /// Application context for the delivery operation.
   final TContext context;
+
+  /// User requesting the email change.
   final AuthUser user;
+
+  /// Canonical address awaiting confirmation.
   final String newEmail;
+
+  /// Raw one-time confirmation token.
   final String token;
+
+  /// UTC time after which [token] is invalid.
   final DateTime expiresAt;
 }
 
 /// Application-owned delivery callback for email-change confirmations.
+/// Sends a transient email-change confirmation payload.
 typedef AuthEmailChangeSender<TContext> =
     FutureOr<void> Function(AuthEmailChangeRequest<TContext> request);
 
 /// Result returned by the framework-neutral email-change initiation helper.
 final class AuthEmailChangeInitiated {
+  /// Creates the result of issuing a pending email-change token.
   const AuthEmailChangeInitiated({
     required this.userId,
     required this.oldEmail,
@@ -39,15 +54,25 @@ final class AuthEmailChangeInitiated {
     required this.expiresAt,
   });
 
+  /// User whose email is being changed.
   final String userId;
+
+  /// Previously stored email address.
   final String oldEmail;
+
+  /// Canonical pending email address.
   final String newEmail;
+
+  /// Raw token for application delivery; never log or persist it.
   final String verificationToken;
+
+  /// UTC token expiry deadline.
   final DateTime expiresAt;
 }
 
 /// Result returned after a pending email change is confirmed.
 final class AuthEmailChangeConfirmed {
+  /// Creates the result of confirming an email change.
   const AuthEmailChangeConfirmed({
     required this.userId,
     required this.oldEmail,
@@ -55,14 +80,25 @@ final class AuthEmailChangeConfirmed {
     required this.sessionsRevoked,
   });
 
+  /// User whose email was changed.
   final String userId;
+
+  /// Email address before confirmation.
   final String oldEmail;
+
+  /// Canonical email address after confirmation.
   final String newEmail;
+
+  /// Number of existing sessions revoked by the compatibility flow.
   final int sessionsRevoked;
 }
 
 /// Creates a one-time email-change token after checking ownership and
 /// normalized email uniqueness.
+///
+/// The returned raw token is intended only for transient delivery. [ttl] must
+/// produce a future expiry; missing users, invalid or unchanged addresses,
+/// duplicate addresses, and empty generated tokens throw [AuthFlowException].
 Future<String> issueAuthEmailChangeTokenForUser({
   required AuthStore store,
   required String userId,
@@ -99,6 +135,10 @@ Future<String> issueAuthEmailChangeTokenForUser({
 }
 
 /// Confirms a one-time email change and returns the updated user.
+///
+/// Consumption occurs before user binding and optional [expectedNewEmail]
+/// checks, so an invalid or raced confirmation cannot be retried. A reused,
+/// expired, mismatched, or unavailable token throws [AuthFlowException].
 Future<AuthUser> confirmAuthEmailChange({
   required AuthStore store,
   required String userId,
@@ -130,6 +170,9 @@ Future<AuthUser> confirmAuthEmailChange({
 }
 
 /// Reauthenticates a password credential without changing it.
+///
+/// Throws [AuthFlowException] with `reauthentication_required` when the
+/// password policy rejects the input or the credential does not match [userId].
 Future<void> requireAuthPasswordForUser({
   required AuthStore store,
   required PasswordHasher passwordHasher,
@@ -153,8 +196,12 @@ Future<void> requireAuthPasswordForUser({
 }
 
 /// Compatibility flow that reauthenticates and creates a bound pending-email
-/// token. Applications should deliver [AuthEmailChangeInitiated.verificationToken]
-/// through their configured sender and never persist or log the raw value.
+/// token.
+///
+/// Applications should deliver
+/// [AuthEmailChangeInitiated.verificationToken] through their configured sender
+/// and never persist or log the raw value. Invalid credentials, unavailable
+/// users, and email conflicts throw [AuthFlowException].
 Future<AuthEmailChangeInitiated> initiateEmailChange({
   required AuthStore store,
   required PasswordHasher passwordHasher,
@@ -198,6 +245,11 @@ Future<AuthEmailChangeInitiated> initiateEmailChange({
 }
 
 /// Confirms a bound pending-email token and revokes existing access.
+///
+/// [tokenIdentifier] must use the `email_change:<userId>` form. Successful
+/// confirmation marks the email verified, revokes all user sessions, and
+/// rotates the user's JWT version. Invalid bindings and tokens throw
+/// [AuthFlowException].
 Future<AuthEmailChangeConfirmed> confirmEmailChange({
   required AuthStore store,
   required String tokenIdentifier,

@@ -11,8 +11,14 @@ import 'tokens.dart' show secureRandomToken;
 import 'users.dart' show authUserIsDisabled;
 import 'device_authorization_store.dart';
 
+/// Registry identifier for the RFC 8628 device-authorization plugin.
 const String authDeviceAuthorizationPluginId = 'device_authorization';
 
+/// Validates a device-flow client and its requested scopes.
+///
+/// Receives application [context], a normalized [clientId], and normalized,
+/// de-duplicated [scopes]. Returning false rejects the request with
+/// `invalid_client`; the callback may complete synchronously or asynchronously.
 typedef AuthDeviceAuthorizationClientValidator<TContext> =
     FutureOr<bool> Function(
       TContext context,
@@ -27,6 +33,11 @@ typedef AuthDeviceAuthorizationClientValidator<TContext> =
 /// after an ambiguous failure must return that same logical grant rather than
 /// minting another one.
 final class AuthDeviceAuthorizationTokenIssuanceRequest<TContext> {
+  /// Creates an immutable token-issuance request.
+  ///
+  /// [authorizationId] is the durable idempotency key. [scopes] is copied into
+  /// an unmodifiable list; [user] must still be eligible for credentials when
+  /// the issuer handles the request.
   AuthDeviceAuthorizationTokenIssuanceRequest({
     required this.context,
     required this.user,
@@ -35,10 +46,19 @@ final class AuthDeviceAuthorizationTokenIssuanceRequest<TContext> {
     required this.authorizationId,
   }) : scopes = List<String>.unmodifiable(scopes);
 
+  /// Application context associated with the device-flow request.
   final TContext context;
+
+  /// Credential-eligible user authorized by the device flow.
   final AuthUser user;
+
+  /// Normalized OAuth client identifier.
   final String clientId;
+
+  /// Normalized, de-duplicated scopes granted to the client.
   final List<String> scopes;
+
+  /// Durable identifier used to make token issuance idempotent.
   final String authorizationId;
 }
 
@@ -47,6 +67,11 @@ final class AuthDeviceAuthorizationTokenIssuanceRequest<TContext> {
 /// Routed deliberately does not persist the returned token material. The
 /// implementation owns durable idempotency records and token lookup.
 abstract interface class AuthDeviceAuthorizationTokenIssuer<TContext> {
+  /// Issues or retrieves the same logical token grant for [request].
+  ///
+  /// The application owns token persistence and lookup. It must key retries by
+  /// [AuthDeviceAuthorizationTokenIssuanceRequest.authorizationId]; Routed
+  /// does not persist the returned raw access or refresh token values.
   FutureOr<AuthDeviceAccessToken> issue(
     AuthDeviceAuthorizationTokenIssuanceRequest<TContext> request,
   );
@@ -54,6 +79,10 @@ abstract interface class AuthDeviceAuthorizationTokenIssuer<TContext> {
 
 /// A token response produced by the application's access-token issuer.
 final class AuthDeviceAccessToken {
+  /// Creates an access-token response for the device grant.
+  ///
+  /// [expiresIn] is serialized as whole seconds. [tokenType] defaults to
+  /// `Bearer`, and an optional [refreshToken] is omitted from JSON when null.
   const AuthDeviceAccessToken({
     required this.accessToken,
     required this.expiresIn,
@@ -62,12 +91,24 @@ final class AuthDeviceAccessToken {
     this.scopes = const <String>[],
   });
 
+  /// Raw access token returned to the token client.
   final String accessToken;
+
+  /// Lifetime of [accessToken].
   final Duration expiresIn;
+
+  /// OAuth token type, `Bearer` by default.
   final String tokenType;
+
+  /// Optional raw refresh token returned to the token client.
   final String? refreshToken;
+
+  /// Scopes granted with the access token.
   final List<String> scopes;
 
+  /// Serializes the response using OAuth token endpoint field names.
+  ///
+  /// Non-empty [scopes] become one space-separated `scope` value.
   Map<String, dynamic> toJson() => <String, dynamic>{
     'access_token': accessToken,
     'token_type': tokenType,
@@ -79,6 +120,10 @@ final class AuthDeviceAccessToken {
 
 /// Raw values returned once when a device starts authorization.
 final class AuthDeviceAuthorizationRequest {
+  /// Creates the one-time response that starts a device authorization flow.
+  ///
+  /// Raw [deviceCode] and formatted [userCode] are delivery credentials and
+  /// should be returned only to the device client or verification UI.
   const AuthDeviceAuthorizationRequest({
     required this.deviceCode,
     required this.userCode,
@@ -87,12 +132,22 @@ final class AuthDeviceAuthorizationRequest {
     required this.interval,
   });
 
+  /// Raw device code presented when polling for a token.
   final String deviceCode;
+
+  /// Human-entered code used by the verification UI.
   final String userCode;
+
+  /// URI where the user enters [userCode].
   final String verificationUri;
+
+  /// Time until the device code expires.
   final Duration expiresIn;
+
+  /// Minimum polling interval recommended to the device client.
   final Duration interval;
 
+  /// Serializes this response with RFC 8628 field names and second values.
   Map<String, dynamic> toJson() => <String, dynamic>{
     'device_code': deviceCode,
     'user_code': userCode,
@@ -118,6 +173,11 @@ final class DeviceAuthorizationPlugin<TContext>
         AuthUserDeletionPlanContributor,
         AuthUserAccessRevocationContributor,
         AuthServerPluginTopologyAware<TContext> {
+  /// Creates a device-authorization plugin.
+  ///
+  /// All duration settings must be positive. [clock] is injectable for
+  /// deterministic tests; [validateClient] controls client and scope access,
+  /// while [tokenIssuer] owns durable, idempotent token issuance.
   DeviceAuthorizationPlugin({
     required this.verificationUri,
     required this.validateClient,
@@ -132,11 +192,22 @@ final class DeviceAuthorizationPlugin<TContext>
        _clock = clock ?? DateTime.now,
        _authStore = null;
 
+  /// Verification URI shown to the user with each authorization request.
   final String verificationUri;
+
+  /// Application callback that validates clients and requested scopes.
   final AuthDeviceAuthorizationClientValidator<TContext> validateClient;
+
+  /// Application-owned idempotent token issuer.
   final AuthDeviceAuthorizationTokenIssuer<TContext> tokenIssuer;
+
+  /// Lifetime of an issued device authorization request.
   final Duration deviceCodeTtl;
+
+  /// Initial minimum interval between device polling attempts.
   final Duration pollInterval;
+
+  /// Maximum lifetime of one token-issuance lease.
   final Duration issuanceLeaseTtl;
   final DateTime Function() _clock;
 
@@ -146,21 +217,28 @@ final class DeviceAuthorizationPlugin<TContext>
   bool _contributesTokenEndpoint = true;
   bool _configured = false;
 
+  /// Stable plugin identifier used by runtime configuration.
   @override
   String get id => authDeviceAuthorizationPluginId;
 
+  /// Declares the user data namespace persisted by this plugin.
   @override
   AuthServerPluginDataContract get dataContract =>
       const AuthServerPluginDataContract(
         userDataNamespace: 'device_authorization',
       );
 
+  /// Namespace used when planning deletion of a user's device records.
   @override
   String get userDataNamespace => 'device_authorization';
 
+  /// Namespace used when revoking a user's device-flow access.
   @override
   String get userAccessNamespace => 'device_authorization';
 
+  /// Binds the plugin to the configured store and deletion coordinator.
+  ///
+  /// Throws [StateError] when the store cannot host coordinated user deletion.
   @override
   void configure(AuthServerPluginContext<TContext> context) {
     _store = context.store.deviceAuthorizations;
@@ -177,6 +255,11 @@ final class DeviceAuthorizationPlugin<TContext>
     _configured = true;
   }
 
+  /// Creates a deletion plan for all device authorizations owned by [user].
+  ///
+  /// Uses an adapter-provided plan when available, otherwise supports the
+  /// in-memory deletion domain and store. Throws [StateError] when neither
+  /// deletion integration is available.
   @override
   Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) {
     _ensureConfigured();
@@ -209,11 +292,16 @@ final class DeviceAuthorizationPlugin<TContext>
     );
   }
 
+  /// Removes pending and completed device authorizations for [userId].
   @override
   Future<void> revokeUserAccess(String userId) async {
     await _store.deleteForUser(userId);
   }
 
+  /// Registers the device grant with one OAuth token endpoint host.
+  ///
+  /// When a host is present, this plugin omits its standalone `/oauth/token`
+  /// endpoint. Multiple token hosts are rejected with [StateError].
   @override
   void composePluginTopology(Iterable<AuthServerPlugin<TContext>> plugins) {
     final hosts = plugins
@@ -233,6 +321,11 @@ final class DeviceAuthorizationPlugin<TContext>
     _contributesTokenEndpoint = false;
   }
 
+  /// Describes device authorization, approval, denial, and token endpoints.
+  ///
+  /// The request endpoint is unauthenticated and repeatable; approval and
+  /// denial require a session and are single-use. The token endpoint is
+  /// omitted when another OAuth token host accepts the device grant.
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints => [
     _endpoint(
@@ -305,6 +398,7 @@ final class DeviceAuthorizationPlugin<TContext>
     handler: (invocation, request) => _invokeEndpoint(id, invocation, request),
   );
 
+  /// Exposes client-operation descriptors for the configured endpoints.
   @override
   Iterable<AuthClientOperationDescriptor> get clientOperations => endpoints.map(
     (endpoint) => AuthClientOperationDescriptor(
@@ -316,11 +410,13 @@ final class DeviceAuthorizationPlugin<TContext>
     ),
   );
 
+  /// Exposes rate-limit operations for the configured endpoints.
   @override
   Iterable<AuthRateLimitOperation> get rateLimitOperations => endpoints
       .map((endpoint) => endpoint.rateLimitOperation)
       .whereType<AuthRateLimitOperation>();
 
+  /// Describes hash-only device records and their atomic store operations.
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
     AuthPersistenceSchema(
@@ -393,6 +489,12 @@ final class DeviceAuthorizationPlugin<TContext>
     ),
   ];
 
+  /// Starts a device authorization request for [clientId].
+  ///
+  /// The client and normalized scopes are checked by [validateClient]. On
+  /// success, raw device and user codes are returned once while only digests
+  /// are stored. Throws `invalid_client` for rejected clients or
+  /// `invalid_scope` when scope normalization fails.
   Future<AuthDeviceAuthorizationRequest> authorizeDevice({
     required TContext context,
     required String clientId,
@@ -429,6 +531,11 @@ final class DeviceAuthorizationPlugin<TContext>
     );
   }
 
+  /// Approves a pending device request for [userId].
+  ///
+  /// User-code formatting is normalized by trimming spaces, hyphens, and
+  /// case. Empty user IDs throw `unauthorized`; missing, expired, or already
+  /// transitioned requests throw `invalid_user_code`.
   Future<void> approveDevice({
     required String userId,
     required String userCode,
@@ -448,6 +555,10 @@ final class DeviceAuthorizationPlugin<TContext>
     }
   }
 
+  /// Denies a pending device request identified by [userCode].
+  ///
+  /// Missing, expired, or already transitioned requests throw
+  /// `invalid_user_code`; successful denial is terminal.
   Future<void> denyDevice({required String userCode, DateTime? now}) async {
     _ensureConfigured();
     final normalizedCode = _normalizeUserCode(userCode);
@@ -458,6 +569,14 @@ final class DeviceAuthorizationPlugin<TContext>
     if (denied == null) throw AuthFlowException('invalid_user_code');
   }
 
+  /// Polls for and issues the token for an approved device request.
+  ///
+  /// Maps store states to RFC 8628 errors such as `authorization_pending`,
+  /// `slow_down`, `access_denied`, `expired_token`, and `invalid_grant`.
+  /// Approved requests are bound to [clientId], leased for bounded idempotent
+  /// issuance, rechecked for account eligibility, and consumed only after the
+  /// issuer succeeds. Failed issuance releases the lease when possible;
+  /// expired leases remain recoverable.
   Future<AuthDeviceAccessToken> pollDeviceToken({
     required TContext context,
     required String clientId,

@@ -12,13 +12,20 @@ import 'magic_link.dart' show MagicLinkPlugin;
 /// ID. This client plugin does not enable email authentication by itself.
 final class AuthMagicLinkClientPlugin
     implements AuthClientPlugin<AuthMagicLinkClient> {
+  /// Creates a client plugin for the server's magic-link provider.
+  ///
+  /// [provider] becomes a route segment and must match the configured server
+  /// provider identifier.
   const AuthMagicLinkClientPlugin({this.provider = 'email'});
 
+  /// Server provider identifier used in route paths.
   final String provider;
 
+  /// Plugin identifier incorporating [provider].
   @override
   String get id => 'magic_link:$provider';
 
+  /// Installs a typed client using the context transport.
   @override
   AuthMagicLinkClient install(AuthClientPluginContext context) {
     return AuthMagicLinkClient(
@@ -30,11 +37,15 @@ final class AuthMagicLinkClientPlugin
 
 /// Typed client for email magic-link authentication.
 final class AuthMagicLinkClient {
+  /// Creates a typed client for one magic-link provider.
   AuthMagicLinkClient({required this.transport, this.provider = 'email'}) {
     _validateProvider(provider);
   }
 
+  /// Transport used for requests and response parsing.
   final AuthClientTransport transport;
+
+  /// Server provider identifier used in route paths.
   final String provider;
 
   /// Requests a one-time sign-in link for [email].
@@ -56,7 +67,9 @@ final class AuthMagicLinkClient {
     );
   }
 
-  /// Verifies [token] and returns the session or server redirect.
+  /// Consumes [token] and returns the session or server redirect.
+  ///
+  /// A malformed response can throw [FormatException].
   Future<AuthClientAuthResult> verify({
     required String email,
     required String token,
@@ -79,11 +92,14 @@ final class AuthMagicLinkClient {
 /// Installs the email OTP API on an [AuthClient].
 final class AuthEmailOtpClientPlugin
     implements AuthClientPlugin<AuthEmailOtpClient> {
+  /// Creates a client plugin for the optional server OTP plugin.
   const AuthEmailOtpClientPlugin();
 
+  /// Stable plugin identifier.
   @override
   String get id => 'email_otp';
 
+  /// Installs a typed client using the context transport.
   @override
   AuthEmailOtpClient install(AuthClientPluginContext context) {
     return AuthEmailOtpClient(transport: context.transport);
@@ -92,10 +108,13 @@ final class AuthEmailOtpClientPlugin
 
 /// Typed client for the optional email OTP server plugin.
 final class AuthEmailOtpClient {
+  /// Creates a typed client for email OTP operations.
   const AuthEmailOtpClient({required this.transport});
 
+  /// Transport used for OTP requests.
   final AuthClientTransport transport;
 
+  /// Requests a verification OTP at the corresponding server endpoint.
   Future<void> sendVerificationOtp({
     required String email,
     required AuthEmailOtpType type,
@@ -107,6 +126,7 @@ final class AuthEmailOtpClient {
     );
   }
 
+  /// Checks a verification OTP without returning user data.
   Future<void> checkVerificationOtp({
     required String email,
     required AuthEmailOtpType type,
@@ -119,6 +139,9 @@ final class AuthEmailOtpClient {
     );
   }
 
+  /// Signs in with [otp] and returns the issued session.
+  ///
+  /// Throws [FormatException] when the response does not contain a session.
   Future<AuthSession> signIn({
     required String email,
     required String otp,
@@ -133,6 +156,9 @@ final class AuthEmailOtpClient {
     return _sessionFromBody(response.body);
   }
 
+  /// Verifies the authenticated user's email with [otp].
+  ///
+  /// Throws [FormatException] when the response has no user object.
   Future<AuthUser> verifyEmail({required String otp}) async {
     final response = await transport.mutate(
       'POST',

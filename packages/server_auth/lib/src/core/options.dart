@@ -285,7 +285,7 @@ class AuthOptions<TContext> {
   /// Whether every authentication boundary must have a verified email.
   ///
   /// Provider profile claims are accepted only when they use the explicit
-  /// boolean verified flags understood by [authUserEmailIsVerified]. Email
+  /// boolean verified flags understood by the authentication policy. Email
   /// magic-link completion marks the local user verified before a session is
   /// issued.
   final bool requireVerifiedEmail;

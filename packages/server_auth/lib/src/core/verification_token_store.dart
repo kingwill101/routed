@@ -11,10 +11,16 @@ import 'tokens.dart' show hashOpaqueToken;
 /// implementations should store only a digest of the token, never the raw
 /// value sent to the user.
 abstract class AuthVerificationTokenStore {
+  /// Stores a verification token as a digest with its expiry and metadata.
   FutureOr<void> save(AuthVerificationToken token);
 
+  /// Atomically consumes one matching unexpired token.
+  ///
+  /// Returns null for an unknown, blank, expired, or already consumed token.
+  /// At most one concurrent caller may receive a matching token.
   FutureOr<AuthVerificationToken?> consume(String identifier, String token);
 
+  /// Deletes all stored tokens for the exact [identifier].
   FutureOr<void> delete(String identifier);
 }
 
@@ -24,6 +30,10 @@ abstract class AuthVerificationTokenStore {
 /// [token]. This prevents one failed delivery from invalidating a newer token
 /// issued concurrently for the same identifier.
 abstract interface class AuthVerificationTokenConditionalDeleteStore {
+  /// Deletes only the record matching [identifier] and [token].
+  ///
+  /// Returns whether a matching record was removed. Implementations compare
+  /// the token digest so a failed delivery cannot remove a newer token.
   FutureOr<bool> deleteToken(String identifier, String token);
 }
 
@@ -33,6 +43,12 @@ class InMemoryAuthVerificationTokenStore
         AuthVerificationTokenStore,
         AuthVerificationTokenConditionalDeleteStore,
         AuthInMemoryDeletionState {
+  /// Creates a bounded store using [clock] for expiry checks.
+  ///
+  /// [maxTokens] must be positive. This implementation accepts whitespace in
+  /// identifiers and tokens, but rejects only exact empty strings. It stores
+  /// token digests, prunes expired entries on save and consume, and evicts the
+  /// oldest digest globally when capacity is reached.
   InMemoryAuthVerificationTokenStore({
     DateTime Function()? clock,
     this.maxTokens = 1024,
@@ -46,6 +62,7 @@ class InMemoryAuthVerificationTokenStore
       <String, Map<String, _StoredVerificationToken>>{};
   final DateTime Function() _clock;
 
+  /// Captures all records for rollback by a deletion transaction.
   @override
   Object captureDeletionState() =>
       <String, Map<String, _StoredVerificationToken>>{
@@ -53,6 +70,9 @@ class InMemoryAuthVerificationTokenStore
           entry.key: Map<String, _StoredVerificationToken>.of(entry.value),
       };
 
+  /// Restores a snapshot produced by [captureDeletionState].
+  ///
+  /// Throws a [TypeError] when [state] is not this store's snapshot shape.
   @override
   void restoreDeletionState(Object state) {
     final values = state as Map<String, Map<String, _StoredVerificationToken>>;
@@ -71,6 +91,11 @@ class InMemoryAuthVerificationTokenStore
   /// Durable stores should enforce equivalent expiry and capacity policies.
   final int maxTokens;
 
+  /// Saves [token] as a digest while preserving its expiry and metadata.
+  ///
+  /// Exact empty identifiers or tokens throw an [ArgumentError]. Expired
+  /// existing records are pruned, and an already-expired new token is ignored.
+  /// Capacity is global across identifiers and evicts the oldest insertion.
   @override
   Future<void> save(AuthVerificationToken token) async {
     if (token.identifier.isEmpty) {
@@ -101,6 +126,11 @@ class InMemoryAuthVerificationTokenStore
     );
   }
 
+  /// Atomically consumes a matching unexpired token at most once.
+  ///
+  /// The digest is removed before expiry is checked, and the returned value
+  /// preserves the caller's raw token plus the stored metadata. Exact empty
+  /// identifiers or tokens return null.
   @override
   Future<AuthVerificationToken?> consume(
     String identifier,
@@ -130,11 +160,15 @@ class InMemoryAuthVerificationTokenStore
     );
   }
 
+  /// Deletes every stored token for the exact [identifier].
   @override
   Future<void> delete(String identifier) async {
     _tokens.remove(identifier);
   }
 
+  /// Deletes the matching digest for the exact [identifier] and [token].
+  ///
+  /// Returns whether a record was removed. Exact empty values return false.
   @override
   Future<bool> deleteToken(String identifier, String token) async {
     if (identifier.isEmpty || token.isEmpty) return false;

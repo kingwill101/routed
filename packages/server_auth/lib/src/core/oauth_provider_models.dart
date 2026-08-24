@@ -4,6 +4,12 @@ import 'plugin.dart';
 
 /// Represents an OAuth client registered with this application.
 class OAuthClient {
+  /// Creates a registered client.
+  ///
+  /// [clientSecretHash] must already be a digest, never plaintext. Grant
+  /// types, scopes, and client authentication default to authorization-code,
+  /// `openid`/`profile`/`email`, and `client_secret_basic`. Client IDs and
+  /// redirect URIs are retained as supplied.
   const OAuthClient({
     required this.clientId,
     required this.clientSecretHash,
@@ -52,6 +58,11 @@ class OAuthClient {
   final bool enabled;
 
   /// Creates a copy with selected fields replaced.
+  ///
+  /// The [clientId] and [createdAt] values are always retained. Omitted
+  /// nullable fields retain their current values, so [description] cannot be
+  /// cleared through this method. List fields are reused by reference rather
+  /// than defensively copied.
   OAuthClient copyWith({
     String? clientSecretHash,
     String? name,
@@ -79,7 +90,7 @@ class OAuthClient {
     );
   }
 
-  /// Serializes to JSON (without sensitive data).
+  /// Serializes client metadata without [clientSecretHash].
   Map<String, dynamic> toJson() => {
     'clientId': clientId,
     'name': name,
@@ -93,13 +104,16 @@ class OAuthClient {
     'enabled': enabled,
   };
 
-  /// Serializes for storage (includes secret hash).
+  /// Serializes client metadata for storage, including the secret hash.
   Map<String, dynamic> toStorageJson() => {
     ...toJson(),
     'clientSecretHash': clientSecretHash,
   };
 
-  /// Creates from JSON.
+  /// Creates a client from JSON.
+  ///
+  /// Missing list fields become empty lists, and only an explicit `false`
+  /// disables the client. Dates are parsed as UTC when valid.
   factory OAuthClient.fromJson(Map<String, dynamic> json) {
     return OAuthClient(
       clientId: json['clientId']?.toString() ?? '',
@@ -132,9 +146,17 @@ class OAuthClient {
 
 /// Represents an authorization code issued to a client.
 ///
-/// Only [codeHash] is persisted. The raw code is returned to the client once
-/// and hashed before it reaches the store.
+/// Stores the authorization metadata without retaining the raw code.
+///
+/// The raw code is returned to the client once and hashed before it reaches the
+/// store; [toStorageJson] includes the digest and protocol metadata needed for
+/// validation.
 class OAuthAuthorizationCode {
+  /// Creates a persistence-safe authorization code record.
+  ///
+  /// All required identifiers and [codeHash] are supplied by the caller; this
+  /// model never accepts or stores a raw authorization code. Optional PKCE,
+  /// nonce, and creation metadata describe the authorization request.
   const OAuthAuthorizationCode({
     required this.authorizationId,
     required this.codeHash,
@@ -210,6 +232,11 @@ class OAuthAuthorizationCode {
 
 /// Represents an issued access token.
 class OAuthAccessToken {
+  /// Creates a persistence-safe access-token record.
+  ///
+  /// [tokenHash] and [refreshTokenHash] are digests, not bearer credentials.
+  /// Refresh expiry is independent of access expiry, and
+  /// [refreshTokenUses] starts at zero unless supplied.
   const OAuthAccessToken({
     required this.tokenHash,
     required this.clientId,
@@ -260,6 +287,10 @@ class OAuthAccessToken {
   /// an authorization code or token.
   final String? authorizationId;
 
+  /// Creates an immutable copy with selected values replaced.
+  ///
+  /// Omitted values are retained. A nullable argument of null also retains its
+  /// existing value, so nullable fields cannot be cleared through this method.
   OAuthAccessToken copyWith({
     String? tokenHash,
     String? clientId,
@@ -307,6 +338,13 @@ class OAuthAccessToken {
 
 /// Options for the OAuth provider mode.
 class OAuthProviderModeOptions {
+  /// Creates provider-mode endpoint, lifetime, and protocol options.
+  ///
+  /// Defaults use ten-minute authorization codes, one-hour access tokens,
+  /// thirty-day refresh tokens, the authorization-code/client-credentials/
+  /// refresh-token grants, `code` responses, and `openid`/`profile`/`email`
+  /// scopes. PKCE and refresh rotation are enabled; null
+  /// [maxRefreshTokenUses] means unlimited use.
   const OAuthProviderModeOptions({
     this.authorizationEndpoint = const AuthRoutePath('/oauth/authorize'),
     this.tokenEndpoint = const AuthRoutePath('/oauth/token'),
@@ -388,6 +426,12 @@ class OAuthProviderModeOptions {
 /// key ID. The plugin derives a public-only JWK for the JWKS endpoint and never
 /// exposes private key parameters.
 class OAuthOidcConfiguration {
+  /// Creates validated OpenID Connect issuer and signing configuration.
+  ///
+  /// [issuer] must be absolute and query- and fragment-free. The signing key
+  /// must be asymmetric, have a non-empty key ID, and support signing with
+  /// [signingAlgorithm]. Endpoint paths are validated and
+  /// [idTokenLifetime] must be positive; invalid values throw [ArgumentError].
   OAuthOidcConfiguration({
     required this.issuer,
     required this.signingKey,

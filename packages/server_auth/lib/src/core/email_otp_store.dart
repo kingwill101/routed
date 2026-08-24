@@ -4,10 +4,26 @@ import 'deletion_transaction.dart';
 import 'tokens.dart' show constantTimeStringEquals;
 
 /// Supported one-time-password purposes.
-enum AuthEmailOtpType { signIn, emailVerification, forgetPassword, changeEmail }
+enum AuthEmailOtpType {
+  /// OTP used to authenticate a sign-in attempt.
+  signIn,
+
+  /// OTP used to verify an email address.
+  emailVerification,
+
+  /// OTP used in a password-recovery flow.
+  forgetPassword,
+
+  /// OTP used to confirm an email change.
+  changeEmail,
+}
 
 /// A persisted email OTP transaction.
 final class AuthEmailOtp {
+  /// Creates a persisted digest-only OTP record.
+  ///
+  /// [createdAt] and [expiresAt] are compared in UTC. The raw OTP must never
+  /// be supplied in place of [codeHash].
   AuthEmailOtp({
     required this.id,
     required this.email,
@@ -20,19 +36,38 @@ final class AuthEmailOtp {
     this.consumed = false,
   });
 
+  /// Stable persistence identifier.
   final String id;
+
+  /// Canonical email address associated with the record.
   final String email;
+
+  /// Application-keyed digest of the OTP.
   final String codeHash;
+
+  /// Flow purpose that partitions records for this email.
   final AuthEmailOtpType type;
+
+  /// UTC time at which the record was created.
   final DateTime createdAt;
+
+  /// UTC deadline at which the record expires.
   final DateTime expiresAt;
+
+  /// Maximum number of verification attempts.
   final int maxAttempts;
+
+  /// Number of attempts already recorded.
   final int attempts;
+
+  /// Whether a successful verification has consumed this record.
   final bool consumed;
 
+  /// Whether [now] is at or after [expiresAt].
   bool isExpired({DateTime? now}) =>
       !(now ?? DateTime.now()).toUtc().isBefore(expiresAt.toUtc());
 
+  /// Returns a copy with updated attempt or consumption state.
   AuthEmailOtp copyWith({int? attempts, bool? consumed}) => AuthEmailOtp(
     id: id,
     email: email,
@@ -59,22 +94,39 @@ final class AuthEmailOtp {
   };
 }
 
+/// Outcome of comparing an OTP digest with a stored record.
 enum AuthEmailOtpVerificationStatus {
+  /// The digest matched and the record was consumed.
   verified,
+
+  /// The digest did not match or no usable record exists.
   invalid,
+
+  /// The record reached its expiry deadline.
   expired,
+
+  /// The record has no attempts remaining.
   tooManyAttempts,
 }
 
+/// Result of an OTP verification attempt.
 final class AuthEmailOtpVerificationResult {
+  /// Creates a verification result with optional record state.
   const AuthEmailOtpVerificationResult(this.status, [this.otp]);
 
+  /// Outcome of the comparison and state transition.
   final AuthEmailOtpVerificationStatus status;
+
+  /// Record state associated with non-missing outcomes.
   final AuthEmailOtp? otp;
 }
 
 /// Typed persistence boundary for email OTP records.
 abstract interface class AuthEmailOtpStore {
+  /// Saves or replaces the active record for an email and purpose.
+  ///
+  /// Implementations must retain only [AuthEmailOtp.codeHash], not a raw OTP,
+  /// and must reject invalid or expired records.
   FutureOr<void> save(AuthEmailOtp otp);
 
   /// Compares an application-keyed digest and atomically records the attempt.
@@ -87,14 +139,20 @@ abstract interface class AuthEmailOtpStore {
     DateTime? now,
   });
 
+  /// Deletes every OTP record associated with [email].
   FutureOr<void> deleteForEmail(String email);
 }
 
 /// In-memory OTP store for tests and local development.
 final class InMemoryAuthEmailOtpStore
     implements AuthEmailOtpStore, AuthInMemoryDeletionState {
+  /// Creates a bounded in-memory store for tests and local development.
+  ///
+  /// Expired entries are pruned on save and the oldest entry is evicted when
+  /// [maxEntries] is reached.
   InMemoryAuthEmailOtpStore({this.maxEntries = 2048}) : assert(maxEntries > 0);
 
+  /// Maximum number of active records retained by this store.
   final int maxEntries;
   final Map<String, AuthEmailOtp> _records = <String, AuthEmailOtp>{};
 
@@ -109,6 +167,7 @@ final class InMemoryAuthEmailOtpStore
       ..addAll(records);
   }
 
+  /// Validates and stores [otp], replacing the same email/purpose record.
   @override
   Future<void> save(AuthEmailOtp otp) async {
     _validate(otp);
@@ -169,6 +228,7 @@ final class InMemoryAuthEmailOtpStore
     );
   }
 
+  /// Deletes all records whose canonical email equals [email].
   @override
   Future<void> deleteForEmail(String email) async {
     final normalized = _normalizeEmail(email);
@@ -184,6 +244,10 @@ final class InMemoryAuthEmailOtpStore
   }
 }
 
+/// Normalizes an OTP storage key without full email-address validation.
+///
+/// This helper trims and lowercases [email]; authentication flows should use
+/// the stricter email validator when accepting an address from a user.
 String normalizeAuthEmailOtpEmail(String email) => _normalizeEmail(email);
 
 String _normalizeEmail(String email) => email.trim().toLowerCase();

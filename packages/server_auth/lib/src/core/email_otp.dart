@@ -15,12 +15,22 @@ import 'store.dart';
 import 'tokens.dart' show base64UrlNoPadding, secureRandomToken;
 import 'users.dart' show authUserIsDisabled;
 
+/// Stable identifier for the optional email OTP plugin.
 const String authEmailOtpPluginId = 'email_otp';
 
+/// Delivers a transient raw OTP after its digest is committed.
 typedef AuthEmailOtpSender<TContext> =
     FutureOr<void> Function(AuthEmailOtpDelivery<TContext> delivery);
 
+/// Transient delivery payload for an email OTP.
+///
+/// The raw [code] is available only to the sender and must never be logged or
+/// persisted; the backend stores a digest instead.
 final class AuthEmailOtpDelivery<TContext> {
+  /// Creates the transient payload passed to [AuthEmailOtpSender].
+  ///
+  /// [code] is a raw secret and must be used only for delivery; it must not be
+  /// logged or persisted. The backend already stores its digest.
   const AuthEmailOtpDelivery({
     required this.context,
     required this.email,
@@ -29,16 +39,28 @@ final class AuthEmailOtpDelivery<TContext> {
     required this.expiresAt,
   });
 
+  /// Application context for delivery.
   final TContext context;
+
+  /// Canonical recipient email address.
   final String email;
+
+  /// Raw numeric OTP for transient delivery.
   final String code;
+
+  /// Flow purpose for the OTP.
   final AuthEmailOtpType type;
+
+  /// UTC expiry deadline for [code].
   final DateTime expiresAt;
 }
 
+/// Result of consuming an email OTP for sign-in.
 final class AuthEmailOtpSignInResult {
+  /// Creates the result of a successful OTP sign-in transition.
   const AuthEmailOtpSignInResult({required this.user});
 
+  /// Authenticated or newly created user.
   final AuthUser user;
 }
 
@@ -54,6 +76,12 @@ final class EmailOtpPlugin<TContext>
         AuthAuthenticationMethodInventoryContributor,
         AuthAuthenticationMethodInventoryBinding,
         AuthUserDeletionPlanContributor {
+  /// Creates an email OTP provider for sign-in and verification flows.
+  ///
+  /// [secret] must contain at least 32 UTF-8 bytes and protects OTP digests
+  /// and rate-limit identifiers. [sendCode] runs after the digest record is
+  /// committed, so delivery failure does not make the code reusable by a new
+  /// issuance. [generateOtp] is intended for controlled tests.
   EmailOtpPlugin({
     required this.sendCode,
     required String secret,
@@ -76,10 +104,19 @@ final class EmailOtpPlugin<TContext>
     }
   }
 
+  /// Callback that receives the raw OTP only for delivery.
   final AuthEmailOtpSender<TContext> sendCode;
+
+  /// Number of decimal digits generated for each OTP.
   final int otpLength;
+
+  /// Lifetime of an issued OTP.
   final Duration expiresIn;
+
+  /// Maximum failed attempts before lockout.
   final int allowedAttempts;
+
+  /// Whether sign-in rejects unknown email addresses instead of creating users.
   final bool disableSignUp;
   final String _secret;
   final List<int> _rateLimitHashKey;
@@ -91,9 +128,11 @@ final class EmailOtpPlugin<TContext>
   late AuthUserDeletionDomain _deletionDomain;
   bool _configured = false;
 
+  /// Stable plugin identifier.
   @override
   String get id => authEmailOtpPluginId;
 
+  /// Declares the OTP authentication and user-data namespaces.
   @override
   AuthServerPluginDataContract get dataContract =>
       const AuthServerPluginDataContract(
@@ -101,20 +140,25 @@ final class EmailOtpPlugin<TContext>
         userDataNamespace: authEmailOtpPluginId,
       );
 
+  /// Namespace for user data owned by this plugin.
   @override
   String get userDataNamespace => authEmailOtpPluginId;
 
+  /// Namespace for OTP authentication methods.
   @override
   String get authenticationMethodNamespace => authEmailOtpPluginId;
 
+  /// Configured OTP store used for authentication-method inventory.
   @override
   Object get authenticationMethodStore => _store;
 
+  /// Authentication-method kinds exposed by this plugin.
   @override
   Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
     AuthAuthenticationMethodKind.emailOtp,
   };
 
+  /// Lists the active OTP method for an eligible [userId].
   @override
   Future<AuthAuthenticationMethodSnapshot> authenticationMethodsForUser(
     String userId,
@@ -127,6 +171,9 @@ final class EmailOtpPlugin<TContext>
     ]);
   }
 
+  /// Configures the typed OTP backend and deletion-coordinator host.
+  ///
+  /// Throws [StateError] when either required host contract is unavailable.
   @override
   void configure(AuthServerPluginContext<TContext> context) {
     final store = context.store;
@@ -151,6 +198,7 @@ final class EmailOtpPlugin<TContext>
     _configured = true;
   }
 
+  /// Creates a plan that removes OTP records for [user].
   @override
   Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) async {
     _ensureConfigured();
@@ -187,6 +235,7 @@ final class EmailOtpPlugin<TContext>
     );
   }
 
+  /// POST endpoint contracts for issuing, checking, signing in, and verifying email.
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints => [
     _endpoint(
@@ -280,6 +329,7 @@ final class EmailOtpPlugin<TContext>
     return 'email:${base64UrlNoPadding(digest.bytes)}';
   }
 
+  /// Client operation descriptors derived from [endpoints].
   @override
   Iterable<AuthClientOperationDescriptor> get clientOperations => endpoints.map(
     (endpoint) => AuthClientOperationDescriptor(
@@ -291,11 +341,13 @@ final class EmailOtpPlugin<TContext>
     ),
   );
 
+  /// Rate-limit operations required by [endpoints].
   @override
   Iterable<AuthRateLimitOperation> get rateLimitOperations => endpoints
       .map((endpoint) => endpoint.rateLimitOperation)
       .whereType<AuthRateLimitOperation>();
 
+  /// Digest-only OTP persistence schema and atomic verification operation.
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
     AuthPersistenceSchema(
@@ -332,6 +384,10 @@ final class EmailOtpPlugin<TContext>
     ),
   ];
 
+  /// Issues and delivers a new OTP for [email] and [type].
+  ///
+  /// The backend commits only the digest before [sendCode] receives the raw
+  /// code. Delivery failures therefore leave the committed OTP in place.
   Future<void> sendVerificationOtp({
     required TContext context,
     required String email,
@@ -372,6 +428,10 @@ final class EmailOtpPlugin<TContext>
     );
   }
 
+  /// Verifies and consumes an OTP without creating a session.
+  ///
+  /// Invalid, expired, and locked records throw [AuthFlowException] with the
+  /// corresponding OTP error code.
   Future<void> checkVerificationOtp({
     required String email,
     required AuthEmailOtpType type,
@@ -381,6 +441,10 @@ final class EmailOtpPlugin<TContext>
     await _verify(email: email, type: type, code: code, now: now);
   }
 
+  /// Consumes an OTP and signs in or creates its verified user.
+  ///
+  /// When [disableSignUp] is true, an unknown email maps to `user_not_found`.
+  /// Invalid, expired, and locked codes throw [AuthFlowException].
   Future<AuthEmailOtpSignInResult> signInWithOtp({
     required TContext context,
     required String email,
@@ -411,6 +475,10 @@ final class EmailOtpPlugin<TContext>
     return AuthEmailOtpSignInResult(user: user);
   }
 
+  /// Consumes an OTP to verify the authenticated user's current email.
+  ///
+  /// Throws [AuthFlowException] for an unknown user, invalid code, expiry, or
+  /// lockout. The user returned by the backend contains the verified state.
   Future<AuthUser> verifyEmail({
     required String userId,
     required String code,

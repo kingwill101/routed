@@ -3,6 +3,9 @@ import 'dart:async';
 import 'models.dart' show AuthResult, AuthSession;
 
 /// Builds a base URL (`scheme://host[:port]`) from [uri].
+///
+/// Uses [defaultScheme] and [defaultHost] when the URI omits its scheme or
+/// host. Only an explicitly present port contributes a port suffix.
 String baseUrlFromUri(
   Uri uri, {
   String defaultScheme = 'http',
@@ -17,6 +20,13 @@ String baseUrlFromUri(
 /// Sanitizes callback/redirect URLs to same-origin or rooted-relative values.
 ///
 /// Returns `null` for invalid or cross-origin values.
+///
+/// Trims [value], rejects blank values, control characters, parse failures,
+/// user-info, protocol-relative URLs, non-rooted relatives, and origins whose
+/// host, scheme, or effective port differs from [requestUri]. Same-origin
+/// absolute URLs and rooted-relative paths are accepted. [fallbackHost] and
+/// [fallbackScheme] are used only when [requestUri] omits those components;
+/// default HTTP and HTTPS ports compare equivalently.
 String? sanitizeRedirectUrl(
   String? value, {
   required Uri requestUri,
@@ -88,6 +98,9 @@ int _effectivePort(Uri uri, String scheme) {
 
 /// Resolves a redirect candidate using auth callback precedence:
 /// payload callback key -> payload redirect key -> query callback key.
+///
+/// Resolution uses null-coalescing semantics, so an empty payload value wins
+/// over later sources. The named keys allow custom payload and query shapes.
 String? resolveRedirectCandidate(
   Map<String, dynamic> payload,
   Map<String, String> queryParameters, {
@@ -169,6 +182,9 @@ Future<String?> resolveAndSanitizeRedirectWithResolver(
 
 /// Resolves a response by preferring a sanitized redirect URL when present,
 /// otherwise falling back to session payload handling.
+///
+/// Invalid, null, or empty redirects invoke [onSession]. Accepted same-origin
+/// redirects invoke [onRedirect].
 Future<TResponse> respondWithSanitizedAuthRedirectOrSession<TResponse>({
   required AuthResult result,
   required Uri requestUri,

@@ -15,6 +15,12 @@ const authBreachedPasswordRejectedErrorCode = 'password_rejected';
 
 /// Typed limits and operation selection for breached-password checks.
 final class AuthBreachedPasswordPluginConfig {
+  /// Creates breached-password protection settings.
+  ///
+  /// Defaults enable checks for registration, reset, and change operations,
+  /// allow 1,024-character passwords, and give the lookup three seconds. The
+  /// [maxPasswordLength] assertion constrains it to 1..4,096; the plugin also
+  /// validates [providerTimeout] as greater than zero and at most 30 seconds.
   const AuthBreachedPasswordPluginConfig({
     this.providerTimeout = const Duration(seconds: 3),
     this.maxPasswordLength = 1024,
@@ -45,6 +51,11 @@ final class AuthBreachedPasswordPluginConfig {
 /// private check and must never log, persist, return, or include it in an
 /// exception or diagnostic value.
 final class AuthBreachedPasswordCheckRequest<TContext> {
+  /// Creates a lookup request containing the password secret.
+  ///
+  /// [context], [operation], and optional [user] identify the flow. The
+  /// [password] must be used only for the private check and must never be
+  /// logged, persisted, returned, or included in errors or diagnostics.
   const AuthBreachedPasswordCheckRequest({
     required this.context,
     required this.password,
@@ -52,20 +63,31 @@ final class AuthBreachedPasswordCheckRequest<TContext> {
     this.user,
   });
 
+  /// Application context associated with the password operation.
   final TContext context;
+
+  /// Password secret to check; it must not be logged or persisted.
   final String password;
+
+  /// Password operation that triggered the lookup.
   final AuthPasswordPolicyOperation operation;
+
+  /// Existing user for password changes or resets, when available.
   final AuthUser? user;
 }
 
 /// Typed result returned by an application-owned breached-password lookup.
 final class AuthBreachedPasswordCheckResult {
+  /// Creates a result with the explicit [breached] status.
   const AuthBreachedPasswordCheckResult({required this.breached});
 
+  /// Creates an allowed result.
   const AuthBreachedPasswordCheckResult.allowed() : breached = false;
 
+  /// Creates a result rejecting a password found in the breach corpus.
   const AuthBreachedPasswordCheckResult.breached() : breached = true;
 
+  /// Whether the checked password was found to be breached.
   final bool breached;
 }
 
@@ -75,6 +97,9 @@ final class AuthBreachedPasswordCheckResult {
 /// another privacy-preserving service. The auth package does not select a
 /// vendor and never receives a vendor-specific response shape.
 abstract interface class AuthBreachedPasswordLookup<TContext> {
+  /// Checks [request] synchronously or asynchronously and returns a typed result.
+  ///
+  /// The plugin treats thrown exceptions and timeouts as rejection.
   FutureOr<AuthBreachedPasswordCheckResult> check(
     AuthBreachedPasswordCheckRequest<TContext> request,
   );
@@ -85,6 +110,10 @@ final class BreachedPasswordPlugin<TContext>
     implements
         AuthServerPlugin<TContext>,
         AuthPasswordPolicyContributor<TContext> {
+  /// Creates opt-in breached-password enforcement using [lookup].
+  ///
+  /// [config] controls operations, timeout, and input length. The plugin must
+  /// be configured by [AuthRuntime] before enforcement begins.
   BreachedPasswordPlugin({
     required this.lookup,
     this.config = const AuthBreachedPasswordPluginConfig(),
@@ -92,24 +121,36 @@ final class BreachedPasswordPlugin<TContext>
     _validateConfig(config);
   }
 
+  /// Application-owned breached-password lookup boundary.
   final AuthBreachedPasswordLookup<TContext> lookup;
+
+  /// Enforcement limits and operation selection.
   final AuthBreachedPasswordPluginConfig config;
   late PasswordPolicy _passwordPolicy;
   bool _configured = false;
 
+  /// Stable plugin identifier used in runtime configuration.
   @override
   String get id => authBreachedPasswordPluginId;
 
+  /// Declares that this plugin contributes no persisted data contract.
   @override
   AuthServerPluginDataContract get dataContract =>
       const AuthServerPluginDataContract.none();
 
+  /// Captures the runtime password policy before enforcement.
   @override
   void configure(AuthServerPluginContext<TContext> context) {
     _passwordPolicy = context.passwordPolicy;
     _configured = true;
   }
 
+  /// Rejects enabled operations when the password is breached or lookup fails.
+  ///
+  /// Built-in password validation runs before lookup for registration, reset,
+  /// and change operations. Overly long passwords are rejected without lookup.
+  /// Breaches, exceptions, and timeouts all use
+  /// [authBreachedPasswordRejectedErrorCode] and never expose the password.
   @override
   Future<void> enforcePasswordPolicy(
     AuthPasswordPolicyRequest<TContext> request,

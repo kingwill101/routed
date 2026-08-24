@@ -5,6 +5,10 @@
 /// are deliberately opt-in so applications can choose their own policy
 /// without forcing predictable composition requirements on users.
 class PasswordPolicy {
+  /// Creates a policy with defaults of 12 and 1,024 characters.
+  ///
+  /// [minimumLength] must be at least one, and [maximumLength] must not be
+  /// shorter than it. These invariants are enforced with assertions.
   const PasswordPolicy({this.minimumLength = 12, this.maximumLength = 1024})
     : assert(minimumLength >= 1),
       assert(maximumLength >= minimumLength);

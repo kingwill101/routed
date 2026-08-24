@@ -7,6 +7,10 @@ import 'package:pointycastle/key_derivators/api.dart';
 
 /// Result of verifying a password against a stored password hash.
 class PasswordVerification {
+  /// Creates a verification result.
+  ///
+  /// [needsRehash] is meaningful only when [matches] is true. Malformed or
+  /// unsupported hashes should be reported with both values false.
   const PasswordVerification({
     required this.matches,
     required this.needsRehash,
@@ -26,8 +30,12 @@ class PasswordVerification {
 /// verify it later. Implementations must not return or persist plaintext
 /// passwords.
 abstract interface class PasswordHasher {
+  /// Returns a self-contained encoded hash for [password], never plaintext.
   String hash(String password);
 
+  /// Verifies [password] against [encodedHash] without throwing for malformed
+  /// or unsupported encodings, and reports whether a matching hash needs
+  /// rehashing under the current policy.
   PasswordVerification verify(String password, String encodedHash);
 }
 
@@ -40,6 +48,14 @@ abstract interface class PasswordHasher {
 /// Salt and derived-key values use unpadded base64url encoding. The format is
 /// self-describing so parameter upgrades can be detected during login.
 class Argon2idPasswordHasher implements PasswordHasher {
+  /// Creates an Argon2id hasher with the current password-policy defaults.
+  ///
+  /// Defaults are two iterations, 19,456 KiB of memory, one lane, a 16-byte
+  /// salt, and a 32-byte derived key. [iterations] must be 1..100,
+  /// [memoryKiB] 8..1,048,576 and at least 8 KiB per lane, [parallelism] 1..32,
+  /// and [saltLength] and [derivedKeyLength] 16..1,024. Invalid values throw
+  /// [ArgumentError]. [saltGenerator] must return exactly the requested number
+  /// of bytes when supplied; otherwise [hash] throws [StateError].
   Argon2idPasswordHasher({
     this.iterations = 2,
     this.memoryKiB = 19456,
@@ -89,6 +105,11 @@ class Argon2idPasswordHasher implements PasswordHasher {
 
   final List<int> Function(int length) _saltGenerator;
 
+  /// Hashes [password] with a salt from the configured generator into the
+  /// self-describing format.
+  ///
+  /// Throws a [StateError] if the configured salt generator returns an
+  /// unexpected length.
   @override
   String hash(String password) {
     final salt = _saltGenerator(saltLength);
@@ -108,6 +129,11 @@ class Argon2idPasswordHasher implements PasswordHasher {
     ].join(r'$');
   }
 
+  /// Verifies [password] against [encodedHash] using constant-time comparison.
+  ///
+  /// Malformed or unsupported hashes return `(false, false)` rather than
+  /// throwing. A matching hash is marked for rehash when its cost, key length,
+  /// or salt length differs from this instance's policy.
   @override
   PasswordVerification verify(String password, String encodedHash) {
     final parsed = _ParsedArgon2idHash.tryParse(encodedHash);

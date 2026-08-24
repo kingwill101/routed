@@ -8,6 +8,10 @@ import 'tokens.dart' show hashOpaqueToken, secureRandomToken;
 /// [tokenHash] is the digest of the one-time token sent to the user. The raw
 /// token must never cross this persistence boundary.
 class AuthPasswordResetToken {
+  /// Creates reset metadata at the persistence boundary.
+  ///
+  /// [tokenHash] must be a digest rather than the raw token. Callers should
+  /// provide UTC timestamps; the builders in this library normalize them.
   AuthPasswordResetToken({
     required this.userId,
     required this.tokenHash,
@@ -15,11 +19,22 @@ class AuthPasswordResetToken {
     required this.expiresAt,
   });
 
+  /// User identifier to which this reset token belongs.
   final String userId;
+
+  /// Digest of the raw one-time token sent to the user.
   final String tokenHash;
+
+  /// UTC time at which this reset token was created.
   final DateTime createdAt;
+
+  /// UTC time after which this reset token cannot be consumed.
   final DateTime expiresAt;
 
+  /// Whether this token is active at [now].
+  ///
+  /// The comparison is strict: a token is active only while `now` is before
+  /// [expiresAt]. This check does not consume or modify the token.
   bool isActive({DateTime? now}) {
     final current = (now ?? DateTime.now()).toUtc();
     return current.isBefore(expiresAt.toUtc());
@@ -51,6 +66,10 @@ abstract interface class AuthPasswordResetTokenStore {
 /// In-memory password-reset token store for tests and local development.
 class InMemoryAuthPasswordResetTokenStore
     implements AuthPasswordResetTokenStore, AuthInMemoryDeletionState {
+  /// Creates an in-memory store using [clock] for expiry checks.
+  ///
+  /// This implementation keeps one record per exact user ID and stores the
+  /// digest supplied in each [AuthPasswordResetToken].
   InMemoryAuthPasswordResetTokenStore({DateTime Function()? clock})
     : _clock = clock ?? DateTime.now;
 
@@ -58,10 +77,14 @@ class InMemoryAuthPasswordResetTokenStore
       <String, AuthPasswordResetToken>{};
   final DateTime Function() _clock;
 
+  /// Captures the stored records for rollback by a deletion transaction.
   @override
   Object captureDeletionState() =>
       Map<String, AuthPasswordResetToken>.of(_tokens);
 
+  /// Restores a snapshot produced by [captureDeletionState].
+  ///
+  /// Throws a [TypeError] when [state] is not this store's snapshot shape.
   @override
   void restoreDeletionState(Object state) {
     _tokens
@@ -69,6 +92,11 @@ class InMemoryAuthPasswordResetTokenStore
       ..addAll(state as Map<String, AuthPasswordResetToken>);
   }
 
+  /// Saves [token], replacing any prior record for its exact user ID.
+  ///
+  /// Blank IDs or digests, and an expiry not after creation, throw an
+  /// [ArgumentError]. The store retains the supplied digest and does not
+  /// normalize the user ID.
   @override
   Future<void> save(AuthPasswordResetToken token) async {
     _validate(token);
@@ -76,6 +104,10 @@ class InMemoryAuthPasswordResetTokenStore
     _tokens[token.tokenHash] = token;
   }
 
+  /// Atomically consumes a matching active raw reset [token].
+  ///
+  /// The digest is removed before expiry is checked, so an expired token is
+  /// not replayable. Returns null for blank, unknown, or expired tokens.
   @override
   Future<AuthPasswordResetToken?> consume(String token) async {
     if (token.trim().isEmpty) return null;
@@ -87,6 +119,10 @@ class InMemoryAuthPasswordResetTokenStore
     return record;
   }
 
+  /// Finds active metadata for [token] without consuming it.
+  ///
+  /// Returns null for blank, unknown, or expired tokens. A successful lookup
+  /// leaves the stored record unchanged.
   @override
   Future<AuthPasswordResetToken?> findActive(String token) async {
     if (token.trim().isEmpty) return null;
@@ -98,6 +134,9 @@ class InMemoryAuthPasswordResetTokenStore
     return record;
   }
 
+  /// Deletes all reset records whose stored user ID equals [userId].
+  ///
+  /// The lookup argument is trimmed; a blank value performs no deletion.
   @override
   Future<void> deleteForUser(String userId) async {
     final normalizedUserId = userId.trim();
@@ -123,6 +162,10 @@ class InMemoryAuthPasswordResetTokenStore
 }
 
 /// Generates a raw password-reset token for delivery to the user.
+///
+/// [length] is passed to [secureRandomToken]; invalid lengths throw the
+/// helper's [ArgumentError]. The raw result is intended for delivery only and
+/// must be hashed before persistence.
 String generateAuthPasswordResetToken({int length = 32}) {
   final token = secureRandomToken(length: length);
   if (token.trim().isEmpty) {
@@ -132,6 +175,10 @@ String generateAuthPasswordResetToken({int length = 32}) {
 }
 
 /// Builds persistable password-reset metadata from a raw delivery token.
+///
+/// Trims [userId], hashes [token] without storing its raw value, and creates
+/// UTC timestamps from [now] plus [ttl]. Blank values and a non-positive [ttl]
+/// throw an [ArgumentError].
 AuthPasswordResetToken buildAuthPasswordResetToken({
   required String userId,
   required String token,
@@ -157,6 +204,9 @@ AuthPasswordResetToken buildAuthPasswordResetToken({
 }
 
 /// Consumes a raw password-reset token from the configured typed store.
+///
+/// Delegates to [AuthPasswordResetTokenStore.consume] and returns null when
+/// the token is blank, unknown, expired, or already consumed.
 Future<AuthPasswordResetToken?> consumeAuthPasswordResetToken({
   required AuthPasswordResetTokenStore store,
   required String token,

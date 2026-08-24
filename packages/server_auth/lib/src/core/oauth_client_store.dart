@@ -96,8 +96,14 @@ abstract interface class OAuthProviderPersistenceTopology {
   AuthUserDeletionDomain get oauthProviderPersistenceDomain;
 }
 
-/// Digest-only bindings presented during an authorization-code exchange.
+/// Bindings presented during an authorization-code exchange.
 final class OAuthAuthorizationCodeExchangeRequest {
+  /// Creates the digest-only bindings for an authorization-code exchange.
+  ///
+  /// [codeHash], [clientId], and [redirectUri] identify the one-time grant;
+  /// [codeVerifier] supplies its raw optional PKCE proof and [now] fixes the
+  /// validity-check timestamp. The raw verifier is transient and is not a
+  /// persistence key.
   const OAuthAuthorizationCodeExchangeRequest({
     required this.codeHash,
     required this.clientId,
@@ -108,53 +114,82 @@ final class OAuthAuthorizationCodeExchangeRequest {
 
   /// Digest of the one-time authorization code.
   final String codeHash;
+
+  /// OAuth client identifier bound to the authorization code.
   final String clientId;
+
+  /// Exact redirect URI bound to the authorization code.
   final String redirectUri;
+
+  /// Optional PKCE verifier supplied by the token client.
   final String? codeVerifier;
+
+  /// UTC time used for expiry and validity checks.
   final DateTime now;
 }
 
 /// Result of checking exchange bindings without consuming a valid code.
 ///
 /// A store must consume a matching code digest when any supplied binding is
-/// wrong. A ready result remains subject to the atomic [commit] comparison.
-enum OAuthAuthorizationCodePreparationStatus { ready, invalidGrant }
+/// wrong. A ready result remains subject to the atomic `commit` comparison.
+enum OAuthAuthorizationCodePreparationStatus {
+  /// The code passed binding checks and is ready for commit.
+  ready,
 
+  /// The code is missing, expired, or failed a binding check.
+  invalidGrant,
+}
+
+/// Result of preparing an authorization-code exchange.
 final class OAuthAuthorizationCodePreparation {
+  /// Creates a preparation result with [status] and optional authorization.
   const OAuthAuthorizationCodePreparation._(this.status, this.authorization);
 
+  /// Creates a successful result containing the persisted authorization.
   const OAuthAuthorizationCodePreparation.ready(
     OAuthAuthorizationCode authorization,
   ) : this._(OAuthAuthorizationCodePreparationStatus.ready, authorization);
 
+  /// Creates a failed result without revealing persisted authorization data.
   const OAuthAuthorizationCodePreparation.invalidGrant()
     : this._(OAuthAuthorizationCodePreparationStatus.invalidGrant, null);
 
+  /// Outcome of preparation.
   final OAuthAuthorizationCodePreparationStatus status;
+
+  /// Persisted authorization when preparation succeeded.
   final OAuthAuthorizationCode? authorization;
 }
 
 /// Result of the backend-owned code-consumption and token-persistence commit.
 enum OAuthAuthorizationCodeExchangeStatus {
+  /// The code was consumed and the token was persisted.
   committed,
+
+  /// The code or one of its exchange bindings was invalid.
   invalidGrant,
+
+  /// Another exchange already committed the same authorization ID.
   alreadyCommitted,
 }
 
 /// Atomic authorization-code exchange result.
 ///
-/// No result contains raw code or token material. [alreadyCommitted] tells the
+/// No result contains raw code or token material. The
+/// [OAuthAuthorizationCodeExchangeStatus.alreadyCommitted] result tells the
 /// caller that a previous request won, but does not promise response replay.
 final class OAuthAuthorizationCodeExchangeResult {
+  /// Creates an exchange result with [status].
   const OAuthAuthorizationCodeExchangeResult(this.status);
 
+  /// Atomic outcome of the exchange.
   final OAuthAuthorizationCodeExchangeStatus status;
 }
 
 /// Authoritative persistence capability for authorization-code grants.
 ///
 /// Implementations own the authorization-code and access-token stores used by
-/// provider mode. [commit] must atomically:
+/// provider mode. The `commit` operation must atomically:
 ///
 /// 1. revalidate the code digest, authorization ID, client, redirect URI,
 ///    S256 verifier, and expiry;
@@ -166,14 +201,23 @@ final class OAuthAuthorizationCodeExchangeResult {
 /// API. Raw authorization codes and raw access or refresh tokens must never be
 /// persisted, logged, serialized, or included in errors.
 abstract interface class OAuthAuthorizationCodeExchangeStore {
+  /// Authorization-code store owned by this exchange backend.
+  ///
+  /// It must share the transaction and persistence topology of
+  /// [accessTokenStore].
   OAuthAuthorizationCodeStore get authorizationCodeStore;
+
+  /// Access-token store owned by this exchange backend.
+  ///
+  /// It must share the transaction and persistence topology of
+  /// [authorizationCodeStore].
   OAuthAccessTokenStore get accessTokenStore;
 
   /// Checks bindings and returns the persisted authorization needed to prepare
   /// token digests and an OIDC ID token before commit.
   ///
   /// A code with a matching digest but wrong binding is consumed. A correctly
-  /// bound code is not consumed until [commit], allowing account and client
+  /// bound code is not consumed until `commit`, allowing account and client
   /// eligibility checks to fail without burning it.
   FutureOr<OAuthAuthorizationCodePreparation> prepare(
     OAuthAuthorizationCodeExchangeRequest request,
@@ -189,10 +233,14 @@ abstract interface class OAuthAuthorizationCodeExchangeStore {
 
 /// Fault points exposed by the in-memory adapter for rollback tests.
 enum InMemoryOAuthCodeExchangeFaultPoint {
+  /// Runs after code removal and before token persistence.
   afterCodeConsumption,
+
+  /// Runs after token persistence, before the exchange returns.
   afterTokenSave,
 }
 
+/// Callback used to inject a one-shot exchange failure in tests.
 typedef InMemoryOAuthCodeExchangeFaultInjector =
     FutureOr<void> Function(InMemoryOAuthCodeExchangeFaultPoint point);
 
@@ -200,16 +248,22 @@ typedef InMemoryOAuthCodeExchangeFaultInjector =
 class InMemoryOAuthClientStore implements OAuthClientStore {
   final Map<String, OAuthClient> _clients = {};
 
+  /// Looks up [clientId] after trimming it; returns null when absent.
   @override
   Future<OAuthClient?> findById(String clientId) async {
     return _clients[clientId.trim()];
   }
 
+  /// Returns an unmodifiable snapshot of all registered clients.
   @override
   Future<List<OAuthClient>> listAll() async {
     return List.unmodifiable(_clients.values);
   }
 
+  /// Stores [client], throwing [StateError] when its ID already exists.
+  ///
+  /// Client IDs are used as supplied; this adapter does not normalize them
+  /// during creation.
   @override
   Future<OAuthClient> create(OAuthClient client) async {
     if (_clients.containsKey(client.clientId)) {
@@ -219,6 +273,7 @@ class InMemoryOAuthClientStore implements OAuthClientStore {
     return client;
   }
 
+  /// Replaces an existing client, throwing [StateError] when it is absent.
   @override
   Future<OAuthClient> update(OAuthClient client) async {
     if (!_clients.containsKey(client.clientId)) {
@@ -228,11 +283,16 @@ class InMemoryOAuthClientStore implements OAuthClientStore {
     return client;
   }
 
+  /// Deletes [clientId] after trimming it; missing IDs are ignored.
   @override
   Future<void> delete(String clientId) async {
     _clients.remove(clientId.trim());
   }
 
+  /// Validates [secret] against the stored SHA-256 digest in constant time.
+  ///
+  /// A missing client or blank secret returns false. The raw secret is never
+  /// persisted by this adapter.
   @override
   Future<bool> validateSecret(String clientId, String secret) async {
     final client = _clients[clientId.trim()];
@@ -245,16 +305,26 @@ class InMemoryOAuthClientStore implements OAuthClientStore {
 /// In-memory authorization code store for tests and development.
 class InMemoryOAuthAuthorizationCodeStore
     implements OAuthAuthorizationCodeStore, AuthInMemoryUserDeletionStore {
+  /// Creates a bounded code store with [maxEntries] positive.
+  ///
+  /// Expired records are pruned on creation and the oldest insertion is
+  /// evicted when capacity is reached.
   InMemoryOAuthAuthorizationCodeStore({this.maxEntries = 1024})
     : assert(maxEntries > 0);
 
+  /// Maximum number of unconsumed authorization codes retained.
   final int maxEntries;
   final Map<String, OAuthAuthorizationCode> _codes = {};
 
+  /// Captures a copy of the code map for deletion rollback.
+  ///
+  /// The returned checkpoint is intended for the deletion coordinator and
+  /// should be restored only through [restoreDeletionState].
   @override
   Object captureDeletionState() =>
       Map<String, OAuthAuthorizationCode>.of(_codes);
 
+  /// Restores a checkpoint created by [captureDeletionState].
   @override
   void restoreDeletionState(Object checkpoint) {
     final codes = checkpoint as Map<String, OAuthAuthorizationCode>;
@@ -263,6 +333,11 @@ class InMemoryOAuthAuthorizationCodeStore
       ..addAll(codes);
   }
 
+  /// Validates and stores [code], retaining only its supplied digest.
+  ///
+  /// Blank identifiers, invalid redirect or PKCE settings, expired creation
+  /// metadata, duplicate code hashes, and duplicate authorization IDs throw.
+  /// Expired entries are pruned and the oldest entry is evicted at capacity.
   @override
   Future<OAuthAuthorizationCode> create(OAuthAuthorizationCode code) async {
     _validateAuthorizationCode(code);
@@ -281,6 +356,11 @@ class InMemoryOAuthAuthorizationCodeStore
     return code;
   }
 
+  /// Consumes a code digest at most once after checking all bindings.
+  ///
+  /// The matching record is removed before expiry, client, redirect, or PKCE
+  /// checks, so a wrong binding burns the code. PKCE uses S256 and a
+  /// constant-time comparison.
   @override
   Future<OAuthAuthorizationCode?> consume({
     required String codeHash,
@@ -305,6 +385,7 @@ class InMemoryOAuthAuthorizationCodeStore
     return consumed;
   }
 
+  /// Removes and counts codes that are expired at [now].
   @override
   Future<int> deleteExpired({DateTime? now}) async {
     final current = now ?? DateTime.now().toUtc();
@@ -318,11 +399,13 @@ class InMemoryOAuthAuthorizationCodeStore
     return expired.length;
   }
 
+  /// Deletes unconsumed codes whose user ID exactly equals [userId].
   @override
   Future<void> deleteForUser(String userId) async {
     _codes.removeWhere((_, code) => code.userId == userId);
   }
 
+  /// Deletes this user's authorization-code data for account deletion.
   @override
   Future<void> deleteUserDataForDeletion(String userId) =>
       deleteForUser(userId);
@@ -333,9 +416,14 @@ class InMemoryOAuthAccessTokenStore
     implements OAuthAccessTokenStore, AuthInMemoryUserDeletionStore {
   final Map<String, OAuthAccessToken> _tokens = {};
 
+  /// Captures a copy of the token map for deletion rollback.
+  ///
+  /// The returned checkpoint is intended for the deletion coordinator and
+  /// should be restored only through [restoreDeletionState].
   @override
   Object captureDeletionState() => Map<String, OAuthAccessToken>.of(_tokens);
 
+  /// Restores a checkpoint created by [captureDeletionState].
   @override
   void restoreDeletionState(Object checkpoint) {
     final tokens = checkpoint as Map<String, OAuthAccessToken>;
@@ -344,6 +432,8 @@ class InMemoryOAuthAccessTokenStore
       ..addAll(tokens);
   }
 
+  /// Saves [token] by digest, rejecting duplicate token hashes or
+  /// authorization IDs.
   @override
   Future<void> save(OAuthAccessToken token) async {
     if (_tokens.containsKey(token.tokenHash) ||
@@ -356,12 +446,16 @@ class InMemoryOAuthAccessTokenStore
     _tokens[token.tokenHash] = token;
   }
 
+  /// Finds a token by hashing [token]; blank input returns null.
   @override
   Future<OAuthAccessToken?> findByToken(String token) async {
     if (token.trim().isEmpty) return null;
     return _tokens[hashOpaqueToken(token)];
   }
 
+  /// Finds a token by its raw refresh-token value; blank input returns null.
+  ///
+  /// The value is hashed internally and is never used as a storage key.
   @override
   Future<OAuthAccessToken?> findByRefreshToken(String refreshToken) async {
     if (refreshToken.trim().isEmpty) return null;
@@ -374,6 +468,11 @@ class InMemoryOAuthAccessTokenStore
     return null;
   }
 
+  /// Atomically replaces a valid refresh-token record with [replacement].
+  ///
+  /// The expected access-token hash, refresh-token digest, lifetime, use limit,
+  /// client, user, and incremented use count must all match. A failed check
+  /// returns null; an invalid replacement identity throws [ArgumentError].
   @override
   Future<OAuthAccessToken?> rotateRefreshToken({
     required String refreshToken,
@@ -406,11 +505,13 @@ class InMemoryOAuthAccessTokenStore
     return current;
   }
 
+  /// Revokes the token represented by [token]; blank input is ignored.
   @override
   Future<void> revoke(String token) async {
     if (token.trim().isNotEmpty) _tokens.remove(hashOpaqueToken(token));
   }
 
+  /// Revokes and counts all tokens owned by [userId].
   @override
   Future<int> revokeAllForUser(String userId) async {
     final tokensToRemove = _tokens.entries
@@ -423,11 +524,13 @@ class InMemoryOAuthAccessTokenStore
     return tokensToRemove.length;
   }
 
+  /// Revokes this user's token data for account deletion.
   @override
   Future<void> deleteUserDataForDeletion(String userId) async {
     await revokeAllForUser(userId);
   }
 
+  /// Revokes and counts all tokens issued to [clientId].
   @override
   Future<int> revokeAllForClient(String clientId) async {
     final tokensToRemove = _tokens.entries
@@ -440,6 +543,9 @@ class InMemoryOAuthAccessTokenStore
     return tokensToRemove.length;
   }
 
+  /// Removes and counts tokens whose access and refresh lifetimes have ended.
+  ///
+  /// A record is retained while its refresh token remains valid.
   @override
   Future<int> deleteExpired({DateTime? now}) async {
     final current = now ?? DateTime.now().toUtc();
@@ -465,6 +571,10 @@ class InMemoryOAuthAccessTokenStore
 /// consumption and token persistence.
 final class InMemoryOAuthAuthorizationCodeExchangeStore
     implements OAuthAuthorizationCodeExchangeStore {
+  /// Creates a process-local serialized exchange store.
+  ///
+  /// When stores are omitted, bounded in-memory code and token stores are
+  /// created. [faultInjector] is intended to exercise rollback paths.
   InMemoryOAuthAuthorizationCodeExchangeStore({
     InMemoryOAuthAuthorizationCodeStore? authorizationCodeStore,
     InMemoryOAuthAccessTokenStore? accessTokenStore,
@@ -473,15 +583,22 @@ final class InMemoryOAuthAuthorizationCodeExchangeStore
            authorizationCodeStore ?? InMemoryOAuthAuthorizationCodeStore(),
        accessTokenStore = accessTokenStore ?? InMemoryOAuthAccessTokenStore();
 
+  /// Code store participating in the serialized exchange.
   @override
   final InMemoryOAuthAuthorizationCodeStore authorizationCodeStore;
 
+  /// Access-token store participating in the serialized exchange.
   @override
   final InMemoryOAuthAccessTokenStore accessTokenStore;
 
+  /// Optional callback for injecting rollback-test failures.
   final InMemoryOAuthCodeExchangeFaultInjector? faultInjector;
   Future<void> _tail = Future<void>.value();
 
+  /// Checks a code without consuming a correctly bound record.
+  ///
+  /// Missing, expired, or mismatched records are removed and return
+  /// [OAuthAuthorizationCodePreparationStatus.invalidGrant].
   @override
   Future<OAuthAuthorizationCodePreparation> prepare(
     OAuthAuthorizationCodeExchangeRequest request,
@@ -501,6 +618,12 @@ final class InMemoryOAuthAuthorizationCodeExchangeStore
     return OAuthAuthorizationCodePreparation.ready(code);
   });
 
+  /// Atomically consumes the prepared code and saves its token.
+  ///
+  /// Calls are serialized, authorization and binding identities are rechecked,
+  /// and snapshots restore both stores if validation, injection, or token
+  /// persistence fails. A previously committed authorization returns
+  /// [OAuthAuthorizationCodeExchangeStatus.alreadyCommitted].
   @override
   Future<OAuthAuthorizationCodeExchangeResult> commit({
     required OAuthAuthorizationCodeExchangeRequest request,

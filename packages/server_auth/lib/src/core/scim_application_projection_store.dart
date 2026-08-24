@@ -415,7 +415,7 @@ final class InMemoryAuthScimApplicationProjectionStore
   Future<bool> isScopeDeleted(AuthScimApplicationProjectionScope scope) =>
       _atomic(() => _deletedScopes.contains(scope));
 
-  /// Deletes all records in [command.scope] and installs its fence.
+  /// Deletes all records in `command.scope` and installs its fence.
   @override
   Future<AuthScimApplicationProjectionScopeDeletionResult> deleteScope(
     AuthScimApplicationProjectionScopeDeletionCommand command,
