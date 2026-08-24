@@ -122,11 +122,11 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// - `POST /sign-in/anonymous` creates an anonymous authenticated session.
 /// - `POST /delete-anonymous-user` deletes the current anonymous account.
 /// - `GET /.well-known/oauth-protected-resource` publishes MCP resource
-///   metadata when [McpAuthPlugin] is enabled.
+///   metadata when `McpAuthPlugin` is enabled.
 /// - `GET /.well-known/oauth-authorization-server` publishes OAuth metadata
-///   when [McpAuthPlugin] is enabled.
+///   when `McpAuthPlugin` is enabled.
 /// - `POST /oauth/register` handles dynamic OAuth client registration when
-///   [McpAuthPlugin] is configured with a registrar callback.
+///   `McpAuthPlugin` is configured with a registrar callback.
 ///
 /// ## Usage
 /// ```dart
@@ -134,6 +134,11 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// routes.register(engine.defaultRouter);
 /// ```
 class AuthRoutes {
+  /// Creates a route registrar backed by [manager].
+  ///
+  /// When [managerOf] is provided, route handlers resolve the current manager
+  /// from it for each request. This supports applications that replace their
+  /// manager during configuration reloads.
   AuthRoutes(AuthManager manager, {AuthManager Function()? managerOf})
     : _manager = manager,
       _managerOf = managerOf;
@@ -153,6 +158,11 @@ class AuthRoutes {
   /// manager passed to the constructor is used.
   AuthManager get manager => _managerOf?.call() ?? _manager;
 
+  /// Registers the auth endpoints on [router].
+  ///
+  /// Uses the manager's configured base path unless [basePath] is supplied.
+  /// Optional endpoints are registered only when their corresponding provider,
+  /// plugin, or manager setting is enabled.
   void register(Router router, {String? basePath}) {
     final root = basePath ?? manager.options.basePath;
     final allPluginEndpoints = manager.runtime.registry.endpoints

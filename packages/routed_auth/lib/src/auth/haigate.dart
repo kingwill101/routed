@@ -50,6 +50,11 @@ Set<String> registerPoliciesWithHaigate(List<PolicyBinding> bindings) {
   );
 }
 
+/// Static authorization facade for Routed request contexts.
+///
+/// The facade resolves principals from [SessionAuth] and delegates policy
+/// evaluation to a process-wide [AuthGateService]. Register abilities before
+/// using [middleware] or the direct authorization methods.
 class Haigate {
   Haigate._();
 
@@ -67,6 +72,7 @@ class Haigate {
 
   static final AuthGateRegistry<EngineContext> _registry = _service.registry;
 
+  /// The process-wide registry of named authorization abilities.
   static AuthGateRegistry<EngineContext> get registry => _registry;
 
   /// Resolves and revalidates explicit tenant membership for this request.
@@ -169,6 +175,7 @@ class Haigate {
     );
   }
 
+  /// Registers an authorization callback for [ability].
   static void register(
     String ability,
     AuthGateCallback<EngineContext> callback,
@@ -176,24 +183,29 @@ class Haigate {
     _registry.register(ability, callback);
   }
 
+  /// Registers each authorization callback in [entries].
   static void registerAll(
     Map<String, AuthGateCallback<EngineContext>> entries,
   ) {
     _registry.registerAll(entries);
   }
 
+  /// Removes the authorization callback registered for [ability].
   static void unregister(String ability) {
     _service.unregister(ability);
   }
 
+  /// Adds [observer] to receive authorization evaluation events.
   static void addObserver(AuthGateObserver<EngineContext> observer) {
     _service.addObserver(observer);
   }
 
+  /// Stops sending authorization evaluation events to [observer].
   static void removeObserver(AuthGateObserver<EngineContext> observer) {
     _service.removeObserver(observer);
   }
 
+  /// Returns whether [ability] is allowed for the current request.
   static Future<bool> can(
     String ability, {
     required EngineContext ctx,
@@ -208,6 +220,7 @@ class Haigate {
     );
   }
 
+  /// Authorizes [ability] or throws an [AuthGateViolation].
   static Future<void> authorize(
     String ability, {
     required EngineContext ctx,
@@ -224,6 +237,7 @@ class Haigate {
     );
   }
 
+  /// Returns whether at least one requested ability is allowed.
   static Future<bool> any(
     Iterable<String> abilities, {
     required EngineContext ctx,
@@ -238,6 +252,7 @@ class Haigate {
     );
   }
 
+  /// Returns whether every requested ability is allowed.
   static Future<bool> all(
     Iterable<String> abilities, {
     required EngineContext ctx,
@@ -252,6 +267,10 @@ class Haigate {
     );
   }
 
+  /// Creates middleware that requires all [abilities] for a request.
+  ///
+  /// A denied request is handled by [onDenied] when supplied. Otherwise the
+  /// middleware writes [deniedStatusCode] and [deniedMessage] to the response.
   static Middleware middleware(
     List<String> abilities, {
     GatePayloadProvider? payloadProvider,

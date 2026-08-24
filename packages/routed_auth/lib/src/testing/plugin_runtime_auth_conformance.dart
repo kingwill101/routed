@@ -42,14 +42,20 @@ const _authPluginRuntimePhoneDeliveryFailureMarker =
 
 /// A copy of one provider-owned phone-code delivery.
 final class AuthPluginRuntimePhoneDelivery {
+  /// Creates a captured phone-code delivery.
   const AuthPluginRuntimePhoneDelivery({
     required this.phoneNumber,
     required this.code,
     required this.expiresAt,
   });
 
+  /// Phone number to which the code was sent.
   final String phoneNumber;
+
+  /// One-time code delivered to [phoneNumber].
   final String code;
+
+  /// Time at which [code] expires.
   final DateTime expiresAt;
 }
 
@@ -59,12 +65,17 @@ final class AuthPluginRuntimePhoneDelivery {
 /// to the host test that owns them and avoids shared mutable state when several
 /// runtime matrices execute concurrently.
 final class AuthPluginRuntimePhoneDeliveryRecorder {
+  /// Creates an empty delivery recorder.
+  AuthPluginRuntimePhoneDeliveryRecorder();
+
   final List<AuthPluginRuntimePhoneDelivery> _deliveries =
       <AuthPluginRuntimePhoneDelivery>[];
 
+  /// Captured deliveries, exposed as an unmodifiable snapshot.
   List<AuthPluginRuntimePhoneDelivery> get deliveries =>
       List<AuthPluginRuntimePhoneDelivery>.unmodifiable(_deliveries);
 
+  /// Returns deliveries recorded for [phoneNumber].
   Iterable<AuthPluginRuntimePhoneDelivery> forPhone(String phoneNumber) =>
       _deliveries.where((delivery) => delivery.phoneNumber == phoneNumber);
 

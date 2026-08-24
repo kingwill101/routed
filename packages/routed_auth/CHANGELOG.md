@@ -1,5 +1,6 @@
 ## Unreleased
 
+- Complete public Dartdoc for the crypto, route, gate, and conformance APIs.
 - Add a session-bound password reauthentication endpoint and manager API for
   refreshing sensitive-action proofs without replacing the current session.
   Reauthentication is rate-limited, supported for session and JWT strategies,

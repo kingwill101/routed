@@ -95,6 +95,7 @@ final class AuthRuntimeConformanceFailure implements Exception {
   /// Human-readable failure detail.
   final String message;
 
+  /// Returns a stable description containing the failed case identifier.
   @override
   String toString() => 'AuthRuntimeConformanceFailure($caseId): $message';
 }
