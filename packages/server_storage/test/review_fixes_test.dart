@@ -95,8 +95,9 @@ void main() {
     test('default disk selection still works', () {
       final manager = StorageManager();
       final local = _FakeDisk();
-      manager.registerDisk('local', local);
-      manager.setDefault('local');
+      manager
+        ..registerDisk('local', local)
+        ..setDefault('local');
       expect(manager.disk(), same(local));
       expect(manager.disk(''), same(local));
     });

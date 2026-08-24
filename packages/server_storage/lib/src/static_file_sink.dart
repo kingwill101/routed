@@ -3,8 +3,8 @@ import 'dart:io';
 
 /// Minimal response/request surface needed to serve static files.
 ///
-/// Framework adapters (e.g. `routed_storage`) implement this over their
-/// request context so [FileHandler] stays free of framework imports.
+/// Framework adapters (for example, `routed_storage`) implement this over
+/// their request context so `FileHandler` stays free of framework imports.
 abstract interface class StaticFileSink {
   /// HTTP method (GET, HEAD, …).
   String get method;
@@ -13,6 +13,9 @@ abstract interface class StaticFileSink {
   HttpHeaders get headers;
 
   /// Sets the response status code.
+  // The sink only requires write access; adapters need not expose a meaningful
+  // status-code readback value.
+  // ignore: avoid_setters_without_getters
   set statusCode(int value);
 
   /// Sets a single response header (replacing prior values).

@@ -1,5 +1,5 @@
-import 'package:routed_core/routed_core.dart' show Event;
 import 'package:routed_cache/routed_cache.dart';
+import 'package:routed_core/routed_core.dart' show Event;
 import 'package:test/test.dart';
 
 void main() {
@@ -51,7 +51,7 @@ void main() {
 
     test('CacheEvent is sealed — all subclasses are final', () {
       // Verify exhaustive pattern matching works (compile-time check)
-      CacheEvent event = CacheHitEvent(store: 's', key: 'k');
+      final CacheEvent event = CacheHitEvent(store: 's', key: 'k');
       final label = switch (event) {
         CacheHitEvent() => 'hit',
         CacheMissEvent() => 'miss',

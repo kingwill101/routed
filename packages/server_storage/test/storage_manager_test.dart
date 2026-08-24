@@ -42,8 +42,9 @@ void main() {
     });
 
     test('setDefault changes default disk', () {
-      manager.registerDisk('custom', _InMemoryDisk(fs));
-      manager.setDefault('custom');
+      manager
+        ..registerDisk('custom', _InMemoryDisk(fs))
+        ..setDefault('custom');
       expect(manager.defaultDisk, 'custom');
       // disk() with no argument uses default.
       expect(manager.disk(), isA<StorageDisk>());
@@ -60,15 +61,17 @@ void main() {
     });
 
     test('resolve with explicit disk name', () {
-      manager.registerDisk('local', _InMemoryDisk(fs));
-      manager.registerDisk('backup', _InMemoryDisk(fs));
+      manager
+        ..registerDisk('local', _InMemoryDisk(fs))
+        ..registerDisk('backup', _InMemoryDisk(fs));
       // Using explicit disk name.
       expect(manager.resolve('data', disk: 'backup'), '/data');
     });
 
     test('clear removes all disks', () {
-      manager.registerDisk('a', _InMemoryDisk(fs));
-      manager.registerDisk('b', _InMemoryDisk(fs));
+      manager
+        ..registerDisk('a', _InMemoryDisk(fs))
+        ..registerDisk('b', _InMemoryDisk(fs));
       expect(manager.hasDisk('a'), isTrue);
       manager.clear();
       expect(manager.hasDisk('a'), isFalse);

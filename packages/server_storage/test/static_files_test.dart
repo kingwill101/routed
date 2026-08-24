@@ -1,8 +1,8 @@
-import 'package:routed_storage/routed_storage.dart';
 import 'dart:io';
 
 import 'package:file/memory.dart';
 import 'package:property_testing/property_testing.dart';
+import 'package:routed_storage/routed_storage.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 
@@ -25,12 +25,13 @@ void main() {
         final dir = fs.directory('files')..createSync();
         final file = dir.childFile('hello.txt')
           ..writeAsStringSync('hello world');
-        engine.static(
-          '/files',
-          dir.path,
-          fileSystem: fs,
-        ); // exposes /files/{*filepath}
-        engine.staticFile('/single', file.path, fs);
+        engine
+          ..static(
+            '/files',
+            dir.path,
+            fileSystem: fs,
+          ) // exposes /files/{*filepath}
+          ..staticFile('/single', file.path, fs);
         final client = TestClient(RoutedRequestHandler(engine));
         addTearDown(client.close);
 
@@ -201,7 +202,8 @@ void main() {
       if (second.statusCode == 304) {
         second.assertStatus(304);
       } else {
-        // If modified comparison failed due to millisecond vs second precision, we still accept 200
+        // If modified comparison failed due to millisecond vs second
+        // precision, we still accept 200.
         expect(second.statusCode, 200);
       }
     });

@@ -5,9 +5,15 @@ import 'dart:math';
 import 'package:server_contracts/server_contracts.dart'
     show LockProvider, Repository;
 
-import 'policy.dart';
+import 'package:server_rate_limit/src/policy.dart';
 
+/// Storage and concurrency contract used by a rate-limit runtime.
 abstract class RateLimiterBackend {
+  /// Consumes one unit from the bucket identified by [bucketKey].
+  ///
+  /// The backend applies [config] at [now]. If the backend cannot complete the
+  /// operation, [failover] selects whether the request is allowed, blocked, or
+  /// evaluated against local fallback state.
   Future<RateLimitOutcome> consume(
     String bucketKey,
     RateLimitAlgorithmConfig config,
@@ -15,10 +21,19 @@ abstract class RateLimiterBackend {
     RateLimitFailoverMode failover,
   });
 
+  /// Releases resources owned by this backend.
   Future<void> close();
 }
 
+/// A cache-backed rate limiter with optional distributed locking.
+///
+/// The repository stores algorithm state. If its store implements
+/// [LockProvider], updates for a bucket are serialized so concurrent requests
+/// cannot consume the same allowance.
 class CacheRateLimiterBackend implements RateLimiterBackend {
+  /// Creates a cache-backed backend using [repository].
+  ///
+  /// [lockTimeout] bounds how long a distributed lock may be held or acquired.
   CacheRateLimiterBackend({
     required Repository repository,
     this.lockTimeout = const Duration(seconds: 2),
@@ -29,6 +44,8 @@ class CacheRateLimiterBackend implements RateLimiterBackend {
 
   final Repository _repository;
   final LockProvider? _lockProvider;
+
+  /// Maximum time used when acquiring or executing under a distributed lock.
   final Duration lockTimeout;
   static const _ttlFloor = Duration(milliseconds: 1000);
 
@@ -69,12 +86,13 @@ class CacheRateLimiterBackend implements RateLimiterBackend {
         // the limit. block() acquires (waiting up to the timeout) and releases
         // after the callback completes.
         return await lock.block(
-          max(1, lockTimeout.inSeconds),
-          () => action(),
-        ) as RateLimitOutcome;
+              max(1, lockTimeout.inSeconds),
+              () => action(),
+            )
+            as RateLimitOutcome;
       }
       return await action();
-    } catch (_) {
+    } on Object catch (_) {
       return _handleFailure(bucketKey, config, now, failover);
     }
   }
@@ -226,7 +244,7 @@ class CacheRateLimiterBackend implements RateLimiterBackend {
     DateTime now,
   ) async {
     switch (config) {
-      case TokenBucketConfig bucket:
+      case final TokenBucketConfig bucket:
         final state = _localTokenBuckets.putIfAbsent(
           bucketKey,
           () => _LocalTokenBucketState(
@@ -262,7 +280,7 @@ class CacheRateLimiterBackend implements RateLimiterBackend {
           remaining: state.tokens.floor(),
           failoverMode: RateLimitFailoverMode.local,
         );
-      case SlidingWindowConfig config:
+      case final SlidingWindowConfig config:
         final windowMs = max(1, config.window.inMilliseconds);
         final currentWindowStart =
             (now.millisecondsSinceEpoch ~/ windowMs) * windowMs;
@@ -271,8 +289,9 @@ class CacheRateLimiterBackend implements RateLimiterBackend {
           () => _LocalWindowState(count: 0, windowStart: currentWindowStart),
         );
         if (state.windowStart != currentWindowStart) {
-          state.windowStart = currentWindowStart;
-          state.count = 0;
+          state
+            ..windowStart = currentWindowStart
+            ..count = 0;
         }
         if (state.count < config.limit) {
           state.count += 1;
@@ -288,7 +307,7 @@ class CacheRateLimiterBackend implements RateLimiterBackend {
           remaining: config.limit - state.count,
           failoverMode: RateLimitFailoverMode.local,
         );
-      case QuotaConfig config:
+      case final QuotaConfig config:
         final periodMs = max(1, config.period.inMilliseconds);
         final periodStart = (now.millisecondsSinceEpoch ~/ periodMs) * periodMs;
         final state = _localQuotas.putIfAbsent(
@@ -296,8 +315,9 @@ class CacheRateLimiterBackend implements RateLimiterBackend {
           () => _LocalQuotaState(count: 0, periodStart: periodStart),
         );
         if (state.periodStart != periodStart) {
-          state.periodStart = periodStart;
-          state.count = 0;
+          state
+            ..periodStart = periodStart
+            ..count = 0;
         }
         if (state.count < config.limit) {
           state.count += 1;
@@ -353,7 +373,7 @@ class CacheRateLimiterBackend implements RateLimiterBackend {
         if (decoded is Map) {
           return _decodeState(decoded);
         }
-      } catch (_) {}
+      } on Object catch (_) {}
     }
     return _StoredState(tokens: 0, timestamp: 0);
   }
@@ -427,7 +447,7 @@ _WindowState _decodeWindowState(dynamic raw) {
       if (decoded is Map) {
         return _decodeWindowState(decoded);
       }
-    } catch (_) {}
+    } on Object catch (_) {}
   }
   return _WindowState(count: 0, windowStart: 0);
 }
@@ -448,7 +468,7 @@ _QuotaState _decodeQuotaState(dynamic raw) {
       if (decoded is Map) {
         return _decodeQuotaState(decoded);
       }
-    } catch (_) {}
+    } on Object catch (_) {}
   }
   return _QuotaState(count: 0, periodStart: 0);
 }

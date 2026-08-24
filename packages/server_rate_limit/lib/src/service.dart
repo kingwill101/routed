@@ -1,12 +1,14 @@
 import 'dart:async';
 
-import 'backend.dart';
-import 'policy.dart';
+import 'package:server_rate_limit/src/backend.dart';
+import 'package:server_rate_limit/src/policy.dart';
 
-/// Optional callbacks for publishing rate-limit outcomes.
+/// Optional callbacks for observing rate-limit outcomes.
 class RateLimitEventCallbacks {
+  /// Creates callbacks for allowed and blocked evaluations.
   const RateLimitEventCallbacks({this.onAllowed, this.onBlocked});
 
+  /// Called after a policy allows a request.
   final void Function(
     String policy,
     RateLimitStrategy strategy,
@@ -16,6 +18,7 @@ class RateLimitEventCallbacks {
   )?
   onAllowed;
 
+  /// Called after a policy blocks a request.
   final void Function(
     String policy,
     RateLimitStrategy strategy,
@@ -27,19 +30,32 @@ class RateLimitEventCallbacks {
   onBlocked;
 }
 
+/// Evaluates compiled policies for incoming requests.
 class RateLimitService {
+  /// Creates a service for the supplied policies.
+  ///
+  /// [callbacks] receives notifications after matching policies are evaluated.
   RateLimitService(this._policies, {RateLimitEventCallbacks? callbacks})
     : _callbacks = callbacks;
 
   final List<CompiledRateLimitPolicy> _policies;
   RateLimitEventCallbacks? _callbacks;
 
+  /// Whether this service has at least one policy to evaluate.
   bool get enabled => _policies.isNotEmpty;
 
+  /// Replaces the callbacks used for subsequent evaluations.
+  // This remains a method because callback attachment is an explicit service
+  // lifecycle operation rather than a field assignment.
+  // ignore: use_setters_to_change_properties
   void attachCallbacks(RateLimitEventCallbacks? callbacks) {
     _callbacks = callbacks;
   }
 
+  /// Evaluates [request] and returns the first blocking outcome.
+  ///
+  /// Returns `null` when no policy matches or all matching policies allow the
+  /// request.
   Future<RateLimitOutcome?> check(RateLimitRequest request) async {
     if (_policies.isEmpty) return null;
     RateLimitOutcome? blocked;
@@ -66,6 +82,7 @@ class RateLimitService {
     return blocked;
   }
 
+  /// Closes each distinct backend used by this service.
   Future<void> dispose() async {
     final closed = <RateLimiterBackend>{};
     for (final policy in _policies) {

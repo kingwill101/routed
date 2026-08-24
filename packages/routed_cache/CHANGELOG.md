@@ -1,3 +1,8 @@
+## Unreleased
+
+- Adopted `very_good_analysis` and completed Dartdoc for the public cache
+  integration APIs.
+
 ## 0.2.0
 
 - Adopt the typed `server_cache` store registration API; map-based store

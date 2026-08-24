@@ -12,6 +12,7 @@ abstract class StorageDisk {
 
 /// Manages configured storage disks.
 class StorageManager {
+  /// Creates a manager using [defaultFileSystem] for disk defaults.
   StorageManager({file.FileSystem? defaultFileSystem})
     : _defaultFileSystem = defaultFileSystem ?? const local.LocalFileSystem();
 

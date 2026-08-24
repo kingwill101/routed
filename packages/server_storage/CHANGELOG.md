@@ -1,3 +1,8 @@
+## Unreleased
+
+- Migrated package analysis to `very_good_analysis` and completed public API
+  Dartdoc coverage.
+
 ## 0.1.1
 
 - Hardened local-disk path resolution against directory escapes and invalid

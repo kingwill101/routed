@@ -4,15 +4,21 @@ import 'dart:io';
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
 import 'package:mime/mime.dart';
-
-import 'static_file_sink.dart';
+import 'package:server_storage/src/static_file_sink.dart';
 
 /// Represents a directory in the file system.
 ///
-/// The [Dir] class provides a way to interact with a directory in the file system.
-/// It allows you to specify the path to the directory, whether to list the contents
-/// of the directory, and which file system to use.
+/// It records the path, listing policy, index file, and file system used to
+/// serve the directory.
 class Dir {
+  /// Creates a directory description for [path].
+  Dir(
+    this.path, {
+    this.listDirectory = false,
+    this.indexFile = 'index.html',
+    file.FileSystem? fileSystem,
+  }) : fileSystem = fileSystem ?? const local.LocalFileSystem();
+
   /// The path to the directory.
   final String path;
 
@@ -24,49 +30,16 @@ class Dir {
 
   /// The file system to use.
   final file.FileSystem fileSystem;
-
-  /// Creates a [Dir] instance.
-  ///
-  /// The [path] parameter specifies the path to the directory.
-  /// The [listDirectory] parameter specifies whether to list the contents of the directory.
-  /// The [fileSystem] parameter specifies the file system to use.
-  Dir(
-    this.path, {
-    this.listDirectory = false,
-    this.indexFile = 'index.html',
-    file.FileSystem? fileSystem,
-  }) : fileSystem = fileSystem ?? const local.LocalFileSystem();
 }
 
 /// Handles file operations such as serving files and directories over HTTP.
 ///
 /// Portable: depends only on [StaticFileSink], not on any framework.
 class FileHandler {
-  /// The root path from which files are served.
-  final String rootPath;
-
-  /// The file system to use.
-  final file.FileSystem fileSystem;
-
-  /// Whether directory listing is allowed.
-  final bool allowDirectoryListing;
-
-  /// File served when a request targets a directory.
-  final String indexFile;
-
-  /// Private constructor that takes normalized path.
-  const FileHandler._({
-    required this.rootPath,
-    required this.fileSystem,
-    required this.allowDirectoryListing,
-    required this.indexFile,
-  });
-
-  /// Factory constructor that handles path normalization.
+  /// Creates a handler rooted at [rootPath].
   ///
-  /// The [rootPath] parameter specifies the root path from which files are served.
-  /// The [fileSystem] parameter specifies the file system to use.
-  /// The [allowDirectoryListing] parameter specifies whether directory listing is allowed.
+  /// Relative roots are resolved against the current directory of
+  /// [fileSystem].
   factory FileHandler({
     required String rootPath,
     file.FileSystem fileSystem = const local.LocalFileSystem(),
@@ -89,9 +62,15 @@ class FileHandler {
     );
   }
 
-  /// Factory constructor that creates a [FileHandler] from a [Dir] instance.
-  ///
-  /// The [dir] parameter specifies the directory from which files are served.
+  /// Creates a handler from an already normalized root path.
+  const FileHandler._({
+    required this.rootPath,
+    required this.fileSystem,
+    required this.allowDirectoryListing,
+    required this.indexFile,
+  });
+
+  /// Creates a handler from a [Dir] description.
   factory FileHandler.fromDir(Dir dir) {
     final pathContext = dir.fileSystem.path;
     final currentDir = pathContext.normalize(
@@ -110,6 +89,18 @@ class FileHandler {
       indexFile: dir.indexFile,
     );
   }
+
+  /// The root path from which files are served.
+  final String rootPath;
+
+  /// The file system to use.
+  final file.FileSystem fileSystem;
+
+  /// Whether directory listing is allowed.
+  final bool allowDirectoryListing;
+
+  /// File served when a request targets a directory.
+  final String indexFile;
 
   /// Serves a file over HTTP via [sink].
   ///
@@ -140,7 +131,7 @@ class FileHandler {
           sink.method == 'HEAD' ? '' : 'Not Found',
         );
       }
-    } catch (e) {
+    } on Object {
       sink.abortWithStatus(
         HttpStatus.internalServerError,
         'Internal Server Error',
@@ -171,7 +162,7 @@ class FileHandler {
           return;
         }
       }
-    } catch (_) {
+    } on Object {
       // No index file, continue to directory listing check.
     }
 
@@ -197,16 +188,17 @@ class FileHandler {
     final entities = await directory.list().toList();
 
     // Directory listing should explicitly send text/html with utf-8 charset
-    sink.setHeader(HttpHeaders.contentTypeHeader, 'text/html; charset=utf-8');
-    sink.write('<!DOCTYPE html><html><body><ul>');
+    sink
+      ..setHeader(HttpHeaders.contentTypeHeader, 'text/html; charset=utf-8')
+      ..write('<!DOCTYPE html><html><body><ul>');
 
-    for (var entity in entities) {
+    for (final entity in entities) {
       final name = pathContext.basename(entity.path);
-      final stat = await entity.stat();
+      final stat = entity.statSync();
       final isDir = stat.type == file.FileSystemEntityType.directory;
       final displayName = isDir ? '${entity.parent.basename}/$name/' : name;
       final prefix = (parent != null && parent.isNotEmpty) ? '$parent/' : '';
-      final encodedName = Uri.encodeComponent("$prefix$name");
+      final encodedName = Uri.encodeComponent('$prefix$name');
       sink.write('<li><a href="$encodedName">$displayName</a></li>');
     }
 
@@ -229,13 +221,13 @@ class FileHandler {
     final length = fileStat.size;
     final contentType = _getContentType(file.path);
 
-    sink.setHeader(HttpHeaders.contentTypeHeader, contentType.toString());
-
-    sink.setHeader(HttpHeaders.contentLengthHeader, length.toString());
-    sink.setHeader(
-      HttpHeaders.lastModifiedHeader,
-      HttpDate.format(fileStat.modified),
-    );
+    sink
+      ..setHeader(HttpHeaders.contentTypeHeader, contentType.toString())
+      ..setHeader(HttpHeaders.contentLengthHeader, length.toString())
+      ..setHeader(
+        HttpHeaders.lastModifiedHeader,
+        HttpDate.format(fileStat.modified),
+      );
 
     // Range request support
     final range = sink.headers.value(HttpHeaders.rangeHeader);
@@ -277,25 +269,27 @@ class FileHandler {
   ) async {
     final ranges = _parseRangeHeader(rangeHeader, fileLength);
     if (ranges == null || ranges.isEmpty) {
-      sink.setHeader(HttpHeaders.contentRangeHeader, 'bytes */$fileLength');
-      sink.abortWithStatus(
-        HttpStatus.requestedRangeNotSatisfiable,
-        'Requested Range Not Satisfiable',
-      );
+      sink
+        ..setHeader(HttpHeaders.contentRangeHeader, 'bytes */$fileLength')
+        ..abortWithStatus(
+          HttpStatus.requestedRangeNotSatisfiable,
+          'Requested Range Not Satisfiable',
+        );
       return;
     }
 
     if (ranges.length == 1) {
       final range = ranges[0];
-      sink.statusCode = HttpStatus.partialContent;
-      sink.setHeader(
-        HttpHeaders.contentRangeHeader,
-        'bytes ${range.start}-${range.end}/$fileLength',
-      );
-      sink.setHeader(
-        HttpHeaders.contentLengthHeader,
-        (range.end - range.start + 1).toString(),
-      );
+      sink
+        ..statusCode = HttpStatus.partialContent
+        ..setHeader(
+          HttpHeaders.contentRangeHeader,
+          'bytes ${range.start}-${range.end}/$fileLength',
+        )
+        ..setHeader(
+          HttpHeaders.contentLengthHeader,
+          (range.end - range.start + 1).toString(),
+        );
 
       await sink.addStream(file.openRead(range.start, range.end + 1));
       await sink.close();
@@ -315,7 +309,7 @@ class FileHandler {
     final rangeStrings = header.substring(prefix.length).split(',');
     final ranges = <_ByteRange>[];
 
-    for (var rangeStr in rangeStrings) {
+    for (final rangeStr in rangeStrings) {
       final range = _parseSingleRange(rangeStr.trim(), fileLength);
       if (range != null) {
         ranges.add(range);
@@ -364,12 +358,12 @@ class FileHandler {
 
 /// Represents a byte range for partial content delivery.
 class _ByteRange {
+  /// Creates a byte range from [start] through [end], inclusive.
+  _ByteRange(this.start, this.end);
+
   /// The start byte of the range.
   final int start;
 
   /// The end byte of the range.
   final int end;
-
-  /// Creates a [_ByteRange] instance.
-  _ByteRange(this.start, this.end);
 }

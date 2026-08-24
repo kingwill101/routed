@@ -1,11 +1,10 @@
-import 'package:routed_core/routed_core.dart';
 import 'package:routed_cache/routed_cache.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 
 void main() {
-  CacheManager cacheManager = CacheManager()
-    ..registerStore('array', ArrayStore());
+  final cacheManager = CacheManager()..registerStore('array', ArrayStore());
 
   group('Cache extension — gap coverage', () {
     engineGroup(
@@ -13,45 +12,43 @@ void main() {
       options: [
         withCacheManager(cacheManager),
         (engine) {
-          engine.get('/remove-cache', (ctx) async {
-            await ctx.cache('to-remove', 'value', 60);
-            final before = await ctx.getCache('to-remove');
-            final removed = await ctx.removeCache('to-remove');
-            final after = await ctx.getCache('to-remove');
-            return ctx.json({
-              'before': before,
-              'removed': removed,
-              'after': after,
+          engine
+            ..get('/remove-cache', (ctx) async {
+              await ctx.cache('to-remove', 'value', 60);
+              final before = await ctx.getCache('to-remove');
+              final removed = await ctx.removeCache('to-remove');
+              final after = await ctx.getCache('to-remove');
+              return ctx.json({
+                'before': before,
+                'removed': removed,
+                'after': after,
+              });
+            })
+            ..get('/cache-forever', (ctx) async {
+              final stored = await ctx.cacheForever('forever-key', 'permanent');
+              final value = await ctx.getCache('forever-key');
+              return ctx.json({'stored': stored, 'value': value});
+            })
+            ..get('/remember-forever', (ctx) async {
+              var computeCount = 0;
+              final value1 = await ctx.rememberCacheForever('rf-key', () {
+                computeCount++;
+                return 'computed-once';
+              });
+              final value2 = await ctx.rememberCacheForever('rf-key', () {
+                computeCount++;
+                return 'should-not-recompute';
+              });
+              return ctx.json({
+                'value1': value1,
+                'value2': value2,
+                'computeCount': computeCount,
+              });
+            })
+            ..get('/remove-nonexistent', (ctx) async {
+              final removed = await ctx.removeCache('does-not-exist');
+              return ctx.json({'removed': removed});
             });
-          });
-
-          engine.get('/cache-forever', (ctx) async {
-            final stored = await ctx.cacheForever('forever-key', 'permanent');
-            final value = await ctx.getCache('forever-key');
-            return ctx.json({'stored': stored, 'value': value});
-          });
-
-          engine.get('/remember-forever', (ctx) async {
-            var computeCount = 0;
-            final value1 = await ctx.rememberCacheForever('rf-key', () {
-              computeCount++;
-              return 'computed-once';
-            });
-            final value2 = await ctx.rememberCacheForever('rf-key', () {
-              computeCount++;
-              return 'should-not-recompute';
-            });
-            return ctx.json({
-              'value1': value1,
-              'value2': value2,
-              'computeCount': computeCount,
-            });
-          });
-
-          engine.get('/remove-nonexistent', (ctx) async {
-            final removed = await ctx.removeCache('does-not-exist');
-            return ctx.json({'removed': removed});
-          });
         },
       ],
       define: (engine, client, tess) {

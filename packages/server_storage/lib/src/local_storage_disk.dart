@@ -1,7 +1,6 @@
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
-
-import 'storage_manager.dart';
+import 'package:server_storage/src/storage_manager.dart';
 
 /// Resolves local storage roots with sensible defaults.
 ///
@@ -27,6 +26,7 @@ String resolveLocalStorageRoot(
 
 /// Local file system backed disk.
 class LocalStorageDisk implements StorageDisk {
+  /// Creates a local disk rooted at [root].
   LocalStorageDisk({required String root, file.FileSystem? fileSystem})
     : _fileSystem = fileSystem ?? const local.LocalFileSystem(),
       _root = _normalizeRoot(root, fileSystem ?? const local.LocalFileSystem());
@@ -86,5 +86,6 @@ class LocalStorageDisk implements StorageDisk {
     return candidate.startsWith(prefix);
   }
 
+  /// The normalized absolute root path for this disk.
   String get root => _root;
 }

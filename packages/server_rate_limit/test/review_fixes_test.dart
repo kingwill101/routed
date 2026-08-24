@@ -73,13 +73,13 @@ class _LockedRepository implements contracts.Repository {
   }
 
   @override
-  Future<bool> forever(String key, dynamic value) => put(key, value, null);
+  Future<bool> forever(String key, dynamic value) => put(key, value);
 
   @override
   Future<dynamic> remember(String key, dynamic ttl, Function callback) async {
     final value = entries[key];
     if (value != null) return value;
-    final result = await callback();
+    final result = await Function.apply(callback, const []);
     await put(key, result, ttl is Duration ? ttl : null);
     return result;
   }
@@ -92,8 +92,8 @@ class _LockedRepository implements contracts.Repository {
   Future<dynamic> rememberForever(String key, Function callback) async {
     final value = entries[key];
     if (value != null) return value;
-    final result = await callback();
-    await put(key, result, null);
+    final result = await Function.apply(callback, const []);
+    await put(key, result);
     return result;
   }
 
@@ -112,7 +112,7 @@ void main() {
         refillInterval: const Duration(seconds: 1),
         maxTokens: 1,
       );
-      final key = 'bucket';
+      const key = 'bucket';
 
       final results = await Future.wait([
         backend.consume(key, config, DateTime.now()),
@@ -123,8 +123,11 @@ void main() {
       // With a capacity-1 bucket, exactly one of the three concurrent calls
       // may be allowed; the others must be blocked.
       final allowedCount = results.where((r) => r.allowed).length;
-      expect(allowedCount, 1,
-          reason: 'the lock must make the read-modify-write atomic');
+      expect(
+        allowedCount,
+        1,
+        reason: 'the lock must make the read-modify-write atomic',
+      );
     });
   });
 
@@ -133,10 +136,16 @@ void main() {
       final matcher = RequestMatcher(method: 'GET', pattern: '*');
 
       expect(matcher.matches(_FakeRequest('GET', '/anything')), isTrue);
-      expect(matcher.matches(_FakeRequest('POST', '/anything')), isFalse,
-          reason: 'a GET-only policy must not match POST traffic');
-      expect(matcher.matches(_FakeRequest('get', '/anything')), isTrue,
-          reason: 'method comparison must be case-insensitive');
+      expect(
+        matcher.matches(_FakeRequest('POST', '/anything')),
+        isFalse,
+        reason: 'a GET-only policy must not match POST traffic',
+      );
+      expect(
+        matcher.matches(_FakeRequest('get', '/anything')),
+        isTrue,
+        reason: 'method comparison must be case-insensitive',
+      );
     });
 
     test('empty pattern honours the configured method', () {

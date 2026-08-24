@@ -49,7 +49,7 @@ void main() async {
 }
 ```
 
-See [`example/cache_example.dart`](example/cache_example.dart) for runnable example.
+See the runnable example in the package's `example` directory.
 
 ## Testing
 

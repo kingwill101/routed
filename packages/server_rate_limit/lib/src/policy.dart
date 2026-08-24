@@ -1,22 +1,43 @@
 import 'dart:math';
 
-import 'backend.dart';
+import 'package:server_rate_limit/src/backend.dart';
 
 /// Available enforcement strategies for rate limiting.
-enum RateLimitStrategy { tokenBucket, slidingWindow, quota }
+enum RateLimitStrategy {
+  /// Refills a token balance over time.
+  tokenBucket,
 
-/// Behaviour when the distributed backend becomes unavailable.
-enum RateLimitFailoverMode { allow, block, local }
+  /// Counts requests within aligned time windows.
+  slidingWindow,
 
-/// Base contract for algorithm-specific configuration.
+  /// Counts requests within a longer-lived quota period.
+  quota,
+}
+
+/// Behavior when the distributed backend becomes unavailable.
+enum RateLimitFailoverMode {
+  /// Allows the request to proceed without enforcing the distributed limit.
+  allow,
+
+  /// Rejects the request while the backend is unavailable.
+  block,
+
+  /// Enforces the limit against process-local fallback state.
+  local,
+}
+
+/// Base configuration contract for a rate-limit algorithm.
 abstract class RateLimitAlgorithmConfig {
+  /// Creates configuration for [strategy].
   const RateLimitAlgorithmConfig(this.strategy);
 
+  /// Algorithm represented by this configuration.
   final RateLimitStrategy strategy;
 }
 
-/// Token bucket configuration parameters shared by all backends.
+/// Token-bucket parameters shared by all backends.
 class TokenBucketConfig extends RateLimitAlgorithmConfig {
+  /// Creates a token-bucket configuration.
   TokenBucketConfig({
     required this.capacity,
     required this.refillTokens,
@@ -33,17 +54,19 @@ class TokenBucketConfig extends RateLimitAlgorithmConfig {
   /// How frequently tokens are refilled.
   final Duration refillInterval;
 
-  /// Upper bound of tokens after refills (capacity * burst).
+  /// Upper bound of tokens after refills, usually capacity multiplied by a
+  /// burst factor.
   final double maxTokens;
 
-  /// Tokens added per millisecond, derived from [refillTokens] and [refillInterval].
+  /// Number of tokens added per millisecond.
   double get refillPerMillisecond => refillInterval.inMilliseconds == 0
       ? double.infinity
       : refillTokens / refillInterval.inMilliseconds;
 }
 
-/// Sliding-window configuration maintaining a strict window boundary.
+/// Sliding-window configuration that maintains a strict window boundary.
 class SlidingWindowConfig extends RateLimitAlgorithmConfig {
+  /// Creates a sliding-window configuration.
   SlidingWindowConfig({required this.limit, required this.window})
     : super(RateLimitStrategy.slidingWindow);
 
@@ -54,8 +77,9 @@ class SlidingWindowConfig extends RateLimitAlgorithmConfig {
   final Duration window;
 }
 
-/// Rolling quota configuration for long-lived limits.
+/// Rolling quota configuration for a longer-lived limit.
 class QuotaConfig extends RateLimitAlgorithmConfig {
+  /// Creates a quota configuration.
   QuotaConfig({required this.limit, required this.period})
     : super(RateLimitStrategy.quota);
 
@@ -66,38 +90,58 @@ class QuotaConfig extends RateLimitAlgorithmConfig {
   final Duration period;
 }
 
-/// Result of a rate-limit evaluation.
+/// Result returned by a rate-limit evaluation.
 class RateLimitOutcome {
+  /// Creates an outcome that allows the request.
   RateLimitOutcome.allowed({
     required this.remaining,
     this.retryAfter = Duration.zero,
     this.failoverMode,
   }) : allowed = true;
 
+  /// Creates an outcome that blocks the request.
   RateLimitOutcome.blocked({
     required this.retryAfter,
     required this.remaining,
     this.failoverMode,
   }) : allowed = false;
 
+  /// Whether the request may proceed.
   final bool allowed;
+
+  /// Suggested delay before retrying a blocked request.
   final Duration retryAfter;
+
+  /// Number of requests or tokens remaining after the evaluation.
   final int remaining;
+
+  /// Failover mode used to produce this outcome, when applicable.
   final RateLimitFailoverMode? failoverMode;
 }
 
-/// Request contract used by the rate-limit policy runtime.
+/// Request data required by the rate-limit policy runtime.
 abstract class RateLimitRequest {
+  /// HTTP method for the request.
   String get method;
+
+  /// Request path used for policy matching.
   String get path;
+
+  /// Client IP address, when available.
   String get clientIP;
+
+  /// Remote address of the connected peer.
   String get remoteAddr;
+
+  /// Returns the request header named [name], or an empty string when absent.
   String header(String name);
 }
 
 typedef _MatchFn = bool Function(RateLimitRequest request);
 
+/// Matches requests against an optional method and wildcard path pattern.
 class RequestMatcher {
+  /// Creates a matcher for [pattern] and an optional HTTP [method].
   RequestMatcher({required String? method, required String pattern})
     : _method = method?.toUpperCase(),
       _pattern = pattern,
@@ -135,7 +179,7 @@ class RequestMatcher {
   static String _wildcardToRegex(String pattern) {
     final escaped = pattern.splitMapJoin(
       RegExp(r'(\*\*|\*)'),
-      onNonMatch: (match) => RegExp.escape(match),
+      onNonMatch: RegExp.escape,
       onMatch: (match) {
         if (match[0] == '**') {
           return '.*';
@@ -146,20 +190,28 @@ class RequestMatcher {
     return '^$escaped\$';
   }
 
+  /// Returns whether [request] satisfies this matcher.
   bool matches(RateLimitRequest request) => _matchFn(request);
 
   @override
   String toString() => '${_method ?? '*'} $_pattern';
 }
 
-/// Resolves the identity string used for rate-limiting.
+/// Resolves the identity string used for rate limiting.
+// This interface is intentionally one method: it is the extension point for
+// custom identity strategies.
+// ignore: one_member_abstracts
 abstract class RateLimitKeyResolver {
+  /// Creates a key resolver.
   const RateLimitKeyResolver();
 
+  /// Returns the identity for [request], or `null` when it cannot be resolved.
   String? resolve(RateLimitRequest request);
 }
 
+/// Resolves rate-limit identities from the client IP.
 class IpKeyResolver extends RateLimitKeyResolver {
+  /// Creates an IP key resolver.
   const IpKeyResolver();
 
   @override
@@ -170,9 +222,12 @@ class IpKeyResolver extends RateLimitKeyResolver {
   }
 }
 
+/// Resolves rate-limit identities from a request header.
 class HeaderKeyResolver extends RateLimitKeyResolver {
+  /// Creates a header resolver for [header].
   const HeaderKeyResolver(this.header);
 
+  /// Header name read from each request.
   final String header;
 
   @override
@@ -183,9 +238,12 @@ class HeaderKeyResolver extends RateLimitKeyResolver {
   }
 }
 
+/// Callback signature for custom request identity resolution.
 typedef CustomKeyResolver = String? Function(RateLimitRequest request);
 
+/// Resolves identities using a caller-provided callback.
 class CustomResolver extends RateLimitKeyResolver {
+  /// Creates a resolver backed by [_resolver].
   const CustomResolver(this._resolver);
 
   final CustomKeyResolver _resolver;
@@ -196,6 +254,7 @@ class CustomResolver extends RateLimitKeyResolver {
 
 /// Compiled policy ready for runtime enforcement.
 class CompiledRateLimitPolicy {
+  /// Creates a compiled policy from its matching, identity, and backend parts.
   CompiledRateLimitPolicy({
     required this.name,
     required this.matcher,
@@ -205,22 +264,39 @@ class CompiledRateLimitPolicy {
     required this.failover,
   });
 
+  /// Stable policy name used to namespace backend buckets.
   final String name;
+
+  /// Request matcher used to select this policy.
   final RequestMatcher matcher;
+
+  /// Identity resolver used to select a caller bucket.
   final RateLimitKeyResolver keyResolver;
+
+  /// Algorithm configuration evaluated by this policy.
   final RateLimitAlgorithmConfig algorithm;
+
+  /// Backend that stores and evaluates this policy's state.
   final RateLimiterBackend backend;
+
+  /// Behavior used if [backend] cannot evaluate a request.
   final RateLimitFailoverMode failover;
 
+  /// Returns whether [request] is selected by this policy.
   bool matches(RateLimitRequest request) => matcher.matches(request);
 
+  /// Evaluates one request for [identity] at [now].
   Future<RateLimitOutcome> evaluate(String identity, DateTime now) {
     final bucketKey = '$name:$identity';
     return backend.consume(bucketKey, algorithm, now, failover: failover);
   }
 }
 
-/// Helper to build token bucket configuration from user parameters.
+/// Builds a token-bucket configuration from user parameters.
+///
+/// Values below one capacity are clamped to one. Non-positive refill
+/// intervals use a one-second interval. A non-positive burst multiplier uses
+/// the default multiplier of `1.0`.
 TokenBucketConfig buildBucketConfig({
   required int capacity,
   required Duration refillInterval,

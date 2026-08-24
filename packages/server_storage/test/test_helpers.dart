@@ -18,7 +18,7 @@ Middleware makeMiddleware(String label, List<String> log) {
 }
 
 String middlewareLabel(Middleware mw, List<String> log) {
-  return _middlewareIdentityMap[mw] ?? "UnknownMiddleware";
+  return _middlewareIdentityMap[mw] ?? 'UnknownMiddleware';
 }
 
 Engine engineWithFeatures({
