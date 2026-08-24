@@ -572,7 +572,7 @@ class Router {
   }
 }
 
-/// A router web socket route used by Routed.
+/// A WebSocket route registered with a [Router].
 class RouterWebSocketRoute {
   /// Creates a [RouterWebSocketRoute].
   RouterWebSocketRoute({
@@ -581,10 +581,10 @@ class RouterWebSocketRoute {
     List<Middleware> routeMiddlewares = const [],
   }) : routeMiddlewares = List<Middleware>.from(routeMiddlewares);
 
-  /// The path value.
+  /// The path pattern for this WebSocket route.
   String path;
 
-  /// The handler value.
+  /// The handler invoked after the WebSocket upgrade.
   final WebSocketHandler handler;
 
   /// The route middlewares value.

@@ -73,7 +73,7 @@ class Request {
   Uint8List? _bodyBytes;
   bool _bodyConsumed = false;
 
-  /// The config value.
+  /// The engine configuration used while processing this request.
   EngineConfig config;
   String? _overrideClientIp;
 

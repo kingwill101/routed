@@ -67,7 +67,7 @@ class ShutdownController {
        _onDrain = onDrain,
        _onForceClose = onForceClose;
 
-  /// The config value.
+  /// The graceful-shutdown configuration.
   final ShutdownConfig config;
 
   final FutureOr<void> Function() _onShutdown;
@@ -81,19 +81,19 @@ class ShutdownController {
   bool _forced = false;
   ProcessSignal? _triggerSignal;
 
-  /// Whether this is draining is enabled.
+  /// Whether graceful shutdown is currently draining requests.
   bool get isDraining => _draining;
 
-  /// Whether this is closed is enabled.
+  /// Whether shutdown has completed and resources are closed.
   bool get isClosed => _closed;
 
-  /// Whether this was forced is enabled.
+  /// Whether shutdown was forced before the grace period elapsed.
   bool get wasForced => _forced;
 
-  /// The trigger signal value.
+  /// The process signal that initiated shutdown, when one exists.
   ProcessSignal? get triggerSignal => _triggerSignal;
 
-  /// The done value.
+  /// Completes when shutdown has finished.
   Future<void> get done => _completer.future;
 
   /// Creates a [ShutdownController].

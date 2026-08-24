@@ -67,7 +67,7 @@ class EventManager implements Disposable {
     return _eventBus.on<T>();
   }
 
-  /// Creates a [EventManager].
+  /// Creates an event manager.
   /// Subscribes [onData] to events of type [T].
   StreamSubscription<T> listen<T extends Event>(void Function(T event) onData) {
     return _eventBus.on<T>().listen(onData);

@@ -4,7 +4,6 @@ import 'package:routed_core/src/engine/engine.dart';
 
 /// A serializable snapshot of the engine's registered routes.
 class RouteManifest {
-  /// Creates a route manifest snapshot.
   /// Creates a route manifest.
   RouteManifest({
     DateTime? generatedAt,
@@ -265,7 +264,7 @@ class WebSocketRouteManifestEntry {
   }
 }
 
-/// A engine route manifest x used by Routed.
+/// Adds route-manifest inspection to an [Engine].
 extension EngineRouteManifestX on Engine {
   /// Generates a [RouteManifest] for the current engine.
   RouteManifest buildRouteManifest() {

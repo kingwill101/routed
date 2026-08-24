@@ -22,13 +22,13 @@ class RegisteredRoute {
   }) : constraints = Map<String, dynamic>.from(constraints ?? const {}),
        metadata = metadata ?? RouteMetadata();
 
-  /// The method value.
+  /// The HTTP method registered for this route.
   final String method;
 
-  /// The path value.
+  /// The path pattern registered for this route.
   String path;
 
-  /// The handler value.
+  /// The handler invoked when this route matches.
   final RouteHandler handler;
 
   /// Route-level middlewares (only declared on this route).
@@ -40,7 +40,7 @@ class RegisteredRoute {
   /// Name of the route, used for "named route" features.
   String? name;
 
-  /// The constraints value.
+  /// The constraints applied while matching this route.
   Map<String, dynamic> constraints;
 
   /// Generic typed metadata attached to the route.

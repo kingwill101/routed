@@ -74,7 +74,7 @@ class AppZone {
   }
 
   // Helper to get the engine config
-  /// The engine config value.
+  /// The active engine configuration.
   static EngineConfig get engineConfig => engine.config;
 
   // Helper for route generation
