@@ -17,11 +17,11 @@ void main() {
             enabled: true,
             exporter: 'console',
           ),
-          metrics: ObservabilityMetricsConfig(enabled: false),
+          metrics: ObservabilityMetricsConfig(),
           health: ObservabilityHealthConfig(enabled: false),
         ),
       );
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
 
       engine.get('/trace', (ctx) {
         final spanContext = dotel.Context.current.spanContext;
@@ -45,12 +45,12 @@ void main() {
     test('metrics endpoint exposes request counters', () async {
       final engine = testEngine(
         observabilityConfig: ObservabilityConfig(
-          tracing: ObservabilityTracingConfig(enabled: false),
+          tracing: ObservabilityTracingConfig(),
           metrics: ObservabilityMetricsConfig(enabled: true),
           health: ObservabilityHealthConfig(enabled: false),
         ),
       );
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
 
       engine.get('/hello', (ctx) => ctx.string('ok'));
       await engine.initialize();
@@ -70,12 +70,12 @@ void main() {
     test('health endpoint supports custom readiness checks', () async {
       final engine = testEngine(
         observabilityConfig: ObservabilityConfig(
-          tracing: ObservabilityTracingConfig(enabled: false),
-          metrics: ObservabilityMetricsConfig(enabled: false),
-          health: ObservabilityHealthConfig(enabled: true),
+          tracing: ObservabilityTracingConfig(),
+          metrics: ObservabilityMetricsConfig(),
+          health: ObservabilityHealthConfig(),
         ),
       );
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
 
       engine.get('/ping', (ctx) => ctx.string('pong'));
       await engine.initialize();
@@ -90,14 +90,17 @@ void main() {
 
       final readiness = await client.get('/readyz');
       expect(readiness.statusCode, equals(503), reason: readiness.body);
-      expect(readiness.json()['ok'], isFalse);
-      final checks = readiness.json()['checks'] as Map<String, dynamic>;
+      final readinessJson = readiness.json() as Map<String, Object?>;
+      expect(readinessJson['ok'], isFalse);
+      final checks = readinessJson['checks']! as Map<String, Object?>;
       expect(checks.containsKey('database'), isTrue);
-      expect(checks['database']['reason'], equals('offline'));
+      final database = checks['database']! as Map<String, Object?>;
+      expect(database['reason'], equals('offline'));
 
       final liveness = await client.get('/livez');
       liveness.assertStatus(200);
-      expect(liveness.json()['ok'], isTrue);
+      final livenessJson = liveness.json() as Map<String, Object?>;
+      expect(livenessJson['ok'], isTrue);
     });
 
     test('readiness reports unhealthy during graceful shutdown', () async {
@@ -113,18 +116,18 @@ void main() {
           ),
         ),
         observabilityConfig: ObservabilityConfig(
-          tracing: ObservabilityTracingConfig(enabled: false),
-          metrics: ObservabilityMetricsConfig(enabled: false),
-          health: ObservabilityHealthConfig(enabled: true),
+          tracing: ObservabilityTracingConfig(),
+          metrics: ObservabilityMetricsConfig(),
+          health: ObservabilityHealthConfig(),
         ),
       );
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
 
       await engine.initialize();
 
       final handler = RoutedRequestHandler(engine);
       final client = TestClient(handler, mode: TransportMode.ephemeralServer);
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       // Kick the server to ensure the shutdown controller is registered.
       final initialResponse = await client.get('/readyz');

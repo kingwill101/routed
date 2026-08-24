@@ -4,13 +4,14 @@
 /// (with attached [RouteSchema] metadata) into an OpenAPI 3.1 document.
 library;
 
-import 'package:routed_core/src/engine/route_manifest.dart';
-import 'openapi_spec.dart';
-import 'pipe_rule_converter.dart';
-import 'schema.dart';
+import 'package:routed_core/routed_core.dart';
+import 'package:routed_openapi/src/openapi/openapi_spec.dart';
+import 'package:routed_openapi/src/openapi/pipe_rule_converter.dart';
+import 'package:routed_openapi/src/openapi/schema.dart';
 
 /// Configuration for the OpenAPI spec generation.
 class OpenApiConfig {
+  /// Creates generation settings for an API document.
   const OpenApiConfig({
     this.title = 'API',
     this.version = '1.0.0',
@@ -19,9 +20,16 @@ class OpenApiConfig {
     this.includeHidden = false,
   });
 
+  /// The title written to the generated document.
   final String title;
+
+  /// The version written to the generated document.
   final String version;
+
+  /// An optional long description for the API.
   final String? description;
+
+  /// Server URLs advertised by the generated document.
   final List<OpenApiServer> servers;
 
   /// Whether to include routes marked with `hidden: true`.
@@ -173,11 +181,11 @@ OpenApiOperation _buildOperation(
 
 /// Builds an [OpenApiRequestBody] from a [BodySchema].
 OpenApiRequestBody _buildRequestBody(BodySchema body) {
-  Map<String, Object?>? jsonSchema = body.jsonSchema;
+  var jsonSchema = body.jsonSchema;
 
   // If the body schema contains pipe-rule markers, convert them.
   if (jsonSchema != null && jsonSchema.containsKey('_validationRules')) {
-    final rules = (jsonSchema['_validationRules'] as Map<String, Object?>)
+    final rules = (jsonSchema['_validationRules']! as Map<String, Object?>)
         .cast<String, String>();
     jsonSchema = PipeRuleSchemaConverter.convertRules(rules);
   }

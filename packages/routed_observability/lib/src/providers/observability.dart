@@ -2,20 +2,22 @@ import 'dart:async';
 
 import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 import 'package:routed_core/routed_core.dart';
+import 'package:routed_observability/src/config.dart';
+import 'package:routed_observability/src/errors.dart';
+import 'package:routed_observability/src/health.dart';
+import 'package:routed_observability/src/metrics.dart';
+import 'package:routed_observability/src/tracing.dart';
 import 'package:sentry/sentry.dart';
 
-import '../errors.dart';
-import '../health.dart';
-import '../metrics.dart';
-import '../tracing.dart';
-import '../config.dart';
-
+/// Registers and runs Routed's observability services.
 class ObservabilityServiceProvider extends ServiceProvider
     with ProvidesTypedConfiguration<ObservabilityConfig> {
+  /// Creates a provider using [configuration] or its defaults.
   ObservabilityServiceProvider([ObservabilityConfig? configuration])
     : configuration = configuration ?? ObservabilityConfig();
 
   @override
+  /// The typed observability configuration used during boot.
   final ObservabilityConfig configuration;
 
   static const _metricsRouteName = 'observability.metrics';
@@ -48,15 +50,15 @@ class ObservabilityServiceProvider extends ServiceProvider
 
   @override
   void register(Container container) {
-    final registry = container.get<MiddlewareRegistry>();
-    registry.register(
-      'routed.observability.tracing',
-      (_) => _tracingMiddlewareRef,
-    );
-    registry.register(
-      'routed.observability.metrics',
-      (_) => _metricsMiddlewareRef,
-    );
+    container.get<MiddlewareRegistry>()
+      ..register(
+        'routed.observability.tracing',
+        (_) => _tracingMiddlewareRef,
+      )
+      ..register(
+        'routed.observability.metrics',
+        (_) => _metricsMiddlewareRef,
+      );
   }
 
   @override
@@ -122,11 +124,12 @@ class ObservabilityServiceProvider extends ServiceProvider
     _sentryEnabled = false;
     _configureSentry(_sentryConfig!, enabled: enabled);
 
-    container.instance<MetricsService>(_metrics);
-    container.instance<HealthService>(_health);
-    container.instance<TracingService>(_tracing);
-    container.instance<ErrorObserverRegistry>(_errorObservers);
-    container.instance<HealthEndpointRegistry>(_healthRegistry);
+    container
+      ..instance<MetricsService>(_metrics)
+      ..instance<HealthService>(_health)
+      ..instance<TracingService>(_tracing)
+      ..instance<ErrorObserverRegistry>(_errorObservers)
+      ..instance<HealthEndpointRegistry>(_healthRegistry);
 
     _attachGlobalMiddleware(engine);
     _registerRoutes(engine);
@@ -140,7 +143,10 @@ class ObservabilityServiceProvider extends ServiceProvider
     if (manager == null) {
       return;
     }
-    _eventSubscription?.cancel();
+    final subscription = _eventSubscription;
+    if (subscription != null) {
+      unawaited(subscription.cancel());
+    }
     _eventSubscription = manager.on<Event>().listen((event) async {
       if (event is RoutingErrorEvent && _errorObservers.hasObservers) {
         await _errorObservers.notify(
@@ -207,28 +213,30 @@ class ObservabilityServiceProvider extends ServiceProvider
         try {
           final response = await next();
           final statusCode = ctx.response.statusCode;
-          span.addAttributes(
-            dotel.OTel.attributes([
-              dotel.OTel.attributeInt('http.status_code', statusCode),
-            ]),
-          );
-          span.setStatus(
-            statusCode >= 500
-                ? dotel.SpanStatusCode.Error
-                : dotel.SpanStatusCode.Ok,
-          );
+          span
+            ..addAttributes(
+              dotel.OTel.attributes([
+                dotel.OTel.attributeInt('http.status_code', statusCode),
+              ]),
+            )
+            ..setStatus(
+              statusCode >= 500
+                  ? dotel.SpanStatusCode.Error
+                  : dotel.SpanStatusCode.Ok,
+            );
           return response;
         } catch (error, stackTrace) {
           final statusCode = ctx.response.statusCode >= 400
               ? ctx.response.statusCode
               : 500;
-          span.addAttributes(
-            dotel.OTel.attributes([
-              dotel.OTel.attributeInt('http.status_code', statusCode),
-            ]),
-          );
-          span.recordException(error, stackTrace: stackTrace);
-          span.setStatus(dotel.SpanStatusCode.Error, error.toString());
+          span
+            ..addAttributes(
+              dotel.OTel.attributes([
+                dotel.OTel.attributeInt('http.status_code', statusCode),
+              ]),
+            )
+            ..recordException(error, stackTrace: stackTrace)
+            ..setStatus(dotel.SpanStatusCode.Error, error.toString());
           await _captureSentryException(ctx, error, stackTrace, sentrySpan);
           rethrow;
         }
@@ -370,8 +378,9 @@ class ObservabilityServiceProvider extends ServiceProvider
     }
 
     await Sentry.init((options) {
-      options.dsn = dsn;
-      options.sendDefaultPii = config.sendDefaultPii;
+      options
+        ..dsn = dsn
+        ..sendDefaultPii = config.sendDefaultPii;
       if (config.tracesSampleRate > 0) {
         options.tracesSampleRate = config.tracesSampleRate;
       }
@@ -428,15 +437,15 @@ class ObservabilityServiceProvider extends ServiceProvider
             baggage: baggage,
           );
 
-    final transaction = Sentry.startTransactionWithContext(
-      transactionContext,
-      bindToScope: false,
-      startTimestamp: DateTime.now(),
-    );
-
-    transaction.setTag('http.method', request.method);
-    transaction.setTag('http.route', routeLabel);
-    transaction.setData('http.target', request.uri.path);
+    final transaction =
+        Sentry.startTransactionWithContext(
+            transactionContext,
+            bindToScope: false,
+            startTimestamp: DateTime.now(),
+          )
+          ..setTag('http.method', request.method)
+          ..setTag('http.route', routeLabel)
+          ..setData('http.target', request.uri.path);
     return transaction;
   }
 
@@ -447,9 +456,10 @@ class ObservabilityServiceProvider extends ServiceProvider
     if (span == null || span.finished) {
       return;
     }
-    span.setTag('http.route', _routeLabel(ctx));
-    span.setData('http.status_code', ctx.response.statusCode);
-    span.status = SpanStatus.fromHttpStatusCode(ctx.response.statusCode);
+    span
+      ..setTag('http.route', _routeLabel(ctx))
+      ..setData('http.status_code', ctx.response.statusCode)
+      ..status = SpanStatus.fromHttpStatusCode(ctx.response.statusCode);
     await span.finish();
     ctx.set(_sentrySpanKey, null);
   }
@@ -469,12 +479,13 @@ class ObservabilityServiceProvider extends ServiceProvider
       stackTrace: stackTrace,
       withScope: (scope) {
         if (span != null) {
-          scope.span = span;
-          scope.transaction = _routeLabel(ctx);
+          scope
+            ..span = span
+            ..transaction = _routeLabel(ctx);
         }
-        scope.setContexts('request', requestContext.toJson());
-        scope.setTag('http.method', ctx.request.method);
-        scope.setTag('http.route', _routeLabel(ctx));
+        _discardFutureOr(scope.setContexts('request', requestContext.toJson()));
+        _discardFutureOr(scope.setTag('http.method', ctx.request.method));
+        _discardFutureOr(scope.setTag('http.route', _routeLabel(ctx)));
       },
     );
   }
@@ -503,7 +514,7 @@ class ObservabilityServiceProvider extends ServiceProvider
         return null;
       }
       return SentryTraceHeader.fromTraceHeader(value.trim());
-    } catch (_) {
+    } on Object catch (_) {
       return null;
     }
   }
@@ -515,7 +526,7 @@ class ObservabilityServiceProvider extends ServiceProvider
     }
     try {
       return SentryBaggage.fromHeaderList(values);
-    } catch (_) {
+    } on Object catch (_) {
       return null;
     }
   }
@@ -680,5 +691,11 @@ class ObservabilityServiceProvider extends ServiceProvider
       'error.type': event.error.runtimeType.toString(),
       'error.message': event.error.toString(),
     };
+  }
+}
+
+void _discardFutureOr(FutureOr<void> result) {
+  if (result is Future<void>) {
+    unawaited(result);
   }
 }

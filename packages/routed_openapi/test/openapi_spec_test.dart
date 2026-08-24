@@ -42,14 +42,14 @@ void main() {
       final json = spec.toJson();
       expect(json['openapi'], '3.1.0');
       expect(
-        (json['info'] as Map<String, Object?>)['description'],
+        (json['info']! as Map<String, Object?>)['description'],
         'A test API',
       );
       expect(json['servers'], isA<List<Object?>>());
-      expect((json['servers'] as List<Object?>).length, 1);
+      expect((json['servers']! as List<Object?>).length, 1);
       expect(json['paths'], isA<Map<String, Object?>>());
       expect(
-        (json['paths'] as Map<String, Object?>).containsKey('/users'),
+        (json['paths']! as Map<String, Object?>).containsKey('/users'),
         isTrue,
       );
       expect(json['tags'], isA<List<Object?>>());
@@ -249,7 +249,7 @@ void main() {
 
     test('operationFor returns correct operation', () {
       const op = OpenApiOperation(summary: 'test');
-      final item = const OpenApiPathItem(get: op);
+      const item = OpenApiPathItem(get: op);
       expect(item.operationFor('GET'), isNotNull);
       expect(item.operationFor('GET')!.summary, 'test');
       expect(item.operationFor('POST'), isNull);
@@ -293,7 +293,7 @@ void main() {
     });
 
     test('round-trip with multiple methods', () {
-      final original = const OpenApiPathItem(
+      const original = OpenApiPathItem(
         summary: 'User path',
         get: OpenApiOperation(
           summary: 'List',
@@ -319,7 +319,7 @@ void main() {
     });
 
     test('deprecated only serialized when true', () {
-      const opFalse = OpenApiOperation(deprecated: false);
+      const opFalse = OpenApiOperation();
       expect(opFalse.toJson().containsKey('deprecated'), isFalse);
 
       const opTrue = OpenApiOperation(deprecated: true);

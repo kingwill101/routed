@@ -1,3 +1,8 @@
+## Unreleased
+
+- Adopt `very_good_analysis` and complete Dartdoc coverage for the public
+  OpenAPI generation, schema, route metadata, and auth contract APIs.
+
 ## 0.1.0
 
 - Generate auth paths and path parameters from typed `AuthRoutePath`

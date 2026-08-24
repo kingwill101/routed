@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_openapi/routed_openapi.dart';
 
@@ -8,7 +10,7 @@ void main() async {
   const createSchema = RouteSchema(summary: 'Create user', tags: ['users']);
 
   engine
-      .get('/users', (ctx) async => ctx.response.json({'users': []}))
+      .get('/users', (ctx) async => ctx.response.json({'users': <Object?>[]}))
       .schema(listSchema);
   engine
       .post('/users', (ctx) async => ctx.response.json({'created': true}))
@@ -20,9 +22,9 @@ void main() async {
   // Convert to OpenAPI
   final spec = manifestToOpenApi(
     manifest,
-    config: const OpenApiConfig(title: 'User Service', version: '1.0.0'),
+    config: const OpenApiConfig(title: 'User Service'),
   );
-  print(spec.toJsonString(pretty: true));
+  stdout.writeln(spec.toJsonString(pretty: true));
 
   await engine.close();
 }

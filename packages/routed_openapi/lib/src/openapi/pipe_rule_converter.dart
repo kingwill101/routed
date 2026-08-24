@@ -108,8 +108,9 @@ class PipeRuleSchemaConverter {
           }
         case 'between':
           if (options != null && options.length >= 2) {
-            result.min = num.tryParse(options[0]);
-            result.max = num.tryParse(options[1]);
+            result
+              ..min = num.tryParse(options[0])
+              ..max = num.tryParse(options[1]);
           }
 
         // Format rules
@@ -179,17 +180,19 @@ class PipeRuleSchemaConverter {
           if (options != null && options.isNotEmpty) {
             final len = int.tryParse(options[0]);
             if (len != null) {
-              result.minLength = len;
-              result.maxLength = len;
-              result.pattern = r'^\d+$';
+              result
+                ..minLength = len
+                ..maxLength = len
+                ..pattern = r'^\d+$';
             }
           }
         case 'digits_between':
           result.type ??= _SchemaType.string;
           result.pattern = r'^\d+$';
           if (options != null && options.length >= 2) {
-            result.minLength = int.tryParse(options[0]);
-            result.maxLength = int.tryParse(options[1]);
+            result
+              ..minLength = int.tryParse(options[0])
+              ..maxLength = int.tryParse(options[1]);
           }
         case 'multiple_of':
           if (options != null && options.isNotEmpty) {
@@ -289,7 +292,7 @@ class PipeRuleSchemaConverter {
   }
 
   static Schema _buildArraySchema(_ParsedRules rules) {
-    return Schema.list(uniqueItems: rules.uniqueItems == true ? true : null);
+    return Schema.list(uniqueItems: rules.uniqueItems ?? false ? true : null);
   }
 }
 

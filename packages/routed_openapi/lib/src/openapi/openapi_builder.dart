@@ -1,10 +1,11 @@
 /// Build-runner `$package$` builder that generates an OpenAPI 3.1 spec
 /// from a route manifest JSON file.
 ///
-/// This builder reads the route manifest (produced by running
-/// `dart run routed_cli openapi generate`), enriches route metadata with handler annotations
-/// and handler Dartdoc comments, then converts the result into `openapi.json`
-/// plus a serving controller.
+/// This builder reads the route manifest produced by
+/// `dart run routed_cli openapi generate`.
+///
+/// It enriches route metadata with handler annotations and Dartdoc comments,
+/// then converts the result into `openapi.json` plus a serving controller.
 ///
 /// ## Usage
 ///
@@ -50,11 +51,11 @@ import 'dart:convert';
 import 'dart:io' as io;
 
 import 'package:build/build.dart';
-import 'package:routed_core/src/engine/route_manifest.dart';
-import 'manifest_to_openapi.dart';
-import 'openapi_spec.dart';
-import 'route_metadata_extractor.dart';
-import 'route_metadata_merger.dart';
+import 'package:routed_core/routed_core.dart';
+import 'package:routed_openapi/src/openapi/manifest_to_openapi.dart';
+import 'package:routed_openapi/src/openapi/openapi_spec.dart';
+import 'package:routed_openapi/src/openapi/route_metadata_extractor.dart';
+import 'package:routed_openapi/src/openapi/route_metadata_merger.dart';
 
 /// Factory function registered in `build.yaml`.
 Builder openApiBuilder(BuilderOptions options) =>

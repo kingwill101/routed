@@ -16,7 +16,10 @@ library;
 /// FutureOr<dynamic> listUsers(EngineContext ctx) { ... }
 /// ```
 class Summary {
+  /// Creates a summary annotation with [value].
   const Summary(this.value);
+
+  /// The short OpenAPI summary.
   final String value;
 }
 
@@ -27,7 +30,10 @@ class Summary {
 /// FutureOr<dynamic> listUsers(EngineContext ctx) { ... }
 /// ```
 class Description {
+  /// Creates a description annotation with [value].
   const Description(this.value);
+
+  /// The detailed OpenAPI description.
   final String value;
 }
 
@@ -38,7 +44,10 @@ class Description {
 /// FutureOr<dynamic> listUsers(EngineContext ctx) { ... }
 /// ```
 class Tags {
+  /// Creates a tags annotation with [values].
   const Tags(this.values);
+
+  /// The OpenAPI tags assigned to the handler.
   final List<String> values;
 }
 
@@ -49,7 +58,10 @@ class Tags {
 /// FutureOr<dynamic> listUsers(EngineContext ctx) { ... }
 /// ```
 class OperationId {
+  /// Creates an operation ID annotation with [value].
   const OperationId(this.value);
+
+  /// The stable OpenAPI operation ID.
   final String value;
 }
 
@@ -60,7 +72,10 @@ class OperationId {
 /// FutureOr<dynamic> listUsers(EngineContext ctx) { ... }
 /// ```
 class ApiDeprecated {
+  /// Creates a deprecation annotation with an optional [message].
   const ApiDeprecated([this.message]);
+
+  /// The optional explanation shown for the deprecation.
   final String? message;
 }
 
@@ -71,6 +86,7 @@ class ApiDeprecated {
 /// FutureOr<dynamic> healthCheck(EngineContext ctx) { ... }
 /// ```
 class ApiHidden {
+  /// Creates an annotation that hides the handler from generated documents.
   const ApiHidden();
 }
 
@@ -82,6 +98,7 @@ class ApiHidden {
 /// FutureOr<dynamic> createUser(EngineContext ctx) { ... }
 /// ```
 class ApiResponse {
+  /// Creates a response annotation for [statusCode].
   const ApiResponse(
     this.statusCode, {
     this.description = '',
@@ -90,7 +107,10 @@ class ApiResponse {
     this.headers,
   });
 
+  /// The HTTP status code represented by this response.
   final int statusCode;
+
+  /// The human-readable response description.
   final String description;
 
   /// MIME type for the response body (e.g. 'application/json').
@@ -112,6 +132,7 @@ class ApiResponse {
 /// FutureOr<dynamic> getUser(EngineContext ctx) { ... }
 /// ```
 class ApiParam {
+  /// Creates a parameter annotation with [name] and its request [location].
   const ApiParam(
     this.name, {
     this.location = ParamLocation.query,
@@ -121,8 +142,13 @@ class ApiParam {
     this.example,
   });
 
+  /// The parameter name.
   final String name;
+
+  /// Where the parameter is supplied in the request.
   final ParamLocation location;
+
+  /// The human-readable parameter description.
   final String description;
 
   /// Whether the parameter is required. Defaults to `true` for path params,
@@ -147,6 +173,7 @@ class ApiParam {
 /// FutureOr<dynamic> createUser(EngineContext ctx) { ... }
 /// ```
 class ApiBody {
+  /// Creates a request-body annotation with the supplied metadata.
   const ApiBody({
     this.description = '',
     this.contentType = 'application/json',
@@ -154,8 +181,13 @@ class ApiBody {
     this.schema,
   });
 
+  /// The human-readable body description.
   final String description;
+
+  /// The media type accepted by the operation.
   final String contentType;
+
+  /// Whether the request must include the body.
   final bool required;
 
   /// JSON Schema for the request body.
@@ -163,4 +195,16 @@ class ApiBody {
 }
 
 /// Location of an API parameter in the HTTP request.
-enum ParamLocation { query, path, header, cookie }
+enum ParamLocation {
+  /// A parameter supplied in the URL query string.
+  query,
+
+  /// A parameter embedded in the route path.
+  path,
+
+  /// A parameter supplied as an HTTP header.
+  header,
+
+  /// A parameter supplied in an HTTP cookie.
+  cookie,
+}

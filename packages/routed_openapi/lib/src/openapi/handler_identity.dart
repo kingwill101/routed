@@ -13,8 +13,11 @@
 /// 3. **Method + path** — fallback using HTTP method and route path
 library;
 
+import 'package:meta/meta.dart';
+
 /// Identifies a route handler for cross-referencing between runtime
 /// registration and static analysis.
+@immutable
 class HandlerIdentity {
   /// Creates an identity from available components.
   ///
@@ -29,6 +32,19 @@ class HandlerIdentity {
     this.sourceLine,
     this.sourceColumn,
   });
+
+  /// Deserializes from JSON.
+  factory HandlerIdentity.fromJson(Map<String, Object?> json) {
+    return HandlerIdentity(
+      routeName: json['routeName'] as String?,
+      functionRef: json['functionRef'] as String?,
+      method: json['method'] as String?,
+      path: json['path'] as String?,
+      sourceFile: json['sourceFile'] as String?,
+      sourceLine: json['sourceLine'] as int?,
+      sourceColumn: json['sourceColumn'] as int?,
+    );
+  }
 
   /// Creates an identity from a route name.
   const HandlerIdentity.named(String name)
@@ -172,18 +188,5 @@ class HandlerIdentity {
       if (sourceLine != null) 'sourceLine': sourceLine,
       if (sourceColumn != null) 'sourceColumn': sourceColumn,
     };
-  }
-
-  /// Deserializes from JSON.
-  factory HandlerIdentity.fromJson(Map<String, Object?> json) {
-    return HandlerIdentity(
-      routeName: json['routeName'] as String?,
-      functionRef: json['functionRef'] as String?,
-      method: json['method'] as String?,
-      path: json['path'] as String?,
-      sourceFile: json['sourceFile'] as String?,
-      sourceLine: json['sourceLine'] as int?,
-      sourceColumn: json['sourceColumn'] as int?,
-    );
   }
 }

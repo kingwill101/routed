@@ -1,8 +1,6 @@
-import 'package:routed_core/src/context/context.dart';
-import 'package:routed_core/src/router/types.dart';
+import 'package:routed_core/routed_core.dart';
+import 'package:routed_openapi/src/openapi/schema.dart';
 import 'package:routed_validation/routed_validation.dart';
-
-import 'schema.dart';
 
 /// Creates a middleware that automatically validates incoming request data
 /// against a [RouteSchema]'s validation rules.

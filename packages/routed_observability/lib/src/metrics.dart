@@ -1,6 +1,10 @@
+// _CounterKey is a private immutable value object used as a map key.
+// ignore_for_file: avoid_equals_and_hash_code_on_mutable_classes
 import 'dart:math';
 
+/// Collects request counters and duration histograms in Prometheus format.
 class MetricsService {
+  /// Creates a metrics service with duration [buckets] in seconds.
   MetricsService({required List<double> buckets}) : _buckets = buckets..sort();
 
   final List<double> _buckets;
@@ -9,12 +13,15 @@ class MetricsService {
 
   int _activeRequests = 0;
 
+  /// The number of requests currently in progress.
   int get activeRequests => _activeRequests;
 
+  /// Records the start of one request.
   void onRequestStart() {
     _activeRequests += 1;
   }
 
+  /// Records a completed request and its [duration].
   void onRequestEnd({
     required String method,
     required String route,
@@ -40,6 +47,7 @@ class MetricsService {
         .observe(duration.inMicroseconds / 1000000);
   }
 
+  /// Renders all collected metrics using the Prometheus text format.
   String renderPrometheus() {
     final buffer = StringBuffer()
       ..writeln('# HELP routed_requests_total Total number of HTTP requests.')
@@ -54,7 +62,8 @@ class MetricsService {
 
     buffer
       ..writeln(
-        '# HELP routed_request_duration_seconds Request duration histogram (seconds).',
+        '# HELP routed_request_duration_seconds '
+        'Request duration histogram (seconds).',
       )
       ..writeln('# TYPE routed_request_duration_seconds histogram');
     for (final entry in _histograms.entries) {
@@ -72,13 +81,11 @@ class MetricsService {
         ..write('routed_request_duration_seconds_bucket')
         ..write(labels.toLabelString({'le': '+Inf'}))
         ..write(' ')
-        ..writeln(histogram.count);
-      buffer
+        ..writeln(histogram.count)
         ..write('routed_request_duration_seconds_sum')
         ..write(labels.toLabelString())
         ..write(' ')
-        ..writeln(histogram.sum);
-      buffer
+        ..writeln(histogram.sum)
         ..write('routed_request_duration_seconds_count')
         ..write(labels.toLabelString())
         ..write(' ')

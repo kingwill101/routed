@@ -1,6 +1,5 @@
+import 'package:routed_openapi/src/openapi/openapi_spec.dart';
 import 'package:server_auth/server_auth.dart';
-
-import '../openapi/openapi_spec.dart';
 
 bool _hasJsonRequestBody(AuthOperationMethod method) => switch (method) {
   AuthOperationMethod.post ||
@@ -16,17 +15,31 @@ bool _hasJsonRequestBody(AuthOperationMethod method) => switch (method) {
 /// selected when the host actually authenticates these operations with an API
 /// key or an API-key-to-session boundary.
 enum AuthOpenApiSessionSecurity {
+  /// Advertise the session cookie security scheme.
   cookie,
+
+  /// Advertise bearer-token security.
   bearer,
+
+  /// Advertise cookie or bearer-token security as alternatives.
   cookieOrBearer,
+
+  /// Advertise API-key security.
   apiKey,
+
+  /// Advertise cookie or API-key security as alternatives.
   cookieOrApiKey,
+
+  /// Advertise bearer-token or API-key security as alternatives.
   bearerOrApiKey,
+
+  /// Advertise cookie, bearer-token, or API-key security as alternatives.
   cookieOrBearerOrApiKey,
 }
 
 /// OpenAPI generation settings for a composed auth plugin registry.
 final class AuthPluginOpenApiConfig {
+  /// Creates OpenAPI generation settings for auth endpoints.
   const AuthPluginOpenApiConfig({
     this.basePath = '/auth',
     this.includeServerOnly = false,
@@ -61,8 +74,10 @@ final class AuthPluginOpenApiConfig {
 
 /// A composition error that would make generated auth clients ambiguous.
 final class AuthOpenApiContractException implements Exception {
+  /// Creates an exception describing an invalid generated auth contract.
   const AuthOpenApiContractException(this.message);
 
+  /// The explanation of the contract violation.
   final String message;
 
   @override
@@ -75,31 +90,54 @@ final class AuthOpenApiContractException implements Exception {
 /// or removing a plugin therefore changes the generated contract without a
 /// separate route catalogue.
 final class AuthPluginOpenApiGenerator<TContext> {
+  /// Creates an auth OpenAPI generator with [config].
   const AuthPluginOpenApiGenerator({
     this.config = const AuthPluginOpenApiConfig(),
   });
 
+  /// Component name for the session-cookie security scheme.
   static const String sessionCookieSecurityScheme = 'authSessionCookie';
+
+  /// Component name for the bearer security scheme.
   static const String bearerSecurityScheme = 'authBearer';
+
+  /// Component name for the API-key security scheme.
   static const String apiKeySecurityScheme = 'authApiKey';
 
-  /// Standard OpenAPI operation extensions emitted by this generator.
+  /// Extension name identifying the plugin that owns an operation.
   static const String pluginExtension = 'x-routed-auth-plugin';
+
+  /// Extension name describing the browser-origin policy.
   static const String originPolicyExtension = 'x-routed-auth-origin-policy';
+
+  /// Extension name describing the CSRF policy.
   static const String csrfPolicyExtension = 'x-routed-auth-csrf-policy';
+
+  /// Extension name describing the rate-limit operation.
   static const String rateLimitOperationExtension =
       'x-routed-auth-rate-limit-operation';
+
+  /// Extension name describing persistence and replay semantics.
   static const String operationSemanticsExtension =
       'x-routed-auth-operation-semantics';
+
+  /// Extension name describing captcha policy.
   static const String captchaExtension = 'x-routed-auth-captcha';
+
+  /// Extension name describing breached-password policy.
   static const String breachedPasswordExtension =
       'x-routed-auth-breached-password';
 
+  /// Component name for the generic auth error schema.
   static const String genericErrorSchema = 'AuthError';
+
+  /// Component name for the two-factor challenge schema.
   static const String twoFactorChallengeSchema = 'AuthTwoFactorChallenge';
 
+  /// The settings used when generating the document.
   final AuthPluginOpenApiConfig config;
 
+  /// Generates an OpenAPI document from a frozen [registry].
   OpenApiSpec generate({
     required AuthServerPluginRegistry<TContext> registry,
     required OpenApiInfo info,
@@ -636,7 +674,7 @@ OpenApiResponse _genericErrorResponse(
 
 Map<String, Object?> _cloneSchema(Map<String, Object?> schema) {
   final cloned = _cloneJsonValue(schema);
-  return Map<String, Object?>.from(cloned as Map);
+  return Map<String, Object?>.from(cloned! as Map);
 }
 
 Map<String, Object?> _publicResponseSchema(Map<String, Object?> schema) =>
@@ -680,9 +718,8 @@ Map<String, Map<String, Object?>> _mutableSchemaProperties(
 void _requireProperty(Map<String, Object?> schema, String name) {
   final required = <String>{
     if (schema['required'] is List)
-      ...(schema['required'] as List).whereType<String>(),
-  };
-  required.add(name);
+      ...(schema['required']! as List).whereType<String>(),
+  }..add(name);
   schema['required'] = required.toList(growable: false);
 }
 
@@ -726,6 +763,7 @@ bool _containsSchemaConst(Map<String, Object?> schema, Object expected) {
 /// Generates an OpenAPI 3.1 document for this composed plugin registry.
 extension AuthServerPluginRegistryOpenApi<TContext>
     on AuthServerPluginRegistry<TContext> {
+  /// Converts this frozen registry to an OpenAPI 3.1 document.
   OpenApiSpec toOpenApi31({
     required OpenApiInfo info,
     AuthPluginOpenApiConfig config = const AuthPluginOpenApiConfig(),
@@ -787,14 +825,14 @@ Map<String, Object?> _withoutPathProperties(
   final names = parameters.map((parameter) => parameter.name).toSet();
   if (names.isEmpty) return Map<String, Object?>.from(schema);
   final result = Map<String, Object?>.from(schema);
-  if (schema['properties'] case final Map properties) {
+  if (schema['properties'] case final Map<Object?, Object?> properties) {
     result['properties'] = <String, Object?>{
       for (final entry in properties.entries)
         if (!names.contains(entry.key.toString()))
           entry.key.toString(): entry.value,
     };
   }
-  if (schema['required'] case final List required) {
+  if (schema['required'] case final List<Object?> required) {
     final remaining = required
         .whereType<String>()
         .where((name) => !names.contains(name))
@@ -846,7 +884,7 @@ Map<String, Map<String, Object?>> _schemaProperties(
 }
 
 Iterable<String> _identifierParts(String value) =>
-    RegExp(r'[A-Za-z0-9]+').allMatches(value).map((match) => match.group(0)!);
+    RegExp('[A-Za-z0-9]+').allMatches(value).map((match) => match.group(0)!);
 
 String _upperFirst(String value) => value.isEmpty
     ? value

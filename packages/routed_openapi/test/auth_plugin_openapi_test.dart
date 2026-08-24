@@ -351,7 +351,7 @@ void main() {
         contains('id'),
       );
       final schema = spec.components!.schemas['AuthTokensUpdateRequest']!;
-      expect((schema['properties']! as Map), isNot(contains('id')));
+      expect(schema['properties']! as Map, isNot(contains('id')));
       expect(schema['required'], <String>['value']);
     });
 
@@ -633,8 +633,7 @@ void main() {
         containsPair('type', 'string'),
       );
       expect(
-        (schemas['AuthUsernameRegisterResponse']!['required']!
-            as List<Object?>),
+        schemas['AuthUsernameRegisterResponse']!['required']! as List<Object?>,
         isNot(contains('token')),
       );
       expect(
@@ -758,9 +757,7 @@ AuthServerPluginRegistry<Object> _registry(
     store: store,
     authenticationMethods: AuthAuthenticationMethodService(store: store),
   );
-  for (final plugin in plugins) {
-    registry.register(plugin);
-  }
+  plugins.forEach(registry.register);
   registry.freeze();
   return registry;
 }
@@ -813,9 +810,7 @@ void _expectSchemaReferencesResolve(
         }
       }
     } else if (node is Iterable) {
-      for (final child in node) {
-        visit(child);
-      }
+      node.forEach(visit);
     }
   }
 

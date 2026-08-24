@@ -1,3 +1,4 @@
+/// OpenAPI generation for composed `server_auth` plugin registries.
 library;
 
 export 'routed_openapi.dart';

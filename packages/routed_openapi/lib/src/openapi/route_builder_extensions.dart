@@ -1,6 +1,6 @@
 import 'package:routed_core/routed_core.dart';
 
-import 'schema.dart';
+import 'package:routed_openapi/src/openapi/schema.dart';
 
 /// Route metadata key used by the OpenAPI integration.
 const openApiSchemaKey = RouteMetadataKey<RouteSchema>('routed.openapi.schema');
@@ -27,10 +27,14 @@ extension OpenApiRouteBuilderExtensions on RouteBuilder {
       schema(_currentSchema().copyWith(operationId: value));
 
   /// Marks the operation deprecated.
+  // Preserve the positional boolean for the fluent API's source compatibility.
+  // ignore: avoid_positional_boolean_parameters
   RouteBuilder deprecated([bool value = true]) =>
       schema(_currentSchema().copyWith(deprecated: value));
 
   /// Hides the route from generated documents.
+  // Preserve the positional boolean for the fluent API's source compatibility.
+  // ignore: avoid_positional_boolean_parameters
   RouteBuilder hidden([bool value = true]) =>
       schema(_currentSchema().copyWith(hidden: value));
 

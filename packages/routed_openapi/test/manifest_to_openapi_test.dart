@@ -270,7 +270,6 @@ void main() {
             schema: const RouteSchema(
               body: BodySchema(
                 description: 'User payload',
-                contentType: 'application/json',
                 required: true,
                 jsonSchema: {
                   'type': 'object',
@@ -319,7 +318,7 @@ void main() {
       expect(schema['type'], 'object');
       expect(schema['required'], containsAll(['name', 'email']));
 
-      final props = schema['properties'] as Map<String, Object?>;
+      final props = schema['properties']! as Map<String, Object?>;
       expect(props.containsKey('name'), isTrue);
       expect(props.containsKey('email'), isTrue);
     });
@@ -396,14 +395,12 @@ void main() {
               params: [
                 ParamSchema(
                   'page',
-                  location: ParamLocation.query,
                   description: 'Page number',
                   required: false,
                   jsonSchema: {'type': 'integer', 'minimum': 1},
                 ),
                 ParamSchema(
                   'limit',
-                  location: ParamLocation.query,
                   description: 'Items per page',
                   required: false,
                   jsonSchema: {'type': 'integer', 'minimum': 1, 'maximum': 100},

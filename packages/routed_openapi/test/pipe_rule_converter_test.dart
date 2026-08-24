@@ -12,8 +12,8 @@ void main() {
         expect(schema['type'], 'object');
         expect(schema['required'], ['name']);
 
-        final props = schema['properties'] as Map<String, Object?>;
-        final nameProp = props['name'] as Map<String, Object?>;
+        final props = schema['properties']! as Map<String, Object?>;
+        final nameProp = props['name']! as Map<String, Object?>;
         expect(nameProp['type'], 'string');
         expect(nameProp['minLength'], 2);
         expect(nameProp['maxLength'], 100);
@@ -24,8 +24,8 @@ void main() {
           'email': 'required|email',
         });
 
-        final props = schema['properties'] as Map<String, Object?>;
-        final emailProp = props['email'] as Map<String, Object?>;
+        final props = schema['properties']! as Map<String, Object?>;
+        final emailProp = props['email']! as Map<String, Object?>;
         expect(emailProp['type'], 'string');
         expect(emailProp['format'], 'email');
         expect(schema['required'], ['email']);
@@ -36,8 +36,8 @@ void main() {
           'age': 'integer|min:0|max:150',
         });
 
-        final props = schema['properties'] as Map<String, Object?>;
-        final ageProp = props['age'] as Map<String, Object?>;
+        final props = schema['properties']! as Map<String, Object?>;
+        final ageProp = props['age']! as Map<String, Object?>;
         expect(ageProp['type'], 'integer');
         expect(ageProp['minimum'], 0);
         expect(ageProp['maximum'], 150);
@@ -54,7 +54,7 @@ void main() {
         });
 
         expect(schema['required'], unorderedEquals(['name', 'email']));
-        final props = schema['properties'] as Map<String, Object?>;
+        final props = schema['properties']! as Map<String, Object?>;
         expect(props, hasLength(4));
       });
 
@@ -63,8 +63,8 @@ void main() {
           'role': 'required|in:admin,editor,viewer',
         });
 
-        final props = schema['properties'] as Map<String, Object?>;
-        final roleProp = props['role'] as Map<String, Object?>;
+        final props = schema['properties']! as Map<String, Object?>;
+        final roleProp = props['role']! as Map<String, Object?>;
         expect(roleProp['type'], 'string');
         expect(roleProp['enum'], ['admin', 'editor', 'viewer']);
       });
@@ -72,8 +72,8 @@ void main() {
       test('converts url rule', () {
         final schema = PipeRuleSchemaConverter.convertRules({'website': 'url'});
 
-        final props = schema['properties'] as Map<String, Object?>;
-        final siteProp = props['website'] as Map<String, Object?>;
+        final props = schema['properties']! as Map<String, Object?>;
+        final siteProp = props['website']! as Map<String, Object?>;
         expect(siteProp['type'], 'string');
         expect(siteProp['format'], 'uri');
       });
@@ -83,8 +83,8 @@ void main() {
           'id': 'required|uuid',
         });
 
-        final props = schema['properties'] as Map<String, Object?>;
-        final idProp = props['id'] as Map<String, Object?>;
+        final props = schema['properties']! as Map<String, Object?>;
+        final idProp = props['id']! as Map<String, Object?>;
         expect(idProp['type'], 'string');
         expect(idProp['format'], 'uuid');
       });
@@ -94,8 +94,8 @@ void main() {
           'active': 'boolean',
         });
 
-        final props = schema['properties'] as Map<String, Object?>;
-        final activeProp = props['active'] as Map<String, Object?>;
+        final props = schema['properties']! as Map<String, Object?>;
+        final activeProp = props['active']! as Map<String, Object?>;
         expect(activeProp['type'], 'boolean');
       });
 
@@ -104,8 +104,8 @@ void main() {
           'username': 'required|alpha_dash',
         });
 
-        final props = schema['properties'] as Map<String, Object?>;
-        final userProp = props['username'] as Map<String, Object?>;
+        final props = schema['properties']! as Map<String, Object?>;
+        final userProp = props['username']! as Map<String, Object?>;
         expect(userProp['type'], 'string');
         expect(userProp['pattern'], r'^[a-zA-Z0-9_-]+$');
       });
@@ -115,8 +115,8 @@ void main() {
           'score': 'numeric|between:1,100',
         });
 
-        final props = schema['properties'] as Map<String, Object?>;
-        final scoreProp = props['score'] as Map<String, Object?>;
+        final props = schema['properties']! as Map<String, Object?>;
+        final scoreProp = props['score']! as Map<String, Object?>;
         expect(scoreProp['type'], 'number');
         expect(scoreProp['minimum'], 1);
         expect(scoreProp['maximum'], 100);
@@ -127,8 +127,8 @@ void main() {
           'tags': 'array|distinct',
         });
 
-        final props = schema['properties'] as Map<String, Object?>;
-        final tagsProp = props['tags'] as Map<String, Object?>;
+        final props = schema['properties']! as Map<String, Object?>;
+        final tagsProp = props['tags']! as Map<String, Object?>;
         expect(tagsProp['type'], 'array');
         expect(tagsProp['uniqueItems'], true);
       });
@@ -139,10 +139,10 @@ void main() {
           'server_ipv6': 'ipv6',
         });
 
-        final props = schema['properties'] as Map<String, Object?>;
-        final v4Prop = props['server_ip'] as Map<String, Object?>;
+        final props = schema['properties']! as Map<String, Object?>;
+        final v4Prop = props['server_ip']! as Map<String, Object?>;
         expect(v4Prop['format'], 'ipv4');
-        final v6Prop = props['server_ipv6'] as Map<String, Object?>;
+        final v6Prop = props['server_ipv6']! as Map<String, Object?>;
         expect(v6Prop['format'], 'ipv6');
       });
 
@@ -151,8 +151,8 @@ void main() {
           'quantity': 'int|multiple_of:5',
         });
 
-        final props = schema['properties'] as Map<String, Object?>;
-        final qtyProp = props['quantity'] as Map<String, Object?>;
+        final props = schema['properties']! as Map<String, Object?>;
+        final qtyProp = props['quantity']! as Map<String, Object?>;
         expect(qtyProp['type'], 'integer');
         expect(qtyProp['multipleOf'], 5);
       });

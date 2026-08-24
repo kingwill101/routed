@@ -23,10 +23,8 @@ void main() {
         tags: ['users', 'admin'],
         operationId: 'createUser',
         deprecated: true,
-        hidden: false,
         body: BodySchema(
           description: 'User payload',
-          contentType: 'application/json',
           required: true,
           jsonSchema: {
             'type': 'object',
@@ -62,9 +60,9 @@ void main() {
       expect(json.containsKey('hidden'), isFalse); // false is omitted
       expect(json['body'], isA<Map<String, Object?>>());
       expect(json['params'], isA<List<Object?>>());
-      expect((json['params'] as List<Object?>).length, 1);
+      expect((json['params']! as List<Object?>).length, 1);
       expect(json['responses'], isA<List<Object?>>());
-      expect((json['responses'] as List<Object?>).length, 2);
+      expect((json['responses']! as List<Object?>).length, 2);
       expect(json['validationRules'], {
         'name': 'required|string',
         'email': 'required|email',
@@ -80,7 +78,6 @@ void main() {
         deprecated: true,
         body: BodySchema(
           description: 'Update payload',
-          contentType: 'application/json',
           required: true,
           jsonSchema: {'type': 'object'},
         ),
@@ -95,7 +92,6 @@ void main() {
           ),
           ParamSchema(
             'fields',
-            location: ParamLocation.query,
             description: 'Fields to return',
           ),
         ],

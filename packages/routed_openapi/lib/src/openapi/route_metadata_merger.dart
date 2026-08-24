@@ -1,7 +1,7 @@
-import 'package:routed_core/src/engine/route_manifest.dart';
-import 'schema.dart';
-
-import 'route_metadata_extractor.dart';
+import 'package:routed_core/routed_core.dart';
+import 'package:routed_openapi/src/openapi/handler_identity.dart';
+import 'package:routed_openapi/src/openapi/route_metadata_extractor.dart';
+import 'package:routed_openapi/src/openapi/schema.dart';
 
 /// Enriches a manifest with annotation and Dartdoc metadata from project files.
 Future<RouteManifest> enrichManifestWithProjectMetadata(
@@ -32,10 +32,8 @@ RouteManifest mergeManifestWithExtractedMetadata(
           return route;
         }
 
-        // handlerIdentity/schema removed from core manifest; merging is no-op when absent
-        // ignore: unused_local_variable
+        // The core manifest may omit handler identity and schema metadata.
         final existingSchema = _schemaFromRoute(route);
-        // ignore: unused_local_variable
         final mergedSchema = _mergeSchema(existingSchema, metadata);
         return RouteManifestEntry(
           method: route.method,
@@ -75,7 +73,7 @@ RouteSchema? _schemaFromRoute(RouteManifestEntry route) {
 }
 
 ExtractedRouteMetadata? _resolveMetadata(
-  dynamic route,
+  RouteManifestEntry route,
   Map<String, ExtractedRouteMetadata> extracted,
 ) {
   final sourceMetadata = _findSourceMetadata(route, extracted);
@@ -84,13 +82,7 @@ ExtractedRouteMetadata? _resolveMetadata(
   final routeMetadata =
       extracted[routeKey] ?? _findSuffixRouteMetadata(route, extracted);
 
-  final functionRef = (() {
-    try {
-      return (route as dynamic).handlerIdentity?.functionRef as String?;
-    } catch (_) {
-      return null;
-    }
-  })();
+  final functionRef = _handlerIdentity(route.handlerIdentity)?.functionRef;
   if (functionRef == null || functionRef.isEmpty) {
     if (sourceMetadata == null) return routeMetadata;
     if (routeMetadata == null) return sourceMetadata;
@@ -118,16 +110,10 @@ ExtractedRouteMetadata? _resolveMetadata(
 }
 
 ExtractedRouteMetadata? _findSourceMetadata(
-  dynamic route,
+  RouteManifestEntry route,
   Map<String, ExtractedRouteMetadata> extracted,
 ) {
-  final dynamic identity = (() {
-    try {
-      return (route as dynamic).handlerIdentity;
-    } catch (_) {
-      return null;
-    }
-  })();
+  final identity = _handlerIdentity(route.handlerIdentity);
   final sourceFile = identity?.sourceFile ?? route.sourceFile;
   final sourceLine = identity?.sourceLine ?? route.sourceLine;
   final sourceColumn = identity?.sourceColumn ?? route.sourceColumn;
@@ -167,6 +153,21 @@ ExtractedRouteMetadata? _findSourceMetadata(
   return null;
 }
 
+HandlerIdentity? _handlerIdentity(Object? value) {
+  if (value is HandlerIdentity) return value;
+  if (value is! Map<Object?, Object?>) return null;
+
+  return HandlerIdentity(
+    routeName: value['routeName'] as String?,
+    functionRef: value['functionRef'] as String?,
+    method: value['method'] as String?,
+    path: value['path'] as String?,
+    sourceFile: value['sourceFile'] as String?,
+    sourceLine: (value['sourceLine'] as num?)?.toInt(),
+    sourceColumn: (value['sourceColumn'] as num?)?.toInt(),
+  );
+}
+
 ExtractedRouteMetadata? _findSuffixRouteMetadata(
   RouteManifestEntry route,
   Map<String, ExtractedRouteMetadata> extracted,
@@ -192,17 +193,16 @@ ExtractedRouteMetadata? _findSuffixRouteMetadata(
   });
 
   if (candidates.length == 1) {
-    // Even with a single route: candidate, the underlying `route:` key may have
-    // collapsed multiple source files with same suffix (e.g. /inline from users_routes.dart
-    // and admin_routes.dart). Check source: entries for a better mount-aware match.
+    // Even with a single route candidate, the underlying `route:` key may have
+    // collapsed multiple source files with the same suffix. Check source
+    // entries for a better mount-aware match.
     final single = candidates.values.single;
     final lowerTarget = targetPath.toLowerCase();
     ExtractedRouteMetadata? sourceMatch;
     extracted.forEach((sKey, sVal) {
       if (!sKey.startsWith('source:')) return;
-      // Only consider source entries that could correspond to this suffix
-      // (their route path is not stored, but we can infer via summary matching or via
-      // checking if any route: entry with same summary exists)
+      // Only consider source entries that could correspond to this suffix.
+      // Their route path is not stored, so infer it from summary matching.
       final m = RegExp(r'^source:(.*):\d+:\d+$').firstMatch(sKey);
       if (m == null) return;
       final srcFile = m.group(1)!.toLowerCase();
@@ -216,13 +216,12 @@ ExtractedRouteMetadata? _findSuffixRouteMetadata(
       }
     });
     if (sourceMatch != null) {
-      // If single route meta is ambiguous (overwritten), prefer the mount-aware source
-      // Only override if the single's summary doesn't already match the target's expected source
+      // If single route metadata is ambiguous, prefer the mount-aware source.
+      // Only override when the single summary does not match the target source.
       final singleSummary = single.summary;
       final sourceSummary = sourceMatch!.summary;
       if (singleSummary != sourceSummary) {
-        // Check if single's summary corresponds to a different source file than the target
-        // If target contains 'admin' but single is users, override
+        // Keep a summary that already identifies the target's source file.
         if (lowerTarget.contains('admin') &&
             singleSummary != null &&
             singleSummary.toLowerCase().contains('admin')) {
@@ -240,11 +239,9 @@ ExtractedRouteMetadata? _findSuffixRouteMetadata(
   }
 
   if (candidates.length > 1) {
-    // Disambiguate mounted routes with same suffix (e.g. /api/v1/users/inline vs /api/v1/admin/inline
-    // both with route:GET /inline) by matching the mount prefix segment to the source file name.
-    // Source keys like `source:lib/users_routes.dart:3:10` preserve per-file metadata even when
-    // `route:` keys collide, so we look for the route candidate whose associated source file
-    // is mentioned in the full path.
+    // Disambiguate mounted routes with the same suffix by matching the mount
+    // prefix segment to the source file name. Source keys preserve per-file
+    // metadata even when `route:` keys collide.
     final lowerTarget = targetPath.toLowerCase();
     for (final entry in candidates.entries) {
       final routeMeta = entry.value;
@@ -265,10 +262,10 @@ ExtractedRouteMetadata? _findSuffixRouteMetadata(
         return routeMeta;
       }
     }
-    // Fallback: if still ambiguous, try to match via any source file that contains a path segment
+    // Fallback: match any source file that contains a path segment.
     for (final entry in candidates.entries) {
       final routeMeta = entry.value;
-      bool hasSourceMatch = false;
+      var hasSourceMatch = false;
       extracted.forEach((sKey, sVal) {
         if (!sKey.startsWith('source:')) return;
         if (sVal.summary != routeMeta.summary) return;
@@ -331,7 +328,7 @@ bool _pathsComparable(String a, String b) {
 }
 
 String _normalizePath(String value) {
-  return value.replaceAll('\\', '/').trim();
+  return value.replaceAll(r'\', '/').trim();
 }
 
 bool _sameMetadata(ExtractedRouteMetadata a, ExtractedRouteMetadata b) {
@@ -353,8 +350,9 @@ Set<String> _pathVariants(String input) {
     final slash = base.indexOf('/');
     if (slash != -1 && slash < base.length - 1) {
       final relative = base.substring(slash + 1);
-      variants.add(relative);
-      variants.add('lib/$relative');
+      variants
+        ..add(relative)
+        ..add('lib/$relative');
     }
   }
 

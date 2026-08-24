@@ -8,11 +8,12 @@ import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/source/line_info.dart';
 import 'package:build/build.dart';
 import 'package:glob/glob.dart';
-import 'annotations.dart';
-import 'schema.dart';
+import 'package:routed_openapi/src/openapi/annotations.dart';
+import 'package:routed_openapi/src/openapi/schema.dart';
 
 /// Partial OpenAPI metadata extracted from handler declarations.
 class ExtractedRouteMetadata {
+  /// Creates extracted metadata from the available handler declarations.
   const ExtractedRouteMetadata({
     this.summary,
     this.description,
@@ -25,16 +26,34 @@ class ExtractedRouteMetadata {
     this.responses = const <ResponseSchema>[],
   });
 
+  /// The short operation summary, when one was declared.
   final String? summary;
+
+  /// The detailed operation description, when one was declared.
   final String? description;
+
+  /// Tags declared for the operation.
   final List<String> tags;
+
+  /// The explicit operation ID, when one was declared.
   final String? operationId;
+
+  /// The deprecation flag, when one was declared.
   final bool? deprecated;
+
+  /// The hidden flag, when one was declared.
   final bool? hidden;
+
+  /// The extracted request body schema.
   final BodySchema? body;
+
+  /// The extracted request parameter schemas.
   final List<ParamSchema> params;
+
+  /// The extracted response schemas.
   final List<ResponseSchema> responses;
 
+  /// Whether this instance contains no extracted metadata.
   bool get isEmpty =>
       summary == null &&
       description == null &&
@@ -46,6 +65,7 @@ class ExtractedRouteMetadata {
       params.isEmpty &&
       responses.isEmpty;
 
+  /// Merges [other], retaining values already present in this instance.
   ExtractedRouteMetadata merge(ExtractedRouteMetadata other) {
     return ExtractedRouteMetadata(
       summary: summary ?? other.summary,
@@ -61,13 +81,18 @@ class ExtractedRouteMetadata {
   }
 }
 
+/// Extracts route metadata from Dart assets visible to [buildStep].
 Future<Map<String, ExtractedRouteMetadata>> extractRouteMetadataIndex(
   BuildStep buildStep,
 ) async {
   final assets = <AssetId>{};
+  // BuildStep exposes these assets as asynchronous streams.
+  // ignore: prefer_foreach
   await for (final asset in buildStep.findAssets(Glob('lib/**.dart'))) {
     assets.add(asset);
   }
+  // BuildStep exposes these assets as asynchronous streams.
+  // ignore: prefer_foreach
   await for (final asset in buildStep.findAssets(Glob('bin/**.dart'))) {
     assets.add(asset);
   }
@@ -83,19 +108,23 @@ Future<Map<String, ExtractedRouteMetadata>> extractRouteMetadataIndex(
       );
     }
 
-    final perFile = extractRouteMetadataFromSource(
+    extractRouteMetadataFromSource(
       source,
       sourcePaths: sourceAliases,
-    );
-    perFile.forEach((key, value) {
-      final existing = index[key];
-      index[key] = existing == null ? value : existing.merge(value);
+    ).forEach((key, value) {
+      index.update(
+        key,
+        (existing) => existing.merge(value),
+        ifAbsent: () => value,
+      );
     });
   }
   return index;
 }
 
 /// Extracts route metadata from Dart source files in a package directory.
+///
+/// The search includes Dart files under `lib` and `bin` below [projectRoot].
 Future<Map<String, ExtractedRouteMetadata>>
 extractRouteMetadataIndexFromFileSystem({
   required String projectRoot,
@@ -129,19 +158,22 @@ extractRouteMetadataIndexFromFileSystem({
       packageName: packageName,
     );
 
-    final perFile = extractRouteMetadataFromSource(
+    extractRouteMetadataFromSource(
       source,
       sourcePaths: aliases,
-    );
-    perFile.forEach((key, value) {
-      final existing = index[key];
-      index[key] = existing == null ? value : existing.merge(value);
+    ).forEach((key, value) {
+      index.update(
+        key,
+        (existing) => existing.merge(value),
+        ifAbsent: () => value,
+      );
     });
   }
 
   return index;
 }
 
+/// Extracts route metadata from a Dart [source] string.
 Map<String, ExtractedRouteMetadata> extractRouteMetadataFromSource(
   String source, {
   Iterable<String> sourcePaths = const <String>[],
@@ -154,14 +186,16 @@ Map<String, ExtractedRouteMetadata> extractRouteMetadataFromSource(
   parsed.unit.accept(visitor);
 
   final merged = Map<String, ExtractedRouteMetadata>.from(visitor.collected);
-  final dartdocFallback = _extractDartdocFallbackFromSource(source);
-  dartdocFallback.forEach((key, value) {
-    final existing = merged[key];
+  _extractDartdocFallbackFromSource(source).forEach((key, value) {
     final docOnly = ExtractedRouteMetadata(
       summary: value.summary,
       description: value.description,
     );
-    merged[key] = existing == null ? docOnly : existing.merge(docOnly);
+    merged.update(
+      key,
+      (existing) => existing.merge(docOnly),
+      ifAbsent: () => docOnly,
+    );
   });
 
   for (final ref in visitor.routeHandlerRefs) {
@@ -182,7 +216,8 @@ Map<String, ({String? summary, String? description})>
 _extractDartdocFallbackFromSource(String source) {
   final result = <String, ({String? summary, String? description})>{};
   final regex = RegExp(
-    r'((?:^[ \t]*///.*\n)+)[ \t]*(?:@[^\n]+\n[ \t]*)*(?:[\w<>,?\[\]\s]+)\s+([A-Za-z_]\w*)\s*\(',
+    r'((?:^[ \t]*///.*\n)+)[ \t]*(?:@[^\n]+\n[ \t]*)*'
+    r'(?:[\w<>,?\[\]\s]+)\s+([A-Za-z_]\w*)\s*\(',
     multiLine: true,
   );
 
@@ -215,6 +250,7 @@ class _MetadataVisitor extends RecursiveAstVisitor<void> {
 
   @override
   void visitClassDeclaration(ClassDeclaration node) {
+    // The analyzer API still exposes this deprecated AST node property.
     // ignore: deprecated_member_use
     _classStack.add(node.name.lexeme);
     super.visitClassDeclaration(node);
@@ -286,7 +322,8 @@ class _MetadataVisitor extends RecursiveAstVisitor<void> {
         final location = lineInfo.getLocation(node.methodName.offset);
         for (final sourcePath in sourcePaths) {
           final sourceKey =
-              'source:$sourcePath:${location.lineNumber}:${location.columnNumber}';
+              'source:$sourcePath:${location.lineNumber}:'
+              '${location.columnNumber}';
           _store(sourceKey, metadata);
         }
         if (handlerRef != null && handlerRef.isNotEmpty) {
@@ -744,8 +781,8 @@ Set<String> _buildSourceAliases({
   required String projectRoot,
   required String packageName,
 }) {
-  final normalizedFile = filePath.replaceAll('\\', '/');
-  final normalizedRoot = projectRoot.replaceAll('\\', '/');
+  final normalizedFile = filePath.replaceAll(r'\', '/');
+  final normalizedRoot = projectRoot.replaceAll(r'\', '/');
 
   final aliases = <String>{normalizedFile};
   if (normalizedFile.startsWith('$normalizedRoot/')) {

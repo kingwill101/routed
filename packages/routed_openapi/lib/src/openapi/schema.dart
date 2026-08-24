@@ -7,7 +7,7 @@
 /// - Analyzer plugin linting (Phase 3)
 library;
 
-import 'annotations.dart';
+import 'package:routed_openapi/src/openapi/annotations.dart';
 
 /// Describes the schema for a single route's request/response contract.
 ///
@@ -18,7 +18,10 @@ import 'annotations.dart';
 ///   body: BodySchema(
 ///     description: 'User creation payload',
 ///     required: true,
-///     jsonSchema: {'type': 'object', 'properties': {'name': {'type': 'string'}}},
+///     jsonSchema: {
+///       'type': 'object',
+///       'properties': {'name': {'type': 'string'}},
+///     },
 ///   ),
 ///   responses: [
 ///     ResponseSchema(201, description: 'User created'),
@@ -27,6 +30,7 @@ import 'annotations.dart';
 /// ));
 /// ```
 class RouteSchema {
+  /// Creates route metadata for request and response generation.
   const RouteSchema({
     this.summary,
     this.description,
@@ -39,6 +43,45 @@ class RouteSchema {
     this.responses,
     this.validationRules,
   });
+
+  /// Creates a [RouteSchema] with only validation rules.
+  ///
+  /// Shorthand for routes that primarily need request validation.
+  factory RouteSchema.fromRules(Map<String, String> rules) {
+    return RouteSchema(validationRules: rules);
+  }
+
+  /// Deserializes from a JSON map (e.g. from a route manifest).
+  factory RouteSchema.fromJson(Map<String, Object?> json) {
+    return RouteSchema(
+      summary: json['summary'] as String?,
+      description: json['description'] as String?,
+      tags: json['tags'] is List
+          ? (json['tags']! as List).cast<String>()
+          : null,
+      operationId: json['operationId'] as String?,
+      deprecated: json['deprecated'] == true,
+      hidden: json['hidden'] == true,
+      body: json['body'] is Map
+          ? BodySchema.fromJson(_stringKeyed(json['body']! as Map))
+          : null,
+      params: json['params'] is List
+          ? (json['params']! as List)
+                .whereType<Map<Object?, Object?>>()
+                .map((p) => ParamSchema.fromJson(_stringKeyed(p)))
+                .toList()
+          : null,
+      responses: json['responses'] is List
+          ? (json['responses']! as List)
+                .whereType<Map<Object?, Object?>>()
+                .map((r) => ResponseSchema.fromJson(_stringKeyed(r)))
+                .toList()
+          : null,
+      validationRules: json['validationRules'] is Map
+          ? (json['validationRules']! as Map).cast<String, String>()
+          : null,
+    );
+  }
 
   /// Short summary of what this route does.
   final String? summary;
@@ -83,13 +126,6 @@ class RouteSchema {
   /// ```
   final Map<String, String>? validationRules;
 
-  /// Creates a [RouteSchema] with only validation rules.
-  ///
-  /// Shorthand for routes that primarily need request validation.
-  factory RouteSchema.fromRules(Map<String, String> rules) {
-    return RouteSchema(validationRules: rules);
-  }
-
   /// Returns a copy with selected fields replaced.
   RouteSchema copyWith({
     String? summary,
@@ -117,36 +153,6 @@ class RouteSchema {
     );
   }
 
-  /// Deserializes from a JSON map (e.g. from a route manifest).
-  factory RouteSchema.fromJson(Map<String, Object?> json) {
-    return RouteSchema(
-      summary: json['summary'] as String?,
-      description: json['description'] as String?,
-      tags: json['tags'] is List ? (json['tags'] as List).cast<String>() : null,
-      operationId: json['operationId'] as String?,
-      deprecated: json['deprecated'] == true,
-      hidden: json['hidden'] == true,
-      body: json['body'] is Map
-          ? BodySchema.fromJson(_stringKeyed(json['body'] as Map))
-          : null,
-      params: json['params'] is List
-          ? (json['params'] as List)
-                .whereType<Map<Object?, Object?>>()
-                .map((p) => ParamSchema.fromJson(_stringKeyed(p)))
-                .toList()
-          : null,
-      responses: json['responses'] is List
-          ? (json['responses'] as List)
-                .whereType<Map<Object?, Object?>>()
-                .map((r) => ResponseSchema.fromJson(_stringKeyed(r)))
-                .toList()
-          : null,
-      validationRules: json['validationRules'] is Map
-          ? (json['validationRules'] as Map).cast<String, String>()
-          : null,
-    );
-  }
-
   /// Serializes to JSON for route manifest output.
   Map<String, Object?> toJson() {
     return {
@@ -169,19 +175,13 @@ class RouteSchema {
 
 /// Describes a request body schema.
 class BodySchema {
+  /// Creates metadata describing an HTTP request body.
   const BodySchema({
     this.description = '',
     this.contentType = 'application/json',
     this.required = false,
     this.jsonSchema,
   });
-
-  final String description;
-  final String contentType;
-  final bool required;
-
-  /// JSON Schema (Draft 2020-12 / OpenAPI 3.1 compatible) for the body.
-  final Map<String, Object?>? jsonSchema;
 
   /// Creates a [BodySchema] from pipe-rule validation strings.
   ///
@@ -206,11 +206,24 @@ class BodySchema {
       contentType: (json['contentType'] as String?) ?? 'application/json',
       required: json['required'] == true,
       jsonSchema: json['schema'] is Map
-          ? _stringKeyed(json['schema'] as Map)
+          ? _stringKeyed(json['schema']! as Map)
           : null,
     );
   }
 
+  /// A human-readable description of the body.
+  final String description;
+
+  /// The MIME type accepted by the route.
+  final String contentType;
+
+  /// Whether the route requires this body.
+  final bool required;
+
+  /// JSON Schema (Draft 2020-12 / OpenAPI 3.1 compatible) for the body.
+  final Map<String, Object?>? jsonSchema;
+
+  /// Serializes the body metadata to a JSON-compatible map.
   Map<String, Object?> toJson() {
     return {
       if (description.isNotEmpty) 'description': description,
@@ -223,6 +236,7 @@ class BodySchema {
 
 /// Describes a path, query, header, or cookie parameter.
 class ParamSchema {
+  /// Creates metadata for a route parameter named [name].
   const ParamSchema(
     this.name, {
     this.location = ParamLocation.query,
@@ -232,8 +246,27 @@ class ParamSchema {
     this.example,
   });
 
+  /// Deserializes from a JSON map.
+  factory ParamSchema.fromJson(Map<String, Object?> json) {
+    return ParamSchema(
+      json['name'] as String? ?? '',
+      location: _parseParamLocation(json['in'] as String?),
+      description: (json['description'] as String?) ?? '',
+      required: json['required'] as bool?,
+      jsonSchema: json['schema'] is Map
+          ? _stringKeyed(json['schema']! as Map)
+          : null,
+      example: json['example'],
+    );
+  }
+
+  /// The parameter name.
   final String name;
+
+  /// Where the parameter is supplied in the request.
   final ParamLocation location;
+
+  /// A human-readable description of the parameter.
   final String description;
 
   /// Whether the parameter is required. Defaults to `true` for path params,
@@ -249,20 +282,7 @@ class ParamSchema {
   /// Whether this parameter is effectively required.
   bool get isRequired => required ?? (location == ParamLocation.path);
 
-  /// Deserializes from a JSON map.
-  factory ParamSchema.fromJson(Map<String, Object?> json) {
-    return ParamSchema(
-      json['name'] as String? ?? '',
-      location: _parseParamLocation(json['in'] as String?),
-      description: (json['description'] as String?) ?? '',
-      required: json['required'] as bool?,
-      jsonSchema: json['schema'] is Map
-          ? _stringKeyed(json['schema'] as Map)
-          : null,
-      example: json['example'],
-    );
-  }
-
+  /// Serializes the parameter metadata to a JSON-compatible map.
   Map<String, Object?> toJson() {
     return {
       'name': name,
@@ -277,6 +297,7 @@ class ParamSchema {
 
 /// Describes a response for a given status code.
 class ResponseSchema {
+  /// Creates metadata for an HTTP response with [statusCode].
   const ResponseSchema(
     this.statusCode, {
     this.description = '',
@@ -285,7 +306,25 @@ class ResponseSchema {
     this.headers,
   });
 
+  /// Deserializes from a JSON map.
+  factory ResponseSchema.fromJson(Map<String, Object?> json) {
+    return ResponseSchema(
+      (json['status'] as num?)?.toInt() ?? 200,
+      description: (json['description'] as String?) ?? '',
+      contentType: json['contentType'] as String?,
+      jsonSchema: json['schema'] is Map
+          ? _stringKeyed(json['schema']! as Map)
+          : null,
+      headers: json['headers'] is Map
+          ? _stringKeyed(json['headers']! as Map)
+          : null,
+    );
+  }
+
+  /// The HTTP status code represented by this response.
   final int statusCode;
+
+  /// A human-readable description of the response.
   final String description;
 
   /// MIME type (e.g. 'application/json'). Defaults to 'application/json'
@@ -298,21 +337,7 @@ class ResponseSchema {
   /// Header schemas for this response.
   final Map<String, Object?>? headers;
 
-  /// Deserializes from a JSON map.
-  factory ResponseSchema.fromJson(Map<String, Object?> json) {
-    return ResponseSchema(
-      (json['status'] as num?)?.toInt() ?? 200,
-      description: (json['description'] as String?) ?? '',
-      contentType: json['contentType'] as String?,
-      jsonSchema: json['schema'] is Map
-          ? _stringKeyed(json['schema'] as Map)
-          : null,
-      headers: json['headers'] is Map
-          ? _stringKeyed(json['headers'] as Map)
-          : null,
-    );
-  }
-
+  /// Serializes the response metadata to a JSON-compatible map.
   Map<String, Object?> toJson() {
     return {
       'status': statusCode,
