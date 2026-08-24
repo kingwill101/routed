@@ -38,7 +38,7 @@ void main() {
       '/private',
       (ctx) => ctx.json({
         'userId': SessionAuth.current(ctx)?.id,
-        'canRead': currentApiKey(ctx)?.allowsScope('jobs:read') == true,
+        'canRead': currentApiKey(ctx)?.allowsScope('jobs:read') ?? false,
       }),
       middlewares: [
         apiKeyAuthentication(plugin: feature, userStore: store.users),
@@ -179,7 +179,6 @@ SessionConfig _sessionConfig() {
     appKey: 'base64:$key',
     cookieName: 'test_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,

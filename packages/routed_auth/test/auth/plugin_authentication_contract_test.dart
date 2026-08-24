@@ -83,11 +83,11 @@ final class _PluginCase {
 
 void main() {
   final cases = <_PluginCase>[
-    _PluginCase('anonymous', _prepareAnonymous),
-    _PluginCase('email_otp', _prepareEmailOtp),
-    _PluginCase('phone_number', _preparePhone),
-    _PluginCase('username', _prepareUsername),
-    _PluginCase('webauthn', _prepareWebAuthn),
+    const _PluginCase('anonymous', _prepareAnonymous),
+    const _PluginCase('email_otp', _prepareEmailOtp),
+    const _PluginCase('phone_number', _preparePhone),
+    const _PluginCase('username', _prepareUsername),
+    const _PluginCase('webauthn', _prepareWebAuthn),
   ];
 
   group('host-owned plugin authentication contract', () {
@@ -457,7 +457,6 @@ Future<_Fixture> _fixture(AuthManager manager) async {
           appKey: 'base64:$key',
           cookieName: 'plugin_contract_session',
           options: SessionOptions(
-            path: '/',
             secure: false,
             httpOnly: true,
             sameSite: SameSite.lax,

@@ -1,25 +1,21 @@
-// ignore_for_file: implementation_imports
-import 'dart:io';
-
 import 'package:http/http.dart' as http;
-import 'package:routed_core/src/context/context.dart';
-import 'package:routed_core/src/router/types.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:server_auth/server_auth.dart'
     show
-        JwtAuthException,
         AuthJwtVerifiedCallback,
-        buildBearerAuthenticateHeader,
+        JwtAuthException,
         JwtOptions,
         JwtVerifier,
+        buildBearerAuthenticateHeader,
         sanitizeAuthErrorCode,
         verifyJwtBearerAuthorizationAndWriteAttributes;
 
 /// Creates a JWT authentication [Middleware] with the given [options].
 ///
-/// Disabled options pass through to [next]. Enabled middleware reads the
+/// Disabled options pass through to `next`. Enabled middleware reads the
 /// configured header and bearer prefix, verifies the token, and writes its
 /// claims, subject, header, and authentication attributes to the request
-/// before invoking [onVerified] and then [next]. [httpClient] is used for
+/// before invoking [onVerified] and then `next`. [httpClient] is used for
 /// remote key material.
 /// A [JwtAuthException] becomes a generic 401 response with a sanitized
 /// `WWW-Authenticate` bearer challenge rather than escaping the middleware.
@@ -36,10 +32,10 @@ Middleware jwtAuthentication(
 
 /// Creates JWT authentication [Middleware] with an existing [verifier].
 ///
-/// Disabled verifier options pass through to [next]. Otherwise the verifier's
+/// Disabled verifier options pass through to `next`. Otherwise the verifier's
 /// [JwtOptions.header] and bearer prefix control extraction; successful claims,
 /// subject, header, and authentication attributes are written to the request
-/// before [onVerified] and [next] run. Verification
+/// before [onVerified] and `next` run. Verification
 /// failures are converted to a generic 401 response with a sanitized bearer
 /// challenge. Reusing [verifier] preserves its configured key and cache
 /// lifecycle for the middleware's lifetime.

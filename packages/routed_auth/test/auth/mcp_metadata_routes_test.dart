@@ -232,7 +232,6 @@ final class _NamespacePlugin
       ),
       authentication: AuthOperationAuthentication.none,
       originPolicy: AuthOperationOriginPolicy.none,
-      csrfPolicy: AuthOperationCsrfPolicy.none,
       handler: (invocation, body) => <String, dynamic>{
         'path': invocation.request.requirePath(_namespaceId),
         'query': invocation.request.query,
@@ -273,7 +272,6 @@ final class _RedirectPlugin
       ),
       authentication: AuthOperationAuthentication.none,
       originPolicy: AuthOperationOriginPolicy.none,
-      csrfPolicy: AuthOperationCsrfPolicy.none,
       handler: (_, _) => AuthEndpointRedirect(
         location: Uri.parse('https://client.example/callback'),
       ),

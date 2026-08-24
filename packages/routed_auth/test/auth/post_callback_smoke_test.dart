@@ -9,21 +9,21 @@ import 'dart:io';
 import 'package:routed/routed.dart'
     hide
         AuthManager,
-        AuthRoutes,
         AuthOptions,
-        AuthUser,
-        AuthSessionStrategy,
         AuthProvider,
-        OAuthProvider,
-        CredentialsProvider,
-        SessionAuth,
-        CallbackResult,
+        AuthProviderType,
+        AuthRoutes,
+        AuthSessionStrategy,
+        AuthUser,
         CallbackProvider,
-        AuthProviderType;
+        CallbackResult,
+        CredentialsProvider,
+        OAuthProvider,
+        SessionAuth;
 import 'package:routed_auth/routed_auth.dart';
 import 'package:routed_testing/routed_testing.dart';
-import 'package:server_testing/server_testing.dart';
 import 'package:server_auth/server_auth.dart' as server_auth;
+import 'package:server_testing/server_testing.dart';
 
 import '../test_engine.dart';
 
@@ -32,7 +32,6 @@ Engine _authEngine(AuthManager manager) {
     appKey: 'base64:${base64.encode(List<int>.generate(32, (i) => i + 1))}',
     cookieName: 'test_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,
@@ -77,7 +76,7 @@ void main() {
       final engine = _authEngine(manager);
       await engine.initialize();
       final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final response = await client.post(
         '/auth/callback/custom',
@@ -122,7 +121,7 @@ void main() {
       final engine = _authEngine(manager);
       await engine.initialize();
       final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final response = await client.get(
         '/auth/callback/custom?code=code123&state=state123&email=get%40example.com',
@@ -152,7 +151,7 @@ void main() {
       final engine = _authEngine(manager);
       await engine.initialize();
       final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final response = await client.get(
         '/auth/callback/custom?code=code123&state=state123',
@@ -178,7 +177,7 @@ void main() {
       final engine = _authEngine(manager);
       await engine.initialize();
       final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final response = await client.get(
         '/auth/callback/custom?code=code123&state=state123',
@@ -209,7 +208,7 @@ void main() {
         final engine = _authEngine(manager);
         await engine.initialize();
         final client = TestClient(RoutedRequestHandler(engine));
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
 
         final response = await client.get(
           '/auth/callback/custom?code=code123&state=state123',
@@ -272,7 +271,7 @@ void main() {
         await engine.initialize();
 
         final client = TestClient(RoutedRequestHandler(engine));
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
 
         // Simulate a config reload replacing the manager instance.
         current = newManager();

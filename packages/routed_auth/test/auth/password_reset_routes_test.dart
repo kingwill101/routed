@@ -14,7 +14,6 @@ SessionConfig _sessionConfig() {
     appKey: 'base64:$key',
     cookieName: 'test_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,
@@ -259,7 +258,6 @@ void main() {
         providers: [CredentialsProvider()],
         passwordHasher: hasher,
         accountPolicy: const AuthAccountPolicy(
-          allowPasswordResetForDisabled: false,
           allowPasswordResetForUnverified: false,
         ),
         passwordResetSender: deliveries.add,
@@ -310,7 +308,7 @@ void main() {
     }, headers: headers);
     retry.assertStatus(HttpStatus.ok);
 
-    await store.upsert(AuthAccountState(userId: user.id, emailVerified: false));
+    await store.upsert(AuthAccountState(userId: user.id));
     final unverifiedRequest = await client.postJson(
       '/auth/password-reset/request',
       {'email': user.email, '_csrf': csrf.csrf},

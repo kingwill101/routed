@@ -1,5 +1,5 @@
-import 'package:server_auth/server_auth.dart';
 import 'package:routed_core/routed_core.dart' show EngineContext;
+import 'package:server_auth/server_auth.dart';
 
 /// Checks browser-origin and Fetch Metadata headers for state-changing auth
 /// requests.

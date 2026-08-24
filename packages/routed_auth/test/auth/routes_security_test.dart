@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:routed_core/routed_core.dart';
 import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_sessions/routed_sessions.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+
 import '../test_engine.dart';
 
 SessionConfig _sessionConfig() {
@@ -14,7 +15,6 @@ SessionConfig _sessionConfig() {
     appKey: 'base64:$key',
     cookieName: 'test_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,
@@ -77,7 +77,7 @@ void main() {
       final engine = _authEngine(manager);
       await engine.initialize();
       final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final unverified = await client.postJson(
         '/auth/signin/credentials',
@@ -106,7 +106,7 @@ void main() {
     () async {
       final store = InMemoryAuthStore();
       await store.upsert(
-        const AuthAccountState(userId: 'verified-user', emailVerified: false),
+        const AuthAccountState(userId: 'verified-user'),
       );
       final manager = AuthManager(
         AuthOptions<EngineContext>(
@@ -172,7 +172,7 @@ void main() {
     final engine = _authEngine(manager);
     await engine.initialize();
     final client = TestClient(RoutedRequestHandler(engine));
-    addTearDown(() async => await client.close());
+    addTearDown(() async => client.close());
 
     final response = await client.postJson(
       '/auth/signin/credentials',
@@ -198,7 +198,7 @@ void main() {
     await engine.initialize();
 
     final client = TestClient(RoutedRequestHandler(engine));
-    addTearDown(() async => await client.close());
+    addTearDown(() async => client.close());
 
     final response = await client.postJson(
       '/auth/signin/credentials',
@@ -226,7 +226,7 @@ void main() {
     await engine.initialize();
 
     final client = TestClient(RoutedRequestHandler(engine));
-    addTearDown(() async => await client.close());
+    addTearDown(() async => client.close());
 
     final response = await client.postJson(
       '/auth/signin/credentials',
@@ -257,7 +257,7 @@ void main() {
     await engine.initialize();
 
     final client = TestClient(RoutedRequestHandler(engine));
-    addTearDown(() async => await client.close());
+    addTearDown(() async => client.close());
 
     final response = await client.postJson(
       '/auth/signin/credentials',
@@ -285,7 +285,7 @@ void main() {
     await engine.initialize();
 
     final client = TestClient(RoutedRequestHandler(engine));
-    addTearDown(() async => await client.close());
+    addTearDown(() async => client.close());
 
     final response = await client.postJson(
       '/auth/signin/credentials',
@@ -315,7 +315,7 @@ void main() {
       await engine.initialize();
 
       final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final response = await client.postJson(
         '/auth/signin/credentials',
@@ -345,7 +345,7 @@ void main() {
       await engine.initialize();
 
       final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final response = await client.postJson(
         '/auth/signin/credentials',
@@ -384,7 +384,7 @@ void main() {
       await engine.initialize();
 
       final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final response = await client.postJson(
         '/auth/register/credentials',
@@ -454,7 +454,10 @@ void main() {
       signIn.assertStatus(HttpStatus.ok);
 
       clock = issuedAt.add(const Duration(minutes: 6));
-      final stale = await client.postJson('/sensitive', const {});
+      final stale = await client.postJson(
+        '/sensitive',
+        const <String, dynamic>{},
+      );
       stale.assertStatus(HttpStatus.forbidden);
       expect(stale.json()['error'], 'recent_authentication_required');
 
@@ -472,7 +475,10 @@ void main() {
       reauthenticated.assertStatus(HttpStatus.ok);
       expect(reauthenticated.json()['ok'], isTrue);
 
-      final sensitive = await client.postJson('/sensitive', const {});
+      final sensitive = await client.postJson(
+        '/sensitive',
+        const <String, dynamic>{},
+      );
       sensitive.assertStatus(HttpStatus.ok);
       expect(sensitive.json()['ok'], isTrue);
     },
@@ -492,7 +498,7 @@ void main() {
     await engine.initialize();
 
     final client = TestClient(RoutedRequestHandler(engine));
-    addTearDown(() async => await client.close());
+    addTearDown(() async => client.close());
 
     final response = await client.get('/auth/signin/credentials');
     response.assertStatus(HttpStatus.methodNotAllowed);
@@ -521,7 +527,7 @@ void main() {
       await engine.initialize();
 
       final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final response = await client.postJson(
         '/auth/signin/credentials',
@@ -560,7 +566,7 @@ void main() {
     await engine.initialize();
 
     final client = TestClient(RoutedRequestHandler(engine));
-    addTearDown(() async => await client.close());
+    addTearDown(() async => client.close());
 
     final response = await client.get(
       '/auth/signin/oauth?callbackUrl=https://evil.test',
@@ -653,7 +659,7 @@ void main() {
     final engine = _authEngine(manager);
     await engine.initialize();
     final client = TestClient(RoutedRequestHandler(engine));
-    addTearDown(() async => await client.close());
+    addTearDown(() async => client.close());
 
     final start = await client.get('/auth/signin/form-post-oauth');
     start.assertStatus(HttpStatus.movedTemporarily);
@@ -794,7 +800,7 @@ void main() {
     await engine.initialize();
 
     final client = TestClient(RoutedRequestHandler(engine));
-    addTearDown(() async => await client.close());
+    addTearDown(() async => client.close());
 
     final signIn = await client.postJson(
       '/auth/signin/missing',
@@ -839,7 +845,7 @@ void main() {
     await engine.initialize();
 
     final client = TestClient(RoutedRequestHandler(engine));
-    addTearDown(() async => await client.close());
+    addTearDown(() async => client.close());
 
     final response = await client.get('/auth/callback/oauth');
     response.assertStatus(HttpStatus.badRequest);
@@ -861,7 +867,7 @@ void main() {
     await engine.initialize();
 
     final client = TestClient(RoutedRequestHandler(engine));
-    addTearDown(() async => await client.close());
+    addTearDown(() async => client.close());
 
     final response = await client.get('/auth/callback/email?email=test');
     response.assertStatus(HttpStatus.badRequest);
@@ -883,7 +889,7 @@ void main() {
     await engine.initialize();
 
     final client = TestClient(RoutedRequestHandler(engine));
-    addTearDown(() async => await client.close());
+    addTearDown(() async => client.close());
 
     final response = await client.postJson(
       '/auth/register/email',
@@ -899,7 +905,6 @@ void main() {
         store: InMemoryAuthStore(),
         storeMode: AuthStoreMode.ephemeral,
         providers: [CredentialsProvider()],
-        enforceCsrf: true,
       ),
     );
 
@@ -907,7 +912,7 @@ void main() {
     await engine.initialize();
 
     final client = TestClient(RoutedRequestHandler(engine));
-    addTearDown(() async => await client.close());
+    addTearDown(() async => client.close());
 
     final csrfResponse = await client.get('/auth/csrf');
     final sessionCookie = csrfResponse.cookie('test_session');
@@ -939,7 +944,7 @@ void main() {
     await engine.initialize();
 
     final client = TestClient(RoutedRequestHandler(engine));
-    addTearDown(() async => await client.close());
+    addTearDown(() async => client.close());
 
     final signOut = await client.postJson('/auth/signout', <String, dynamic>{});
     signOut.assertStatus(HttpStatus.ok);

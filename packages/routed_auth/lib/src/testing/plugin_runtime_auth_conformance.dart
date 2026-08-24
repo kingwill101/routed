@@ -3,12 +3,11 @@ import 'dart:io' show SameSite;
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_auth/src/testing/runtime_auth_conformance.dart';
+import 'package:routed_auth/src/testing/webauthn_runtime_auth_conformance.dart';
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_sessions/routed_sessions.dart';
-
-import '../../routed_auth.dart';
-import 'runtime_auth_conformance.dart';
-import 'webauthn_runtime_auth_conformance.dart';
 
 /// Session cookie used by [createAuthPluginRuntimeConformanceEngine].
 const authPluginRuntimeConformanceCookieName = 'runtime_plugin_auth_session';
@@ -136,7 +135,6 @@ Engine createAuthPluginRuntimeConformanceEngine({
       sendCode: phoneDeliveries._record,
       codeHashKey: 'runtime-phone-code-hash-key-32-bytes',
       allowSignUp: true,
-      allowedAttempts: 3,
       generateCode: (_) => _authPluginRuntimeConformancePhoneCode,
     ),
     EmailOtpPlugin<EngineContext>(
@@ -168,8 +166,6 @@ Engine createAuthPluginRuntimeConformanceEngine({
       providers: <AuthProvider>[webAuthnProvider],
       plugins: plugins,
       passwordHasher: const _ConformancePasswordHasher(),
-      sessionStrategy: AuthSessionStrategy.session,
-      enforceCsrf: true,
       cookiePolicy: AuthCookiePolicy.development,
     ),
   );
@@ -180,7 +176,6 @@ Engine createAuthPluginRuntimeConformanceEngine({
     appKey: 'base64:$sessionKey',
     cookieName: authPluginRuntimeConformanceCookieName,
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,
@@ -604,7 +599,7 @@ Future<void> _verifyPhoneNumber(
       error: 'invalid_phone_code',
     );
     _check(
-      transport.responses.last.body.contains(hostileCode) == false,
+      !transport.responses.last.body.contains(hostileCode),
       'phone.hostile-code',
       'A hostile verification code reached the public error response.',
     );
@@ -857,7 +852,7 @@ Future<void> _verifyEmailOtp(
   );
   _expectStatus(sent, 200, 'email-otp.send');
   _check(
-    sent.body.contains(authPluginRuntimeConformanceOtpCode) == false,
+    !sent.body.contains(authPluginRuntimeConformanceOtpCode),
     'email-otp.send',
     'The delivered OTP leaked into the HTTP response.',
   );
@@ -907,7 +902,7 @@ Future<String> _verifyUsername(
     'The username was not normalized by the plugin.',
   );
   _check(
-    registered.body.contains(authPluginRuntimeConformancePassword) == false,
+    !registered.body.contains(authPluginRuntimeConformancePassword),
     'username.register',
     'The username password leaked into the HTTP response.',
   );
@@ -954,12 +949,14 @@ Future<void> _verifyApiKeyExchange(
   );
   _expectStatus(created, 200, 'api-key.create');
   final createdBody = _jsonObject(created, 'api-key.create');
-  final rawKey = createdBody['apiKey'];
-  _check(
-    rawKey is String && rawKey.startsWith('rka.'),
-    'api-key.create',
-    'The API-key response did not contain the one-time raw key.',
-  );
+  final rawKeyValue = createdBody['apiKey'];
+  final rawKey = switch (rawKeyValue) {
+    final String value when value.startsWith('rka.') => value,
+    _ => throw const AuthRuntimeConformanceFailure(
+      caseId: 'api-key.create',
+      message: 'The API-key response did not contain the one-time raw key.',
+    ),
+  };
 
   final listed = await send(
     AuthRuntimeConformanceRequest(
@@ -972,7 +969,7 @@ Future<void> _verifyApiKeyExchange(
   );
   _expectStatus(listed, 200, 'api-key.list');
   _check(
-    listed.body.contains(rawKey as String) == false,
+    !listed.body.contains(rawKey),
     'api-key.list',
     'The one-time raw API key appeared in the list response.',
   );
@@ -1017,7 +1014,7 @@ Future<void> _verifyWebAuthnBoundary(
   );
   _check(
     registrationBody['challenge'] is String &&
-        (registrationBody['challenge'] as String).isNotEmpty,
+        (registrationBody['challenge']! as String).isNotEmpty,
     'webauthn.registration-options',
     'WebAuthn registration options did not contain a challenge.',
   );
@@ -1037,7 +1034,7 @@ Future<void> _verifyWebAuthnBoundary(
   );
   _check(
     authenticationBody['challenge'] is String &&
-        (authenticationBody['challenge'] as String).isNotEmpty,
+        (authenticationBody['challenge']! as String).isNotEmpty,
     'webauthn.authentication-options',
     'WebAuthn authentication options did not contain a challenge.',
   );
@@ -1059,8 +1056,7 @@ Future<void> _verifyWebAuthnBoundary(
     'Malformed WebAuthn input did not return a sanitized WebAuthn error.',
   );
   _check(
-    malformed.body.contains('StateError') == false &&
-        malformed.body.contains('/src/') == false,
+    !malformed.body.contains('StateError') && !malformed.body.contains('/src/'),
     'webauthn.error-boundary',
     'The WebAuthn error response leaked internal implementation details.',
   );
@@ -1128,7 +1124,7 @@ Future<void> _verifyTwoFactorGating(
   );
   _expectStatus(absent, 404, 'two-factor.absent');
   _check(
-    absent.body.contains('two_factor_unavailable') == false,
+    !absent.body.contains('two_factor_unavailable'),
     'two-factor.absent',
     'An uninstalled two-factor plugin exposed an auth route.',
   );
@@ -1155,7 +1151,7 @@ Future<_CsrfState> _issueCsrf(
     'Expected a non-empty CSRF token.',
   );
   return _CsrfState(
-    token: token as String,
+    token: token! as String,
     cookie: _optionalSessionCookie(response) ?? cookie,
   );
 }
@@ -1188,7 +1184,7 @@ Map<String, Object?> _jsonObject(
     );
   }
   _check(value is Map<String, Object?>, caseId, 'Expected a JSON object.');
-  return value as Map<String, Object?>;
+  return value! as Map<String, Object?>;
 }
 
 Object? _userField(Map<String, Object?> body, String field) {
@@ -1237,7 +1233,7 @@ String _requireSessionCookie(
 }
 
 String? _optionalSessionCookie(AuthRuntimeConformanceResponse response) {
-  final prefix = '$authPluginRuntimeConformanceCookieName=';
+  const prefix = '$authPluginRuntimeConformanceCookieName=';
   for (final value in response.headerValues('set-cookie')) {
     final candidate = value.trimLeft();
     if (candidate.startsWith(prefix)) return candidate.split(';').first;

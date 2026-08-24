@@ -371,7 +371,6 @@ SessionConfig _sessionConfig() {
     appKey: 'base64:$key',
     cookieName: 'phone_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,

@@ -1,12 +1,14 @@
-import 'package:routed_core/routed_core.dart';
 import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+
 import '../test_engine.dart';
 
 class Project {
   Project({required this.id, required this.ownerId});
 
+  // ignore: unreachable_from_main
   final String id;
   final String ownerId;
 }
@@ -142,7 +144,7 @@ void main() {
       expect(callback, isNotNull);
 
       final allowed = await _withContext((ctx) async {
-        return await Future.value(
+        return Future.value(
           callback!(
             AuthGateEvaluationContext<EngineContext>(
               context: ctx,

@@ -1,10 +1,11 @@
 import 'dart:convert';
 
-import 'package:routed_core/routed_core.dart';
 import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_sessions/routed_sessions.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+
 import '../test_engine.dart';
 
 final Set<String> _baselineAbilities = Set<String>.from(gateRegistry.abilities);
@@ -379,17 +380,16 @@ void main() {
   group('Haigate provider integration', () {
     test('registers config-defined gates and middleware', () async {
       final engine = testEngine(
-        includeDefaultProviders: true,
         providers: [
           AuthServiceProvider(
             configuration: AuthConfig.defaults().copyWith(
-              haigate: HaigateConfig(
+              haigate: const HaigateConfig(
                 enabled: true,
-                defaults: const GateDefaults(
+                defaults: GateDefaults(
                   statusCode: HttpStatus.unauthorized,
                   message: 'Gate denied',
                 ),
-                abilities: const <String, GateDefinition>{
+                abilities: <String, GateDefinition>{
                   'publish-post': GateDefinition.roles(roles: ['publisher']),
                 },
               ),

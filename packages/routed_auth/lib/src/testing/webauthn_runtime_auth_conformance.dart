@@ -1,8 +1,7 @@
 import 'dart:convert';
 
+import 'package:routed_auth/src/testing/runtime_auth_conformance.dart';
 import 'package:server_auth/testing.dart' show AuthWebAuthnCeremonyFixture;
-
-import 'runtime_auth_conformance.dart';
 
 const _browserOrigin = 'https://runtime.example';
 const _relyingPartyId = 'runtime.example';
@@ -40,7 +39,7 @@ Future<void> verifyAuthWebAuthnBrowserRuntimeConformance({
   final registrationUser = registrationBody['user'];
   _check(
     registrationBody['challenge'] is String &&
-        (registrationBody['challenge'] as String).isNotEmpty &&
+        (registrationBody['challenge']! as String).isNotEmpty &&
         relyingParty is Map<String, Object?> &&
         relyingParty['id'] == _relyingPartyId &&
         registrationUser is Map<String, Object?> &&
@@ -48,6 +47,20 @@ Future<void> verifyAuthWebAuthnBrowserRuntimeConformance({
     'webauthn.registration-options',
     'Registration options omitted browser ceremony fields.',
   );
+  final registrationUserMap = switch (registrationUser) {
+    final Map<String, Object?> value => value,
+    _ => throw const AuthRuntimeConformanceFailure(
+      caseId: 'webauthn.registration-options',
+      message: 'Registration options omitted browser ceremony fields.',
+    ),
+  };
+  final registrationUserId = switch (registrationUserMap['id']) {
+    final String value => value,
+    _ => throw const AuthRuntimeConformanceFailure(
+      caseId: 'webauthn.registration-options',
+      message: 'Registration options omitted browser ceremony fields.',
+    ),
+  };
 
   final fixture = AuthWebAuthnCeremonyFixture(
     relyingPartyId: _relyingPartyId,
@@ -63,7 +76,7 @@ Future<void> verifyAuthWebAuthnBrowserRuntimeConformance({
       ),
       body: jsonEncode(<String, Object?>{
         'credential': fixture.registrationCredential(
-          challenge: registrationBody['challenge'] as String,
+          challenge: registrationBody['challenge']! as String,
         ),
         '_csrf': csrfToken,
       }),
@@ -96,14 +109,14 @@ Future<void> verifyAuthWebAuthnBrowserRuntimeConformance({
   );
   _check(
     authenticationBody['challenge'] is String &&
-        (authenticationBody['challenge'] as String).isNotEmpty,
+        (authenticationBody['challenge']! as String).isNotEmpty,
     'webauthn.authentication-options',
     'Authentication options omitted the browser challenge.',
   );
   final assertion = fixture.assertionCredential(
-    challenge: authenticationBody['challenge'] as String,
+    challenge: authenticationBody['challenge']! as String,
     counter: 1,
-    userHandle: (registrationUser as Map<String, Object?>)['id'] as String,
+    userHandle: registrationUserId,
   );
   _check(
     fixture.hasDerEs256Signature(assertion),
@@ -162,10 +175,10 @@ Future<void> verifyAuthWebAuthnBrowserRuntimeConformance({
   _expectStatus(counterOptions, 200, 'webauthn.counter-options');
   final staleCounterAssertion = fixture.assertionCredential(
     challenge:
-        _jsonObject(counterOptions, 'webauthn.counter-options')['challenge']
+        _jsonObject(counterOptions, 'webauthn.counter-options')['challenge']!
             as String,
     counter: 1,
-    userHandle: registrationUser['id'] as String,
+    userHandle: registrationUserId,
   );
   final replayedCounter = await send(
     AuthRuntimeConformanceRequest(
@@ -207,7 +220,7 @@ Map<String, Object?> _jsonObject(
     );
   }
   _check(value is Map<String, Object?>, caseId, 'Expected a JSON object.');
-  return value as Map<String, Object?>;
+  return value! as Map<String, Object?>;
 }
 
 Object? _userField(Map<String, Object?> body, String field) {

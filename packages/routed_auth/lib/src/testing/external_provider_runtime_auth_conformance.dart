@@ -1,12 +1,11 @@
 import 'dart:convert';
 import 'dart:io' show SameSite;
 
+import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_auth/src/testing/runtime_auth_conformance.dart';
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_sessions/routed_sessions.dart';
 import 'package:server_auth/testing.dart';
-
-import '../../routed_auth.dart';
-import 'runtime_auth_conformance.dart';
 
 /// Host session cookie used by the external-provider conformance fixture.
 const authExternalProviderRuntimeCookieName = 'runtime_external_auth_session';
@@ -57,7 +56,6 @@ Engine createAuthExternalProviderRuntimeConformanceEngine({
         secure: false,
       ),
       httpClient: providerClient,
-      enforceCsrf: true,
       cookiePolicy: AuthCookiePolicy.development,
     ),
   );
@@ -75,7 +73,6 @@ Engine createAuthExternalProviderRuntimeConformanceEngine({
           appKey: 'base64:$sessionKey',
           cookieName: authExternalProviderRuntimeCookieName,
           options: SessionOptions(
-            path: '/',
             secure: false,
             httpOnly: true,
             sameSite: SameSite.lax,
@@ -327,7 +324,7 @@ Future<String> _seedExistingUser(
     'external.seed-user',
     'The seed registration did not return a user ID.',
   );
-  return userId as String;
+  return userId! as String;
 }
 
 Future<void> _verifyCustomCallbackProvider(
@@ -719,7 +716,7 @@ Map<String, Object?> _jsonObject(
     );
   }
   _check(value is Map<String, Object?>, caseId, 'Expected a JSON object.');
-  return value as Map<String, Object?>;
+  return value! as Map<String, Object?>;
 }
 
 Object? _userField(Map<String, Object?> body, String field) {

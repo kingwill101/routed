@@ -17,7 +17,6 @@ SessionConfig _sessionConfig() {
     appKey: 'base64:$key',
     cookieName: 'test_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,
@@ -294,7 +293,7 @@ void main() {
     );
     final engine = testEngine(
       config: EngineConfig(
-        security: EngineSecurityFeatures(csrfProtection: false),
+        security: const EngineSecurityFeatures(csrfProtection: false),
       ),
     );
     AuthRoutes(manager).register(engine.defaultRouter);

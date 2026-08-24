@@ -15,7 +15,6 @@ SessionConfig _sessionConfig() {
     appKey: 'base64:$key',
     cookieName: 'test_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,
@@ -60,14 +59,6 @@ final class _RecordingAuthStore implements AuthStore {
   @override
   AuthEmailChangeTokenStore get emailChangeTokens =>
       _delegate.emailChangeTokens;
-
-  @override
-  AuthWebAuthnChallengeStore get webAuthnChallenges =>
-      _delegate.webAuthnChallenges;
-
-  @override
-  AuthWebAuthnAuthenticatorStore get webAuthnAuthenticators =>
-      _delegate.webAuthnAuthenticators;
 
   @override
   AuthDeviceAuthorizationStore get deviceAuthorizations =>
@@ -184,7 +175,6 @@ final class _AuthStatefulSut {
     final manager = AuthManager(
       AuthOptions<EngineContext>(
         store: store,
-        storeMode: AuthStoreMode.durable,
         runtimeMode: AuthRuntimeMode.localDevelopment,
         providers: [
           CredentialsProvider(
@@ -197,7 +187,6 @@ final class _AuthStatefulSut {
             },
           ),
         ],
-        sessionStrategy: AuthSessionStrategy.session,
         enforceCsrf: false,
       ),
     );
@@ -238,7 +227,7 @@ final class _AuthStatefulSut {
     HttpHeaders.cookieHeader: ['test_session=${sessionCookie!}'],
   };
 
-  Future<dynamic> sessionResponse() {
+  Future<TestResponse> sessionResponse() {
     final headers = sessionCookie == null ? null : cookieHeaders;
     return client.get('/auth/session', headers: headers);
   }
@@ -290,7 +279,7 @@ final class _LoginCommand extends Command<_SessionState, _AuthStatefulSut> {
   @override
   _SessionState update(_SessionState model) {
     if (!valid) return model.copyWith(hasCookie: true);
-    return _SessionState(authenticated: true, hasCookie: true);
+    return const _SessionState(authenticated: true, hasCookie: true);
   }
 
   @override
@@ -337,7 +326,7 @@ final class _LogoutCommand extends Command<_SessionState, _AuthStatefulSut> {
 
   @override
   _SessionState update(_SessionState model) =>
-      _SessionState(authenticated: false, hasCookie: false);
+      const _SessionState(authenticated: false, hasCookie: false);
 
   @override
   Future<void> postcondition(_SessionState model, _AuthStatefulSut sut) async {
@@ -366,7 +355,7 @@ final class _RevokeCommand extends Command<_SessionState, _AuthStatefulSut> {
 
   @override
   _SessionState update(_SessionState model) =>
-      _SessionState(authenticated: false, hasCookie: true);
+      const _SessionState(authenticated: false, hasCookie: true);
 
   @override
   Future<void> postcondition(_SessionState model, _AuthStatefulSut sut) async {

@@ -1,6 +1,6 @@
+import 'package:routed_auth/src/auth/provider.dart';
 import 'package:routed_core/routed_core.dart';
 import 'package:server_auth/server_auth.dart';
-import 'package:routed_auth/src/auth/provider.dart';
 
 /// Routed-specific binding helpers for a typed [AuthDeployment].
 extension RoutedAuthDeploymentBinding on AuthDeployment<EngineContext> {

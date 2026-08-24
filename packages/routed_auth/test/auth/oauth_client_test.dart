@@ -3,19 +3,20 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:routed_core/routed_core.dart';
+import 'package:routed_testing/routed_testing.dart';
 import 'package:server_auth/server_auth.dart'
     show
-        OAuth2Client,
-        OAuth2Exception,
-        OAuthIntrospectionResult,
-        OAuthTokenResponse,
         GitHubEmail,
         GitHubPlan,
         GitHubProfile,
         GitHubProviderOptions,
+        OAuth2Client,
+        OAuth2Exception,
+        OAuthIntrospectionResult,
+        OAuthTokenResponse,
         githubProvider;
-import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+
 import '../test_engine.dart';
 
 void main() {

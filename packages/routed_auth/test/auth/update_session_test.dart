@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:routed_core/routed_core.dart';
 import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_sessions/routed_sessions.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
@@ -32,7 +32,6 @@ SessionConfig _sessionConfig() {
     appKey: 'base64:$key',
     cookieName: 'test_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,
@@ -92,7 +91,6 @@ AuthManager _sessionManager({AuthCallbacks<EngineContext>? callbacks}) {
           },
         ),
       ],
-      sessionStrategy: AuthSessionStrategy.session,
       enforceCsrf: false,
       callbacks: callbacks ?? const AuthCallbacks<EngineContext>(),
     ),
@@ -183,7 +181,7 @@ void main() {
 
         await engine.initialize();
         final client = TestClient(RoutedRequestHandler(engine));
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
 
         final authCookie = await _signIn(client);
 
@@ -251,7 +249,7 @@ void main() {
 
         await engine.initialize();
         final client = TestClient(RoutedRequestHandler(engine));
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
 
         final authCookie = await _signIn(client);
         final afterCookie =
@@ -289,7 +287,6 @@ void main() {
                 },
               ),
             ],
-            sessionStrategy: AuthSessionStrategy.session,
             sessionMaxAge: const Duration(hours: 2),
             enforceCsrf: false,
           ),
@@ -313,7 +310,7 @@ void main() {
 
         await engine.initialize();
         final client = TestClient(RoutedRequestHandler(engine));
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
 
         final authCookie = await _signIn(client);
         final afterCookie =
@@ -374,7 +371,7 @@ void main() {
 
         await engine.initialize();
         final client = TestClient(RoutedRequestHandler(engine));
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
 
         final authCookie = await _signIn(client);
 
@@ -440,7 +437,7 @@ void main() {
 
         await engine.initialize();
         final client = TestClient(RoutedRequestHandler(engine));
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
 
         final authCookie = await _signIn(client);
 
@@ -498,7 +495,7 @@ void main() {
 
         await engine.initialize();
         final client = TestClient(RoutedRequestHandler(engine));
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
 
         final authCookie = await _signIn(client);
 
@@ -538,7 +535,6 @@ void main() {
               ),
             ],
             sessionStrategy: AuthSessionStrategy.jwt,
-            jwtOptions: const JwtSessionOptions(secret: ''),
             enforceCsrf: false,
           ),
         );
@@ -551,7 +547,7 @@ void main() {
               try {
                 await manager.updateSession(
                   ctx,
-                  AuthPrincipal(id: 'user-1', roles: const []),
+                  AuthPrincipal(id: 'user-1'),
                 );
                 return ctx.json({'ok': true});
               } on AuthFlowException catch (e) {
@@ -566,7 +562,7 @@ void main() {
 
         await engine.initialize();
         final client = TestClient(RoutedRequestHandler(engine));
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
 
         // Get a session cookie (sign-in will fail for JWT with empty secret,
         // so just get a csrf cookie to have a valid session).
@@ -583,7 +579,7 @@ void main() {
 
         expect(caughtError, isA<AuthFlowException>());
         expect(
-          (caughtError as AuthFlowException).code,
+          (caughtError! as AuthFlowException).code,
           equals('missing_jwt_secret'),
         );
         final body = _decodeJson(response)!;
@@ -619,7 +615,7 @@ void main() {
 
           await engine.initialize();
           final client = TestClient(RoutedRequestHandler(engine));
-          addTearDown(() async => await client.close());
+          addTearDown(() async => client.close());
 
           final authCookie = await _signIn(client);
 
@@ -680,7 +676,7 @@ void main() {
 
         await engine.initialize();
         final client = TestClient(RoutedRequestHandler(engine));
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
 
         final authCookie = await _signIn(client);
 
@@ -724,7 +720,6 @@ void main() {
                 ctx,
                 AuthPrincipal(
                   id: 'user-1',
-                  roles: const [],
                   attributes: const {'email': 'user@example.com'},
                 ),
               );
@@ -735,7 +730,7 @@ void main() {
 
         await engine.initialize();
         final client = TestClient(RoutedRequestHandler(engine));
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
 
         final authCookie = await _signIn(client);
         final preCookie =
@@ -780,7 +775,7 @@ void main() {
 
         await engine.initialize();
         final client = TestClient(RoutedRequestHandler(engine));
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
 
         final authCookie = await _signIn(client);
         final preCookie =
@@ -839,7 +834,7 @@ void main() {
 
         await engine.initialize();
         final client = TestClient(RoutedRequestHandler(engine));
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
 
         final authCookie = await _signIn(client);
         final preCookie =
@@ -897,7 +892,7 @@ void _sessionAuthUpdateSessionTests() {
 
           await engine.initialize();
           final client = TestClient(RoutedRequestHandler(engine));
-          addTearDown(() async => await client.close());
+          addTearDown(() async => client.close());
 
           final authCookie = await _signIn(client);
           final preCookie =
@@ -956,7 +951,7 @@ void _sessionAuthUpdateSessionTests() {
 
         await engine.initialize();
         final client = TestClient(RoutedRequestHandler(engine));
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
 
         final authCookie = await _signIn(client);
 
@@ -1036,7 +1031,7 @@ void _sessionAuthUpdateSessionTests() {
 
           await engine.initialize();
           final client = TestClient(RoutedRequestHandler(engine));
-          addTearDown(() async => await client.close());
+          addTearDown(() async => client.close());
 
           // Login.
           final loginResponse = await client.postJson(

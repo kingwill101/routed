@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:routed_core/routed_core.dart';
 import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_sessions/routed_sessions.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+
 import '../test_engine.dart';
 
 SessionConfig _sessionConfig() {
@@ -14,7 +15,6 @@ SessionConfig _sessionConfig() {
     appKey: 'base64:$key',
     cookieName: 'test_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,
@@ -141,7 +141,7 @@ void main() {
           RoutedRequestHandler(engine),
           mode: TransportMode.ephemeralServer,
         );
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
         addTearDown(() {
           guardRegistry.unregister('admin-only');
         });
@@ -225,7 +225,7 @@ void main() {
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
       addTearDown(() {
         guardRegistry.unregister('admin-only');
       });
@@ -260,7 +260,7 @@ void main() {
       engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
 
       engine.post('/login', (ctx) async {
-        final principal = AuthPrincipal(id: 'user-logout', roles: const []);
+        final principal = AuthPrincipal(id: 'user-logout');
         SessionAuth.configure(rememberStore: store);
         await SessionAuth.login(ctx, principal, rememberMe: true);
         return ctx.json({'status': 'ok'});
@@ -283,13 +283,13 @@ void main() {
       });
 
       await engine.initialize();
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
 
       final client = TestClient(
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final loginResponse = await client.post('/login', '');
       loginResponse.assertStatus(200);
@@ -375,13 +375,13 @@ void main() {
         );
 
         await engine.initialize();
-        addTearDown(() async => await engine.close());
+        addTearDown(() async => engine.close());
 
         final client = TestClient(
           RoutedRequestHandler(engine),
           mode: TransportMode.ephemeralServer,
         );
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
         addTearDown(() {
           guardRegistry.unregister('auth-required');
         });
@@ -427,7 +427,7 @@ void main() {
         )
         ..register(
           'support-all-test',
-          requireRoles(['support', 'editor'], any: false),
+          requireRoles(['support', 'editor']),
         );
 
       engine.post('/login', (ctx) async {
@@ -454,7 +454,7 @@ void main() {
       );
 
       await engine.initialize();
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
       addTearDown(() {
         guardRegistry
           ..unregister('auth-only-test')
@@ -466,7 +466,7 @@ void main() {
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final loginResponse = await client.post('/login', '');
       loginResponse.assertStatus(200);
@@ -513,7 +513,6 @@ void main() {
           MemorySessionStore(
             codecs: [SecureCookie(useEncryption: true, useSigning: true)],
             defaultOptions: SessionOptions(
-              path: '/',
               httpOnly: true,
               sameSite: SameSite.lax,
             ),
@@ -539,7 +538,7 @@ void main() {
       );
 
       await engine.initialize();
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
       addTearDown(() {
         guardRegistry.unregister('maintenance-test');
       });
@@ -548,7 +547,7 @@ void main() {
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final response = await client.get('/feature');
 

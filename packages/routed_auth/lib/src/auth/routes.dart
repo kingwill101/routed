@@ -3,61 +3,61 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:routed_auth/src/auth/manager/auth_manager.dart';
-import 'package:server_auth/server_auth.dart'
-    show
-        AuthCredentials,
-        AuthEndpointDescriptor,
-        AuthEndpointSecurityDescriptor,
-        AuthEndpointMount,
-        AuthEndpointRequest,
-        AuthRoutePath,
-        AuthEndpointRateLimitIdentifierDescriptor,
-        AuthEndpointAuthenticationIntent,
-        AuthEndpointHttpResponse,
-        AuthEndpointPublicErrorKind,
-        AuthEndpointPublicErrorResponseDescriptor,
-        AuthEndpointRedirect,
-        AuthOperationAuthentication,
-        AuthOperationCsrfPolicy,
-        AuthOperationInvocation,
-        AuthServerPluginSessionControl,
-        AuthOperationMethod,
-        AuthOperationOriginPolicy,
-        authSignInProviderRoute,
-        authRegisterProviderRoute,
-        authCallbackProviderRoute,
-        AuthCallbackRouteKind,
-        authErrorStatusCode,
-        authProviderSummaries,
-        AuthFlowException,
-        AuthTwoFactorRequiredException,
-        AuthProvider,
-        AuthRateLimitException,
-        AuthRateLimitAction,
-        apiKeyExchangeRateLimitOperation,
-        AuthResult,
-        AuthRegisterRouteKind,
-        AuthSignInRouteKind,
-        AuthSessionStrategy,
-        TwoFactorPlugin,
-        CallbackProvider,
-        CredentialsProvider,
-        AuthMagicLinkProvider,
-        normalizeAuthCallbackProviderResult,
-        OAuthProvider,
-        respondWithSanitizedAuthRedirectOrSession,
-        sanitizeAuthErrorCode,
-        resolveAuthCallbackRouteDecision,
-        resolveAuthRegisterRouteDecision,
-        resolveAuthProviderByOptionalId,
-        resolveAuthSignInRouteDecision,
-        resolveAuthSignOutForStrategy,
-        resolveAndSanitizeRedirectWithResolver;
 import 'package:routed_core/src/context/context.dart';
 import 'package:routed_core/src/response.dart';
 import 'package:routed_core/src/router/router.dart';
 import 'package:routed_http/routed_http.dart';
 import 'package:routed_sessions/routed_sessions.dart';
+import 'package:server_auth/server_auth.dart'
+    show
+        AuthCallbackRouteKind,
+        AuthCredentials,
+        AuthEndpointAuthenticationIntent,
+        AuthEndpointDescriptor,
+        AuthEndpointHttpResponse,
+        AuthEndpointMount,
+        AuthEndpointPublicErrorKind,
+        AuthEndpointPublicErrorResponseDescriptor,
+        AuthEndpointRateLimitIdentifierDescriptor,
+        AuthEndpointRedirect,
+        AuthEndpointRequest,
+        AuthEndpointSecurityDescriptor,
+        AuthFlowException,
+        AuthMagicLinkProvider,
+        AuthOperationAuthentication,
+        AuthOperationCsrfPolicy,
+        AuthOperationInvocation,
+        AuthOperationMethod,
+        AuthOperationOriginPolicy,
+        AuthProvider,
+        AuthRateLimitAction,
+        AuthRateLimitException,
+        AuthRegisterRouteKind,
+        AuthResult,
+        AuthRoutePath,
+        AuthServerPluginSessionControl,
+        AuthSessionStrategy,
+        AuthSignInRouteKind,
+        AuthTwoFactorRequiredException,
+        CallbackProvider,
+        CredentialsProvider,
+        OAuthProvider,
+        TwoFactorPlugin,
+        apiKeyExchangeRateLimitOperation,
+        authCallbackProviderRoute,
+        authErrorStatusCode,
+        authProviderSummaries,
+        authRegisterProviderRoute,
+        authSignInProviderRoute,
+        normalizeAuthCallbackProviderResult,
+        resolveAndSanitizeRedirectWithResolver,
+        resolveAuthCallbackRouteDecision,
+        resolveAuthProviderByOptionalId,
+        resolveAuthRegisterRouteDecision,
+        resolveAuthSignInRouteDecision,
+        resolveAuthSignOutForStrategy,
+        respondWithSanitizedAuthRedirectOrSession,
+        sanitizeAuthErrorCode;
 
 /// Auth HTTP routes for routed.
 ///
@@ -152,7 +152,7 @@ class AuthRoutes {
 
   /// Resolves the manager used by route handlers.
   ///
-  /// When [managerOf] is provided (e.g. a container lookup), it is consulted on
+  /// When `managerOf` is provided (e.g. a container lookup), it is consulted on
   /// every request so handlers stay in sync with the current manager after
   /// config reloads replace the previously bound instance. Otherwise the
   /// manager passed to the constructor is used.
@@ -300,7 +300,7 @@ class AuthRoutes {
             _twoFactorStepUpRevoke,
           );
         }
-        if (manager.apiKeys?.sessionExchangeEnabled == true &&
+        if ((manager.apiKeys?.sessionExchangeEnabled ?? false) &&
             manager.options.sessionStrategy == AuthSessionStrategy.session) {
           auth.post(
             const AuthRoutePath('/api-keys/exchange').template,
@@ -410,7 +410,7 @@ class AuthRoutes {
       final security = endpoint is AuthEndpointSecurityDescriptor
           ? endpoint as AuthEndpointSecurityDescriptor
           : null;
-      if (security?.requiresRecentAuthentication == true) {
+      if (security?.requiresRecentAuthentication ?? false) {
         if (endpoint.authentication != AuthOperationAuthentication.session) {
           throw AuthFlowException('recent_authentication_required');
         }
@@ -623,7 +623,7 @@ class AuthRoutes {
           );
           final redirectUri = await manager.beginOAuth(
             ctx,
-            provider as OAuthProvider,
+            provider! as OAuthProvider,
             callbackUrl: callbackUrl,
           );
           return await ctx.redirect(redirectUri.toString());
@@ -636,7 +636,7 @@ class AuthRoutes {
           payload,
           provider: provider,
         );
-        final emailProvider = provider as AuthMagicLinkProvider;
+        final emailProvider = provider! as AuthMagicLinkProvider;
         try {
           await manager.signInWithEmail(
             ctx,
@@ -655,7 +655,7 @@ class AuthRoutes {
         final credentials = AuthCredentials.fromMap(
           _withoutCaptchaToken(payload),
         );
-        final credentialsProvider = provider as CredentialsProvider;
+        final credentialsProvider = provider! as CredentialsProvider;
         try {
           final result = await manager.signInWithCredentials(
             ctx,
@@ -698,7 +698,7 @@ class AuthRoutes {
         final credentials = AuthCredentials.fromMap(
           _withoutCaptchaToken(payload),
         );
-        final credentialsProvider = provider as CredentialsProvider;
+        final credentialsProvider = provider! as CredentialsProvider;
         try {
           final result = await manager.registerWithCredentials(
             ctx,
@@ -736,7 +736,7 @@ class AuthRoutes {
       case AuthCallbackRouteKind.error:
         return _errorResponse(ctx, decision.errorCode!);
       case AuthCallbackRouteKind.oauth:
-        final oauthProvider = provider as OAuthProvider;
+        final oauthProvider = provider! as OAuthProvider;
         try {
           final result = await manager.finishOAuth(
             ctx,
@@ -749,7 +749,7 @@ class AuthRoutes {
           return _flowErrorResponse(ctx, error);
         }
       case AuthCallbackRouteKind.email:
-        final emailProvider = provider as AuthMagicLinkProvider;
+        final emailProvider = provider! as AuthMagicLinkProvider;
         try {
           final result = await manager.verifyEmail(
             ctx,
@@ -762,7 +762,7 @@ class AuthRoutes {
           return _flowErrorResponse(ctx, error);
         }
       case AuthCallbackRouteKind.custom:
-        final callbackProvider = provider as CallbackProvider;
+        final callbackProvider = provider! as CallbackProvider;
         try {
           await manager.enforceRateLimit(
             ctx,
@@ -1399,7 +1399,7 @@ class AuthRoutes {
         action: AuthRateLimitAction.twoFactor,
       );
     } on AuthFlowException catch (error) {
-      return await _flowErrorResponse(ctx, error);
+      return _flowErrorResponse(ctx, error);
     }
     return null;
   }
@@ -1419,7 +1419,7 @@ class AuthRoutes {
     }
     if (contentType.contains('application/x-www-form-urlencoded') ||
         contentType.contains('multipart/form-data')) {
-      return await ctx.formCache;
+      return ctx.formCache;
     }
 
     return Map<String, dynamic>.from(ctx.queryCache);

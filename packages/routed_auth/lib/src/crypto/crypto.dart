@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:pointycastle/api.dart' show KeyParameter, Mac, Digest;
+import 'package:pointycastle/api.dart' show Digest, KeyParameter, Mac;
 import 'package:pointycastle/digests/md5.dart';
 import 'package:pointycastle/digests/sha1.dart';
 import 'package:pointycastle/digests/sha256.dart';
@@ -35,7 +35,7 @@ bool constantTimeEqualsBytes(List<int> a, List<int> b) {
   if (a.length != b.length) return false;
   var result = 0;
   for (var i = 0; i < a.length; i++) {
-    result |= (a[i] ^ b[i]);
+    result |= a[i] ^ b[i];
   }
   return result == 0;
 }

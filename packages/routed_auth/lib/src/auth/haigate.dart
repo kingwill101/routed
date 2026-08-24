@@ -2,24 +2,24 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:server_auth/server_auth.dart'
-    show
-        AuthGateCallback,
-        AuthGateObserver,
-        AuthGateRegistry,
-        AuthGateService,
-        AuthGateViolation,
-        AuthFlowException,
-        AuthOrganizationAuthorizationContext,
-        OrganizationPlugin,
-        PolicyBinding,
-        syncManagedPolicyBindings,
-        AuthPrincipal;
 import 'package:routed_auth/src/auth/session_auth.dart';
 import 'package:routed_core/src/context/context.dart';
 import 'package:routed_core/src/response.dart';
 import 'package:routed_core/src/router/types.dart';
 import 'package:routed_sessions/routed_sessions.dart';
+import 'package:server_auth/server_auth.dart'
+    show
+        AuthFlowException,
+        AuthGateCallback,
+        AuthGateObserver,
+        AuthGateRegistry,
+        AuthGateService,
+        AuthGateViolation,
+        AuthOrganizationAuthorizationContext,
+        AuthPrincipal,
+        OrganizationPlugin,
+        PolicyBinding,
+        syncManagedPolicyBindings;
 
 /// A function that provides a payload for a specific ability in the given
 /// [EngineContext].
@@ -110,7 +110,7 @@ class Haigate {
     } on AuthFlowException catch (error) {
       final staleInheritedTeam =
           inheritsActiveTeam &&
-          requestedTeamId?.isNotEmpty == true &&
+          (requestedTeamId?.isNotEmpty ?? false) &&
           (error.code == 'team_not_found' || error.code == 'team_forbidden');
       if (!staleInheritedTeam) rethrow;
       ctx.removeSession('__routed.auth.activeTeamId');

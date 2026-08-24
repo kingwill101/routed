@@ -257,7 +257,7 @@ void main() {
 
   group('WebAuthnAuthenticator', () {
     test('stores all required fields', () {
-      final authenticator = WebAuthnAuthenticator(
+      const authenticator = WebAuthnAuthenticator(
         credentialId: 'cred-123',
         publicKey: 'base64-encoded-public-key',
         counter: 0,

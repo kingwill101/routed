@@ -46,7 +46,6 @@ void main() {
               appKey: 'base64:$key',
               cookieName: 'saml_route_session',
               options: SessionOptions(
-                path: '/',
                 secure: false,
                 httpOnly: true,
                 sameSite: SameSite.lax,
@@ -84,7 +83,7 @@ void main() {
         base64.decode(fields['SAMLRequest'] as String),
       );
       final requestId = RegExp(
-        r' ID="([^"]+)"',
+        ' ID="([^"]+)"',
       ).firstMatch(requestXml)!.group(1)!;
       final response = _response(requestId);
       final form = Uri(
@@ -110,8 +109,10 @@ void main() {
   );
 }
 
-String _response(String requestId) =>
-    '''<?xml version="1.0"?>
+String _response(String requestId) {
+  // The fixture must retain its exact XML bytes, including the missing lead.
+  // ignore: leading_newlines_in_multiline_strings
+  return '''<?xml version="1.0"?>
 <samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_response" Version="2.0" IssueInstant="2030-01-01T12:00:00Z" Destination="https://sp.example.test/auth/sso/saml/acs/enterprise" InResponseTo="$requestId">
 <saml:Issuer>https://idp.example.test/entity</saml:Issuer>
 <samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>
@@ -120,6 +121,7 @@ String _response(String requestId) =>
 <saml:Subject><saml:NameID Format="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent">stable-subject</saml:NameID><saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData Recipient="https://sp.example.test/auth/sso/saml/acs/enterprise" InResponseTo="$requestId" NotOnOrAfter="2030-01-01T12:05:00Z"/></saml:SubjectConfirmation></saml:Subject>
 <saml:Conditions NotBefore="2030-01-01T11:59:30Z" NotOnOrAfter="2030-01-01T12:05:00Z"><saml:AudienceRestriction><saml:Audience>https://sp.example.test/entity</saml:Audience></saml:AudienceRestriction></saml:Conditions>
 </saml:Assertion></samlp:Response>''';
+}
 
 final class _Catalog implements AuthSamlConnectionCatalog {
   final connection = AuthSamlConnection(

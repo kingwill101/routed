@@ -7,8 +7,8 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:routed_core/routed_core.dart';
 import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_sessions/routed_sessions.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
@@ -23,7 +23,6 @@ SessionConfig _sessionConfig() {
     appKey: 'base64:$key',
     cookieName: 'test_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,
@@ -108,7 +107,6 @@ void main() {
                 },
               ),
             ],
-            sessionStrategy: AuthSessionStrategy.session,
             enforceCsrf: false,
           ),
         );
@@ -291,7 +289,6 @@ void main() {
                 tokenExpiry: const Duration(minutes: 10),
               ),
             ],
-            sessionStrategy: AuthSessionStrategy.session,
             enforceCsrf: false,
           ),
         );
@@ -332,7 +329,7 @@ void main() {
         addTearDown(client.close);
 
         final csrfResponse = await client.get('/auth/csrf');
-        var sessionCookie = csrfResponse.cookie('test_session')!;
+        final sessionCookie = csrfResponse.cookie('test_session')!;
 
         // Step 1: Request magic link
         final signInResponse = await client.postJson(
@@ -428,7 +425,6 @@ void main() {
             sessionStrategy: AuthSessionStrategy.jwt,
             jwtOptions: const JwtSessionOptions(
               secret: 'test-secret-key-for-jwt-signing-32chars',
-              maxAge: Duration(hours: 1),
               cookieName: 'auth.jwt',
             ),
             enforceCsrf: false,
@@ -475,7 +471,7 @@ void main() {
         addTearDown(client.close);
 
         final csrfResponse = await client.get('/auth/csrf');
-        var sessionCookie = csrfResponse.cookie('test_session')!;
+        final sessionCookie = csrfResponse.cookie('test_session')!;
 
         // First login
         final loginResponse = await client.postJson(
@@ -561,7 +557,6 @@ void main() {
                 ),
               ),
             ],
-            sessionStrategy: AuthSessionStrategy.session,
             enforceCsrf: false,
           ),
         );
@@ -720,7 +715,6 @@ void main() {
           AuthOptions(
             store: InMemoryAuthStore(),
             storeMode: AuthStoreMode.ephemeral,
-            enforceCsrf: true, // Enable CSRF
             providers: [
               CredentialsProvider(
                 authorize: (ctx, provider, credentials) async {
@@ -826,7 +820,6 @@ void main() {
                 },
               ),
             ],
-            sessionStrategy: AuthSessionStrategy.session,
           ),
         );
         engine = _authEngine(manager);
@@ -928,7 +921,7 @@ void main() {
               signIn: (context) async {
                 signInCallbackCalled = true;
                 // Block users with certain email domain
-                if (context.user.email?.endsWith('@blocked.com') == true) {
+                if (context.user.email?.endsWith('@blocked.com') ?? false) {
                   return const AuthSignInResult.deny();
                 }
                 return const AuthSignInResult.allow();

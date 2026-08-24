@@ -20,7 +20,7 @@ void main() {
       );
       await source.writeAsString(await fixture.readAsString());
       addTearDown(() async {
-        if (await source.exists()) await source.delete();
+        if (source.existsSync()) source.deleteSync();
       });
 
       final result = await Process.run(Platform.resolvedExecutable, [
@@ -37,11 +37,10 @@ void main() {
   );
 
   test('Routed deployment installs AuthManager and routes', () async {
-    final AuthDeployment<EngineContext> deployment =
-        AuthDeploymentPresets.localDevelopment<EngineContext>(
-          providers: [CredentialsProvider()],
-          trustedOrigins: [Uri.parse('http://localhost:3000')],
-        );
+    final deployment = AuthDeploymentPresets.localDevelopment<EngineContext>(
+      providers: [CredentialsProvider()],
+      trustedOrigins: [Uri.parse('http://localhost:3000')],
+    );
 
     final provider = deployment.serviceProvider();
     final engine = Engine(

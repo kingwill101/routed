@@ -36,7 +36,7 @@ void main() {
             'credential-${++credentialSequence}-abcdefgh',
         secretGenerator: ({length = 0}) =>
             'secret-${++secretSequence}-abcdefghijklmnopqrstuvwxyz',
-        clock: () => DateTime.utc(2030, 1, 1),
+        clock: () => DateTime.utc(2030),
       );
       final manager = AuthManager(
         AuthOptions<EngineContext>(
@@ -179,7 +179,6 @@ SessionConfig _sessionConfig() {
     appKey: 'base64:$key',
     cookieName: 'test_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,

@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:routed_core/routed_core.dart';
 import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_sessions/routed_sessions.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
@@ -17,7 +17,6 @@ SessionConfig _sessionConfig() {
     appKey: 'base64:$key',
     cookieName: 'test_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,
@@ -79,7 +78,6 @@ void main() {
               },
             ),
           ],
-          sessionStrategy: AuthSessionStrategy.session,
           enforceCsrf: false,
           callbacks: const AuthCallbacks(signIn: _denySignIn),
         ),
@@ -88,7 +86,7 @@ void main() {
       await engine.initialize();
 
       final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final csrfResponse = await client.get('/auth/csrf');
       final csrfToken = csrfResponse.json()['csrfToken'] as String;
@@ -118,7 +116,6 @@ void main() {
               },
             ),
           ],
-          sessionStrategy: AuthSessionStrategy.session,
           enforceCsrf: false,
           callbacks: AuthCallbacks(
             session: (context) async {
@@ -131,7 +128,7 @@ void main() {
       await engine.initialize();
 
       final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final csrfResponse = await client.get('/auth/csrf');
       final csrfToken = csrfResponse.json()['csrfToken'] as String;
@@ -188,7 +185,7 @@ void main() {
       await engine.initialize();
 
       final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final csrfResponse = await client.get('/auth/csrf');
       final csrfToken = csrfResponse.json()['csrfToken'] as String;
@@ -232,7 +229,6 @@ void main() {
             ),
           ],
           plugins: [lifecyclePlugin],
-          sessionStrategy: AuthSessionStrategy.session,
           enforceCsrf: false,
         ),
       );
@@ -250,7 +246,7 @@ void main() {
       eventManager.listen<AuthSessionEvent>((event) => events.add('session'));
 
       final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final csrfResponse = await client.get('/auth/csrf');
       final csrfToken = csrfResponse.json()['csrfToken'] as String;
@@ -430,10 +426,22 @@ void main() {
         expect(signIn.account!.accessToken, isNull);
         expect(signIn.account!.refreshToken, isNull);
         expect(signIn.session.token, isNull);
-        expect(signIn.user.attributes, equals({'nested': {}}));
-        expect(signIn.profile, equals({'name': 'Alice', 'nested': {}}));
+        expect(
+          signIn.user.attributes,
+          equals(<String, dynamic>{'nested': <String, dynamic>{}}),
+        );
+        expect(
+          signIn.profile,
+          equals(<String, dynamic>{
+            'name': 'Alice',
+            'nested': <String, dynamic>{},
+          }),
+        );
         expect(signIn.credentials!.password, isNull);
-        expect(signIn.credentials!.attributes, equals({'nested': {}}));
+        expect(
+          signIn.credentials!.attributes,
+          equals(<String, dynamic>{'nested': <String, dynamic>{}}),
+        );
         expect(sessionEvent.session.token, isNull);
         expect(sessionEvent.payload, equals({'visible': true}));
 
@@ -442,7 +450,7 @@ void main() {
       await engine.initialize();
 
       final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
       final response = await client.get('/event-probe');
 
       response.assertStatus(HttpStatus.ok);
@@ -477,7 +485,7 @@ void main() {
         await engine.initialize();
 
         final client = TestClient(RoutedRequestHandler(engine));
-        addTearDown(() async => await client.close());
+        addTearDown(() async => client.close());
         const querySecret = 'query-secret';
         const headerSecret = 'header-secret';
         const cookieSecret = 'cookie-secret';
@@ -529,7 +537,7 @@ void main() {
           () => publicContext.queryParameters,
           throwsA(isA<NoSuchMethodError>()),
         );
-        expect(() => publicContext.body(), throwsA(isA<NoSuchMethodError>()));
+        expect(() => publicContext.body, throwsA(isA<NoSuchMethodError>()));
         expect(() => publicContext.response, throwsA(isA<NoSuchMethodError>()));
         expect(
           () => publicContext.container,
@@ -570,7 +578,6 @@ void main() {
               },
             ),
           ],
-          sessionStrategy: AuthSessionStrategy.session,
           enforceCsrf: false,
           callbacks: AuthCallbacks(
             signIn: (context) =>
@@ -586,7 +593,7 @@ void main() {
       await engine.initialize();
 
       final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final csrfResponse = await client.get('/auth/csrf');
       final csrfToken = csrfResponse.json()['csrfToken'] as String;

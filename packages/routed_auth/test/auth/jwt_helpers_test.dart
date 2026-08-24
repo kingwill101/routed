@@ -256,17 +256,12 @@ void main() {
 
   test('JwtOptions copyWith applies overrides', () {
     const options = JwtOptions(
-      enabled: true,
       issuer: 'routed',
       audience: ['demo'],
       requiredClaims: ['role'],
-      jwksUri: null,
-      inlineKeys: [],
       algorithms: ['HS256'],
       clockSkew: Duration(seconds: 15),
       jwksCacheTtl: Duration(minutes: 1),
-      header: 'Authorization',
-      bearerPrefix: 'Bearer ',
       cookieName: 'auth',
     );
 

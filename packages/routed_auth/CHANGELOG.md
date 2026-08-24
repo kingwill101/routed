@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Adopt `very_good_analysis` with strict typing, complete public API
+  documentation, and package-safe imports across the library, examples, and
+  tests.
 - Keep auth lifecycle events from retaining raw request contexts; publish only
   bounded, non-secret request metadata and add regression coverage for request
   secret isolation.

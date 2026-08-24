@@ -12,8 +12,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:property_testing/property_testing.dart';
-import 'package:routed_core/routed_core.dart';
 import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_sessions/routed_sessions.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
@@ -31,18 +31,18 @@ Generator<String> chaoticUsername({int maxLength = 100}) {
       Gen.oneOf([
         "admin'--",
         "admin' OR '1'='1",
-        "admin\"; DROP TABLE users; --",
+        'admin"; DROP TABLE users; --',
         "<script>alert('xss')</script>",
-        "../../../etc/passwd",
-        "admin%00",
-        "admin\x00hidden",
-        "admin\r\nX-Injected: header",
+        '../../../etc/passwd',
+        'admin%00',
+        'admin\x00hidden',
+        'admin\r\nX-Injected: header',
         "admin' UNION SELECT * FROM passwords--",
-        "${'\$'}{process.env.SECRET}",
+        "${r'$'}{process.env.SECRET}",
         "{{constructor.constructor('return this')()}}",
-        "admin|cat /etc/passwd",
-        "admin; ls -la",
-        "admin\nX-Forwarded-For: attacker",
+        'admin|cat /etc/passwd',
+        'admin; ls -la',
+        'admin\nX-Forwarded-For: attacker',
       ]),
     ),
     (1, Gen.string(minLength: 1, maxLength: 50)),
@@ -56,19 +56,19 @@ Generator<String> chaoticPassword({int maxLength = 100}) {
     (
       2,
       Gen.oneOf([
-        "", // Empty password
-        " ", // Single space
-        "   ", // Multiple spaces
-        "\t\n\r", // Whitespace only
-        "a" * 10000, // Very long password
-        "\x00password", // Null byte prefix
-        "pass\x00word", // Null byte middle
-        "password\x00", // Null byte suffix
-        "пароль", // Cyrillic
-        "密码", // Chinese
-        "🔐🔑🔒", // Emoji
-        "pass\u200Bword", // Zero-width space
-        "pass\u202Eword", // Right-to-left override
+        '', // Empty password
+        ' ', // Single space
+        '   ', // Multiple spaces
+        '\t\n\r', // Whitespace only
+        'a' * 10000, // Very long password
+        '\x00password', // Null byte prefix
+        'pass\x00word', // Null byte middle
+        'password\x00', // Null byte suffix
+        'пароль', // Cyrillic
+        '密码', // Chinese
+        '🔐🔑🔒', // Emoji
+        'pass\u200Bword', // Zero-width space
+        'pass\u202Eword', // Right-to-left override
       ]),
     ),
     (1, Gen.string(minLength: 1, maxLength: 50)),
@@ -82,25 +82,25 @@ Generator<String> chaoticEmail({int maxLength = 100}) {
     (
       2,
       Gen.oneOf([
-        "", // Empty
-        "notanemail", // No @
-        "@", // Just @
-        "user@", // No domain
-        "@domain.com", // No local part
-        "user@@domain.com", // Double @
-        "user@domain@evil.com", // Double @
-        "user@domain.com@attacker.com",
-        "user+tag@domain.com",
-        "user@[127.0.0.1]",
-        "user@localhost",
-        "user@.com",
-        ".user@domain.com",
-        "user.@domain.com",
-        "user..test@domain.com",
-        "<script>@evil.com",
-        "user@domain.com\r\nBcc: attacker@evil.com",
-        "\"user\"@domain.com",
-        "user@domain.com%00attacker@evil.com",
+        '', // Empty
+        'notanemail', // No @
+        '@', // Just @
+        'user@', // No domain
+        '@domain.com', // No local part
+        'user@@domain.com', // Double @
+        'user@domain@evil.com', // Double @
+        'user@domain.com@attacker.com',
+        'user+tag@domain.com',
+        'user@[127.0.0.1]',
+        'user@localhost',
+        'user@.com',
+        '.user@domain.com',
+        'user.@domain.com',
+        'user..test@domain.com',
+        '<script>@evil.com',
+        'user@domain.com\r\nBcc: attacker@evil.com',
+        '"user"@domain.com',
+        'user@domain.com%00attacker@evil.com',
       ]),
     ),
     (1, Specialized.email()),
@@ -114,15 +114,15 @@ Generator<String> chaoticOAuthState({int maxLength = 200}) {
     (
       2,
       Gen.oneOf([
-        "", // Empty
-        "valid-state-token",
-        "a" * 10000, // Very long
-        "state%00injected",
-        "state\r\nLocation: http://evil.com",
-        "state<script>",
-        "../../../.env",
-        "state|cat /etc/passwd",
-        "eyJhbGciOiJub25lIn0.eyJ1c2VyIjoiYWRtaW4ifQ.", // JWT with alg:none
+        '', // Empty
+        'valid-state-token',
+        'a' * 10000, // Very long
+        'state%00injected',
+        'state\r\nLocation: http://evil.com',
+        'state<script>',
+        '../../../.env',
+        'state|cat /etc/passwd',
+        'eyJhbGciOiJub25lIn0.eyJ1c2VyIjoiYWRtaW4ifQ.', // JWT with alg:none
       ]),
     ),
     (1, Gen.string(minLength: 10, maxLength: 64)),
@@ -136,14 +136,14 @@ Generator<String> chaoticOAuthCode({int maxLength = 200}) {
     (
       2,
       Gen.oneOf([
-        "", // Empty
-        "valid-code",
-        "a" * 10000, // Very long
-        "code%00injected",
-        "code\r\nX-Injected: header",
-        "code<script>alert(1)</script>",
+        '', // Empty
+        'valid-code',
+        'a' * 10000, // Very long
+        'code%00injected',
+        'code\r\nX-Injected: header',
+        'code<script>alert(1)</script>',
         "code' OR '1'='1",
-        "code; DROP TABLE tokens;--",
+        'code; DROP TABLE tokens;--',
       ]),
     ),
     (1, Gen.string(minLength: 10, maxLength: 64)),
@@ -157,22 +157,22 @@ Generator<String> chaoticCallbackUrl({int maxLength = 500}) {
     (
       2,
       Gen.oneOf([
-        "", // Empty
-        "javascript:alert(1)",
-        "data:text/html,<script>alert(1)</script>",
-        "//evil.com/steal-token",
-        "https://evil.com/callback",
-        "http://localhost/../../../etc/passwd",
-        "/callback?redirect=http://evil.com",
-        "https://legit.com@evil.com/",
-        "https://evil.com#legit.com",
-        "https://evil.com%00legit.com",
-        "\r\nLocation: http://evil.com",
-        "file:///etc/passwd",
-        "ftp://evil.com",
+        '', // Empty
+        'javascript:alert(1)',
+        'data:text/html,<script>alert(1)</script>',
+        '//evil.com/steal-token',
+        'https://evil.com/callback',
+        'http://localhost/../../../etc/passwd',
+        '/callback?redirect=http://evil.com',
+        'https://legit.com@evil.com/',
+        'https://evil.com#legit.com',
+        'https://evil.com%00legit.com',
+        '\r\nLocation: http://evil.com',
+        'file:///etc/passwd',
+        'ftp://evil.com',
       ]),
     ),
-    (1, Gen.oneOf(["/callback", "/profile", "/dashboard"])),
+    (1, Gen.oneOf(['/callback', '/profile', '/dashboard'])),
   ]);
 }
 
@@ -187,11 +187,11 @@ Generator<String?> chaoticCsrfToken({int maxLength = 100}) {
       2,
       Gen.oneOf<String?>([
         null,
-        "",
-        "invalid-csrf",
-        "a" * 10000,
-        "csrf%00injected",
-        "\r\nX-Injected: header",
+        '',
+        'invalid-csrf',
+        'a' * 10000,
+        'csrf%00injected',
+        '\r\nX-Injected: header',
       ]),
     ),
     (1, Gen.string(minLength: 32, maxLength: 64).map((s) => s as String?)),
@@ -258,25 +258,6 @@ Generator<Map<String, dynamic>> chaoticAuthPayload() {
   ]);
 }
 
-/// Generates chaotic HTTP header values
-Generator<String> chaoticHeaderValue({int maxLength = 200}) {
-  return Gen.frequency([
-    (3, Chaos.string(minLength: 0, maxLength: maxLength)),
-    (
-      2,
-      Gen.oneOf([
-        "", // Empty
-        "value\r\nX-Injected: header",
-        "value\r\n\r\n<html>",
-        "a" * 10000,
-        "\x00value",
-        "value%00injected",
-      ]),
-    ),
-    (1, Gen.string(minLength: 1, maxLength: 50)),
-  ]);
-}
-
 /// Generates cookie values that exercise parser boundaries without creating a
 /// real authenticated session.
 Generator<String> chaoticCookieValue({int maxLength = 200}) {
@@ -308,7 +289,6 @@ SessionConfig _sessionConfig() {
     appKey: 'base64:$key',
     cookieName: 'test_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,
@@ -370,7 +350,6 @@ void main() {
                 },
               ),
             ],
-            sessionStrategy: AuthSessionStrategy.session,
             enforceCsrf: false,
           ),
         );
@@ -382,7 +361,7 @@ void main() {
       tearDown(() => client.close());
 
       test('server never crashes with chaotic usernames', () async {
-        final config = PropertyConfig(numTests: 100, seed: 42);
+        final config = PropertyConfig(seed: 42);
         final runner = PropertyTestRunner(chaoticUsername(), (username) async {
           final csrfResponse = await client.get('/auth/csrf');
           final sessionCookie = csrfResponse.cookie('test_session');
@@ -414,7 +393,7 @@ void main() {
       });
 
       test('server never crashes with chaotic passwords', () async {
-        final config = PropertyConfig(numTests: 100, seed: 42);
+        final config = PropertyConfig(seed: 42);
         final runner = PropertyTestRunner(chaoticPassword(), (password) async {
           final csrfResponse = await client.get('/auth/csrf');
           final sessionCookie = csrfResponse.cookie('test_session');
@@ -439,7 +418,7 @@ void main() {
       });
 
       test('server never crashes with chaotic payloads', () async {
-        final config = PropertyConfig(numTests: 100, seed: 42);
+        final config = PropertyConfig(seed: 42);
         final runner = PropertyTestRunner(chaoticAuthPayload(), (
           payload,
         ) async {
@@ -466,7 +445,7 @@ void main() {
       });
 
       test('chaotic credentials never authenticate successfully', () async {
-        final config = PropertyConfig(numTests: 100, seed: 42);
+        final config = PropertyConfig(seed: 42);
         final runner = PropertyTestRunner(
           chaoticUsername().flatMap((username) {
             return chaoticPassword().map((password) => (username, password));
@@ -532,7 +511,6 @@ void main() {
                 tokenExpiry: const Duration(minutes: 10),
               ),
             ],
-            sessionStrategy: AuthSessionStrategy.session,
             enforceCsrf: false,
           ),
         );
@@ -544,7 +522,7 @@ void main() {
       tearDown(() => client.close());
 
       test('server never crashes with chaotic email addresses', () async {
-        final config = PropertyConfig(numTests: 100, seed: 42);
+        final config = PropertyConfig(seed: 42);
         final runner = PropertyTestRunner(chaoticEmail(), (email) async {
           final csrfResponse = await client.get('/auth/csrf');
           final sessionCookie = csrfResponse.cookie('test_session');
@@ -580,7 +558,7 @@ void main() {
           },
         );
 
-        final config = PropertyConfig(numTests: 100, seed: 42);
+        final config = PropertyConfig(seed: 42);
         final runner = PropertyTestRunner(
           Chaos.string(minLength: 0, maxLength: 200),
           (chaoticToken) async {
@@ -645,7 +623,6 @@ void main() {
                 ),
               ),
             ],
-            sessionStrategy: AuthSessionStrategy.session,
             enforceCsrf: false,
           ),
         );
@@ -657,7 +634,7 @@ void main() {
       tearDown(() => client.close());
 
       test('server never crashes with chaotic OAuth codes', () async {
-        final config = PropertyConfig(numTests: 100, seed: 42);
+        final config = PropertyConfig(seed: 42);
         final runner = PropertyTestRunner(chaoticOAuthCode(), (code) async {
           final csrfResponse = await client.get('/auth/csrf');
           final sessionCookie = csrfResponse.cookie('test_session');
@@ -681,7 +658,7 @@ void main() {
       });
 
       test('server never crashes with chaotic OAuth states', () async {
-        final config = PropertyConfig(numTests: 100, seed: 42);
+        final config = PropertyConfig(seed: 42);
         final runner = PropertyTestRunner(chaoticOAuthState(), (state) async {
           final csrfResponse = await client.get('/auth/csrf');
           final sessionCookie = csrfResponse.cookie('test_session');
@@ -705,7 +682,7 @@ void main() {
       });
 
       test('chaotic states never validate successfully', () async {
-        final config = PropertyConfig(numTests: 100, seed: 42);
+        final config = PropertyConfig(seed: 42);
         final runner = PropertyTestRunner(chaoticOAuthState(), (state) async {
           final csrfResponse = await client.get('/auth/csrf');
           final sessionCookie = csrfResponse.cookie('test_session');
@@ -754,7 +731,6 @@ void main() {
                 },
               ),
             ],
-            sessionStrategy: AuthSessionStrategy.session,
             enforceCsrf: false,
           ),
         );
@@ -766,7 +742,7 @@ void main() {
       tearDown(() => client.close());
 
       test('server never crashes with chaotic callback URLs', () async {
-        final config = PropertyConfig(numTests: 100, seed: 42);
+        final config = PropertyConfig(seed: 42);
         final runner = PropertyTestRunner(chaoticCallbackUrl(), (
           callbackUrl,
         ) async {
@@ -859,7 +835,6 @@ void main() {
           AuthOptions(
             store: InMemoryAuthStore(),
             storeMode: AuthStoreMode.ephemeral,
-            enforceCsrf: true, // Enable CSRF
             providers: [
               CredentialsProvider(
                 authorize: (ctx, provider, credentials) async {
@@ -877,7 +852,7 @@ void main() {
       tearDown(() => client.close());
 
       test('server never crashes with chaotic CSRF tokens', () async {
-        final config = PropertyConfig(numTests: 100, seed: 42);
+        final config = PropertyConfig(seed: 42);
         final runner = PropertyTestRunner(chaoticCsrfToken(), (
           csrfToken,
         ) async {
@@ -904,7 +879,7 @@ void main() {
       });
 
       test('chaotic CSRF tokens never validate', () async {
-        final config = PropertyConfig(numTests: 100, seed: 42);
+        final config = PropertyConfig(seed: 42);
         final runner = PropertyTestRunner(
           Chaos.string(minLength: 0, maxLength: 200),
           (csrfToken) async {
@@ -962,7 +937,7 @@ void main() {
       tearDown(() => client.close());
 
       test('server never crashes with chaotic provider IDs', () async {
-        final config = PropertyConfig(numTests: 100, seed: 42);
+        final config = PropertyConfig(seed: 42);
         final runner = PropertyTestRunner(Chaos.string(minLength: 0, maxLength: 100), (
           providerId,
         ) async {
@@ -1053,7 +1028,7 @@ void main() {
       tearDown(() => client.close());
 
       test('server handles chaotic JSON bodies gracefully', () async {
-        final config = PropertyConfig(numTests: 100, seed: 42);
+        final config = PropertyConfig(seed: 42);
         final runner = PropertyTestRunner(
           // Use smaller depth/length to avoid DoS-type large payloads
           Chaos.json(maxDepth: 2, maxLength: 5),
@@ -1237,7 +1212,7 @@ void main() {
               // The real HTTP client rejects non-wire-safe header values before
               // they reach the server; that is a safe boundary outcome.
             }
-          }, PropertyConfig(numTests: 100, seed: 20260819));
+          }, PropertyConfig(seed: 20260819));
 
           final result = await runner.run();
           expect(result.success, isTrue, reason: _formatResult(result));
@@ -1392,8 +1367,8 @@ String _sanitize(dynamic value) {
     return '${str.substring(0, 100)}... (${str.length} chars)';
   }
   return str
-      .replaceAll('\r', '\\r')
-      .replaceAll('\n', '\\n')
-      .replaceAll('\t', '\\t')
-      .replaceAll('\x00', '\\0');
+      .replaceAll('\r', r'\r')
+      .replaceAll('\n', r'\n')
+      .replaceAll('\t', r'\t')
+      .replaceAll('\x00', r'\0');
 }

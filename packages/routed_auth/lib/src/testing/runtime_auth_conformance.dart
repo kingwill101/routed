@@ -1,10 +1,9 @@
 import 'dart:convert';
 import 'dart:io' show SameSite;
 
+import 'package:routed_auth/routed_auth.dart';
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_sessions/routed_sessions.dart';
-
-import '../../routed_auth.dart';
 
 /// Session cookie used by [createAuthRuntimeConformanceEngine].
 const authRuntimeConformanceCookieName = 'runtime_auth_session';
@@ -133,8 +132,6 @@ Engine createAuthRuntimeConformanceEngine() {
           },
         ),
       ],
-      sessionStrategy: AuthSessionStrategy.session,
-      enforceCsrf: true,
       cookiePolicy: AuthCookiePolicy.development,
     ),
   );
@@ -142,7 +139,6 @@ Engine createAuthRuntimeConformanceEngine() {
     appKey: 'base64:$sessionKey',
     cookieName: authRuntimeConformanceCookieName,
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,
@@ -183,12 +179,14 @@ Future<void> verifyAuthRuntimeConformance({
     'Expected status 200, received ${csrfResponse.statusCode}.',
   );
   final csrfBody = _jsonObject(csrfResponse, 'csrf.issue');
-  final csrf = csrfBody['csrfToken'];
-  _check(
-    csrf is String && csrf.isNotEmpty,
-    'csrf.issue',
-    'Expected a non-empty csrfToken.',
-  );
+  final csrfValue = csrfBody['csrfToken'];
+  final csrf = switch (csrfValue) {
+    final String value when value.isNotEmpty => value,
+    _ => throw const AuthRuntimeConformanceFailure(
+      caseId: 'csrf.issue',
+      message: 'Expected a non-empty csrfToken.',
+    ),
+  };
 
   final initialSetCookie = _setCookieFor(
     csrfResponse,
@@ -225,7 +223,7 @@ Future<void> verifyAuthRuntimeConformance({
         cookie: cookie,
         origin: 'https://attacker.example',
       ),
-      body: _credentialsBody(csrf: csrf as String),
+      body: _credentialsBody(csrf: csrf),
     ),
   );
   _expectError(
@@ -375,7 +373,7 @@ Map<String, Object?> _jsonObject(
     );
   }
   _check(value is Map<String, Object?>, caseId, 'Expected a JSON object.');
-  return value as Map<String, Object?>;
+  return value! as Map<String, Object?>;
 }
 
 String? _userId(Map<String, Object?> body) {

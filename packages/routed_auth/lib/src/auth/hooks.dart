@@ -1,15 +1,15 @@
 // ignore_for_file: implementation_imports
+import 'package:routed_core/src/context/context.dart';
+import 'package:routed_core/src/events/event.dart';
 import 'package:server_auth/server_auth.dart'
     show
         AuthAccount,
+        AuthCredentials,
+        AuthProvider,
         AuthSession,
         AuthSessionStrategy,
         AuthUser,
-        AuthCredentials,
-        AuthProvider,
         sanitizeAuthPublicAttributes;
-import 'package:routed_core/src/context/context.dart';
-import 'package:routed_core/src/events/event.dart';
 
 const _authEventMetadataMaxLength = 256;
 const _authEventPathMaxLength = 2048;

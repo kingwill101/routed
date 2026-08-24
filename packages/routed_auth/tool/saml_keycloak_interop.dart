@@ -91,7 +91,6 @@ Future<void> main(List<String> arguments) async {
             appKey: 'base64:$key',
             cookieName: _sessionCookieName,
             options: SessionOptions(
-              path: '/',
               secure: false,
               httpOnly: true,
               sameSite: SameSite.lax,
@@ -158,7 +157,7 @@ Future<void> main(List<String> arguments) async {
     final routedForm = Uri(
       queryParameters: {
         'SAMLResponse': samlResponse,
-        'RelayState': returnedRelayState!,
+        'RelayState': returnedRelayState,
       },
     ).query;
     final requestHeaders = {

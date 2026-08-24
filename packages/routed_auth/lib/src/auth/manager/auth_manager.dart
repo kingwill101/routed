@@ -3,116 +3,119 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:routed_auth/routed_auth.dart' show AuthRoutes;
+import 'package:routed_auth/src/auth/api_key.dart';
+import 'package:routed_auth/src/auth/browser_protection.dart';
+import 'package:routed_auth/src/auth/hooks.dart';
+import 'package:routed_auth/src/auth/routes.dart' show AuthRoutes;
+import 'package:routed_auth/src/auth/session_auth.dart';
+import 'package:routed_auth/testing.dart' show AuthRoutes;
+import 'package:routed_core/src/context/context.dart';
+import 'package:routed_core/src/events/event.dart';
+import 'package:routed_core/src/events/event_manager.dart';
+import 'package:routed_sessions/routed_sessions.dart';
 import 'package:server_auth/server_auth.dart'
     show
-        AuthAccount,
-        AuthAccountLinked,
-        AuthApiKeyPlugin,
+        AdminPlugin,
         AnonymousPlugin,
+        AuthAccount,
+        AuthAccountDeletionConfirmed,
+        AuthAccountDeletionDelivery,
+        AuthAccountLinked,
+        AuthAccountState,
+        AuthAccountStateStore,
+        AuthAdminStoreCapabilities,
+        AuthApiKeyPlugin,
+        AuthAuthenticationLifecycleEvent,
+        AuthAuthenticationLifecycleEventType,
+        AuthAuthenticationPolicyPhase,
+        AuthAuthenticationPolicyRequest,
         AuthCallbacks,
         AuthCredentialPolicyOperation,
         AuthCredentialPolicyRequest,
         AuthCredentials,
+        AuthEmailChangeRequest,
+        AuthEmailChangeTokenConditionalDeleteStore,
         AuthEndpointAuthenticationIntent,
-        requireAuthorizedCredentialsRegistration,
-        requireAuthorizedCredentialsSignIn,
-        resolveAuthRedirectWithCallbacks,
-        resolveAuthSignInResultForStrategyWithCallbacks,
-        resolveAuthSessionPayloadWithCallbacks,
-        resolveAuthSignInRedirectTarget,
+        AuthFlowException,
+        AuthMagicLinkBackend,
+        AuthMagicLinkProvider,
+        AuthOptions,
+        AuthPasswordChangeResult,
+        AuthPasswordPolicyOperation,
+        AuthPasswordPolicyRequest,
+        AuthPasswordResetRequest,
+        AuthPasswordResetResult,
         AuthPrincipal,
         AuthProvider,
         AuthRateLimitAction,
         AuthRateLimitOperation,
         AuthRateLimitRequest,
-        enforceAuthRateLimit,
-        normalizeAuthRateLimitIdentifier,
-        hashOpaqueToken,
-        baseUrlFromUri,
-        resolveOAuthAuthorizationStart,
-        authProviderStateSessionKey,
-        resolveOAuthCallbackSignInForProvider,
         AuthResult,
+        AuthRuntime,
         AuthSession,
-        AuthSessionRecord,
         AuthSessionInfo,
+        AuthSessionRecord,
         AuthSessionStrategy,
-        TwoFactorPlugin,
-        OrganizationPlugin,
-        PhoneNumberPlugin,
-        WebAuthnPlugin,
+        AuthStore,
         AuthTwoFactorRequiredException,
         AuthTwoFactorStepUpToken,
-        authJwtVersionClaim,
-        jwtClaimsAttribute,
-        jwtAuthenticationTimeUtc,
-        AuthFlowException,
-        AuthPasswordResetRequest,
-        AuthPasswordResetResult,
-        AuthPasswordPolicyOperation,
-        AuthPasswordPolicyRequest,
-        AuthPasswordChangeResult,
-        AuthEmailChangeRequest,
-        AuthAccountDeletionDelivery,
-        AuthAccountDeletionConfirmed,
-        AuthAdminStoreCapabilities,
-        AuthAuthenticationLifecycleEvent,
-        AuthAuthenticationLifecycleEventType,
+        AuthUser,
         AuthUserAccessRevocationContributor,
         AuthUserDeletionCoordinatorHost,
-        AuthUser,
-        AuthRuntime,
-        AdminPlugin,
-        AuthAuthenticationPolicyPhase,
-        AuthAuthenticationPolicyRequest,
-        AuthAccountState,
-        AuthAccountStateStore,
-        AuthEmailChangeTokenConditionalDeleteStore,
         AuthVerificationTokenConditionalDeleteStore,
-        AuthStore,
-        resolveAuthEmailVerificationSignIn,
-        normalizeAuthEmail,
-        startAuthEmailSignIn,
-        resolveBearerOrCookieToken,
-        resolveAuthSessionForStrategyWithCallbacks,
-        resolveAuthSessionUpdateForStrategyWithCallbacks,
-        resolveCsrfToken,
-        validateCsrfToken,
         CallbackProvider,
         CredentialsProvider,
-        AuthMagicLinkBackend,
-        AuthMagicLinkProvider,
-        normalizeAuthOneTimeEmail,
         OAuthProvider,
+        OrganizationPlugin,
+        PhoneNumberPlugin,
+        TwoFactorPlugin,
+        WebAuthnPlugin,
+        authJwtVersionClaim,
+        authProviderStateSessionKey,
         authSessionIssuedAtKey,
-        AuthOptions,
-        resolveAuthSessionMaxAgeSeconds,
-        resolveAuthSessionExpiry,
-        serializeAuthSessionIssuedAt,
-        issueAuthPasswordResetTokenForUser,
-        resetAuthPasswordWithToken,
-        changeAuthPasswordForUser,
-        issueAuthEmailChangeTokenForUser,
-        confirmAuthEmailChange,
-        unlinkProviderAccount,
-        findAuthCredentialForUser,
-        initiateAccountDeletion,
-        verifyOAuthProviderAccount,
-        linkProviderAccountFlow,
-        requireAuthPasswordForUser,
-        listAuthSessionsForUser,
         authUserEmailIsVerified,
         authUserIsDisabled,
+        baseUrlFromUri,
+        changeAuthPasswordForUser,
+        confirmAuthEmailChange,
+        enforceAuthRateLimit,
+        findAuthCredentialForUser,
+        hashOpaqueToken,
+        initiateAccountDeletion,
+        issueAuthEmailChangeTokenForUser,
+        issueAuthPasswordResetTokenForUser,
+        jwtAuthenticationTimeUtc,
+        jwtClaimsAttribute,
+        linkProviderAccountFlow,
+        listAuthSessionsForUser,
+        normalizeAuthEmail,
+        normalizeAuthOneTimeEmail,
+        normalizeAuthRateLimitIdentifier,
+        requireAuthPasswordForUser,
+        requireAuthorizedCredentialsRegistration,
+        requireAuthorizedCredentialsSignIn,
+        resetAuthPasswordWithToken,
+        resolveAuthEmailVerificationSignIn,
+        resolveAuthRedirectWithCallbacks,
+        resolveAuthSessionExpiry,
+        resolveAuthSessionForStrategyWithCallbacks,
+        resolveAuthSessionMaxAgeSeconds,
+        resolveAuthSessionPayloadWithCallbacks,
+        resolveAuthSessionUpdateForStrategyWithCallbacks,
+        resolveAuthSignInRedirectTarget,
+        resolveAuthSignInResultForStrategyWithCallbacks,
         resolveAuthSignOutForStrategy,
-        secureRandomToken;
-import 'package:routed_auth/src/auth/hooks.dart';
-import 'package:routed_auth/src/auth/browser_protection.dart';
-import 'package:routed_auth/src/auth/api_key.dart';
-import 'package:routed_auth/src/auth/session_auth.dart';
-import 'package:routed_core/src/context/context.dart';
-import 'package:routed_sessions/routed_sessions.dart';
-import 'package:routed_core/src/events/event.dart';
-import 'package:routed_core/src/events/event_manager.dart';
+        resolveBearerOrCookieToken,
+        resolveCsrfToken,
+        resolveOAuthAuthorizationStart,
+        resolveOAuthCallbackSignInForProvider,
+        secureRandomToken,
+        serializeAuthSessionIssuedAt,
+        startAuthEmailSignIn,
+        unlinkProviderAccount,
+        validateCsrfToken,
+        verifyOAuthProviderAccount;
 
 String _normalizeOneTimeEmail(String email) {
   try {
@@ -129,6 +132,12 @@ const String _authRequestReauthenticatedAtKey =
 
 /// High-level auth coordinator for routed.
 class AuthManager {
+  /// Creates an authentication coordinator from [options].
+  ///
+  /// Uses [sessionAuth] when supplied to manage the framework session,
+  /// [runtime] when supplied to resolve plugins and policies, and [clock] when
+  /// supplied to obtain the current time. Omitted values use the configured
+  /// defaults.
   AuthManager(
     this.options, {
     SessionAuthService? sessionAuth,
@@ -139,12 +148,16 @@ class AuthManager {
        _httpClient = options.httpClient,
        _clock = clock ?? DateTime.now;
 
+  /// The authentication options used by this coordinator.
   final AuthOptions<EngineContext> options;
+
+  /// The plugin and policy runtime used by this coordinator.
   final AuthRuntime<EngineContext> runtime;
   final SessionAuthService? _sessionAuth;
   final DateTime Function() _clock;
   http.Client? _httpClient;
 
+  /// The persistent store configured for this coordinator.
   AuthStore get store => runtime.store;
 
   /// The configured two-factor plugin, if enabled for this runtime.
@@ -201,12 +214,16 @@ class AuthManager {
   PhoneNumberPlugin<EngineContext>? get phoneNumbers =>
       runtime.plugin('phone_number') as PhoneNumberPlugin<EngineContext>?;
 
+  /// The framework session service used to store the authenticated principal.
   SessionAuthService get sessionAuth => _sessionAuth ?? SessionAuth.instance;
 
+  /// The HTTP client used by authentication flows that call external services.
   http.Client get httpClient => _httpClient ??= http.Client();
 
+  /// The callback collection configured for this coordinator.
   AuthCallbacks<EngineContext> get callbacks => options.callbacks;
 
+  /// Returns the request CSRF token, creating and storing one when necessary.
   String csrfToken(EngineContext ctx) {
     final token = resolveCsrfToken(
       existingToken: ctx.getSession<String>(options.csrfKey),
@@ -216,6 +233,7 @@ class AuthManager {
     return token;
   }
 
+  /// Validates the request CSRF token against [payload] and request headers.
   bool validateCsrf(EngineContext ctx, Map<String, dynamic> payload) {
     final headerToken =
         ctx.request.headers.value('x-csrf-token') ??
@@ -233,6 +251,11 @@ class AuthManager {
     return validateRoutedAuthBrowserRequest(ctx, options.browserProtection);
   }
 
+  /// Signs in with [credentials] through [provider].
+  ///
+  /// When [captchaToken] is supplied, the configured credential policy can use
+  /// it to authorize the sign-in attempt. The returned result contains the
+  /// session established by the configured session strategy.
   Future<AuthResult> signInWithCredentials(
     EngineContext ctx,
     CredentialsProvider provider,
@@ -473,6 +496,10 @@ class AuthManager {
     );
   }
 
+  /// Registers [credentials] through [provider] and signs the user in.
+  ///
+  /// When [captchaToken] is supplied, the configured credential policy can use
+  /// it to authorize the registration attempt.
   Future<AuthResult> registerWithCredentials(
     EngineContext ctx,
     CredentialsProvider provider,
@@ -526,6 +553,11 @@ class AuthManager {
     );
   }
 
+  /// Starts a magic-link sign-in for [email].
+  ///
+  /// The provider sends or otherwise delivers the verification link using the
+  /// configured email backend. [callbackUrl] is returned to the application
+  /// after the link is verified.
   Future<AuthResult> signInWithEmail(
     EngineContext ctx,
     AuthMagicLinkProvider provider,
@@ -965,8 +997,8 @@ class AuthManager {
   /// sensitive operation immediately after reauthentication.
   Future<void> reauthenticateWithPassword(
     EngineContext ctx, {
-    String? identifier,
     required String currentPassword,
+    String? identifier,
   }) async {
     final session = await resolveSession(ctx);
     if (session == null) throw AuthFlowException('not_authenticated');
@@ -1116,6 +1148,10 @@ class AuthManager {
     return current;
   }
 
+  /// Completes a magic-link sign-in using [email] and [token].
+  ///
+  /// The token must match the browser state established by
+  /// [signInWithEmail].
   Future<AuthResult> verifyEmail(
     EngineContext ctx,
     AuthMagicLinkProvider provider,
@@ -1159,6 +1195,11 @@ class AuthManager {
     );
   }
 
+  /// Creates an OAuth authorization URI for [provider].
+  ///
+  /// The returned URI includes the state and, when supported by the provider,
+  /// PKCE and nonce values that are stored for the callback. [callbackUrl]
+  /// overrides the provider's default callback destination.
   Future<Uri> beginOAuth<TProfile extends Object>(
     EngineContext ctx,
     OAuthProvider<TProfile> provider, {
@@ -1193,6 +1234,10 @@ class AuthManager {
     return resolved.authorizationUri;
   }
 
+  /// Completes an OAuth sign-in from an authorization [code] and [state].
+  ///
+  /// The callback state is checked against the browser state created by
+  /// [beginOAuth] before the provider profile is exchanged for an auth session.
   Future<AuthResult> finishOAuth<TProfile extends Object>(
     EngineContext ctx,
     OAuthProvider<TProfile> provider,
@@ -1292,7 +1337,6 @@ class AuthManager {
       provider: provider,
       account: AuthAccount(providerId: provider.id, providerAccountId: user.id),
       profile: profile,
-      isNewUser: false,
     );
   }
 
@@ -1353,6 +1397,11 @@ class AuthManager {
     return resolved.session;
   }
 
+  /// Resolves and validates the current authentication session for [ctx].
+  ///
+  /// Returns `null` when no valid session is present or when a persisted
+  /// server-side session no longer exists. The configured session strategy,
+  /// callbacks, account policies, and session refresh rules are applied.
   Future<AuthSession?> resolveSession(EngineContext ctx) async {
     final storedSession = await _resolveStoredSession(ctx);
     if (options.sessionStrategy == AuthSessionStrategy.session &&
@@ -1444,7 +1493,7 @@ class AuthManager {
 
     final policy = options.accountPolicy;
     final hasStepUp = await hasValidTwoFactorStepUp(ctx);
-    DateTime? authenticatedAt = ctx.get<DateTime>(
+    var authenticatedAt = ctx.get<DateTime>(
       _authRequestReauthenticatedAtKey,
     );
     switch (options.sessionStrategy) {
@@ -1465,7 +1514,6 @@ class AuthManager {
             (createdAt != null && createdAt.isAfter(authenticatedAt))) {
           authenticatedAt = createdAt;
         }
-        break;
       case AuthSessionStrategy.jwt:
         final claims = ctx.get<Map<String, dynamic>>(jwtClaimsAttribute);
         final jwtAuthenticatedAt = claims == null
@@ -1476,7 +1524,6 @@ class AuthManager {
                 jwtAuthenticatedAt.isAfter(authenticatedAt))) {
           authenticatedAt = jwtAuthenticatedAt;
         }
-        break;
     }
     if (policy.allowsSensitiveAction(
       authenticatedAt: authenticatedAt,
@@ -1494,10 +1541,10 @@ class AuthManager {
         ? store as AuthAccountStateStore
         : null;
     final state = await accountStates?.find(user.id);
-    final disabled = authUserIsDisabled(user) || state?.disabled == true;
+    final disabled = authUserIsDisabled(user) || (state?.disabled ?? false);
     if (disabled && !policy.allowPasswordResetForDisabled) return false;
     final verified =
-        authUserEmailIsVerified(user) || state?.emailVerified == true;
+        authUserEmailIsVerified(user) || (state?.emailVerified ?? false);
     if (!verified && !policy.allowPasswordResetForUnverified) return false;
     return true;
   }
@@ -1573,6 +1620,7 @@ class AuthManager {
     return result;
   }
 
+  /// Returns the persisted server-side session identifier for [ctx], if any.
   Future<String?> currentStoredSessionId(EngineContext ctx) async =>
       (await _resolveStoredSession(ctx))?.id;
 
@@ -1613,6 +1661,10 @@ class AuthManager {
     return session;
   }
 
+  /// Resolves [url] against the current request and configured auth callbacks.
+  ///
+  /// Returns `null` when no redirect can be resolved or when the configured
+  /// redirect policy rejects the URL.
   Future<String?> resolveRedirect(
     EngineContext ctx,
     String? url, {
@@ -1631,6 +1683,11 @@ class AuthManager {
     );
   }
 
+  /// Builds the callback-adjusted payload returned for [session].
+  ///
+  /// The payload is emitted through the configured session event hooks before
+  /// it is returned. [provider] identifies the provider that produced the
+  /// session when the flow has one.
   Future<Map<String, dynamic>> buildSessionPayload(
     EngineContext ctx,
     AuthSession session, {
@@ -1709,7 +1766,7 @@ class AuthManager {
           principal.id != user.id &&
           principal.isAnonymous) {
         final stored = await store.users.findById(principal.id);
-        if (stored?.isAnonymous == true) anonymousUser = stored;
+        if (stored?.isAnonymous ?? false) anonymousUser = stored;
       }
     }
     await _synchronizeAccountState(
@@ -1886,8 +1943,9 @@ class AuthManager {
   ) async {
     final rawVersion = claims[authJwtVersionClaim];
     final version = switch (rawVersion) {
-      int value when value >= 0 => value,
-      num value when value.isFinite && value == value.toInt() && value >= 0 =>
+      final int value when value >= 0 => value,
+      final num value
+          when value.isFinite && value == value.toInt() && value >= 0 =>
         value.toInt(),
       _ => null,
     };

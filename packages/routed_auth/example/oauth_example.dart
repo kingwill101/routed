@@ -17,8 +17,8 @@ library;
 
 import 'dart:io';
 
-import 'package:routed_core/routed_core.dart';
 import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_core/routed_core.dart';
 
 Future<void> main() async {
   // 1. Build the Google OAuth provider.
@@ -64,8 +64,10 @@ Future<void> main() async {
         .whereType<OAuthProvider<GoogleProfile>>()
         .firstWhere((p) => p.id == 'google');
 
-    final code = ctx.query('code') ?? '';
-    final state = ctx.query('state');
+    final codeValue = ctx.query('code');
+    final code = codeValue is String ? codeValue : '';
+    final stateValue = ctx.query('state');
+    final state = stateValue is String ? stateValue : null;
     final result = await manager.finishOAuth(ctx, provider, code, state);
 
     ctx.json({

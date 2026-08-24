@@ -1,7 +1,5 @@
-// ignore_for_file: implementation_imports
-import 'dart:io';
-
 import 'package:http/http.dart' as http;
+import 'package:routed_core/routed_core.dart';
 import 'package:server_auth/server_auth.dart'
     show
         AuthOAuthValidatedCallback,
@@ -9,14 +7,12 @@ import 'package:server_auth/server_auth.dart'
         OAuth2TokenIntrospector,
         OAuthIntrospectionOptions,
         validateOAuthBearerAuthorizationAndWriteAttributes;
-import 'package:routed_core/src/context/context.dart';
-import 'package:routed_core/src/router/types.dart';
 
 /// Creates a middleware for OAuth2 token introspection.
 ///
 /// This middleware validates incoming OAuth2 bearer tokens using the provided
 /// [options]. If a token is active, its claims and server-auth attributes are
-/// written to the request before [onValidated] and [next] run.
+/// written to the request before [onValidated] and `next` run.
 ///
 /// Only a bearer `Authorization` header is accepted. Missing, empty, or
 /// non-bearer credentials, inactive or expired tokens, malformed responses,

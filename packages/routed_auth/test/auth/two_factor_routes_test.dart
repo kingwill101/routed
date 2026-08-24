@@ -15,7 +15,6 @@ SessionConfig _sessionConfig() {
     appKey: 'base64:$key',
     cookieName: 'test_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,
@@ -81,7 +80,10 @@ void main() {
     final absentStatus = await absentClient.get('/auth/2fa/status');
     absentStatus.assertStatus(HttpStatus.notFound);
     for (final path in postPaths) {
-      final absent = await absentClient.postJson(path, const {});
+      final absent = await absentClient.postJson(
+        path,
+        const <String, dynamic>{},
+      );
       absent.assertStatus(HttpStatus.notFound);
       expect(absent.body, isNot(contains('two_factor_unavailable')));
     }
@@ -430,8 +432,7 @@ void main() {
       {'_csrf': csrf},
       headers: {
         HttpHeaders.cookieHeader: [
-          '${_cookieHeader(completedSessionCookie)}; '
-              '${_cookieHeader(trustedCookie)}',
+          '${_cookieHeader(completedSessionCookie)}; ${_cookieHeader(trustedCookie)}',
         ],
       },
     );
@@ -469,8 +470,7 @@ void main() {
       {'_csrf': csrf},
       headers: {
         HttpHeaders.cookieHeader: [
-          '${_cookieHeader(trustedSessionCookie)}; '
-              '${_cookieHeader(stepUp.cookie('two_factor_step_up')!)}',
+          '${_cookieHeader(trustedSessionCookie)}; ${_cookieHeader(stepUp.cookie('two_factor_step_up')!)}',
         ],
       },
     );

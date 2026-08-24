@@ -2,37 +2,12 @@
 import 'dart:async';
 
 import 'package:http/http.dart' as http;
-import 'package:server_auth/server_auth.dart'
-    show
-        AuthConfig,
-        AuthGateRegistry,
-        GateDefinition,
-        GuardDefinition,
-        AuthGuardRegistry,
-        HaigateConfig,
-        materializeJwtVerifier,
-        materializeOAuthIntrospectionOptions,
-        RememberTokenStore,
-        resolveConfiguredGateCallback,
-        resolveConfiguredGuard,
-        AuthStore,
-        AuthRuntimeMode,
-        AuthProxyPolicy,
-        JwtVerifier,
-        AuthRuntime,
-        resolveAuthOptions,
-        SessionRememberMeConfig,
-        syncManagedGateDefinitions,
-        syncManagedGuardDefinitions,
-        syncManagedPolicyBindings,
-        syncManagedRbacAbilities,
-        AuthOptions;
-import 'package:routed_auth/src/auth/manager/auth_manager.dart';
-import 'package:routed_auth/src/auth/routes.dart';
 import 'package:routed_auth/src/auth/haigate.dart';
 import 'package:routed_auth/src/auth/jwt.dart'
     show jwtAuthenticationWithVerifier;
+import 'package:routed_auth/src/auth/manager/auth_manager.dart';
 import 'package:routed_auth/src/auth/oauth.dart';
+import 'package:routed_auth/src/auth/routes.dart';
 import 'package:routed_auth/src/auth/session_auth.dart';
 import 'package:routed_core/src/container/container.dart';
 import 'package:routed_core/src/context/context.dart';
@@ -42,6 +17,31 @@ import 'package:routed_core/src/provider/provider.dart';
 import 'package:routed_core/src/provider/typed_provider.dart';
 import 'package:routed_core/src/response.dart';
 import 'package:routed_core/src/router/types.dart';
+import 'package:server_auth/server_auth.dart'
+    show
+        AuthConfig,
+        AuthGateRegistry,
+        AuthGuardRegistry,
+        AuthOptions,
+        AuthProxyPolicy,
+        AuthRuntime,
+        AuthRuntimeMode,
+        AuthStore,
+        GateDefinition,
+        GuardDefinition,
+        HaigateConfig,
+        JwtVerifier,
+        RememberTokenStore,
+        SessionRememberMeConfig,
+        materializeJwtVerifier,
+        materializeOAuthIntrospectionOptions,
+        resolveAuthOptions,
+        resolveConfiguredGateCallback,
+        resolveConfiguredGuard,
+        syncManagedGateDefinitions,
+        syncManagedGuardDefinitions,
+        syncManagedPolicyBindings,
+        syncManagedRbacAbilities;
 
 /// Creates a provider coupled to one Routed deployment binding.
 ///
@@ -213,7 +213,7 @@ class AuthServiceProvider extends ServiceProvider
     final guardRegistry = _resolveGuardRegistry(container);
     guardRegistry.register(
       'authenticated',
-      requireAuthenticated(sessionAuth: _sessionAuth!),
+      requireAuthenticated(sessionAuth: _sessionAuth),
     );
     syncManagedGuardDefinitions<EngineContext, Response, GuardDefinition>(
       guardRegistry,
@@ -222,9 +222,9 @@ class AuthServiceProvider extends ServiceProvider
           resolveConfiguredGuard<EngineContext, Response>(
             definition: definition,
             authenticatedGuard: (realm) =>
-                requireAuthenticated(realm: realm, sessionAuth: _sessionAuth!),
+                requireAuthenticated(realm: realm, sessionAuth: _sessionAuth),
             rolesGuard: (roles, any) =>
-                requireRoles(roles, sessionAuth: _sessionAuth!, any: any),
+                requireRoles(roles, sessionAuth: _sessionAuth, any: any),
           ),
       managed: _managedConfigGuards,
       preserve: const <String>{'authenticated'},

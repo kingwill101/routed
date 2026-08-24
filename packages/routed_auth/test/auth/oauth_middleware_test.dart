@@ -2,10 +2,11 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:routed_core/routed_core.dart';
 import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+
 import '../test_engine.dart';
 
 void main() {
@@ -96,7 +97,7 @@ void main() {
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final res = await client.get(
         '/secure',
@@ -128,7 +129,7 @@ void main() {
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final res = await client.get('/secure');
       expect(res.statusCode, equals(401));
@@ -154,7 +155,7 @@ void main() {
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final res = await client.get(
         '/secure',
@@ -187,7 +188,7 @@ void main() {
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final res = await client.get(
         '/secure',
@@ -225,7 +226,7 @@ void main() {
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final res = await client.get(
         '/secure',
@@ -256,7 +257,7 @@ void main() {
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final res = await client.get(
         '/secure',
@@ -300,7 +301,7 @@ void main() {
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final first = await client.get(
         '/secure',
@@ -327,7 +328,6 @@ void main() {
       final middleware = oauth2Introspection(
         OAuthIntrospectionOptions(
           endpoint: Uri.parse('https://auth.test/introspect'),
-          cacheTtl: Duration.zero,
         ),
         httpClient: MockClient((request) async {
           requestCount += 1;
@@ -348,7 +348,7 @@ void main() {
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       await client.get(
         '/secure',
@@ -386,7 +386,7 @@ void main() {
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final res = await client.get(
         '/secure',
@@ -426,7 +426,7 @@ void main() {
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final res = await client.get(
         '/secure',
@@ -466,7 +466,7 @@ void main() {
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final res = await client.get(
         '/secure',
@@ -506,7 +506,7 @@ void main() {
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final res = await client.get(
         '/secure',
@@ -546,7 +546,7 @@ void main() {
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
       );
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final res = await client.get(
         '/secure',

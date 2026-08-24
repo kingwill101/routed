@@ -1,10 +1,12 @@
-import 'package:routed_core/routed_core.dart';
 import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:test/test.dart';
 
 class Project {
+  // ignore: unreachable_from_main
   Project({required this.id, required this.ownerId});
 
+  // ignore: unreachable_from_main
   final String id;
   final String ownerId;
 }

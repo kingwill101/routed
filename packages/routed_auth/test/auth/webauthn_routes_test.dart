@@ -15,7 +15,6 @@ SessionConfig _sessionConfig() {
     appKey: 'base64:$key',
     cookieName: 'test_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,
@@ -31,9 +30,7 @@ Future<_PasswordlessUnlinkFixture> _passwordlessUnlinkFixture({
 }) async {
   final user = AuthUser(id: 'user-1', email: 'user@example.com');
   final memoryStore = InMemoryAuthStore();
-  final AuthStore store = supportsAtomicMutation
-      ? memoryStore
-      : _NonAtomicAuthStore(memoryStore);
+  final store = _selectAuthStore(supportsAtomicMutation, memoryStore);
   await memoryStore.users.create(user);
   await memoryStore.accounts.link(
     AuthAccount(
@@ -48,7 +45,7 @@ Future<_PasswordlessUnlinkFixture> _passwordlessUnlinkFixture({
       publicKey: 'cose-key',
       counter: 0,
       userId: user.id,
-      createdAt: DateTime.utc(2026, 1, 1),
+      createdAt: DateTime.utc(2026),
     ),
   );
   final webAuthnProvider = WebAuthnProvider(
@@ -124,6 +121,11 @@ Future<_PasswordlessUnlinkFixture> _passwordlessUnlinkFixture({
     },
   );
 }
+
+AuthStore _selectAuthStore(
+  bool supportsAtomicMutation,
+  InMemoryAuthStore memoryStore,
+) => supportsAtomicMutation ? memoryStore : _NonAtomicAuthStore(memoryStore);
 
 final class _PasswordlessUnlinkFixture {
   const _PasswordlessUnlinkFixture({
@@ -245,7 +247,7 @@ void main() {
           publicKey: 'cose-key',
           counter: 0,
           userId: user.id,
-          createdAt: DateTime.utc(2026, 1, 1),
+          createdAt: DateTime.utc(2026),
           name: 'Old name',
         ),
       );

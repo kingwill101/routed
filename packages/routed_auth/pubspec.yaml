@@ -16,24 +16,24 @@ environment:
   sdk: ">=3.9.0 <4.0.0"
 
 dependencies:
-  http: ^1.6.0
-  routed_core: ">=0.4.0 <1.0.0"
-  server_auth: ">=0.2.0 <1.0.0"
-  routed_sessions: ">=0.2.0 <1.0.0"
-  server_sessions: ">=0.1.0 <1.0.0"
-  routed_views: ">=0.2.0 <1.0.0"
-  pointycastle: ^4.0.0
-  routed_http: ">=0.1.0 <1.0.0"
-
   crypto: ^3.0.0
+  http: ^1.6.0
+  pointycastle: ^4.0.0
+  routed_core: ">=0.4.0 <1.0.0"
+  routed_http: ">=0.1.0 <1.0.0"
+  routed_sessions: ">=0.2.0 <1.0.0"
+  routed_views: ">=0.2.0 <1.0.0"
+  server_auth: ">=0.2.0 <1.0.0"
+  server_sessions: ">=0.1.0 <1.0.0"
 dev_dependencies:
+  file: any
   html: ^0.15.6
   jose: ^0.3.5
   lints: ^6.0.0
   property_testing: ^0.3.2
+  # removed: server_data: any (split into server_sessions/cache etc.)
+  routed: any
   routed_testing: ">=0.4.0 <1.0.0"
   server_testing: ">=0.4.0 <1.0.0"
   test: ^1.29.0
-  # removed: server_data: any (split into server_sessions/cache etc.)
-  routed: any
-  file: any
+  very_good_analysis: ^10.0.0

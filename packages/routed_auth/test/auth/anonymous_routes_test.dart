@@ -15,7 +15,6 @@ SessionConfig _sessionConfig() {
     appKey: 'base64:$key',
     cookieName: 'test_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,
@@ -107,7 +106,10 @@ void main() {
     final client = TestClient(RoutedRequestHandler(engine));
     addTearDown(client.close);
 
-    final signedIn = await client.postJson('/auth/sign-in/anonymous', {});
+    final signedIn = await client.postJson(
+      '/auth/sign-in/anonymous',
+      <String, dynamic>{},
+    );
     signedIn.assertStatus(HttpStatus.ok);
     expect(signedIn.json()['user']['isAnonymous'], isTrue);
     final sessionCookie = signedIn.cookie('test_session');

@@ -1,9 +1,6 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:routed_core/src/context/context.dart';
-import 'package:routed_core/src/response.dart';
-import 'package:routed_core/src/router/types.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:server_auth/server_auth.dart'
     show
         AuthApiKeyAuthentication,
@@ -44,9 +41,9 @@ AuthApiKeyAuthentication? currentApiKey(EngineContext context) => context
 /// The middleware accepts `X-API-Key: <key>` by default and also accepts
 /// `Authorization: ApiKey <key>`. A missing key leaves the request untouched,
 /// allowing applications to compose API-key, session, and JWT middleware. An
-/// An invalid supplied key returns a generic 401 response with an `ApiKey`
+/// invalid supplied key returns a generic 401 response with an `ApiKey`
 /// challenge. [headerName] is trimmed and must not be empty. After successful
-/// user lookup, [onVerified] runs before [next], and the request receives the
+/// user lookup, [onVerified] runs before `next`, and the request receives the
 /// API-key authentication plus an [AuthPrincipal] with `apiKeyId` and
 /// `apiKeyScopes` attributes. Invalid credentials do not disclose whether a
 /// key or user exists; exceptions from the authentication plugin or user store

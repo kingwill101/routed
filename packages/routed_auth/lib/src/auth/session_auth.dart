@@ -1,26 +1,25 @@
-// ignore_for_file: implementation_imports
 import 'dart:async';
 import 'dart:io';
 
+import 'package:routed_auth/routed_auth.dart'
+    show AuthManager, AuthServiceProvider;
+import 'package:routed_core/routed_core.dart';
+import 'package:routed_sessions/routed_sessions.dart';
 import 'package:server_auth/server_auth.dart'
     show
-        AuthSessionRuntimeAdapter,
         AuthGuard,
         AuthGuardRegistry,
         AuthGuardService,
         AuthPrincipal,
+        AuthSessionRuntimeAdapter,
+        InMemoryRememberTokenStore,
         RememberSessionAuthRuntime,
+        RememberTokenStore,
+        buildBearerAuthenticateHeader,
         buildExpiredRememberTokenCookie,
         buildRememberTokenCookie,
-        buildBearerAuthenticateHeader,
         requireAuthenticatedGuard,
-        requireRolesGuard,
-        RememberTokenStore,
-        InMemoryRememberTokenStore;
-import 'package:routed_core/src/context/context.dart';
-import 'package:routed_sessions/routed_sessions.dart';
-import 'package:routed_core/src/response.dart';
-import 'package:routed_core/src/router/types.dart';
+        requireRolesGuard;
 
 /// Key for storing the authenticated principal in the session.
 const String _sessionPrincipalKey = '__routed.auth.principal';
@@ -123,7 +122,7 @@ class _RoutedAuthSessionRuntimeAdapter
       cookieName,
       path: options.path ?? '/',
       domain: options.domain,
-      secure: options.secure == true,
+      secure: options.secure ?? false,
       sameSite: options.sameSite,
     );
   }
@@ -142,7 +141,7 @@ class _RoutedAuthSessionRuntimeAdapter
       expiresAt: expiresAt,
       path: options.path ?? '/',
       domain: options.domain,
-      secure: options.secure == true,
+      secure: options.secure ?? false,
       sameSite: options.sameSite,
     );
   }
@@ -221,8 +220,7 @@ class SessionAuth {
       defaultRememberDuration:
           defaultRememberDuration ?? current.defaultRememberDuration,
     );
-    _service = service;
-    return _service;
+    return _service = service;
   }
 
   /// Delegates login to [instance], rotating the session by default.

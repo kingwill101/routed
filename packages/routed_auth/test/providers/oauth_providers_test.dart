@@ -5,7 +5,7 @@ void main() {
   group('GoogleProvider', () {
     test('creates provider with required options', () {
       final provider = googleProvider(
-        GoogleProviderOptions(
+        const GoogleProviderOptions(
           clientId: 'google-client-id',
           clientSecret: 'google-client-secret',
           redirectUri: 'https://example.com/auth/callback/google',
@@ -19,7 +19,7 @@ void main() {
     });
 
     test('default scopes include openid, profile, email', () {
-      final options = GoogleProviderOptions(
+      const options = GoogleProviderOptions(
         clientId: 'id',
         clientSecret: 'secret',
         redirectUri: 'https://example.com/callback',
@@ -51,7 +51,7 @@ void main() {
     });
 
     test('profile toJson roundtrip', () {
-      final original = GoogleProfile(
+      const original = GoogleProfile(
         sub: 'sub-123',
         email: 'test@example.com',
         name: 'Test',
@@ -67,14 +67,14 @@ void main() {
 
     test('maps profile to AuthUser', () {
       final provider = googleProvider(
-        GoogleProviderOptions(
+        const GoogleProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'https://example.com/callback',
         ),
       );
 
-      final profile = GoogleProfile(
+      const profile = GoogleProfile(
         sub: 'google-user-123',
         email: 'user@gmail.com',
         name: 'Gmail User',
@@ -93,7 +93,7 @@ void main() {
   group('DiscordProvider', () {
     test('creates provider with required options', () {
       final provider = discordProvider(
-        DiscordProviderOptions(
+        const DiscordProviderOptions(
           clientId: 'discord-client-id',
           clientSecret: 'discord-client-secret',
           redirectUri: 'https://example.com/auth/callback/discord',
@@ -138,14 +138,14 @@ void main() {
 
     test('maps profile to AuthUser', () {
       final provider = discordProvider(
-        DiscordProviderOptions(
+        const DiscordProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'https://example.com/callback',
         ),
       );
 
-      final profile = DiscordProfile(
+      const profile = DiscordProfile(
         id: 'discord-123',
         username: 'DiscordUser',
         globalName: 'Display Name',
@@ -164,7 +164,7 @@ void main() {
   group('MicrosoftEntraProvider', () {
     test('creates provider with required options', () {
       final provider = microsoftEntraProvider(
-        MicrosoftEntraProviderOptions(
+        const MicrosoftEntraProviderOptions(
           clientId: 'ms-client-id',
           clientSecret: 'ms-client-secret',
           redirectUri: 'https://example.com/auth/callback/microsoft',
@@ -199,7 +199,7 @@ void main() {
   group('AppleProvider', () {
     test('creates provider with required options', () {
       final provider = appleProvider(
-        AppleProviderOptions(
+        const AppleProviderOptions(
           clientId: 'com.example.app',
           clientSecret: 'apple-client-secret',
           redirectUri: 'https://example.com/auth/callback/apple',
@@ -227,7 +227,7 @@ void main() {
 
     test('uses form_post response mode', () {
       final provider = appleProvider(
-        AppleProviderOptions(
+        const AppleProviderOptions(
           clientId: 'com.example.app',
           clientSecret: 'secret',
           redirectUri: 'https://example.com/callback',
@@ -244,7 +244,7 @@ void main() {
   group('TwitterProvider', () {
     test('creates provider with required options', () {
       final provider = twitterProvider(
-        TwitterProviderOptions(
+        const TwitterProviderOptions(
           clientId: 'twitter-client-id',
           clientSecret: 'twitter-client-secret',
           redirectUri: 'https://example.com/auth/callback/twitter',
@@ -276,7 +276,7 @@ void main() {
   group('FacebookProvider', () {
     test('creates provider with required options', () {
       final provider = facebookProvider(
-        FacebookProviderOptions(
+        const FacebookProviderOptions(
           clientId: 'fb-app-id',
           clientSecret: 'fb-app-secret',
           redirectUri: 'https://example.com/auth/callback/facebook',
@@ -308,7 +308,7 @@ void main() {
   group('GitLabProvider', () {
     test('creates provider with required options', () {
       final provider = gitlabProvider(
-        GitLabProviderOptions(
+        const GitLabProviderOptions(
           clientId: 'gitlab-app-id',
           clientSecret: 'gitlab-secret',
           redirectUri: 'https://example.com/auth/callback/gitlab',
@@ -337,7 +337,7 @@ void main() {
     });
 
     test('supports self-hosted GitLab', () {
-      final options = GitLabProviderOptions(
+      const options = GitLabProviderOptions(
         clientId: 'id',
         clientSecret: 'secret',
         redirectUri: 'https://example.com/callback',
@@ -351,7 +351,7 @@ void main() {
   group('SlackProvider', () {
     test('creates provider with required options', () {
       final provider = slackProvider(
-        SlackProviderOptions(
+        const SlackProviderOptions(
           clientId: 'slack-client-id',
           clientSecret: 'slack-client-secret',
           redirectUri: 'https://example.com/auth/callback/slack',
@@ -386,7 +386,7 @@ void main() {
   group('SpotifyProvider', () {
     test('creates provider with required options', () {
       final provider = spotifyProvider(
-        SpotifyProviderOptions(
+        const SpotifyProviderOptions(
           clientId: 'spotify-client-id',
           clientSecret: 'spotify-client-secret',
           redirectUri: 'https://example.com/auth/callback/spotify',
@@ -420,7 +420,7 @@ void main() {
   group('LinkedInProvider', () {
     test('creates provider with required options', () {
       final provider = linkedInProvider(
-        LinkedInProviderOptions(
+        const LinkedInProviderOptions(
           clientId: 'linkedin-client-id',
           clientSecret: 'linkedin-client-secret',
           redirectUri: 'https://example.com/auth/callback/linkedin',
@@ -455,7 +455,7 @@ void main() {
   group('TwitchProvider', () {
     test('creates provider with required options', () {
       final provider = twitchProvider(
-        TwitchProviderOptions(
+        const TwitchProviderOptions(
           clientId: 'twitch-client-id',
           clientSecret: 'twitch-client-secret',
           redirectUri: 'https://example.com/auth/callback/twitch',
@@ -484,7 +484,7 @@ void main() {
 
     test('does not use basic auth', () {
       final provider = twitchProvider(
-        TwitchProviderOptions(
+        const TwitchProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'https://example.com/callback',
@@ -498,7 +498,7 @@ void main() {
   group('TelegramProvider', () {
     test('creates provider with required options', () {
       final provider = telegramProvider(
-        TelegramProviderOptions(
+        const TelegramProviderOptions(
           botToken: '123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11',
           botUsername: 'ExampleBot',
           redirectUri: 'https://example.com/auth/callback/telegram',
@@ -529,7 +529,7 @@ void main() {
     });
 
     test('default auth date max age is 5 minutes', () {
-      final options = TelegramProviderOptions(
+      const options = TelegramProviderOptions(
         botToken: 'token',
         botUsername: 'bot',
         redirectUri: 'https://example.com/callback',
@@ -542,42 +542,42 @@ void main() {
   group('Provider type assignments', () {
     test('OIDC providers use oidc type', () {
       final google = googleProvider(
-        GoogleProviderOptions(
+        const GoogleProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'uri',
         ),
       );
       final microsoft = microsoftEntraProvider(
-        MicrosoftEntraProviderOptions(
+        const MicrosoftEntraProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'uri',
         ),
       );
       final apple = appleProvider(
-        AppleProviderOptions(
+        const AppleProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'uri',
         ),
       );
       final slack = slackProvider(
-        SlackProviderOptions(
+        const SlackProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'uri',
         ),
       );
       final linkedin = linkedInProvider(
-        LinkedInProviderOptions(
+        const LinkedInProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'uri',
         ),
       );
       final twitch = twitchProvider(
-        TwitchProviderOptions(
+        const TwitchProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'uri',
@@ -594,49 +594,49 @@ void main() {
 
     test('OAuth providers use oauth type', () {
       final discord = discordProvider(
-        DiscordProviderOptions(
+        const DiscordProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'uri',
         ),
       );
       final twitter = twitterProvider(
-        TwitterProviderOptions(
+        const TwitterProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'uri',
         ),
       );
       final facebook = facebookProvider(
-        FacebookProviderOptions(
+        const FacebookProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'uri',
         ),
       );
       final gitlab = gitlabProvider(
-        GitLabProviderOptions(
+        const GitLabProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'uri',
         ),
       );
       final spotify = spotifyProvider(
-        SpotifyProviderOptions(
+        const SpotifyProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'uri',
         ),
       );
       final telegram = telegramProvider(
-        TelegramProviderOptions(
+        const TelegramProviderOptions(
           botToken: 'token',
           botUsername: 'bot',
           redirectUri: 'uri',
         ),
       );
       final dropbox = dropboxProvider(
-        DropboxProviderOptions(
+        const DropboxProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'uri',
@@ -656,7 +656,7 @@ void main() {
   group('DropboxProvider', () {
     test('creates provider with required options', () {
       final provider = dropboxProvider(
-        DropboxProviderOptions(
+        const DropboxProviderOptions(
           clientId: 'dropbox-client-id',
           clientSecret: 'dropbox-client-secret',
           redirectUri: 'https://example.com/auth/callback/dropbox',
@@ -670,7 +670,7 @@ void main() {
     });
 
     test('default scopes include account_info.read', () {
-      final options = DropboxProviderOptions(
+      const options = DropboxProviderOptions(
         clientId: 'id',
         clientSecret: 'secret',
         redirectUri: 'https://example.com/callback',
@@ -680,7 +680,7 @@ void main() {
     });
 
     test('default token access type is offline', () {
-      final options = DropboxProviderOptions(
+      const options = DropboxProviderOptions(
         clientId: 'id',
         clientSecret: 'secret',
         redirectUri: 'https://example.com/callback',
@@ -724,7 +724,7 @@ void main() {
     });
 
     test('profile toJson roundtrip', () {
-      final original = DropboxProfile(
+      const original = DropboxProfile(
         accountId: 'dbid:test123',
         email: 'test@dropbox.com',
         name: 'Test User',
@@ -741,14 +741,14 @@ void main() {
 
     test('maps profile to AuthUser', () {
       final provider = dropboxProvider(
-        DropboxProviderOptions(
+        const DropboxProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'https://example.com/callback',
         ),
       );
 
-      final profile = DropboxProfile(
+      const profile = DropboxProfile(
         accountId: 'dbid:user-123',
         email: 'user@dropbox.com',
         name: 'Dropbox User',
@@ -765,7 +765,7 @@ void main() {
 
     test('has userInfoRequest for POST-based userinfo endpoint', () {
       final provider = dropboxProvider(
-        DropboxProviderOptions(
+        const DropboxProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'https://example.com/callback',
@@ -783,11 +783,10 @@ void main() {
 
     test('authorization params include token_access_type', () {
       final provider = dropboxProvider(
-        DropboxProviderOptions(
+        const DropboxProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'https://example.com/callback',
-          tokenAccessType: 'offline',
         ),
       );
 
@@ -802,21 +801,21 @@ void main() {
     test('providers without userInfoRequest use default GET behavior', () {
       // Most providers don't need custom userinfo requests
       final google = googleProvider(
-        GoogleProviderOptions(
+        const GoogleProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'uri',
         ),
       );
       final discord = discordProvider(
-        DiscordProviderOptions(
+        const DiscordProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'uri',
         ),
       );
       final spotify = spotifyProvider(
-        SpotifyProviderOptions(
+        const SpotifyProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'uri',
@@ -830,7 +829,7 @@ void main() {
 
     test('Dropbox has userInfoRequest for POST endpoint', () {
       final dropbox = dropboxProvider(
-        DropboxProviderOptions(
+        const DropboxProviderOptions(
           clientId: 'id',
           clientSecret: 'secret',
           redirectUri: 'uri',

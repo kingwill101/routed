@@ -15,7 +15,6 @@ SessionConfig _sessionConfig() {
     appKey: 'base64:$key',
     cookieName: 'test_session',
     options: SessionOptions(
-      path: '/',
       secure: false,
       httpOnly: true,
       sameSite: SameSite.lax,
@@ -47,7 +46,6 @@ void main() {
                 'framework_session',
                 '',
                 maxAge: 0,
-                path: '/',
               );
             },
           ),
@@ -63,10 +61,10 @@ void main() {
       engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
       AuthRoutes(manager).register(engine.defaultRouter);
       await engine.initialize();
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
 
       final client = TestClient(RoutedRequestHandler(engine));
-      addTearDown(() async => await client.close());
+      addTearDown(() async => client.close());
 
       final signIn = await client.postJson(
         '/auth/signin/credentials',
