@@ -7,6 +7,10 @@ import 'package:server_cache/src/taggable_store.dart';
 import 'package:server_contracts/server_contracts.dart';
 
 /// Implements cache storage and locking using a Redis server.
+///
+/// Values are encoded with a small type prefix so strings, numbers, booleans,
+/// null, and JSON-compatible objects can share one Redis keyspace. The store
+/// connects lazily on first use and reconnects after a command failure.
 class RedisStore extends TaggableStore implements Store, LockProvider {
   /// Creates a Redis store connected to [host] and [port].
   ///
@@ -82,6 +86,7 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
   }
 
   @override
+  /// Returns and decodes the value stored at [key].
   Future<dynamic> get(String key) async {
     final value = await _send(['GET', key]);
     if (value == null) return null;
@@ -90,6 +95,7 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
   }
 
   @override
+  /// Returns decoded values for [keys], using `null` for misses.
   Future<Map<String, dynamic>> many(List<String> keys) async {
     if (keys.isEmpty) return <String, dynamic>{};
     final response = await _send(['MGET', ...keys]);
@@ -110,6 +116,8 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
   }
 
   @override
+  /// Encodes and stores [value] at [key], optionally expiring it after
+  /// [seconds].
   Future<bool> put(String key, dynamic value, int seconds) async {
     final encoded = _encode(value);
     final args = ['SET', key, encoded];
@@ -123,6 +131,7 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
   }
 
   @override
+  /// Atomically stores [value] only when [key] is absent.
   Future<bool> add(String key, dynamic value, int seconds) async {
     final encoded = _encode(value);
     final args = ['SET', key, encoded, 'NX'];
@@ -136,6 +145,7 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
   }
 
   @override
+  /// Writes each entry in [values] with the same TTL.
   Future<bool> putMany(Map<String, dynamic> values, int seconds) async {
     if (values.isEmpty) return true;
     for (final entry in values.entries) {
@@ -145,6 +155,7 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
   }
 
   @override
+  /// Increments the integer value at [key] while preserving its Redis TTL.
   Future<dynamic> increment(String key, [dynamic value = 1]) async {
     final incrementBy = value is num ? value.toInt() : 1;
     final ttl = await _send(['PTTL', key]);
@@ -157,6 +168,7 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
   }
 
   @override
+  /// Decrements the integer value at [key] while preserving its Redis TTL.
   Future<dynamic> decrement(String key, [dynamic value = 1]) async {
     final decrementBy = value is num ? value.toInt() : 1;
     final ttl = await _send(['PTTL', key]);
@@ -169,11 +181,13 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
   }
 
   @override
+  /// Stores [value] without an expiration.
   Future<bool> forever(String key, dynamic value) async {
     return put(key, value, 0);
   }
 
   @override
+  /// Deletes [key] and reports whether Redis removed an entry.
   Future<bool> forget(String key) async {
     final result = await _send(['DEL', key]);
     if (result is int) {
@@ -183,15 +197,18 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
   }
 
   @override
+  /// Flushes the selected Redis database.
   Future<bool> flush() async {
     await _send(['FLUSHDB']);
     return true;
   }
 
   @override
+  /// Returns the empty key prefix used by this store.
   String getPrefix() => '';
 
   @override
+  /// Scans Redis for keys in the selected database.
   Future<List<String>> getAllKeys() async {
     final keys = <String>[];
     var cursor = '0';
@@ -211,11 +228,13 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
   }
 
   @override
+  /// Creates a Redis-backed lock handle for [name].
   Future<Lock> lock(String name, [int seconds = 0, String? owner]) async {
     return RedisLock(this, name, seconds, owner);
   }
 
   @override
+  /// Restores a Redis lock handle for an existing [owner].
   Future<Lock> restoreLock(String name, String owner) async {
     return RedisLock(this, name, 0, owner);
   }

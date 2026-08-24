@@ -2,7 +2,10 @@ import 'dart:math';
 
 import 'package:server_contracts/server_contracts.dart';
 
-/// A class that manages a set of tags for caching purposes.
+/// Tracks version identifiers for a group of cache invalidation tags.
+///
+/// Resetting a tag changes its stored identifier. Tagged keys that include the
+/// old identifier then become unreachable without scanning every cache value.
 class TagSet {
   /// Constructs a [TagSet] with the given [store] and an optional list of
   /// [names].
@@ -13,7 +16,7 @@ class TagSet {
   /// The cache store where the tags are stored.
   final Store store;
 
-  /// The list of tag names.
+  /// The tag names included in the namespace, in stable order.
   final List<String> names;
 
   /// Resets all tags in the [names] list.
@@ -56,7 +59,7 @@ class TagSet {
     await store.forget(tagKey(name));
   }
 
-  /// Retrieves the namespace for the tags.
+  /// Returns the namespace formed by the current IDs for all [names].
   ///
   /// This method maps each tag name in the [names] list to its corresponding
   /// tag ID using [tagId], and then joins them with a `|` separator.
@@ -67,7 +70,7 @@ class TagSet {
     return ids.join('|');
   }
 
-  /// Retrieves the list of tag IDs.
+  /// Resolves the current ID for each configured tag.
   ///
   /// This method maps each tag name in the [names] list to its corresponding
   /// tag ID using [tagId] and returns the list of tag IDs.
@@ -81,7 +84,7 @@ class TagSet {
     return ids;
   }
 
-  /// Retrieves the tag ID for a specific tag by [name].
+  /// Returns the current ID for [name], creating one when absent.
   ///
   /// This method gets the tag ID from the cache store using the key generated
   /// by [tagKey]. If the tag ID is not found, it calls [resetTag] to generate a
@@ -96,7 +99,7 @@ class TagSet {
     return resetTag(name);
   }
 
-  /// Generates the cache key for a specific tag by [name].
+  /// Returns the backend key used to persist the version for [name].
   ///
   /// This method constructs the cache key by prefixing the tag name with
   /// `tag:` and suffixing it with `:key`.

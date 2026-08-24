@@ -23,8 +23,11 @@ class RepositoryEventCallbacks {
   final void Function(String key)? onForget;
 }
 
-/// Implementation of the [Repository] interface.
-/// This class provides methods to interact with the cache store.
+/// Prefixing and instrumentation implementation of the [Repository] contract.
+///
+/// The repository keeps the public key separate from the backend key by
+/// prepending [_prefix]. Event callbacks receive the public key, so metrics do
+/// not need to know how a store is namespaced.
 class RepositoryImpl implements Repository {
   /// Creates a repository around [store] with [storeName] and an initial key
   /// prefix.
@@ -99,6 +102,7 @@ class RepositoryImpl implements Repository {
     return value;
   }
 
+  /// Returns the value for [key] and removes it from the cache.
   @override
   Future<dynamic> get(String key) async {
     final result = await store.get(_prefixed(key));

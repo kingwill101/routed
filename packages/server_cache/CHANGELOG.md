@@ -4,6 +4,8 @@
   analyzer lint.
 - Clarified the package-level cache workflow, typed store factories, and
   in-memory locking and storage behavior.
+- Documented Redis, no-op, repository, and tag-scoped cache APIs and their
+  operational boundaries.
 
 ## 0.2.0
 

@@ -2,12 +2,11 @@ import 'package:server_cache/src/tag_set.dart';
 import 'package:server_cache/src/tagged_cache.dart';
 import 'package:server_contracts/server_contracts.dart';
 
-/// An abstract class that provides tagging capabilities for cache stores.
+/// Mixin-like base class that exposes tag-scoped cache repositories.
 ///
-/// The `TaggableStore` class allows cache stores to be tagged with specific
-/// identifiers, enabling more granular control over cache invalidation and
-/// retrieval. This is particularly useful in scenarios where you want to
-/// group cache items and invalidate them based on certain tags.
+/// A concrete store extends this class when tagged keys should be isolated by
+/// version identifiers. The implementation assumes the concrete object also
+/// implements `Store`; it is intended for the package's cache stores.
 abstract class TaggableStore {
   /// Creates a `TaggedCache` instance with the specified tags.
   ///
@@ -21,10 +20,10 @@ abstract class TaggableStore {
   /// - Returns: A `TaggedCache` instance that is associated with the specified
   ///   tags.
   ///
-  /// Example usage:
+  /// Example:
   /// ```dart
-  /// var taggedCache = taggableStore.tags(['user', 'session']);
-  /// taggedCache.put('key', 'value');
+  /// final taggedCache = taggableStore.tags(['user', 'session']);
+  /// await taggedCache.put('key', 'value');
   /// ```
   TaggedCache tags(List<String> names) {
     return TaggedCache(this as Store, TagSet(this as Store, names));

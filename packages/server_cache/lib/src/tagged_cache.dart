@@ -1,7 +1,7 @@
 import 'package:server_cache/src/tag_set.dart';
 import 'package:server_contracts/server_contracts.dart';
 
-/// A cache repository that supports tagging.
+/// A [Repository] whose keys are scoped by a [TagSet] namespace.
 ///
 /// Every key is scoped by the current tag namespace, so entries written under
 /// one set of tag IDs are never visible to a different set, and resetting or
@@ -45,6 +45,7 @@ class TaggedCache implements Repository {
     return value ?? defaultValue;
   }
 
+  /// Returns the value for [key] in the current tag namespace, or `null`.
   @override
   Future<dynamic> get(String key) async {
     return await store.get(await _namespaced(key));
@@ -181,7 +182,7 @@ class TaggedCache implements Repository {
     return await store.forget(await _namespaced(key));
   }
 
-  /// Gets the cache store implementation.
+  /// Returns the underlying store used by this tagged repository.
   ///
   /// Returns the underlying [Store] instance.
   @override
@@ -189,7 +190,7 @@ class TaggedCache implements Repository {
     return store;
   }
 
-  /// Gets the set of tags associated with the cache.
+  /// Returns the tag set that determines this repository's namespace.
   ///
   /// Returns the [TagSet] instance.
   TagSet getTags() {
