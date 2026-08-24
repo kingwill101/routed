@@ -79,18 +79,25 @@ enum AuthRateLimitAction {
 
 /// Stable namespaced identifier for a rate-limited auth operation.
 final class AuthRateLimitOperation {
+  /// Creates a namespaced operation from [namespace] and [name].
   const AuthRateLimitOperation(this.namespace, this.name)
     : assert(namespace != ''),
       assert(name != '');
 
+  /// Creates the core operation corresponding to [action].
   factory AuthRateLimitOperation.core(AuthRateLimitAction action) =>
       AuthRateLimitOperation('core', action.name);
 
+  /// Namespace that owns the operation.
   final String namespace;
+
+  /// Stable name of the operation within [namespace].
   final String name;
 
+  /// Fully qualified operation identifier.
   String get id => '$namespace.$name';
 
+  /// Legacy core action represented by this operation, if one exists.
   AuthRateLimitAction? get legacyAction {
     if (namespace != 'core') return null;
     for (final action in AuthRateLimitAction.values) {
@@ -119,6 +126,7 @@ final class AuthRateLimitOperation {
 /// for a limiter key (for example, an email address or username), but callers
 /// must still treat it as private user input.
 final class AuthRateLimitRequest<TContext> {
+  /// Creates a request using the deprecated core [action] field.
   @Deprecated('Use AuthRateLimitRequest.operation with a namespaced operation.')
   const AuthRateLimitRequest({
     required AuthRateLimitAction action,
@@ -128,6 +136,7 @@ final class AuthRateLimitRequest<TContext> {
   }) : _legacyAction = action,
        _operation = null;
 
+  /// Creates a request for a namespaced [operation].
   const AuthRateLimitRequest.operation({
     required AuthRateLimitOperation operation,
     required this.providerId,
@@ -139,9 +148,11 @@ final class AuthRateLimitRequest<TContext> {
   final AuthRateLimitOperation? _operation;
   final AuthRateLimitAction? _legacyAction;
 
+  /// Operation being checked by the limiter.
   AuthRateLimitOperation get operation =>
       _operation ?? AuthRateLimitOperation.core(_legacyAction!);
 
+  /// Legacy core action, when this request represents one.
   @Deprecated('Use operation instead.')
   AuthRateLimitAction get action {
     final value = _legacyAction ?? operation.legacyAction;
@@ -151,37 +162,50 @@ final class AuthRateLimitRequest<TContext> {
     return value;
   }
 
+  /// Identifier of the provider handling the operation.
   final String providerId;
+
+  /// Host context used by the limiter to derive trusted request attributes.
   final TContext context;
+
+  /// Optional non-secret identifier such as an email or username.
   final String? identifier;
 }
 
 /// Result returned by an [AuthRateLimiter].
 final class AuthRateLimitDecision {
+  /// Creates an allowed decision.
   const AuthRateLimitDecision.allow()
     : allowed = true,
       retryAfter = Duration.zero;
 
+  /// Creates a blocked decision with the suggested retry delay.
   const AuthRateLimitDecision.block({required this.retryAfter})
     : allowed = false;
 
+  /// Whether the operation may continue.
   final bool allowed;
+
+  /// Duration the caller should wait before retrying.
   final Duration retryAfter;
 }
 
 /// Application-owned policy for throttling authentication operations.
 ///
-/// Implementations commonly combine a trusted client address from [context]
+/// Implementations commonly combine a trusted client address from `context`
 /// with [AuthRateLimitRequest.identifier]. Do not log or persist the request
 /// object as a whole: its context and identifier may contain private data.
 abstract interface class AuthRateLimiter<TContext> {
+  /// Evaluates whether [request] may proceed.
   FutureOr<AuthRateLimitDecision> check(AuthRateLimitRequest<TContext> request);
 }
 
 /// Raised when an auth operation is rejected by [AuthRateLimiter].
 final class AuthRateLimitException extends AuthFlowException {
+  /// Creates a rate-limit exception with [retryAfter].
   AuthRateLimitException({required this.retryAfter}) : super('rate_limited');
 
+  /// Suggested delay before another attempt.
   final Duration retryAfter;
 }
 

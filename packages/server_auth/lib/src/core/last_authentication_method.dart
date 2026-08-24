@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart' show Hmac, sha256;
 import 'plugin.dart';
 import 'tokens.dart' show base64UrlNoPadding, constantTimeStringEquals;
 
+/// Stable plugin identifier for the last-authentication-method feature.
 const String authLastAuthenticationMethodPluginId =
     'last_authentication_method';
 
@@ -14,19 +15,31 @@ const String authLastAuthenticationMethodPluginId =
 /// token, or user identifier. OAuth providers are represented as the stable
 /// namespace `oauth:<provider>`.
 final class AuthLastAuthenticationMethodId {
+  /// Maximum length of a canonical method identifier.
   static const int maximumLength = 64;
   static final RegExp _identifierPattern = RegExp(r'^[a-z][a-z0-9_-]{0,63}$');
   static final RegExp _oauthProviderPattern = RegExp(
     r'^[a-z0-9][a-z0-9._-]{0,31}$',
   );
 
+  /// Identifier for a credentials-based login.
   static const credentials = AuthLastAuthenticationMethodId._('credentials');
+
+  /// Identifier for a username-and-password login.
   static const usernamePassword = AuthLastAuthenticationMethodId._(
     'username_password',
   );
+
+  /// Identifier for a phone-based login.
   static const phone = AuthLastAuthenticationMethodId._('phone');
+
+  /// Identifier for an email OTP login.
   static const emailOtp = AuthLastAuthenticationMethodId._('email_otp');
+
+  /// Identifier for an anonymous login.
   static const anonymous = AuthLastAuthenticationMethodId._('anonymous');
+
+  /// Identifier for a passkey login.
   static const passkey = AuthLastAuthenticationMethodId._('passkey');
 
   const AuthLastAuthenticationMethodId._(this.value);
@@ -97,6 +110,7 @@ final class AuthLastAuthenticationMethodId {
     }
   }
 
+  /// Canonical serialized identifier.
   final String value;
 
   @override
@@ -110,12 +124,30 @@ final class AuthLastAuthenticationMethodId {
   String toString() => value;
 }
 
-enum AuthLastAuthenticationMethodBrowserPersistence { session, persistent }
+/// Persistence modes for the browser cookie that stores the last method.
+enum AuthLastAuthenticationMethodBrowserPersistence {
+  /// Expires with the browser session.
+  session,
 
-enum AuthLastAuthenticationMethodSameSite { lax, strict }
+  /// Persists for the policy's [AuthLastAuthenticationMethodPolicy.retention].
+  persistent,
+}
+
+/// SameSite modes supported by the last-method cookie.
+enum AuthLastAuthenticationMethodSameSite {
+  /// Sends the cookie with same-site requests and safe cross-site requests.
+  lax,
+
+  /// Sends the cookie only with same-site requests.
+  strict,
+}
 
 /// Explicit policy for the last-method browser state.
 final class AuthLastAuthenticationMethodPolicy {
+  /// Creates a policy for the allowed [allowedMethods].
+  ///
+  /// Retention must be between one second and 365 days, and
+  /// [maximumStateBytes] must be between 128 and 2048.
   AuthLastAuthenticationMethodPolicy({
     required Iterable<AuthLastAuthenticationMethodId> allowedMethods,
     this.retention = const Duration(days: 30),
@@ -168,22 +200,40 @@ final class AuthLastAuthenticationMethodPolicy {
     }
   }
 
+  /// Method identifiers that may be recorded.
   final Set<AuthLastAuthenticationMethodId> allowedMethods;
+
+  /// Maximum lifetime of recorded browser state.
   final Duration retention;
+
+  /// Whether the browser state is session-only or persistent.
   final AuthLastAuthenticationMethodBrowserPersistence browserPersistence;
+
+  /// Maximum encoded cookie-state length.
   final int maximumStateBytes;
+
+  /// Name of the browser cookie.
   final String cookieName;
+
+  /// Path assigned to the browser cookie.
   final String cookiePath;
+
+  /// SameSite policy assigned to the browser cookie.
   final AuthLastAuthenticationMethodSameSite sameSite;
 
   /// These flags are fixed by the plugin contract and cannot be relaxed by a
   /// caller through the policy object.
   bool get secureCookie => true;
+
+  /// Whether the plugin requires the cookie to be HTTP-only.
   bool get httpOnlyCookie => true;
 }
 
 /// Host-owned browser cookie instructions produced by the plugin.
 final class AuthLastAuthenticationMethodCookie {
+  /// Creates host-owned cookie instructions for the last-method state.
+  ///
+  /// The cookie is always required to be Secure and HTTP-only.
   AuthLastAuthenticationMethodCookie({
     required this.name,
     required this.value,
@@ -198,37 +248,58 @@ final class AuthLastAuthenticationMethodCookie {
     }
   }
 
+  /// Cookie name.
   final String name;
+
+  /// Encoded signed state, or an empty value when clearing the cookie.
   final String value;
+
+  /// Cookie path.
   final String path;
+
+  /// Cookie SameSite policy.
   final AuthLastAuthenticationMethodSameSite sameSite;
+
+  /// Max-age in seconds, or null for a session cookie.
   final int? maxAge;
+
+  /// Whether the cookie is restricted to HTTPS.
   final bool secure;
+
+  /// Whether the cookie is inaccessible to client-side scripts.
   final bool httpOnly;
 }
 
 /// Minimal host adapter used by the portable plugin to own one browser cookie.
 abstract interface class AuthLastAuthenticationMethodBrowserStore<TContext> {
+  /// Reads the cookie named [name] from [context].
   String? readCookie(TContext context, String name);
 
+  /// Writes [cookie] to the response associated with [context].
   void writeCookie(TContext context, AuthLastAuthenticationMethodCookie cookie);
 }
 
 /// Public, typed result returned by the server and client read APIs.
 final class AuthLastAuthenticationMethodReadResult {
+  /// Creates a result for [method] that expires at [expiresAt].
   const AuthLastAuthenticationMethodReadResult({
     required this.method,
     required this.expiresAt,
   });
 
+  /// Authentication method represented by the signed browser state.
   final AuthLastAuthenticationMethodId method;
+
+  /// Time at which the browser state expires.
   final DateTime expiresAt;
 
+  /// Converts this result to its transport representation.
   Map<String, dynamic> toJson() => <String, dynamic>{
     'method': method.value,
     'expiresAt': expiresAt.toUtc().toIso8601String(),
   };
 
+  /// Decodes a result from a validated JSON-compatible map.
   factory AuthLastAuthenticationMethodReadResult.fromJson(
     Map<String, dynamic> json,
   ) {
@@ -261,6 +332,9 @@ final class AuthLastAuthenticationMethodPlugin<TContext>
         AuthEndpointContributor<TContext>,
         AuthClientOperationContributor,
         AuthAuthenticationLifecycleContributor<TContext> {
+  /// Creates the plugin with a signing [signingKey] and browser [browserStore].
+  ///
+  /// The key must contain between 32 and 256 UTF-8 bytes.
   AuthLastAuthenticationMethodPlugin({
     required String signingKey,
     required this.browserStore,
@@ -275,21 +349,28 @@ final class AuthLastAuthenticationMethodPlugin<TContext>
     }
   }
 
+  /// Host adapter that owns the browser cookie.
   final AuthLastAuthenticationMethodBrowserStore<TContext> browserStore;
+
+  /// Policy controlling accepted methods and cookie lifetime.
   final AuthLastAuthenticationMethodPolicy policy;
   final List<int> _signingKey;
   final DateTime Function() _clock;
 
+  /// Stable identifier used to register this plugin.
   @override
   String get id => authLastAuthenticationMethodPluginId;
 
+  /// This plugin does not require a persistent data contract.
   @override
   AuthServerPluginDataContract get dataContract =>
       const AuthServerPluginDataContract.none();
 
+  /// Configures the plugin in the supplied server context.
   @override
   void configure(AuthServerPluginContext<TContext> context) {}
 
+  /// Describes the client operation exposed by this plugin.
   @override
   Iterable<AuthClientOperationDescriptor> get clientOperations =>
       const <AuthClientOperationDescriptor>[
@@ -300,6 +381,7 @@ final class AuthLastAuthenticationMethodPlugin<TContext>
         ),
       ];
 
+  /// Describes the read endpoint exposed by this plugin.
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints =>
       <AuthEndpointDescriptor<TContext>>[
@@ -320,6 +402,7 @@ final class AuthLastAuthenticationMethodPlugin<TContext>
         ),
       ];
 
+  /// Records or clears browser state for an authentication lifecycle event.
   @override
   Future<void> onAuthenticationLifecycleEvent(
     AuthAuthenticationLifecycleEvent<TContext> event,

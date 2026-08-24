@@ -132,14 +132,20 @@ Cookie buildExpiredJwtTokenCookie(
 
 /// Result of issuing a JWT token and corresponding auth cookie.
 class AuthIssuedJwtToken {
+  /// Creates an issued-token result.
   const AuthIssuedJwtToken({
     required this.token,
     required this.expiresAt,
     required this.cookie,
   });
 
+  /// Serialized JWT returned to the caller.
   final String token;
+
+  /// Expiration time represented by [token].
   final DateTime expiresAt;
+
+  /// Cookie containing [token] for browser clients.
   final Cookie cookie;
 }
 
@@ -224,29 +230,41 @@ class JwtPayload {
 
 /// Result of resolving and verifying a JWT bearer token from a header.
 class JwtBearerVerificationResult {
+  /// Creates a bearer verification result.
   const JwtBearerVerificationResult({
     required this.token,
     required this.payload,
   });
 
+  /// Bearer token extracted from the authorization header.
   final String token;
+
+  /// Verified token payload.
   final JwtPayload payload;
 }
 
 /// Verified JWT session payload for auth session resolution.
 class AuthVerifiedJwtSession {
+  /// Creates a verified session from [token], [payload], and [user].
   const AuthVerifiedJwtSession({
     required this.token,
     required this.payload,
     required this.user,
   });
 
+  /// Serialized JWT used to authenticate the session.
   final String token;
+
+  /// Verified JWT payload.
   final JwtPayload payload;
+
+  /// User reconstructed from the JWT claims.
   final AuthUser user;
 
+  /// Expiration time from the verified token, if present.
   DateTime? get expiresAt => payload.token.claims.expiry?.toUtc();
 
+  /// Converts this result into a framework-neutral auth session.
   AuthSession toSession({
     AuthSessionStrategy strategy = AuthSessionStrategy.jwt,
   }) {
@@ -539,6 +557,7 @@ Future<AuthVerifiedJwtSession?> verifyAuthJwtSessionToken({
 
 /// Resolved JWT session payload after optional refresh processing.
 class AuthResolvedJwtSession {
+  /// Creates a resolved session result.
   const AuthResolvedJwtSession({
     required this.token,
     required this.user,
@@ -547,12 +566,22 @@ class AuthResolvedJwtSession {
     this.refreshCookie,
   });
 
+  /// Serialized JWT to use for the resolved session.
   final String token;
+
+  /// User reconstructed from the verified JWT claims.
   final AuthUser user;
+
+  /// Expiration time of [token], if present.
   final DateTime? expiresAt;
+
+  /// Payload from the verified token.
   final JwtPayload payload;
+
+  /// Replacement cookie when the token was refreshed.
   final Cookie? refreshCookie;
 
+  /// Converts this result into a framework-neutral auth session.
   AuthSession toSession({
     AuthSessionStrategy strategy = AuthSessionStrategy.jwt,
   }) {

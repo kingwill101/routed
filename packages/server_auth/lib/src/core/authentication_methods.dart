@@ -6,14 +6,31 @@ const int _maxAuthenticationMethodsPerUser = 1024;
 
 /// Built-in kinds understood by the account-safety inventory.
 enum AuthAuthenticationMethodKind {
+  /// A password-backed credential.
   password,
+
+  /// An account linked through an external OAuth provider.
   oauthProvider,
+
+  /// A WebAuthn or passkey credential.
   passkey,
+
+  /// A phone-number authentication method.
   phone,
+
+  /// A one-time password delivered through email.
   emailOtp,
+
+  /// An email-link authentication method.
   emailLink,
+
+  /// A username-backed authentication method.
   username,
+
+  /// An API key that is eligible to authenticate as the user.
   apiKey,
+
+  /// An authentication method supplied by another plugin.
   plugin,
 }
 
@@ -40,6 +57,7 @@ final class AuthAuthenticationMethod {
            ? null
            : _component(providerAccountId, 'providerAccountId', maxLength: 512);
 
+  /// Creates a password method for [credentialId].
   factory AuthAuthenticationMethod.password(
     String credentialId, {
     String providerId = 'credentials',
@@ -50,6 +68,7 @@ final class AuthAuthenticationMethod {
     identity: 'credential:$credentialId',
   );
 
+  /// Creates an OAuth method for a provider account.
   factory AuthAuthenticationMethod.oauthProvider({
     required String providerId,
     required String providerAccountId,
@@ -64,6 +83,7 @@ final class AuthAuthenticationMethod {
     providerAccountId: providerAccountId,
   );
 
+  /// Creates a passkey method for [credentialId].
   factory AuthAuthenticationMethod.passkey(String credentialId) =>
       AuthAuthenticationMethod._(
         kind: AuthAuthenticationMethodKind.passkey,
@@ -72,6 +92,7 @@ final class AuthAuthenticationMethod {
         identity: 'webauthn:$credentialId',
       );
 
+  /// Creates a phone method for [phoneNumber].
   factory AuthAuthenticationMethod.phone(String phoneNumber) =>
       AuthAuthenticationMethod._(
         kind: AuthAuthenticationMethodKind.phone,
@@ -80,6 +101,7 @@ final class AuthAuthenticationMethod {
         identity: 'phone_number:$phoneNumber',
       );
 
+  /// Creates an email OTP method for [userId].
   factory AuthAuthenticationMethod.emailOtp(String userId) =>
       AuthAuthenticationMethod._(
         kind: AuthAuthenticationMethodKind.emailOtp,
@@ -88,6 +110,7 @@ final class AuthAuthenticationMethod {
         identity: 'email_otp:$userId',
       );
 
+  /// Creates an email-link method for [userId] and [providerId].
   factory AuthAuthenticationMethod.emailLink({
     required String providerId,
     required String userId,
@@ -111,6 +134,7 @@ final class AuthAuthenticationMethod {
         identity: 'credential:$credentialId',
       );
 
+  /// Creates an API-key method for [keyId].
   factory AuthAuthenticationMethod.apiKey(String keyId) =>
       AuthAuthenticationMethod._(
         kind: AuthAuthenticationMethodKind.apiKey,
@@ -130,6 +154,7 @@ final class AuthAuthenticationMethod {
     identity: _compoundIdentity('plugin', [namespace, id]),
   );
 
+  /// Kind of authentication method represented by this value.
   final AuthAuthenticationMethodKind kind;
 
   /// Stable namespace owned by one provider or server plugin.
@@ -149,6 +174,8 @@ final class AuthAuthenticationMethod {
 
   /// Exact provider coordinates for [AuthAuthenticationMethodKind.oauthProvider].
   final String? providerId;
+
+  /// Provider account coordinate for an OAuth method.
   final String? providerAccountId;
 
   @override
@@ -161,11 +188,16 @@ final class AuthAuthenticationMethod {
 
 /// A contributor's bounded view of one user's usable authentication methods.
 final class AuthAuthenticationMethodSnapshot {
+  /// Creates a complete snapshot containing [methods].
+  ///
+  /// A complete empty snapshot authoritatively reports that no usable method
+  /// exists.
   AuthAuthenticationMethodSnapshot.complete(
     Iterable<AuthAuthenticationMethod> methods,
   ) : methods = List<AuthAuthenticationMethod>.unmodifiable(methods),
       isComplete = true;
 
+  /// Creates a snapshot that cannot authoritatively enumerate methods.
   const AuthAuthenticationMethodSnapshot.unavailable()
     : methods = const <AuthAuthenticationMethod>[],
       isComplete = false;
@@ -175,6 +207,7 @@ final class AuthAuthenticationMethodSnapshot {
   ) : methods = List<AuthAuthenticationMethod>.unmodifiable(methods),
       isComplete = false;
 
+  /// Methods reported by the contributor.
   final List<AuthAuthenticationMethod> methods;
 
   /// Whether an empty [methods] list authoritatively means no method exists.
@@ -188,8 +221,10 @@ final class AuthAuthenticationMethodSnapshot {
 /// qualify. An adapter that cannot provide an authoritative view returns an
 /// unavailable snapshot so destructive mutations fail closed.
 abstract interface class AuthAuthenticationMethodInventoryContributor {
+  /// Stable namespace owned by this contributor.
   String get authenticationMethodNamespace;
 
+  /// Returns the usable methods for [userId].
   FutureOr<AuthAuthenticationMethodSnapshot> authenticationMethodsForUser(
     String userId,
   );
@@ -200,18 +235,22 @@ abstract interface class AuthAuthenticationMethodInventoryContributor {
 /// Durable coordinators use this declaration to reject topologies containing
 /// method stores that cannot participate in their transaction.
 abstract interface class AuthAuthenticationMethodInventoryBinding {
+  /// Store or coordinator that owns this contributor's method data.
   Object get authenticationMethodStore;
 
+  /// Method kinds that this store can report authoritatively.
   Set<AuthAuthenticationMethodKind> get authenticationMethodKinds;
 }
 
 /// Optional switch for contributors whose method status is configuration-led.
 abstract interface class AuthAuthenticationMethodInventoryControl {
+  /// Whether this contributor should participate in inventory composition.
   bool get authenticationMethodInventoryEnabled;
 }
 
 /// Binds the immutable method topology to a durable mutation coordinator.
 abstract interface class AuthAuthenticationMethodTopologyStore {
+  /// Binds [contributors] to the store's mutation topology.
   void bindAuthenticationMethodInventory(
     Iterable<AuthAuthenticationMethodInventoryContributor> contributors,
   );
@@ -219,22 +258,33 @@ abstract interface class AuthAuthenticationMethodTopologyStore {
 
 /// Result of an atomic authentication-method removal attempt.
 enum AuthAuthenticationMethodMutationResult {
+  /// The target method was removed.
   mutated,
+
+  /// No matching method was found.
   notFound,
+
+  /// Removing the target would leave no usable authentication method.
   lastAuthenticationMethod,
+
+  /// The store could not provide the required atomicity guarantee.
   atomicityUnavailable,
 }
 
+/// Loads the current authentication-method inventory for a user.
 typedef AuthAuthenticationMethodInventoryLoader =
     FutureOr<AuthAuthenticationMethodSnapshot> Function();
+
+/// Applies a previously checked authentication-method mutation.
 typedef AuthAuthenticationMethodMutation = FutureOr<bool> Function();
 
 /// Root-store transaction required by destructive method mutations.
 ///
-/// The store invokes [loadInventory] and [mutate] in one serializable boundary
+/// The store invokes `loadInventory` and `mutate` in one serializable boundary
 /// shared by every participating provider/plugin store. Durable adapters must
 /// not implement this contract unless all nested stores join that transaction.
 abstract interface class AuthAuthenticationMethodMutationStore {
+  /// Mutates [target] only when [loadInventory] proves it is safe.
   FutureOr<AuthAuthenticationMethodMutationResult>
   mutateAuthenticationMethodIfSafe({
     required String userId,
@@ -250,6 +300,7 @@ abstract interface class AuthAuthenticationMethodMutationStore {
 /// callback. The store itself checks the authoritative inventory and removes
 /// the exact provider/account pair in one serializable boundary.
 abstract interface class AuthOAuthAccountMutationStore {
+  /// Unlinks the exact provider account when the mutation is safe.
   FutureOr<AuthAuthenticationMethodMutationResult> unlinkOAuthAccountIfSafe({
     required String userId,
     required String providerId,
@@ -260,6 +311,11 @@ abstract interface class AuthOAuthAccountMutationStore {
 
 /// Composes provider and plugin inventories with the root-store transaction.
 final class AuthAuthenticationMethodService {
+  /// Creates a service for the supplied root [store].
+  ///
+  /// Optional capabilities are discovered from [store]. Contributors supplied
+  /// here are composed together with contributors passed to
+  /// [composeContributors].
   AuthAuthenticationMethodService({
     required Object store,
     Iterable<AuthAuthenticationMethodInventoryContributor> contributors =

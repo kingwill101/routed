@@ -7,11 +7,14 @@ import 'last_authentication_method.dart';
 /// Installs only the typed last-authentication-method read API.
 final class AuthLastAuthenticationMethodClientPlugin
     implements AuthClientPlugin<AuthLastAuthenticationMethodClient> {
+  /// Creates the client plugin.
   const AuthLastAuthenticationMethodClientPlugin();
 
+  /// Stable identifier used to install the matching server plugin.
   @override
   String get id => authLastAuthenticationMethodPluginId;
 
+  /// Installs a typed client using the transport from [context].
   @override
   AuthLastAuthenticationMethodClient install(AuthClientPluginContext context) =>
       AuthLastAuthenticationMethodClient(context.transport);
@@ -19,6 +22,7 @@ final class AuthLastAuthenticationMethodClientPlugin
 
 /// Typed client for the optional server plugin.
 final class AuthLastAuthenticationMethodClient {
+  /// Creates a client backed by [_transport].
   const AuthLastAuthenticationMethodClient(this._transport);
 
   final AuthClientTransport _transport;
