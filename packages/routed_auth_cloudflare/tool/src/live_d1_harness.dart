@@ -8,6 +8,9 @@ import 'package:routed_auth_cloudflare/routed_auth_cloudflare.dart';
 import 'package:routed_node/cloudflare.dart';
 import 'package:server_auth/testing.dart';
 
+// Sequential result additions keep the conformance case order explicit.
+// ignore_for_file: cascade_invocations
+
 const _disposablePrefix = 'routed-auth-conformance';
 
 /// Identifies one D1 database returned by Cloudflare's control plane.
@@ -86,7 +89,9 @@ String validateCloudflareAccountId(String value) {
 String validateCloudflareD1DatabaseId(String value) {
   final normalized = value.trim();
   if (!RegExp(
-    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-'
+    '[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
+    r'[0-9a-fA-F]{12}$',
   ).hasMatch(normalized)) {
     throw ArgumentError.value(
       value,
@@ -190,6 +195,9 @@ final class LiveD1ConformanceReport {
   bool get passed => results.every((result) => result.passed);
 }
 
+// A one-method interface is intentional: callers inject the conformance
+// executor without inheriting implementation details.
+// ignore: one_member_abstracts
 abstract interface class LiveD1ConformanceExecutor {
   Future<LiveD1ConformanceReport> run(CloudflareD1Database database);
 }
@@ -250,7 +258,7 @@ final class DefaultLiveD1ConformanceExecutor
               skippedReason: result.skippedReason,
             ),
           );
-        } catch (error) {
+        } on Object catch (error) {
           results.add(
             LiveD1ConformanceCaseResult(
               id: conformanceCase.id,
@@ -274,7 +282,7 @@ final class DefaultLiveD1ConformanceExecutor
         try {
           await conformanceCase.run();
           results.add(LiveD1ConformanceCaseResult(id: id, passed: true));
-        } catch (error) {
+        } on Object catch (error) {
           results.add(
             LiveD1ConformanceCaseResult(
               id: id,
@@ -288,8 +296,8 @@ final class DefaultLiveD1ConformanceExecutor
       final anonymousSuite = AuthAnonymousStoreConformanceSuite(() async {
         final schema = await newSchema();
         final store = CloudflareD1AuthStore(database, schema: schema);
-        final plugin = AnonymousPlugin<Object>();
-        plugin.configure(AuthServerPluginContext<Object>(store: store));
+        final plugin = AnonymousPlugin<Object>()
+          ..configure(AuthServerPluginContext<Object>(store: store));
         store.bindUserDeletionPlanContributors([plugin]);
         return AuthAnonymousStoreConformanceFixture(
           store: store,
@@ -305,7 +313,7 @@ final class DefaultLiveD1ConformanceExecutor
         try {
           await conformanceCase.run();
           results.add(LiveD1ConformanceCaseResult(id: id, passed: true));
-        } catch (error) {
+        } on Object catch (error) {
           results.add(
             LiveD1ConformanceCaseResult(
               id: id,
@@ -322,8 +330,7 @@ final class DefaultLiveD1ConformanceExecutor
           database,
           schema: schema,
           clock: _clock,
-        );
-        store.bindUserDeletionPlanContributors(const []);
+        )..bindUserDeletionPlanContributors(const []);
         return AuthPhoneNumberBackendConformanceFixture(
           store: store,
           backend: store,
@@ -339,7 +346,7 @@ final class DefaultLiveD1ConformanceExecutor
         try {
           await conformanceCase.run();
           results.add(LiveD1ConformanceCaseResult(id: id, passed: true));
-        } catch (error) {
+        } on Object catch (error) {
           results.add(
             LiveD1ConformanceCaseResult(
               id: id,
@@ -373,7 +380,7 @@ final class DefaultLiveD1ConformanceExecutor
         try {
           await conformanceCase.run();
           results.add(LiveD1ConformanceCaseResult(id: id, passed: true));
-        } catch (error) {
+        } on Object catch (error) {
           results.add(
             LiveD1ConformanceCaseResult(
               id: id,
@@ -401,7 +408,7 @@ final class DefaultLiveD1ConformanceExecutor
         try {
           await conformanceCase.run();
           results.add(LiveD1ConformanceCaseResult(id: id, passed: true));
-        } catch (error) {
+        } on Object catch (error) {
           results.add(
             LiveD1ConformanceCaseResult(
               id: id,
@@ -451,14 +458,14 @@ final class DefaultLiveD1ConformanceExecutor
         ),
       );
       report = LiveD1ConformanceReport(List.unmodifiable(results));
-    } catch (error, stackTrace) {
+    } on Object catch (error, stackTrace) {
       executionFailure = error;
       executionStack = stackTrace;
     } finally {
       for (final schema in activeSchemas.toList().reversed) {
         try {
           await schema.dropAll(database);
-        } catch (error, stackTrace) {
+        } on Object catch (error, stackTrace) {
           cleanupFailure ??= error;
           cleanupStack ??= stackTrace;
         }
@@ -487,7 +494,7 @@ final class DefaultLiveD1ConformanceExecutor
     try {
       await body();
       return LiveD1ConformanceCaseResult(id: id, passed: true);
-    } catch (error) {
+    } on Object catch (error) {
       return LiveD1ConformanceCaseResult(
         id: id,
         passed: false,
@@ -519,7 +526,7 @@ final class DefaultLiveD1ConformanceExecutor
               .bind(['probe-user', 'probe-two@example.com', '{}']),
         ]);
         rejected = batch.any((result) => !result.success);
-      } catch (_) {
+      } on Object {
         rejected = true;
       }
       if (!rejected) {
@@ -527,7 +534,7 @@ final class DefaultLiveD1ConformanceExecutor
       }
       final result = await database
           .prepare('SELECT COUNT(*) AS row_count FROM $table')
-          .all<int>(decode: (row) => (row['row_count'] as num).toInt());
+          .all<int>(decode: (row) => (row['row_count']! as num).toInt());
       if (!result.success || result.results.single != 0) {
         throw StateError('D1 retained writes from a rejected batch.');
       }
@@ -726,7 +733,7 @@ final class LiveD1ConformanceHarness {
       );
       report = await _executor.run(database);
       if (!report.passed) throw LiveD1ConformanceFailure(report);
-    } catch (error, stackTrace) {
+    } on Object catch (error, stackTrace) {
       if (error is LiveD1ExecutorCleanupFailure) {
         executionCleanupFailure = error.cleanupFailure;
         testFailure = error.executionFailure;
@@ -744,7 +751,7 @@ final class LiveD1ConformanceHarness {
       if (ownership != null) {
         try {
           await _controlPlane.deleteOwnedDatabase(ownership);
-        } catch (error, stackTrace) {
+        } on Object catch (error, stackTrace) {
           cleanupFailures.add(error);
           cleanupStack = stackTrace;
         }
@@ -783,6 +790,9 @@ final class LiveD1ApiResponse {
   final Map<String, String> headers;
 }
 
+// A one-method interface is intentional: callers inject the HTTP transport
+// without inheriting implementation details.
+// ignore: one_member_abstracts
 abstract interface class LiveD1ApiTransport {
   Future<LiveD1ApiResponse> send({
     required String method,
@@ -1012,8 +1022,8 @@ final class CloudflareLiveD1ApiClient implements LiveD1ControlPlane {
     required String operation,
     required String method,
     required String path,
-    Object? body,
     required bool retrySafe,
+    Object? body,
     bool allowNotFound = false,
   }) async {
     final attempts = retrySafe ? maxSafeAttempts : 1;
@@ -1350,7 +1360,8 @@ CloudflareD1Result<T> _decodeResult<T>(
 ) => CloudflareD1Result<T>(
   success: result.success,
   results: [
-    for (final row in result.results) decode == null ? row as T : decode(row),
+    for (final row in result.results)
+      if (decode == null) row as T else decode(row),
   ],
   meta: result.meta,
   error: result.error,

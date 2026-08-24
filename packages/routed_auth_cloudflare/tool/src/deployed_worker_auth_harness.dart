@@ -58,7 +58,7 @@ Uri validateDeployedWorkerOrigin(Uri value) {
           'query, or fragment',
     );
   }
-  return value.replace(path: '/', query: null, fragment: null);
+  return value.replace(path: '/');
 }
 
 /// Parses and validates an HTTPS Worker origin without exposing credentials.
@@ -136,7 +136,7 @@ final class HttpDeployedWorkerAuthConformanceRunner
     _client.connectionTimeout = config.timeout;
   }
 
-  static const _maximumResponseBytes = 256 * 1024;
+  static const int _maximumResponseBytes = 256 * 1024;
 
   final DeployedWorkerAuthConformanceConfig config;
   final HttpClient _client;
@@ -217,10 +217,11 @@ final class HttpDeployedWorkerAuthConformanceRunner
       // the Worker. Do not let a keep-alive connection carry protocol state
       // from one suite into the next, especially across Cloudflare's HTTP/2
       // edge proxy.
-      request.persistentConnection = false;
-      request.followRedirects = false;
-      request.headers.set(deployedWorkerAuthTokenHeader, config.token);
-      request.headers.set(HttpHeaders.acceptHeader, ContentType.json.mimeType);
+      request
+        ..persistentConnection = false
+        ..followRedirects = false
+        ..headers.set(deployedWorkerAuthTokenHeader, config.token)
+        ..headers.set(HttpHeaders.acceptHeader, ContentType.json.mimeType);
       if (body != null) {
         request.headers.contentType = ContentType.json;
         request.add(utf8.encode(body));

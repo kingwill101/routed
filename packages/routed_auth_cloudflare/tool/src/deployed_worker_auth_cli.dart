@@ -132,7 +132,7 @@ void _validateEnvironmentVariableName(String value, String option) {
   }
 }
 
-const deployedWorkerAuthConformanceUsage = '''
+const deployedWorkerAuthConformanceUsage = r'''
 Deployed Cloudflare Worker auth conformance harness
 
 This command makes no request unless --run is present. It calls only an
@@ -140,8 +140,8 @@ already-deployed Worker over HTTPS; it never invokes Wrangler or a Cloudflare
 control-plane API and never creates, changes, or deletes Cloudflare resources.
 
 Usage:
-  dart run tool/deployed_worker_auth_conformance.dart --run \\
-    --origin https://your-worker.example.workers.dev \\
+  dart run tool/deployed_worker_auth_conformance.dart --run \
+    --origin https://your-worker.example.workers.dev \
     [--suite session,jwt,plugins,external-providers,webauthn]
 
 Configuration:
@@ -173,8 +173,9 @@ Future<int> runDeployedWorkerAuthConformanceCli(
   try {
     options = DeployedWorkerAuthCliOptions.parse(arguments);
   } on FormatException catch (error) {
-    stderrSink.writeln('Configuration error: ${error.message}');
-    stderrSink.writeln(deployedWorkerAuthConformanceUsage);
+    stderrSink
+      ..writeln('Configuration error: ${error.message}')
+      ..writeln(deployedWorkerAuthConformanceUsage);
     return 64;
   }
 
@@ -191,11 +192,13 @@ Future<int> runDeployedWorkerAuthConformanceCli(
   DeployedWorkerAuthConformanceConfig config;
   try {
     config = options.toConfig(environment ?? Platform.environment);
-  } on ArgumentError catch (_) {
+  } on Object catch (error) {
+    if (error case final FormatException formatError) {
+      stderrSink.writeln('Configuration error: ${formatError.message}');
+      return 64;
+    }
+    if (error is! ArgumentError) rethrow;
     stderrSink.writeln('Configuration error: invalid Worker origin or token.');
-    return 64;
-  } on FormatException catch (error) {
-    stderrSink.writeln('Configuration error: ${error.message}');
     return 64;
   }
 
@@ -221,7 +224,7 @@ Future<int> runDeployedWorkerAuthConformanceCli(
   } on DeployedWorkerAuthRequestFailure catch (error) {
     stderrSink.writeln('Harness request failed: ${error.code}.');
     return 69;
-  } catch (_) {
+  } on Object {
     stderrSink.writeln('Harness failed: internal_error.');
     return 1;
   } finally {

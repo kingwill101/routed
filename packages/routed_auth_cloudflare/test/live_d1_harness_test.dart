@@ -581,7 +581,9 @@ final class _FakeControlPlane implements LiveD1ControlPlane {
   Future<void> deleteOwnedDatabase(LiveD1DatabaseOwnership ownership) async {
     events.add('delete');
     deletedOwnership = ownership;
-    if (deleteFailure case final failure?) throw failure;
+    if (deleteFailure case final failure?) {
+      Error.throwWithStackTrace(failure, StackTrace.current);
+    }
     database.close();
   }
 }
@@ -616,7 +618,7 @@ final class _ThrowingExecutor implements LiveD1ConformanceExecutor {
   @override
   Future<LiveD1ConformanceReport> run(CloudflareD1Database database) async {
     events.add('test');
-    throw failure;
+    Error.throwWithStackTrace(failure, StackTrace.current);
   }
 }
 

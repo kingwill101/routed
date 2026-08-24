@@ -27,7 +27,6 @@ void main() {
         const schema = CloudflareD1AuthSchema();
         final store = await CloudflareD1AuthStore.open(
           database,
-          schema: schema,
         );
         final plugin = _plugin(store.scimConnectionStore);
 
@@ -74,7 +73,6 @@ void main() {
         const schema = CloudflareD1AuthSchema();
         final store = await CloudflareD1AuthStore.open(
           database,
-          schema: schema,
         );
         final transaction = _createTransaction();
         var injected = false;
@@ -143,7 +141,7 @@ void main() {
         hasLength(1),
       );
       expect(
-        results.where((result) => result?.replayed == true),
+        results.where((result) => result?.replayed ?? false),
         hasLength(15),
       );
       expect(
@@ -226,7 +224,7 @@ void main() {
       final database = FakeCloudflareD1Database();
       addTearDown(database.close);
       const schema = CloudflareD1AuthSchema();
-      final store = await CloudflareD1AuthStore.open(database, schema: schema);
+      final store = await CloudflareD1AuthStore.open(database);
       final user = AuthUser(
         id: _principal.subjectId,
         email: 'owner@example.test',

@@ -84,7 +84,7 @@ final class FakeCloudflareD1Database implements CloudflareD1Database {
       _database.execute('COMMIT');
       await afterBatchCommit?.call();
       return results;
-    } catch (_) {
+    } on Object {
       _database.execute('ROLLBACK');
       rethrow;
     }

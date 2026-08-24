@@ -5,6 +5,11 @@
 - Keep request throttling in the built-in `server_rate_limit` and Routed
   adapter layers instead of adding a Cloudflare-specific D1 rate-limit schema.
 
+## Unreleased
+
+- Complete public API documentation and adopt the shared
+  `very_good_analysis` lint baseline.
+
 ## 0.1.1
 
 - Keep WebAuthn counter validation within JavaScript's exact integer range so

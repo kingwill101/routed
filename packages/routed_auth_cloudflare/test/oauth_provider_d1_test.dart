@@ -26,7 +26,7 @@ void main() {
       final database = FakeCloudflareD1Database();
       addTearDown(database.close);
       const schema = CloudflareD1AuthSchema();
-      final store = await CloudflareD1AuthStore.open(database, schema: schema);
+      final store = await CloudflareD1AuthStore.open(database);
       final fixture = await _createExchangeFixture(store, 'rollback');
 
       var injected = false;
@@ -87,7 +87,7 @@ void main() {
       final database = FakeCloudflareD1Database();
       addTearDown(database.close);
       const schema = CloudflareD1AuthSchema();
-      final store = await CloudflareD1AuthStore.open(database, schema: schema);
+      final store = await CloudflareD1AuthStore.open(database);
       const rawClientSecret = 'raw-client-secret-do-not-store';
       final client = OAuthClient(
         clientId: 'digest-client',
@@ -160,7 +160,7 @@ void main() {
         expiresAt: DateTime.utc(2030, 1, 1, 1),
         refreshTokenHash: hashOpaqueToken(rawRefreshToken),
         refreshTokenExpiresAt: DateTime.utc(2030, 1, 2),
-        issuedAt: DateTime.utc(2030, 1, 1),
+        issuedAt: DateTime.utc(2030),
       );
       final replacement = OAuthAccessToken(
         tokenHash: hashOpaqueToken(replacementAccessToken),
@@ -205,7 +205,7 @@ void main() {
       final database = FakeCloudflareD1Database();
       addTearDown(database.close);
       const schema = CloudflareD1AuthSchema();
-      final store = await CloudflareD1AuthStore.open(database, schema: schema);
+      final store = await CloudflareD1AuthStore.open(database);
       final user = AuthUser(
         id: 'provider-user',
         email: 'provider@example.test',
@@ -235,7 +235,7 @@ void main() {
       );
 
       final redirect =
-          await authorize.invoke(
+          (await authorize.invoke(
                 AuthOperationInvocation<Object>(context: Object(), user: user),
                 AuthEndpointRequest(
                   query: const <String, dynamic>{
@@ -248,12 +248,15 @@ void main() {
                     'code_challenge_method': 'S256',
                   },
                 ),
-              )
+              ))!
               as AuthEndpointRedirect;
       final rawCode = redirect.location.queryParameters['code']!;
       final response =
-          await token.invoke(
-                AuthOperationInvocation<Object>(context: Object(), user: null),
+          (await token.invoke(
+                const AuthOperationInvocation<Object>(
+                  context: Object(),
+                  user: null,
+                ),
                 AuthEndpointRequest(
                   body: <String, dynamic>{
                     'grant_type': 'authorization_code',
@@ -265,7 +268,7 @@ void main() {
                         'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',
                   },
                 ),
-              )
+              ))!
               as Map<String, dynamic>;
       final rawAccessToken = response['access_token']! as String;
 
@@ -353,14 +356,14 @@ _createExchangeFixture(CloudflareD1AuthStore store, String namespace) async {
     expiresAt: DateTime.utc(2030, 1, 1, 0, 10),
     codeChallenge: 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
     codeChallengeMethod: 'S256',
-    createdAt: DateTime.utc(2030, 1, 1),
+    createdAt: DateTime.utc(2030),
   );
   final request = OAuthAuthorizationCodeExchangeRequest(
     codeHash: code.codeHash,
     clientId: code.clientId,
     redirectUri: code.redirectUri,
     codeVerifier: verifier,
-    now: DateTime.utc(2030, 1, 1),
+    now: DateTime.utc(2030),
   );
   final token = OAuthAccessToken(
     tokenHash: hashOpaqueToken(rawAccessToken),
@@ -371,7 +374,7 @@ _createExchangeFixture(CloudflareD1AuthStore store, String namespace) async {
     expiresAt: DateTime.utc(2030, 1, 1, 1),
     refreshTokenHash: hashOpaqueToken(rawRefreshToken),
     refreshTokenExpiresAt: DateTime.utc(2030, 1, 2),
-    issuedAt: DateTime.utc(2030, 1, 1),
+    issuedAt: DateTime.utc(2030),
   );
   await store.oauthAuthorizationCodeStore.create(code);
   return (

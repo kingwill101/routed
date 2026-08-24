@@ -128,7 +128,7 @@ final class LiveD1CliOptions {
   }
 }
 
-const liveD1ConformanceUsage = '''
+const liveD1ConformanceUsage = r'''
 Cloudflare D1 auth conformance harness
 
 This command is non-mutating unless --live is present. Live runs require an
@@ -136,15 +136,15 @@ API token in an environment variable; token values are never accepted as
 arguments or printed.
 
 Create and clean up a uniquely named disposable database:
-  dart run tool/live_d1_conformance.dart --live \\
-    --account-id "\$CLOUDFLARE_ACCOUNT_ID" --create-disposable \\
+  dart run tool/live_d1_conformance.dart --live \
+    --account-id "$CLOUDFLARE_ACCOUNT_ID" --create-disposable \
     --name-prefix routed-auth-conformance
 
 Use an existing remote database without deleting it:
-  dart run tool/live_d1_conformance.dart --live \\
-    --account-id "\$CLOUDFLARE_ACCOUNT_ID" \\
-    --database-id "\$CLOUDFLARE_D1_DATABASE_ID" \\
-    --database-name "\$CLOUDFLARE_D1_DATABASE_NAME"
+  dart run tool/live_d1_conformance.dart --live \
+    --account-id "$CLOUDFLARE_ACCOUNT_ID" \
+    --database-id "$CLOUDFLARE_D1_DATABASE_ID" \
+    --database-name "$CLOUDFLARE_D1_DATABASE_NAME"
 
 The token defaults to CLOUDFLARE_API_TOKEN. Select another environment
 variable with --api-token-env NAME. Disposable mode needs D1 Read and D1
@@ -164,9 +164,10 @@ Future<int> runLiveD1ConformanceCli(
   LiveD1CliOptions options;
   try {
     options = LiveD1CliOptions.parse(arguments);
-  } catch (error) {
-    stderrSink.writeln('Configuration error: $error');
-    stderrSink.writeln(liveD1ConformanceUsage);
+  } on Object catch (error) {
+    stderrSink
+      ..writeln('Configuration error: $error')
+      ..writeln(liveD1ConformanceUsage);
     return 64;
   }
 
@@ -235,7 +236,7 @@ Future<int> runLiveD1ConformanceCli(
       );
     }
     return error.cleanupFailure == null ? 1 : 2;
-  } catch (error) {
+  } on Object catch (error) {
     stderrSink.writeln(
       'Live D1 harness failure: '
       '${redactLiveD1Secrets(error.toString(), [token])}',

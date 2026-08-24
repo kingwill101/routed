@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 
+// SQL statements intentionally use multiline strings without a leading
+// newline so the exact query text remains easy to compare with D1 schemas.
+// ignore_for_file: leading_newlines_in_multiline_strings
+
+import 'package:routed_auth_cloudflare/src/cloudflare_d1_auth_schema.dart';
 import 'package:routed_node/cloudflare.dart';
 import 'package:server_auth/server_auth.dart';
-
-import 'cloudflare_d1_auth_schema.dart';
 
 // WebAuthn signature counters are unsigned 32-bit values. Keeping this bound
 // within JavaScript's exact integer range also makes the D1 adapter portable
@@ -273,7 +276,7 @@ class CloudflareD1AuthStore
     for (final contributor in contributors) {
       activeNamespaces.add(contributor.authenticationMethodNamespace);
       final binding = switch (contributor) {
-        AuthAuthenticationMethodInventoryBinding binding => binding,
+        final AuthAuthenticationMethodInventoryBinding binding => binding,
         _ => null,
       };
       if (binding == null) {
@@ -707,7 +710,7 @@ class CloudflareD1AuthStore
           user: command.user,
         );
       }
-    } catch (error, stackTrace) {
+    } on Object catch (error, stackTrace) {
       final replay = await _readAnonymousReplay(
         operationIdHash: operationIdHash,
         fingerprint: fingerprint,
@@ -815,7 +818,7 @@ class CloudflareD1AuthStore
               ]),
         ],
       );
-    } catch (error, stackTrace) {
+    } on Object catch (error, stackTrace) {
       final conflict = await _readAnonymousReplay(
         operationIdHash: operationIdHash,
         fingerprint: fingerprint,
@@ -1008,7 +1011,7 @@ class CloudflareD1AuthStore
           credential: credential,
         );
       }
-    } catch (_) {
+    } on Object {
       if (!await _hasUsernameRegistrationConflict(command)) rethrow;
     }
     return const AuthUsernameMutationResult(
@@ -1048,10 +1051,10 @@ class CloudflareD1AuthStore
       command.expectedUsername,
       command.username,
     ]);
-    const available = '''
-      COALESCE(json_extract(payload, '\$.attributes.disabled'), 0) <> 1
-      AND COALESCE(json_extract(payload, '\$.attributes.accountDisabled'), 0) <> 1
-      AND json_extract(payload, '\$.attributes.deletedAt') IS NULL''';
+    const available = r'''
+      COALESCE(json_extract(payload, '$.attributes.disabled'), 0) <> 1
+      AND COALESCE(json_extract(payload, '$.attributes.accountDisabled'), 0) <> 1
+      AND json_extract(payload, '$.attributes.deletedAt') IS NULL''';
     try {
       final results = await _sql.batch([
         _database
@@ -1143,7 +1146,7 @@ class CloudflareD1AuthStore
           AuthUsernameMutationStatus.changed,
         );
       }
-    } catch (_) {
+    } on Object {
       final replay = await _readUsernameChangeResult(
         command,
         AuthUsernameMutationStatus.unchanged,
@@ -1305,10 +1308,10 @@ class CloudflareD1AuthStore
       credentialId,
       credential.identifier,
     ]);
-    const available = '''
-      COALESCE(json_extract(payload, '\$.attributes.disabled'), 0) <> 1
-      AND COALESCE(json_extract(payload, '\$.attributes.accountDisabled'), 0) <> 1
-      AND json_extract(payload, '\$.attributes.deletedAt') IS NULL''';
+    const available = r'''
+      COALESCE(json_extract(payload, '$.attributes.disabled'), 0) <> 1
+      AND COALESCE(json_extract(payload, '$.attributes.accountDisabled'), 0) <> 1
+      AND json_extract(payload, '$.attributes.deletedAt') IS NULL''';
     final guard = clauses.join(' OR ');
     final results = await _sql.batch([
       _database
@@ -1745,9 +1748,8 @@ class CloudflareD1AuthStore
         AuthEmailOtpUserTransitionStatus.userUnavailable,
       );
     }
-    final inserted = verifiedCandidate != null
-        ? (results[2].meta?.changes ?? 0) == 1
-        : false;
+    final inserted =
+        verifiedCandidate != null && (results[2].meta?.changes ?? 0) == 1;
     return AuthEmailOtpUserTransitionResult(
       AuthEmailOtpUserTransitionStatus.applied,
       user: user,
@@ -1897,6 +1899,8 @@ final class CloudflareD1UserDeletionCoordinator
        _clock = clock;
 
   final _D1 _sql;
+
+  /// Schema used to resolve the tables managed by this coordinator.
   final CloudflareD1AuthSchema schema;
   final DateTime Function() _clock;
   List<AuthUserDeletionPlanContributor> _contributors = const [];
@@ -2271,9 +2275,7 @@ final class _D1 {
     Iterable<CloudflareD1PreparedStatement> statements,
   ) async {
     final results = await database.batch<Object?>(statements);
-    for (final result in results) {
-      _check(result);
-    }
+    results.forEach(_check);
     return results;
   }
 
@@ -2284,9 +2286,7 @@ final class _D1 {
       statements,
       decode: (row) => row,
     );
-    for (final result in results) {
-      _check(result);
-    }
+    results.forEach(_check);
     return results;
   }
 
@@ -2353,7 +2353,7 @@ final class CloudflareD1WebAuthnChallengeStore
             _date(challenge.expiresAt),
             maxRecords,
             userId,
-            userId == null ? null : hashOpaqueToken(userId),
+            if (userId == null) null else hashOpaqueToken(userId),
           ]),
     ]);
     if ((results[1].meta?.changes ?? 0) != 1) {
@@ -2506,7 +2506,7 @@ final class CloudflareD1WebAuthnAuthenticatorStore
     if (expectedCounter < 0 ||
         newCounter < expectedCounter ||
         newCounter > _maximumWebAuthnCounter) {
-      return Future.value(null);
+      return Future.value();
     }
     final timestamp = _date(lastUsedAt);
     return _sql.first(
@@ -2535,15 +2535,17 @@ final class CloudflareD1WebAuthnAuthenticatorStore
   /// Deletes one passkey belonging to [userId].
   @override
   Future<bool> deleteForUser(String userId, String credentialId) async {
-    final result = await _sql
-        .run('DELETE FROM $table WHERE user_id = ? AND credential_id = ?', [
-          _d1WebAuthnComponent(userId, 'userId', 512),
-          _d1WebAuthnComponent(
-            credentialId,
-            'credentialId',
-            _webAuthnCredentialIdMaxLength,
-          ),
-        ]);
+    final result = await _sql.run(
+      'DELETE FROM $table WHERE user_id = ? AND credential_id = ?',
+      [
+        _d1WebAuthnComponent(userId, 'userId', 512),
+        _d1WebAuthnComponent(
+          credentialId,
+          'credentialId',
+          _webAuthnCredentialIdMaxLength,
+        ),
+      ],
+    );
     return (result.meta?.changes ?? 0) == 1;
   }
 
@@ -3131,7 +3133,7 @@ final class CloudflareD1OAuthClientStore
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
         _oauthClientValues(client),
       );
-    } catch (_) {
+    } on Object {
       throw StateError('D1 OAuth client creation failed.');
     }
     return client;
@@ -3211,6 +3213,8 @@ final class CloudflareD1OAuthAuthorizationCodeStore
 
   /// Deletion domain shared with the root auth store.
   final CloudflareD1UserDeletionDomain domain;
+
+  /// Clock used to timestamp authorization-code operations.
   final DateTime Function() clock;
 
   /// The table name used for authorization codes.
@@ -3229,7 +3233,7 @@ final class CloudflareD1OAuthAuthorizationCodeStore
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
         _oauthAuthorizationCodeValues(code),
       );
-    } catch (_) {
+    } on Object {
       throw StateError('D1 OAuth authorization code creation failed.');
     }
     return code;
@@ -3304,6 +3308,8 @@ final class CloudflareD1OAuthAccessTokenStore implements OAuthAccessTokenStore {
 
   /// Deletion domain shared with the root auth store.
   final CloudflareD1UserDeletionDomain domain;
+
+  /// Clock used to timestamp access-token operations.
   final DateTime Function() clock;
 
   /// The table name used for access and refresh tokens.
@@ -3322,7 +3328,7 @@ final class CloudflareD1OAuthAccessTokenStore implements OAuthAccessTokenStore {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
         _oauthAccessTokenValues(token),
       );
-    } catch (_) {
+    } on Object {
       throw StateError('D1 OAuth access token creation failed.');
     }
   }
@@ -3330,14 +3336,14 @@ final class CloudflareD1OAuthAccessTokenStore implements OAuthAccessTokenStore {
   /// Finds an access token by hashing [token] before lookup.
   @override
   Future<OAuthAccessToken?> findByToken(String token) {
-    if (token.trim().isEmpty) return Future.value(null);
+    if (token.trim().isEmpty) return Future.value();
     return _findByDigest('token_hash', hashOpaqueToken(token));
   }
 
   /// Finds an access token by hashing [refreshToken] before lookup.
   @override
   Future<OAuthAccessToken?> findByRefreshToken(String refreshToken) {
-    if (refreshToken.trim().isEmpty) return Future.value(null);
+    if (refreshToken.trim().isEmpty) return Future.value();
     return _findByDigest('refresh_token_hash', hashOpaqueToken(refreshToken));
   }
 
@@ -3366,7 +3372,8 @@ final class CloudflareD1OAuthAccessTokenStore implements OAuthAccessTokenStore {
     }
     final now = _date(clock().toUtc());
     final expectedUses = replacement.refreshTokenUses - 1;
-    final predicate = '''token_hash = ? AND refresh_token_hash = ?
+    const predicate = '''
+token_hash = ? AND refresh_token_hash = ?
       AND (refresh_token_expires_at IS NULL OR refresh_token_expires_at > ?)
       AND refresh_token_uses = ? AND client_id = ? AND user_id = ?
       AND (? IS NULL OR (? > 0 AND refresh_token_uses < ?))''';
@@ -3402,7 +3409,7 @@ final class CloudflareD1OAuthAccessTokenStore implements OAuthAccessTokenStore {
         return null;
       }
       return _decodeOAuthAccessToken(results.first.results.single);
-    } catch (_) {
+    } on Object {
       throw StateError('D1 OAuth refresh-token rotation failed atomically.');
     }
   }
@@ -3601,7 +3608,7 @@ final class CloudflareD1OAuthAuthorizationCodeExchangeStore
       if (inserted != 0 || deleted != 0) {
         throw StateError('D1 OAuth exchange affected inconsistent rows.');
       }
-    } catch (error) {
+    } on Object catch (error) {
       if (error is StateError &&
           error.message == 'D1 OAuth exchange affected inconsistent rows.') {
         rethrow;
@@ -3733,7 +3740,7 @@ final class CloudflareD1ScimConnectionStore
           connection.createdAt,
         ),
       ]);
-    } catch (_) {
+    } on Object {
       final committed = await _readReplay(
         connection.binding,
         operation,
@@ -3766,7 +3773,7 @@ final class CloudflareD1ScimConnectionStore
   Future<AuthScimConnectionPage> listConnections(
     AuthScimConnectionCatalogQuery query,
   ) async {
-    final predicate = 'tenant_id = ? AND organization_id = ?';
+    const predicate = 'tenant_id = ? AND organization_id = ?';
     final values = [query.binding.tenantId, query.binding.organizationId];
     final results = await _sql.batchRows([
       _sql.database
@@ -3782,7 +3789,7 @@ final class CloudflareD1ScimConnectionStore
           )
           .bind([...values, query.limit, query.offset]),
     ]);
-    final total = (results.first.results.single['total'] as num).toInt();
+    final total = (results.first.results.single['total']! as num).toInt();
     return AuthScimConnectionPage(
       items: results.last.results
           .map(_decodeScimConnection)
@@ -3985,7 +3992,7 @@ final class CloudflareD1ScimConnectionStore
           credential.createdAt,
         ),
       ]);
-    } catch (_) {
+    } on Object {
       final committed = await _readReplay(
         transaction.binding,
         operation,
@@ -4137,7 +4144,7 @@ final class CloudflareD1ScimConnectionStore
         throw StateError('D1 managed SCIM rotation changed partial state.');
       }
       return null;
-    } catch (_) {
+    } on Object {
       final committed = await _readReplay(
         binding,
         operation,
@@ -4224,7 +4231,7 @@ final class CloudflareD1ScimConnectionStore
           )
           .bind([connection.id, query.limit, query.offset]),
     ]);
-    final total = (results.first.results.single['total'] as num).toInt();
+    final total = (results.first.results.single['total']! as num).toInt();
     final current = now.toUtc();
     return AuthScimCredentialPage(
       items: results.last.results
@@ -4249,7 +4256,8 @@ final class CloudflareD1ScimConnectionStore
     final normalized = digest.trim();
     if (!RegExp(r'^[A-Za-z0-9_-]{43,128}$').hasMatch(normalized)) return null;
     final current = now.toUtc();
-    final predicate = '''credential.secret_digest = ?
+    const predicate = '''
+credential.secret_digest = ?
       AND credential.revoked_at IS NULL
       AND (credential.expires_at IS NULL OR credential.expires_at > ?)
       AND connection.disabled_at IS NULL
@@ -4623,7 +4631,7 @@ final class _D1Credentials
         credential.identifier.trim().toLowerCase(),
         credential.passwordHash,
         _date(credential.updatedAt),
-        credential.enabled ? 1 : 0,
+        if (credential.enabled) 1 else 0,
         credential.id,
         credential.userId,
       ],
@@ -4942,7 +4950,7 @@ final class _D1JwtVersions implements AuthJwtVersionStore {
     return await sql.first<int>(
           'SELECT version FROM $table WHERE user_id = ?',
           [id],
-          (row) => (row['version'] as num).toInt(),
+          (row) => (row['version']! as num).toInt(),
         ) ??
         0;
   }
@@ -4961,7 +4969,7 @@ final class _D1JwtVersions implements AuthJwtVersionStore {
     ]);
     final rows = results.last.results;
     if (rows.isEmpty) throw StateError('D1 JWT rotation returned no row.');
-    return (rows.single['version'] as num).toInt();
+    return (rows.single['version']! as num).toInt();
   }
 }
 
@@ -5412,8 +5420,8 @@ final class _D1DeviceAuthorizations
           authorization.clientId == client &&
           !authorization.isExpired(now: current) &&
           authorization.issuanceLeaseDigest != null &&
-          authorization.issuanceLeaseExpiresAt?.toUtc().isAfter(current) ==
-              true) {
+          (authorization.issuanceLeaseExpiresAt?.toUtc().isAfter(current) ??
+              false)) {
         return const AuthDeviceAuthorizationIssuanceLeaseResult(
           AuthDeviceAuthorizationIssuanceLeaseStatus.busy,
         );
@@ -5502,6 +5510,8 @@ final class CloudflareD1PhoneNumberStore implements AuthPhoneNumberBackend {
 
   /// Schema used to resolve phone-authentication tables.
   final CloudflareD1AuthSchema schema;
+
+  /// Clock used to timestamp phone-authentication operations.
   final DateTime Function() clock;
 
   /// Maximum number of active phone verifications retained.
@@ -5961,7 +5971,7 @@ final class _D1EmailOtps
     final rows = results.last.results;
     final row = rows.isEmpty ? null : _decodeEmailOtp(rows.single);
     if (row == null || row.consumed) {
-      if ((results.first.meta?.changes ?? 0) == 1 && row?.consumed == true) {
+      if ((results.first.meta?.changes ?? 0) == 1 && (row?.consumed ?? false)) {
         return AuthEmailOtpVerificationResult(
           AuthEmailOtpVerificationStatus.verified,
           row,
@@ -6036,7 +6046,7 @@ List<Object?> _oauthClientValues(OAuthClient client) => [
   client.tokenEndpointAuthMethod,
   _nullableDate(client.createdAt),
   _nullableDate(client.updatedAt),
-  client.enabled ? 1 : 0,
+  if (client.enabled) 1 else 0,
 ];
 
 OAuthClient _decodeOAuthClient(Map<String, Object?> row) => OAuthClient(
@@ -6050,7 +6060,7 @@ OAuthClient _decodeOAuthClient(Map<String, Object?> row) => OAuthClient(
   tokenEndpointAuthMethod: row['token_endpoint_auth_method']! as String,
   createdAt: _optionalDate(row['created_at']),
   updatedAt: _optionalDate(row['updated_at']),
-  enabled: (row['enabled'] as num).toInt() == 1,
+  enabled: (row['enabled']! as num).toInt() == 1,
 );
 
 void _validateD1OAuthAuthorizationCode(OAuthAuthorizationCode code) {
@@ -6115,7 +6125,7 @@ void _validateD1OAuthAccessToken(OAuthAccessToken token) {
   _required(token.clientId, 'token.clientId');
   _required(token.userId, 'token.userId');
   _required(token.scope, 'token.scope');
-  if (token.refreshTokenHash?.trim().isEmpty == true ||
+  if ((token.refreshTokenHash?.trim().isEmpty ?? false) ||
       token.refreshTokenHash == null && token.refreshTokenExpiresAt != null ||
       token.refreshTokenUses < 0) {
     throw ArgumentError('OAuth refresh-token state is invalid.');
@@ -6155,7 +6165,7 @@ OAuthAccessToken _decodeOAuthAccessToken(Map<String, Object?> row) =>
       expiresAt: DateTime.parse(row['expires_at']! as String),
       refreshTokenHash: row['refresh_token_hash']?.toString(),
       refreshTokenExpiresAt: _optionalDate(row['refresh_token_expires_at']),
-      refreshTokenUses: (row['refresh_token_uses'] as num).toInt(),
+      refreshTokenUses: (row['refresh_token_uses']! as num).toInt(),
       issuedAt: _optionalDate(row['issued_at']),
     );
 
@@ -6166,7 +6176,8 @@ OAuthAccessToken _decodeOAuthAccessToken(Map<String, Object?> row) =>
       ? null
       : _s256Challenge(request.codeVerifier!);
   return (
-    sql: '''client_id = ? AND redirect_uri = ? AND expires_at > ? AND
+    sql: '''
+client_id = ? AND redirect_uri = ? AND expires_at > ? AND
       (code_challenge IS NULL OR
        (? IS NOT NULL AND code_challenge_method = 'S256' AND
         code_challenge = ?))''',
@@ -6668,8 +6679,8 @@ String _date(DateTime value) => value.toUtc().toIso8601String();
 
 String _usableUserSql(String payloadColumn) =>
     "COALESCE(json_extract($payloadColumn, '\$.attributes.disabled'), 0) != 1 "
-    "AND COALESCE(json_extract($payloadColumn, "
-    "'\$.attributes.accountDisabled'), 0) != 1 "
+    'AND COALESCE(json_extract($payloadColumn, '
+    r"'$.attributes.accountDisabled'), 0) != 1 "
     "AND json_extract($payloadColumn, '\$.attributes.deletedAt') IS NULL";
 
 AuthUser _verifiedEmailUser(AuthUser user) => AuthUser(
@@ -6754,7 +6765,7 @@ List<Object?> _credentialValues(AuthPasswordCredential value) => [
   value.passwordHash,
   _date(value.createdAt),
   _date(value.updatedAt),
-  value.enabled ? 1 : 0,
+  if (value.enabled) 1 else 0,
 ];
 
 AuthPasswordCredential _decodeCredential(Map<String, Object?> row) =>
@@ -6765,7 +6776,7 @@ AuthPasswordCredential _decodeCredential(Map<String, Object?> row) =>
       passwordHash: row['password_hash']! as String,
       createdAt: DateTime.parse(row['created_at']! as String),
       updatedAt: DateTime.parse(row['updated_at']! as String),
-      enabled: (row['enabled'] as num).toInt() == 1,
+      enabled: (row['enabled']! as num).toInt() == 1,
     );
 
 List<Object?> _sessionValues(AuthSessionRecord value) => [
@@ -6775,7 +6786,7 @@ List<Object?> _sessionValues(AuthSessionRecord value) => [
   _date(value.createdAt),
   _date(value.expiresAt),
   _date(value.lastUsedAt),
-  value.revokedAt == null ? null : _date(value.revokedAt!),
+  if (value.revokedAt == null) null else _date(value.revokedAt!),
   jsonEncode(value.toStorageJson()),
 ];
 
@@ -6872,8 +6883,8 @@ AuthPhoneNumberVerification _decodePhoneVerification(
   codeDigest: row['code_digest']! as String,
   createdAt: DateTime.parse(row['created_at']! as String),
   expiresAt: DateTime.parse(row['expires_at']! as String),
-  maxAttempts: (row['max_attempts'] as num).toInt(),
-  attempts: (row['attempts'] as num).toInt(),
+  maxAttempts: (row['max_attempts']! as num).toInt(),
+  attempts: (row['attempts']! as num).toInt(),
   lockedAt: _optionalDate(row['locked_at']),
   consumedAt: _optionalDate(row['consumed_at']),
 );

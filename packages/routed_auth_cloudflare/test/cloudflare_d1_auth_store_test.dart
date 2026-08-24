@@ -1,3 +1,7 @@
+// The SQL fixtures intentionally preserve their multiline layout so they can
+// be compared directly with the migration statements.
+// ignore_for_file: leading_newlines_in_multiline_strings
+
 import 'dart:convert';
 
 import 'package:property_testing/property_testing.dart';
@@ -142,7 +146,8 @@ void main() {
           candidate.runes.any((rune) => rune < 0x20 || rune == 0x7f),
           isFalse,
         );
-      } on ArgumentError {
+      } on Object catch (error) {
+        expect(error, isA<ArgumentError>());
         expect(
           candidate.isEmpty ||
               candidate != candidate.trim() ||
@@ -505,7 +510,8 @@ void main() {
           database.prepare(statement),
         database
             .prepare(
-              'INSERT INTO $migrationsTable (version, applied_at) VALUES (?, ?)',
+              'INSERT INTO $migrationsTable (version, applied_at) '
+              'VALUES (?, ?)',
             )
             .bind([migration.version, DateTime.utc(2026).toIso8601String()]),
       ]);
@@ -536,7 +542,7 @@ void main() {
           authorization.expiresAt.toIso8601String(),
           jsonEncode(authorization.toStorageJson()),
         ])
-        .run();
+        .run<Object?>();
 
     await schema.migrate(database);
     final store = CloudflareD1AuthStore(
@@ -592,11 +598,9 @@ void main() {
     final database = FakeCloudflareD1Database();
     addTearDown(database.close);
     final store = await CloudflareD1AuthStore.open(database);
-    store.bindUserDeletionPlanContributors(const []);
-    final coordinator =
-        store.userDeletionCoordinator
-            as AuthHistoricalUserDeletionNamespaceCoordinator;
-    coordinator.bindHistoricalUserDeletionNamespaces(const ['legacy_device']);
+    ((store..bindUserDeletionPlanContributors(const [])).userDeletionCoordinator
+            as AuthHistoricalUserDeletionNamespaceCoordinator)
+        .bindHistoricalUserDeletionNamespaces(const ['legacy_device']);
 
     await expectLater(
       store.userDeletionCoordinator.deleteUser('missing-user'),
@@ -618,7 +622,7 @@ void main() {
     await database
         .prepare('INSERT INTO plugin_data (user_id, value) VALUES (?, ?)')
         .bind(['delete-me', 'retained-on-fault'])
-        .run();
+        .run<Object?>();
     await store.verificationTokens.save(
       AuthVerificationToken(
         identifier: 'account_deletion:delete-me',
@@ -706,7 +710,6 @@ void main() {
     const schema = CloudflareD1AuthSchema();
     final store = await CloudflareD1AuthStore.open(
       database,
-      schema: schema,
       clock: () => now,
     );
     final user = AuthUser(id: 'user-1', email: 'user@example.com');
@@ -776,7 +779,6 @@ void main() {
     const schema = CloudflareD1AuthSchema();
     final store = await CloudflareD1AuthStore.open(
       database,
-      schema: schema,
       clock: () => now,
     );
     final user = AuthUser(id: 'removed-plugin-user', email: 'old@example.com');
@@ -865,7 +867,7 @@ void main() {
     final database = FakeCloudflareD1Database();
     addTearDown(database.close);
     const schema = CloudflareD1AuthSchema();
-    final store = await CloudflareD1AuthStore.open(database, schema: schema);
+    final store = await CloudflareD1AuthStore.open(database);
     const rawToken = 'never-persist-this-value';
 
     await store.verificationTokens.save(
@@ -1168,7 +1170,8 @@ final class _D1DeletionContributor implements AuthUserDeletionPlanContributor {
         if (injectFault)
           CloudflareD1UserDeletionStatement(
             sql:
-                'DELETE FROM missing_plugin_data WHERE user_id = ? AND {{guard}}',
+                'DELETE FROM missing_plugin_data '
+                'WHERE user_id = ? AND {{guard}}',
             parameters: [user.id],
           ),
       ],

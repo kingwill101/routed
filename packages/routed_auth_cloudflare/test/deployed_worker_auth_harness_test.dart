@@ -39,7 +39,7 @@ void main() {
       Object? failure;
       try {
         validateDeployedWorkerToken(secret);
-      } catch (error) {
+      } on Object catch (error) {
         failure = error;
       }
       expect(failure, isNotNull);
@@ -53,7 +53,7 @@ void main() {
         validateDeployedWorkerOrigin(
           Uri.parse('https://user:$password@example.workers.dev'),
         );
-      } catch (error) {
+      } on Object catch (error) {
         failure = error;
       }
       expect(failure, isNotNull);
@@ -160,13 +160,12 @@ void main() {
         errorOutput: StringBuffer(),
         runnerFactory: (config) {
           captured = config;
-          runner = _FakeRunner(
+          return runner = _FakeRunner(
             DeployedWorkerAuthConformanceReport(<DeployedWorkerAuthSuiteResult>[
               for (final suite in config.suites)
                 DeployedWorkerAuthSuiteResult(suite: suite, passed: true),
             ]),
           );
-          return runner;
         },
       );
 
@@ -186,7 +185,7 @@ void main() {
       final source = File(
         'tool/src/deployed_worker_auth_harness.dart',
       ).readAsStringSync();
-      expect(source, contains('request.persistentConnection = false;'));
+      expect(source, contains('..persistentConnection = false'));
     });
 
     test('reports only stable failure identifiers', () async {
@@ -269,7 +268,7 @@ void main() {
     await engine.initialize();
     addTearDown(engine.close);
     final origin = Uri.parse('https://auth-check.example.workers.dev');
-    final environment = _FakeEnvironment(const <String, Object?>{
+    const environment = _FakeEnvironment(<String, Object?>{
       'ROUTED_AUTH_CONFORMANCE_TOKEN': 'dedicated-test-token',
     });
 

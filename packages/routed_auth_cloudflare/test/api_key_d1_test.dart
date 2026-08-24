@@ -32,7 +32,6 @@ void main() {
       const schema = CloudflareD1AuthSchema();
       final store = await CloudflareD1AuthStore.open(
         database,
-        schema: schema,
         clock: () => _now,
       );
       final plugin = AuthApiKeyPlugin<Object>(
@@ -87,7 +86,7 @@ void main() {
         hasLength(1),
       );
       expect(
-        database.select("SELECT name FROM sqlite_master WHERE name = ?", [
+        database.select('SELECT name FROM sqlite_master WHERE name = ?', [
           schema.table('magic_links'),
         ]),
         hasLength(1),
@@ -102,7 +101,7 @@ void main() {
       await schema.dropAll(database);
 
       expect(
-        database.select("SELECT name FROM sqlite_master WHERE name = ?", [
+        database.select('SELECT name FROM sqlite_master WHERE name = ?', [
           schema.table('api_keys'),
         ]),
         isEmpty,
@@ -154,16 +153,18 @@ void main() {
         database,
         clock: () => _now,
       );
-      final plugin = AuthApiKeyPlugin<Object>(
-        store: store.apiKeys,
-        clock: () => _now,
-      );
-      plugin.configure(
-        AuthServerPluginContext<Object>(
-          store: store,
-          authenticationMethods: AuthAuthenticationMethodService(store: store),
-        ),
-      );
+      final plugin =
+          AuthApiKeyPlugin<Object>(
+            store: store.apiKeys,
+            clock: () => _now,
+          )..configure(
+            AuthServerPluginContext<Object>(
+              store: store,
+              authenticationMethods: AuthAuthenticationMethodService(
+                store: store,
+              ),
+            ),
+          );
       store.bindUserDeletionPlanContributors([plugin]);
       await store.users.create(AuthUser(id: 'user-1'));
       final issued = await plugin.issue(userId: 'user-1', name: 'Worker');
@@ -358,7 +359,8 @@ void main() {
             isFalse,
           );
           await store.apiKeys.deleteForUser(candidate);
-        } on ArgumentError {
+        } on Object catch (error) {
+          expect(error, isA<ArgumentError>());
           expect(
             candidate.isEmpty ||
                 candidate != candidate.trim() ||
@@ -407,8 +409,10 @@ void main() {
                 case 0:
                   try {
                     await store.apiKeys.create(_record('state-${serial++}'));
-                  } on StateError {
-                    // A full store rejects creation without exceeding its bound.
+                  } on Object catch (error) {
+                    expect(error, isA<StateError>());
+                    // A full store rejects creation without exceeding its
+                    // bound.
                   }
                 case 1:
                   if (active.isNotEmpty) {
@@ -456,8 +460,10 @@ void main() {
                         expiresAt: _now.subtract(const Duration(seconds: 1)),
                       ),
                     );
-                  } on StateError {
-                    // Capacity rejection is valid and must leave the bound intact.
+                  } on Object catch (error) {
+                    expect(error, isA<StateError>());
+                    // Capacity rejection is valid and must leave the bound
+                    // intact.
                   }
               }
 
@@ -490,7 +496,7 @@ void main() {
   });
 }
 
-final DateTime _now = DateTime.utc(2030, 1, 1);
+final DateTime _now = DateTime.utc(2030);
 
 AuthApiKeyRecord _record(
   String suffix, {

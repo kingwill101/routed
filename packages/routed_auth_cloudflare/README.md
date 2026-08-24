@@ -26,7 +26,7 @@ YAML configuration and application code does not import `package:web` or use
 
 For a complete Worker entrypoint, Wrangler configuration, local SQLite-backed
 smoke test, and curl walkthrough, see the runnable
-[Cloudflare D1 auth example](../../examples/cloudflare_auth).
+[Cloudflare D1 auth example](https://github.com/kingwill101/routed/tree/master/examples/cloudflare_auth).
 
 When an external authentication plugin is removed from a deployment, preserve
 its namespace in the durable safety inventory until its records have a
@@ -247,7 +247,7 @@ and fails closed for mixed or unsupported authentication-method stores.
 
 The local tests also run `verifyAuthUsernameStoreConformance` against that
 deterministic public D1 fake. The separate
-[live harness](test/live/README.md) is intentionally not part of the default
+[live harness](https://github.com/kingwill101/routed/blob/master/packages/routed_auth_cloudflare/test/live/README.md) is intentionally not part of the default
 test command. On 2026-08-21, a disposable live D1 run passed the core,
 anonymous, managed-SCIM, phone v11, API-key v9, WebAuthn v10, username,
 OAuth-exchange, rollback, and prefix-isolation cases. Fault-injection cases
@@ -304,7 +304,7 @@ built-in `CacheRateLimiterBackend`; this package does not silently turn the D1
 auth store into a rate-limit store.
 
 The independent
-[deployed Worker auth harness](tool/deployed_worker/README.md) verifies Routed's
+[deployed Worker auth harness](https://github.com/kingwill101/routed/blob/master/packages/routed_auth_cloudflare/tool/deployed_worker/README.md) verifies Routed's
 session, JWT, plugin, external-provider, and browser-shaped WebAuthn contracts
 inside an already-deployed Cloudflare Worker. It is also opt-in and does not
 create, update, or delete Cloudflare resources.

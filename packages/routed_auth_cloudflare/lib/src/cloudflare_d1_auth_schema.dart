@@ -1,3 +1,10 @@
+// SQL migrations intentionally use adjacent fragments and multiline strings
+// without a leading newline so the generated statements remain readable and
+// preserve the exact SQL sent to D1.
+// ignore_for_file: leading_newlines_in_multiline_strings
+// ignore_for_file: no_adjacent_strings_in_list
+// ignore_for_file: lines_longer_than_80_chars
+
 import 'package:routed_node/cloudflare.dart';
 
 /// Describes one Cloudflare D1 auth schema migration.
@@ -15,7 +22,7 @@ final class CloudflareD1AuthMigration {
   final List<String> statements;
 }
 
-/// Typed schema configuration for [CloudflareD1AuthStore].
+/// Typed schema configuration for the D1 auth store.
 final class CloudflareD1AuthSchema {
   /// Creates a schema that prefixes its tables with [tablePrefix].
   const CloudflareD1AuthSchema({this.tablePrefix = 'routed_auth'});
@@ -530,7 +537,7 @@ final class CloudflareD1AuthSchema {
             'D1 auth migration ${migration.version} failed: ${failed.error}',
           );
           lastStack = StackTrace.current;
-        } catch (error, stackTrace) {
+        } on Object catch (error, stackTrace) {
           lastError = error;
           lastStack = stackTrace;
         }
@@ -543,7 +550,7 @@ final class CloudflareD1AuthSchema {
         try {
           final applied = await _readAppliedVersions(database, migrationTable);
           if (applied.contains(migration.version)) break;
-        } catch (error, stackTrace) {
+        } on Object catch (error, stackTrace) {
           lastError = error;
           lastStack = stackTrace;
         }
@@ -567,7 +574,7 @@ final class CloudflareD1AuthSchema {
   ) async {
     final result = await database
         .prepare('SELECT version FROM $migrationTable')
-        .all<int>(decode: (row) => (row['version'] as num).toInt());
+        .all<int>(decode: (row) => (row['version']! as num).toInt());
     if (!result.success) {
       throw StateError('Reading D1 auth migrations failed: ${result.error}');
     }

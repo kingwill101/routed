@@ -49,19 +49,19 @@ void main() {
           ),
         );
         expect(
-          database.select("SELECT name FROM sqlite_master WHERE name = ?", [
+          database.select('SELECT name FROM sqlite_master WHERE name = ?', [
             schema.table('phone_verifications'),
           ]),
           hasLength(1),
         );
         expect(
-          database.select("SELECT name FROM sqlite_master WHERE name = ?", [
+          database.select('SELECT name FROM sqlite_master WHERE name = ?', [
             schema.table('phone_identities'),
           ]),
           hasLength(1),
         );
         expect(
-          database.select("SELECT name FROM sqlite_master WHERE name = ?", [
+          database.select('SELECT name FROM sqlite_master WHERE name = ?', [
             schema.table('phone_issue_receipts'),
           ]),
           hasLength(1),
@@ -70,7 +70,7 @@ void main() {
         await schema.dropAll(database);
 
         expect(
-          database.select("SELECT name FROM sqlite_master WHERE name LIKE ?", [
+          database.select('SELECT name FROM sqlite_master WHERE name LIKE ?', [
             '${schema.tablePrefix}_%',
           ]),
           isEmpty,
@@ -265,7 +265,7 @@ final class _D1PhoneFaults
   }
 }
 
-final _now = DateTime.utc(2030, 1, 1);
+final _now = DateTime.utc(2030);
 
 AuthPhoneNumberIssueCodeCommand _issue({
   String id = 'phone-issue',

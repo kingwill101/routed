@@ -27,7 +27,7 @@ void main() {
   });
 
   test('D1 magic-link consume rolls back the whole guarded batch', () async {
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     for (var faultIndex = 0; faultIndex < 6; faultIndex++) {
       final database = FakeCloudflareD1Database();
       addTearDown(database.close);
@@ -60,7 +60,7 @@ void main() {
   });
 
   test('D1 OTP sign-in rolls back attempt, consume, and user writes', () async {
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     for (var faultIndex = 0; faultIndex < 6; faultIndex++) {
       final database = FakeCloudflareD1Database();
       addTearDown(database.close);
@@ -91,11 +91,10 @@ void main() {
   test('D1 persistence contains digests but no deliverable material', () async {
     final database = FakeCloudflareD1Database();
     addTearDown(database.close);
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     const schema = CloudflareD1AuthSchema();
     final store = await CloudflareD1AuthStore.open(
       database,
-      schema: schema,
       clock: () => now,
     );
     await store.issueMagicLink(

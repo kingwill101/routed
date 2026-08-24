@@ -14,80 +14,83 @@ const _maximumControlBodyBytes = 1024;
 /// The engine calls only deterministic, in-memory Routed auth fixtures. It
 /// does not use Cloudflare control-plane APIs or mutate account resources.
 Engine createDeployedWorkerAuthConformanceEngine() {
-  final engine = Engine(providers: Engine.defaultProviders);
-  engine.get('/__routed_auth_conformance/health', (context) async {
-    if (!_isAuthorized(context)) {
+  final engine = Engine(providers: Engine.defaultProviders)
+    ..get('/__routed_auth_conformance/health', (context) async {
+      if (!_isAuthorized(context)) {
+        return context.json(<String, Object?>{
+          'error': 'unauthorized',
+        }, statusCode: 401);
+      }
       return context.json(<String, Object?>{
-        'error': 'unauthorized',
-      }, statusCode: 401);
-    }
-    return context.json(<String, Object?>{
-      'protocolVersion': deployedWorkerAuthProtocolVersion,
-      'suites': <String>[
-        for (final suite in DeployedWorkerAuthSuite.values) suite.id,
-      ],
-    });
-  });
-  engine.post('/__routed_auth_conformance/run', (context) async {
-    if (!_isAuthorized(context)) {
-      return context.json(<String, Object?>{
-        'error': 'unauthorized',
-      }, statusCode: 401);
-    }
-    if (context.contentLength > _maximumControlBodyBytes) {
-      return context.json(<String, Object?>{
-        'error': 'invalid_request',
-      }, statusCode: 400);
-    }
-
-    Object? decoded;
-    try {
-      final body = await context.body();
-      if (utf8.encode(body).length > _maximumControlBodyBytes) {
+        'protocolVersion': deployedWorkerAuthProtocolVersion,
+        'suites': <String>[
+          for (final suite in DeployedWorkerAuthSuite.values) suite.id,
+        ],
+      });
+    })
+    ..post('/__routed_auth_conformance/run', (context) async {
+      if (!_isAuthorized(context)) {
+        return context.json(<String, Object?>{
+          'error': 'unauthorized',
+        }, statusCode: 401);
+      }
+      if (context.contentLength > _maximumControlBodyBytes) {
         return context.json(<String, Object?>{
           'error': 'invalid_request',
         }, statusCode: 400);
       }
-      decoded = jsonDecode(body);
-    } on FormatException {
-      return context.json(<String, Object?>{
-        'error': 'invalid_request',
-      }, statusCode: 400);
-    }
-    if (decoded is! Map || decoded['suite'] is! String) {
-      return context.json(<String, Object?>{
-        'error': 'invalid_request',
-      }, statusCode: 400);
-    }
 
-    DeployedWorkerAuthSuite suite;
-    try {
-      suite = DeployedWorkerAuthSuite.parse(decoded['suite'] as String);
-    } on FormatException {
-      return context.json(<String, Object?>{
-        'error': 'unknown_suite',
-      }, statusCode: 400);
-    }
+      Object? decoded;
+      try {
+        final body = await context.body();
+        if (utf8.encode(body).length > _maximumControlBodyBytes) {
+          return context.json(<String, Object?>{
+            'error': 'invalid_request',
+          }, statusCode: 400);
+        }
+        decoded = jsonDecode(body);
+      } on FormatException {
+        return context.json(<String, Object?>{
+          'error': 'invalid_request',
+        }, statusCode: 400);
+      }
+      if (decoded is! Map || decoded['suite'] is! String) {
+        return context.json(<String, Object?>{
+          'error': 'invalid_request',
+        }, statusCode: 400);
+      }
 
-    final origin = _originOf(context.requestedUri);
-    try {
-      await runDeployedWorkerAuthSuite(suite, origin);
-      return context.json(<String, Object?>{'suite': suite.id, 'passed': true});
-    } on AuthRuntimeConformanceFailure catch (error) {
-      return context.json(<String, Object?>{
-        'suite': suite.id,
-        'passed': false,
-        'caseId': _safeIdentifier(error.caseId),
-        'error': 'conformance_failed',
-      });
-    } catch (_) {
-      return context.json(<String, Object?>{
-        'suite': suite.id,
-        'passed': false,
-        'error': 'conformance_failed',
-      });
-    }
-  });
+      DeployedWorkerAuthSuite suite;
+      try {
+        suite = DeployedWorkerAuthSuite.parse(decoded['suite'] as String);
+      } on FormatException {
+        return context.json(<String, Object?>{
+          'error': 'unknown_suite',
+        }, statusCode: 400);
+      }
+
+      final origin = _originOf(context.requestedUri);
+      try {
+        await runDeployedWorkerAuthSuite(suite, origin);
+        return context.json(<String, Object?>{
+          'suite': suite.id,
+          'passed': true,
+        });
+      } on AuthRuntimeConformanceFailure catch (error) {
+        return context.json(<String, Object?>{
+          'suite': suite.id,
+          'passed': false,
+          'caseId': _safeIdentifier(error.caseId),
+          'error': 'conformance_failed',
+        });
+      } on Object {
+        return context.json(<String, Object?>{
+          'suite': suite.id,
+          'passed': false,
+          'error': 'conformance_failed',
+        });
+      }
+    });
   return engine;
 }
 
@@ -102,7 +105,7 @@ bool _isAuthorized(EngineContext context) {
     );
     if (presented == null || !_validToken(presented)) return false;
     return _constantTimeStringEquals(expected, presented);
-  } catch (_) {
+  } on Object {
     return false;
   }
 }

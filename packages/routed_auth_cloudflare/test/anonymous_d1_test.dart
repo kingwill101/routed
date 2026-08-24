@@ -63,7 +63,6 @@ void main() {
       const schema = CloudflareD1AuthSchema();
       final store = await CloudflareD1AuthStore.open(
         database,
-        schema: schema,
         anonymousMaxReceipts: 2,
         clock: () => now,
       );
@@ -112,7 +111,7 @@ void main() {
     final database = FakeCloudflareD1Database();
     addTearDown(database.close);
     const schema = CloudflareD1AuthSchema();
-    final store = await CloudflareD1AuthStore.open(database, schema: schema);
+    final store = await CloudflareD1AuthStore.open(database);
     _bindAnonymousPlugin(store);
     const userId = 'generic-hard-delete-anonymous';
     await store.createAnonymousAccount(
@@ -136,7 +135,6 @@ void main() {
     const schema = CloudflareD1AuthSchema();
     final store = await CloudflareD1AuthStore.open(
       database,
-      schema: schema,
       anonymousMaxReceipts: 2,
     );
     _bindAnonymousPlugin(store);
@@ -179,7 +177,7 @@ void main() {
       final database = FakeCloudflareD1Database();
       addTearDown(database.close);
       const schema = CloudflareD1AuthSchema();
-      final store = await CloudflareD1AuthStore.open(database, schema: schema);
+      final store = await CloudflareD1AuthStore.open(database);
       _bindAnonymousPlugin(store);
       final createCommitted = Completer<void>();
       final returnCreate = Completer<void>();
@@ -270,8 +268,8 @@ void main() {
     final database = FakeCloudflareD1Database();
     addTearDown(database.close);
     final store = CloudflareD1AuthStore(database);
-    final plugin = AnonymousPlugin<Object>();
-    plugin.configure(AuthServerPluginContext<Object>(store: store));
+    final plugin = AnonymousPlugin<Object>()
+      ..configure(AuthServerPluginContext<Object>(store: store));
     store.bindUserDeletionPlanContributors([plugin]);
 
     await expectLater(
@@ -286,8 +284,8 @@ void main() {
 }
 
 void _bindAnonymousPlugin(CloudflareD1AuthStore store) {
-  final plugin = AnonymousPlugin<Object>();
-  plugin.configure(AuthServerPluginContext<Object>(store: store));
+  final plugin = AnonymousPlugin<Object>()
+    ..configure(AuthServerPluginContext<Object>(store: store));
   store.bindUserDeletionPlanContributors([plugin]);
 }
 

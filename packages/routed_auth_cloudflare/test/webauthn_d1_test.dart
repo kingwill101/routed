@@ -46,13 +46,13 @@ void main() {
           ),
         );
         expect(
-          database.select("SELECT name FROM sqlite_master WHERE name = ?", [
+          database.select('SELECT name FROM sqlite_master WHERE name = ?', [
             schema.table('webauthn_challenges'),
           ]),
           hasLength(1),
         );
         expect(
-          database.select("SELECT name FROM sqlite_master WHERE name = ?", [
+          database.select('SELECT name FROM sqlite_master WHERE name = ?', [
             schema.table('webauthn_authenticators'),
           ]),
           hasLength(1),
@@ -61,7 +61,7 @@ void main() {
         await schema.dropAll(database);
 
         expect(
-          database.select("SELECT name FROM sqlite_master WHERE name LIKE ?", [
+          database.select('SELECT name FROM sqlite_master WHERE name LIKE ?', [
             '${schema.tablePrefix}_%',
           ]),
           isEmpty,
@@ -77,7 +77,6 @@ void main() {
         const schema = CloudflareD1AuthSchema();
         final store = await CloudflareD1AuthStore.open(
           database,
-          schema: schema,
           clock: () => _now,
         );
         const rawChallenge = 'one-time-browser-challenge';
@@ -513,7 +512,8 @@ void main() {
                 ),
                 isNotNull,
               );
-            } on ArgumentError {
+            } on Object catch (error) {
+              expect(error, isA<ArgumentError>());
               expect(
                 candidate.isEmpty ||
                     candidate != candidate.trim() ||
@@ -534,7 +534,7 @@ void main() {
   });
 }
 
-final DateTime _now = DateTime.utc(2030, 1, 1);
+final DateTime _now = DateTime.utc(2030);
 
 WebAuthnPlugin<Object> _plugin() => WebAuthnPlugin<Object>(
   provider: WebAuthnProvider(
