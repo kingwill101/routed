@@ -44,6 +44,12 @@ void main() {
   test('Engine.handleConnection accepts IoHttpConnection', () async {
     final engine = Engine(providers: Engine.defaultProviders);
     engine.get('/ping', (ctx) => ctx.string('pong'));
+    engine.get('/native', (ctx) {
+      final request = ctx.request;
+      // This deliberately checks native identity so request-size wrapping
+      // cannot make the request look like a portable request.
+      return ctx.string('${request.hasNativeHttpRequest}:${request.method}');
+    });
     await engine.initialize();
     addTearDown(engine.close);
 
@@ -64,6 +70,13 @@ void main() {
     final body = await response.transform(utf8.decoder).join();
     expect(response.statusCode, 200);
     expect(body, 'pong');
+
+    final nativeResponse = await client
+        .getUrl(Uri.parse('http://127.0.0.1:${server.port}/native'))
+        .then((r) => r.close());
+    final nativeBody = await nativeResponse.transform(utf8.decoder).join();
+    expect(nativeResponse.statusCode, 200);
+    expect(nativeBody, 'true:GET');
   });
 
   test('portableRequestFromIo maps method, uri, headers', () async {
@@ -74,12 +87,10 @@ void main() {
     final client = HttpClient();
     addTearDown(client.close);
     // ignore: unawaited_futures
-    client
-        .getUrl(Uri.parse('http://127.0.0.1:${server.port}/z?q=1'))
-        .then((r) {
-          r.headers.set('x-io', 'yes');
-          return r.close();
-        });
+    client.getUrl(Uri.parse('http://127.0.0.1:${server.port}/z?q=1')).then((r) {
+      r.headers.set('x-io', 'yes');
+      return r.close();
+    });
 
     final httpRequest = await seen;
     final portable = portableRequestFromIo(httpRequest);

@@ -387,14 +387,33 @@ final class AdapterHttpHeaders implements HttpHeaders {
 /// from adapter-backed shims.
 abstract interface class SyntheticHttpRequest {}
 
+/// Internal capability used by request wrappers to preserve whether the
+/// original request came from a portable adapter.
+abstract interface class SyntheticRequestCarrier {
+  /// Whether the wrapped request is synthetic rather than a native IO request.
+  bool get isSyntheticRequest;
+}
+
+/// Internal capability used to preserve a textual client address across the
+/// portable bridge without requiring `dart:io` socket types.
+abstract interface class PortableRemoteAddressCarrier {
+  /// Host-provided client address preserved without constructing an
+  /// `InternetAddress` on portable runtimes.
+  String? get portableRemoteAddress;
+}
+
 /// [HttpRequest] backed by a portable [RequestAdapter].
 final class AdapterHttpRequest extends Stream<Uint8List>
-    implements HttpRequest, SyntheticHttpRequest, HostContextCarrier {
+    implements
+        HttpRequest,
+        SyntheticHttpRequest,
+        SyntheticRequestCarrier,
+        PortableRemoteAddressCarrier,
+        HostContextCarrier {
   AdapterHttpRequest(this._adapter, this.response)
     : headers = AdapterHttpHeaders(_adapter.headers),
       requestedUri = _adapter.uri,
-      method = _adapter.method,
-      connectionInfo = _AdapterConnectionInfo.tryParse(_adapter.remoteAddress) {
+      method = _adapter.method {
     final cookieValues = headers[HttpHeaders.cookieHeader];
     if (cookieValues != null) {
       for (final header in cookieValues) {
@@ -426,6 +445,12 @@ final class AdapterHttpRequest extends Stream<Uint8List>
       : null;
 
   @override
+  String? get portableRemoteAddress => _adapter.remoteAddress;
+
+  @override
+  bool get isSyntheticRequest => true;
+
+  @override
   final String method;
 
   @override
@@ -453,7 +478,7 @@ final class AdapterHttpRequest extends Stream<Uint8List>
   String get protocolVersion => '1.1';
 
   @override
-  final HttpConnectionInfo? connectionInfo;
+  HttpConnectionInfo? get connectionInfo => null;
 
   @override
   final HttpResponse response;
@@ -621,40 +646,6 @@ final class AdapterHttpResponse implements HttpResponse {
       throw UnsupportedError(
         'detachSocket is not supported on portable adapter responses',
       );
-}
-
-final class _AdapterConnectionInfo implements HttpConnectionInfo {
-  _AdapterConnectionInfo._(this.remoteAddress) : remotePort = 0, localPort = 0;
-
-  /// Builds connection info when `dart:io` [InternetAddress] is available.
-  /// Returns null when the host does not expose a parseable address.
-  static HttpConnectionInfo? tryParse(String? remoteAddress) {
-    try {
-      return _AdapterConnectionInfo._(_parseAddress(remoteAddress));
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static InternetAddress _parseAddress(String? value) {
-    if (value != null && value.isNotEmpty) {
-      try {
-        return InternetAddress(value);
-      } catch (_) {
-        // Fall through to loopback when parse fails on a real IO host.
-      }
-    }
-    return InternetAddress.loopbackIPv4;
-  }
-
-  @override
-  final InternetAddress remoteAddress;
-
-  @override
-  final int remotePort;
-
-  @override
-  final int localPort;
 }
 
 final class _AdapterSession extends MapBase<dynamic, dynamic>

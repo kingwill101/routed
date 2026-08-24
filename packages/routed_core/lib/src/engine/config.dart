@@ -6,6 +6,7 @@ import 'package:routed_core/src/runtime/shutdown.dart';
 import 'package:routed_core/src/utils/debug.dart';
 import 'package:routed_core/src/config/typed.dart';
 import 'package:routed_core/src/provider/typed_provider.dart';
+import 'package:routed_core/src/security/network.dart';
 
 /// Default ETag generation strategies supported by the engine.
 enum EtagStrategy { disabled, strong, weak }
@@ -514,7 +515,8 @@ class EngineConfig implements ValidatableConfiguration {
   final List<String> remoteIPHeaders;
   List<String> _trustedProxies = [];
   String? _trustedPlatform;
-  List<({InternetAddress address, int prefixLength})> _parsedProxies = [];
+  List<NetworkMatcher> _parsedProxyNetworks = [];
+  bool _trustedProxiesParsed = false;
 
   final String templateDirectory;
   final dynamic templateEngine;
@@ -618,42 +620,49 @@ class EngineConfig implements ValidatableConfiguration {
     }
   }
 
-  /// Parses the `trustedProxies` list into a list of `InternetAddress` and prefix length.
-  ///
-  /// This method should be called during engine initialization to pre-parse the trusted proxy
-  /// configurations for efficient lookup. It uses `InternetAddress.lookup` to resolve the
-  /// proxy addresses and supports both IPv4 and IPv6 addresses with optional CIDR notation
-  /// for specifying the prefix length.
-  ///
-  /// The parsed proxies are stored in the `_parsedProxies` field.
+  /// Parses trusted proxy networks without requiring socket APIs for IP/CIDR
+  /// values. Hostname proxies retain Dart IO DNS lookup support when available.
   Future<void> parseTrustedProxies() async {
     if (!features.enableProxySupport) {
       throw StateError(
         'Proxy support not enabled. Enable with EngineFeatures.enableProxySupport',
       );
     }
-    if (_parsedProxies.isNotEmpty || _trustedProxies.isEmpty) {
-      return;
+    if (_trustedProxiesParsed) return;
+
+    final parsedNetworks = <NetworkMatcher>[];
+    for (final proxy in trustedProxies) {
+      final direct = NetworkMatcher.maybeParse(proxy);
+      if (direct != null) {
+        parsedNetworks.add(direct);
+        continue;
+      }
+
+      // Hostname proxies retain Dart IO DNS support. Portable runtimes do not
+      // expose DNS sockets, so an unsupported lookup fails closed.
+      final parts = proxy.split('/');
+      final host = parts.first.trim();
+      try {
+        final lookupResult = await InternetAddress.lookup(host);
+        for (final address in lookupResult) {
+          final prefix = parts.length > 1
+              ? int.tryParse(parts[1].trim())
+              : null;
+          final network = NetworkMatcher.maybeParse(
+            '${address.address}/${prefix ?? (address.type == InternetAddressType.IPv4 ? 32 : 128)}',
+          );
+          if (network != null) parsedNetworks.add(network);
+        }
+      } catch (_) {
+        // Keep the proxy untrusted when the host cannot resolve it.
+      }
     }
-    _parsedProxies = await Future.wait(
-      trustedProxies.map((proxy) async {
-        final parts = proxy.split('/');
-        final host = parts[0];
-        final parsed = InternetAddress.tryParse(host);
-        final lookupResult = parsed != null
-            ? <InternetAddress>[parsed]
-            : await InternetAddress.lookup(host);
-        final addr = lookupResult.first;
-        final prefix = parts.length > 1
-            ? int.parse(parts[1])
-            : (addr.type == InternetAddressType.IPv4 ? 32 : 128);
-        return (address: addr, prefixLength: prefix);
-      }),
-    );
+    _parsedProxyNetworks = parsedNetworks;
+    _trustedProxiesParsed = true;
   }
 
   Future<void> ensureTrustedProxiesParsed() async {
-    if (!features.enableProxySupport || _parsedProxies.isNotEmpty) {
+    if (!features.enableProxySupport || _trustedProxiesParsed) {
       return;
     }
     await parseTrustedProxies();
@@ -661,9 +670,8 @@ class EngineConfig implements ValidatableConfiguration {
 
   /// Checks if the given `InternetAddress` is a trusted proxy.
   ///
-  /// This method iterates through the parsed trusted proxies (`_parsedProxies`) and compares
-  /// the provided `InternetAddress` against each trusted proxy, taking into account the
-  /// prefix length specified in CIDR notation.
+  /// This method compares the provided [InternetAddress] against parsed
+  /// trusted proxy networks.
   ///
   /// Returns `true` if the address is a trusted proxy, `false` otherwise.
   bool isTrustedProxy(InternetAddress addr) {
@@ -672,19 +680,20 @@ class EngineConfig implements ValidatableConfiguration {
         'Proxy support not enabled. Enable with EngineFeatures.enableProxySupport',
       );
     }
-    if (_parsedProxies.isEmpty) return false;
-    for (final proxy in _parsedProxies) {
-      final addrBytes = addr.rawAddress;
-      final proxyBytes = proxy.address.rawAddress;
-      final prefixBytes = (proxy.prefixLength / 8).ceil();
-      if (addrBytes.length != proxyBytes.length) continue;
-      var matches = true;
-      for (var i = 0; i < prefixBytes && matches; i++) {
-        matches = addrBytes[i] == proxyBytes[i];
-      }
-      if (matches) return true;
+    return _parsedProxyNetworks.any((network) => network.contains(addr));
+  }
+
+  /// Checks a textual address against trusted proxy networks.
+  ///
+  /// Portable hosts cannot construct [InternetAddress] values, so their
+  /// adapters use this path instead.
+  bool isTrustedProxyText(String address) {
+    if (!features.enableProxySupport) {
+      throw StateError(
+        'Proxy support not enabled. Enable with EngineFeatures.enableProxySupport',
+      );
     }
-    return false;
+    return _parsedProxyNetworks.any((network) => network.containsText(address));
   }
 
   List<String> get trustedProxies {
@@ -698,7 +707,8 @@ class EngineConfig implements ValidatableConfiguration {
       );
     }
     _trustedProxies = value;
-    _parsedProxies = [];
+    _parsedProxyNetworks = [];
+    _trustedProxiesParsed = false;
   }
 
   String? get trustedPlatform => _trustedPlatform;
@@ -782,9 +792,10 @@ class EngineConfig implements ValidatableConfiguration {
       tlsV6Only: tlsV6Only ?? this.tlsV6Only,
     );
 
-    // Copy over the parsed proxies if they exist
-    if (_parsedProxies.isNotEmpty) {
-      newConfig._parsedProxies = List.from(_parsedProxies);
+    // Copy over parsed proxy networks when they are already available.
+    if (trustedProxies == null && _trustedProxiesParsed) {
+      newConfig._parsedProxyNetworks = List.from(_parsedProxyNetworks);
+      newConfig._trustedProxiesParsed = true;
     }
 
     return newConfig;

@@ -100,6 +100,60 @@ void main() {
     expect(utf8.decode(response.body.takeBytes()), 'pong');
   });
 
+  test('portable requests preserve the direct client address', () async {
+    final engine = Engine(providers: Engine.defaultProviders);
+    engine.get('/ip', (ctx) {
+      return ctx.string('${ctx.request.remoteAddr}|${ctx.request.clientIP}');
+    });
+    await engine.initialize();
+    addTearDown(engine.close);
+
+    final response = _MemoryResponseAdapter();
+    await engine.handleConnection(
+      HttpConnection(
+        _MemoryRequestAdapter(
+          method: 'GET',
+          uri: Uri.parse('http://example.test/ip'),
+          remoteAddress: '127.0.0.1',
+        ),
+        response,
+      ),
+    );
+
+    expect(utf8.decode(response.body.takeBytes()), '127.0.0.1|127.0.0.1');
+  });
+
+  test('portable requests apply trusted proxy headers textually', () async {
+    final config = EngineConfig(
+      features: const EngineFeatures(enableProxySupport: true),
+      remoteIPHeaders: const ['X-Forwarded-For'],
+      trustedProxies: const ['127.0.0.1'],
+    );
+    final engine = Engine(
+      providers: [CoreServiceProvider(config), RoutingServiceProvider()],
+    );
+    engine.get('/ip', (ctx) => ctx.string(ctx.request.clientIP));
+    await engine.initialize();
+    addTearDown(engine.close);
+
+    final response = _MemoryResponseAdapter();
+    await engine.handleConnection(
+      HttpConnection(
+        _MemoryRequestAdapter(
+          method: 'GET',
+          uri: Uri.parse('http://example.test/ip'),
+          headers: {
+            'x-forwarded-for': ['203.0.113.8'],
+          },
+          remoteAddress: '127.0.0.1',
+        ),
+        response,
+      ),
+    );
+
+    expect(utf8.decode(response.body.takeBytes()), '203.0.113.8');
+  });
+
   test('handleConnection returns 404 for unknown routes', () async {
     final engine = Engine(providers: Engine.defaultProviders);
     await engine.initialize();
@@ -258,6 +312,7 @@ void main() {
     expect(request.queryParameters['x'], '1');
     expect(request.host, 'api.test');
     expect(request.remoteAddr, '10.0.0.1');
+    expect(request.clientIP, '10.0.0.1');
     expect(request.cookies.map((c) => c.name), containsAll(['a', 'b']));
     expect(await request.body(), 'hello');
     expect(() => request.httpRequest, throwsUnsupportedError);

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:routed_core/src/http/adapter_http.dart';
 import 'package:routed_core/src/http/transport.dart';
 
 /// Wraps an [HttpRequest] to enforce a maximum request body size limit.
@@ -15,7 +16,12 @@ import 'package:routed_core/src/http/transport.dart';
 /// final maxSize = 5 * 1024 * 1024; // 5MB
 /// final wrapped = WrappedRequest(request, maxSize);
 /// ```
-class WrappedRequest implements HttpRequest, HostContextCarrier {
+class WrappedRequest
+    implements
+        HttpRequest,
+        HostContextCarrier,
+        SyntheticRequestCarrier,
+        PortableRemoteAddressCarrier {
   /// The original HTTP request being wrapped.
   final HttpRequest _originalRequest;
 
@@ -84,6 +90,17 @@ class WrappedRequest implements HttpRequest, HostContextCarrier {
   Object? get hostContext => _originalRequest is HostContextCarrier
       ? (_originalRequest as HostContextCarrier).hostContext
       : null;
+
+  @override
+  String? get portableRemoteAddress =>
+      _originalRequest is PortableRemoteAddressCarrier
+      ? (_originalRequest as PortableRemoteAddressCarrier).portableRemoteAddress
+      : null;
+
+  @override
+  bool get isSyntheticRequest => _originalRequest is SyntheticRequestCarrier
+      ? (_originalRequest as SyntheticRequestCarrier).isSyntheticRequest
+      : _originalRequest is SyntheticHttpRequest;
 
   @override
   HttpConnectionInfo? get connectionInfo => _originalRequest.connectionInfo;

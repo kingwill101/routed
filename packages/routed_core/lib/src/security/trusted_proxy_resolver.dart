@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:routed_core/src/http/adapter_http.dart';
 import 'package:routed_core/src/security/network.dart';
 
 /// A resolver that determines the client IP address, considering trusted proxies
@@ -109,11 +110,21 @@ class TrustedProxyResolver {
   /// ```
   String resolve(HttpRequest request) {
     final remoteAddr = _normalize(request.connectionInfo?.remoteAddress);
+    final portableRemoteAddress = request is PortableRemoteAddressCarrier
+        ? (request as PortableRemoteAddressCarrier).portableRemoteAddress
+        : null;
+    final directAddress = portableRemoteAddress ?? remoteAddr?.address ?? '';
     if (!_enabled || !_forwardClientIp) {
-      return remoteAddr?.address ?? '';
+      return directAddress;
     }
-    if (remoteAddr == null || !_isTrustedProxy(remoteAddr)) {
-      return remoteAddr?.address ?? '';
+    final trustedProxy = remoteAddr != null
+        ? _isTrustedProxy(remoteAddr)
+        : portableRemoteAddress != null &&
+              _networks.any(
+                (network) => network.containsText(portableRemoteAddress),
+              );
+    if (!trustedProxy) {
+      return directAddress;
     }
 
     if (_trustedPlatform != null) {
@@ -133,7 +144,7 @@ class TrustedProxyResolver {
       }
     }
 
-    return remoteAddr.address;
+    return directAddress;
   }
 
   /// Checks if the given [address] is a trusted proxy.

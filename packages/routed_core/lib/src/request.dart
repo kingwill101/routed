@@ -77,7 +77,13 @@ class Request {
   }
 
   /// Whether this request is backed by a real native `dart:io` request.
-  bool get hasNativeHttpRequest => _httpRequest is! SyntheticHttpRequest;
+  bool get hasNativeHttpRequest {
+    final request = _httpRequest;
+    if (request is SyntheticRequestCarrier) {
+      return !(request as SyntheticRequestCarrier).isSyntheticRequest;
+    }
+    return request is! SyntheticHttpRequest;
+  }
 
   /// Whether this request was built from a portable adapter.
   bool get isPortable => !hasNativeHttpRequest;
@@ -150,7 +156,9 @@ class Request {
 
   /// Returns the remote address of the client making the request.
   String get remoteAddr =>
-      _httpRequest.connectionInfo?.remoteAddress.address ?? '';
+      _portableRemoteAddress ??
+      _httpRequest.connectionInfo?.remoteAddress.address ??
+      '';
 
   /// Returns the body of the request as a UTF-8 decoded string.
   FutureOr<String> body() async {
@@ -179,12 +187,18 @@ class Request {
       return _overrideClientIp!;
     }
     final remoteAddr = _httpRequest.connectionInfo?.remoteAddress;
+    final portableRemoteAddress = _portableRemoteAddress;
+    final directAddress = portableRemoteAddress ?? remoteAddr?.address ?? '';
     if (!config.forwardedByClientIP || !config.features.enableProxySupport) {
-      return remoteAddr?.address ?? '';
+      return directAddress;
     }
 
-    if (remoteAddr == null || !config.isTrustedProxy(remoteAddr)) {
-      return remoteAddr?.address ?? '';
+    final trustedProxy = remoteAddr != null
+        ? config.isTrustedProxy(remoteAddr)
+        : portableRemoteAddress != null &&
+              config.isTrustedProxyText(portableRemoteAddress);
+    if (!trustedProxy) {
+      return directAddress;
     }
 
     // Check platform-specific header first
@@ -201,7 +215,15 @@ class Request {
       }
     }
 
-    return remoteAddr.address;
+    return directAddress;
+  }
+
+  String? get _portableRemoteAddress {
+    final synthetic = _httpRequest;
+    if (synthetic is PortableRemoteAddressCarrier) {
+      return (synthetic as PortableRemoteAddressCarrier).portableRemoteAddress;
+    }
+    return null;
   }
 
   void overrideClientIp(String ip) {
