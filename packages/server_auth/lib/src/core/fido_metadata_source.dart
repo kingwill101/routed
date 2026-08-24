@@ -2,6 +2,9 @@ part of 'fido_metadata.dart';
 
 /// Resource bounds applied before any MDS payload is materialized.
 final class FidoMetadataLimits {
+  /// Creates resource limits for parsing an MDS blob.
+  ///
+  /// Each limit is checked before the corresponding value is materialized.
   const FidoMetadataLimits({
     this.maxBlobBytes = 32 * 1024 * 1024,
     this.maxJwtSegmentBytes = 24 * 1024 * 1024,
@@ -16,23 +19,44 @@ final class FidoMetadataLimits {
     this.maxMetadataLifetime = const Duration(days: 366 * 5),
   });
 
+  /// Maximum compact JWT size in bytes.
   final int maxBlobBytes;
+
+  /// Maximum size of an individual JWT segment in bytes.
   final int maxJwtSegmentBytes;
+
+  /// Maximum DER certificate size in bytes.
   final int maxCertificateBytes;
+
+  /// Maximum number of certificates in a supplied chain or trust set.
   final int maxCertificates;
+
+  /// Maximum number of metadata entries in a blob.
   final int maxEntries;
+
+  /// Maximum status reports retained for one metadata entry.
   final int maxStatusReportsPerEntry;
+
+  /// Maximum UTF-8 byte length of an individual status token.
   final int maxStatusStringBytes;
+
+  /// Maximum UTF-8 byte length of bounded metadata strings.
   final int maxStringBytes;
+
+  /// Maximum nesting depth accepted by the JSON duplicate scanner.
   final int maxJsonDepth;
+
+  /// Maximum metadata roots retained in one statement.
   final int maxCertificateRootsPerStatement;
+
+  /// Maximum lifetime allowed between metadata timestamps.
   final Duration maxMetadataLifetime;
 }
 
 /// The only cryptographic operation the package delegates to applications.
 ///
 /// The callback MUST verify the JWS signature and the complete certificate
-/// path, including validity and revocation, under [trustAnchors]. The loader
+/// path, including validity and revocation, under `trustAnchors`. The loader
 /// does not fetch `x5u`, perform network I/O, or treat parsed JSON as trusted
 /// before this callback returns [FidoMetadataJwsVerificationResult.verified].
 typedef FidoMetadataJwsVerifier =
@@ -71,28 +95,49 @@ final class FidoMetadataJwsVerificationInput {
              .toList(growable: false),
        );
 
+  /// Original compact JWS supplied to the loader.
   final String compact;
+
+  /// ASCII signing input covered by the JWS signature.
   final String signingInput;
+
+  /// Decoded protected JWS header.
   final Map<String, dynamic> header;
+
+  /// UTF-8 bytes of the decoded payload.
   final List<int> payloadBytes;
+
+  /// Decoded JWS signature bytes.
   final List<int> signatureBytes;
+
+  /// DER certificates supplied by the JWS `x5c` header.
   final List<List<int>> certificateChain;
+
+  /// DER trust anchors configured by the caller.
   final List<List<int>> trustAnchors;
+
+  /// JWS algorithm named by the protected header.
   final String algorithm;
+
+  /// Time at which the caller requested verification.
   final DateTime now;
 }
 
 /// Result of the application-supplied MDS JWS verifier.
 final class FidoMetadataJwsVerificationResult {
+  /// Creates a result indicating that signature and path verification passed.
   const FidoMetadataJwsVerificationResult.verified() : isVerified = true;
 
+  /// Creates a result indicating that verification failed.
   const FidoMetadataJwsVerificationResult.rejected() : isVerified = false;
 
+  /// Whether the application verifier accepted the JWS.
   final bool isVerified;
 }
 
 /// Generic public failure for malformed or untrusted metadata.
 final class FidoMetadataException implements Exception {
+  /// Creates the package's deliberately generic metadata failure.
   const FidoMetadataException();
 
   @override
@@ -101,6 +146,11 @@ final class FidoMetadataException implements Exception {
 
 /// Parses a caller-supplied compact MDS3 JWT after an explicit JWS check.
 final class FidoMetadataBlobLoader {
+  /// Creates a loader that authenticates blobs against [trustAnchors].
+  ///
+  /// [verifyJws] remains responsible for the cryptographic JWS and certificate
+  /// path decision. The loader applies parsing, resource, freshness, and blob
+  /// ordering checks around that callback.
   FidoMetadataBlobLoader({
     required Iterable<List<int>> trustAnchors,
     required this.verifyJws,
@@ -112,8 +162,13 @@ final class FidoMetadataBlobLoader {
          limits.maxCertificateBytes,
        );
 
+  /// Callback used to authenticate each decoded JWS.
   final FidoMetadataJwsVerifier verifyJws;
+
+  /// Resource bounds applied while parsing a blob.
   final FidoMetadataLimits limits;
+
+  /// Policy used when an authenticated blob contains `nextUpdate`.
   final FidoMetadataNextUpdatePolicy nextUpdatePolicy;
   final List<List<int>> _trustAnchors;
 

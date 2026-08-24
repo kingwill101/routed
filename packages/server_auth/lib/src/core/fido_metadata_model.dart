@@ -2,40 +2,100 @@ part of 'fido_metadata.dart';
 
 /// The status values currently defined by FIDO Metadata Service 3.1.1.
 enum FidoMetadataAuthenticatorStatus {
+  /// The authenticator has not completed FIDO certification.
   notFidoCertified,
+
+  /// The authenticator is FIDO certified.
   fidoCertified,
+
+  /// The authenticator permits bypassing user verification.
   userVerificationBypass,
+
+  /// The authenticator's attestation key has been compromised.
   attestationKeyCompromise,
+
+  /// The authenticator's user key has been compromised remotely.
   userKeyRemoteCompromise,
+
+  /// The authenticator's user key has been compromised physically.
   userKeyPhysicalCompromise,
+
+  /// An update is available for the authenticator.
   updateAvailable,
+
+  /// The authenticator has been retired.
   retired,
+
+  /// The authenticator has been revoked.
   revoked,
+
+  /// The authenticator's self-asserted status was submitted.
   selfAssertionSubmitted,
+
+  /// The authenticator is FIDO Certified Level 1.
   fidoCertifiedL1,
+
+  /// The authenticator is FIDO Certified Level 1 Plus.
   fidoCertifiedL1Plus,
+
+  /// The authenticator is FIDO Certified Level 2.
   fidoCertifiedL2,
+
+  /// The authenticator is FIDO Certified Level 2 Plus.
   fidoCertifiedL2Plus,
+
+  /// The authenticator is FIDO Certified Level 3.
   fidoCertifiedL3,
+
+  /// The authenticator is FIDO Certified Level 3 Plus.
   fidoCertifiedL3Plus,
+
+  /// The authenticator is FIPS 140 certified at Level 1.
   fips140CertifiedL1,
+
+  /// The authenticator is FIPS 140 certified at Level 2.
   fips140CertifiedL2,
+
+  /// The authenticator is FIPS 140 certified at Level 3.
   fips140CertifiedL3,
+
+  /// The authenticator is FIPS 140 certified at Level 4.
   fips140CertifiedL4,
+
+  /// The status token was not recognized by this version of the package.
   unknown,
 }
 
 /// How a WebAuthn attestation was matched to an MDS entry.
-enum FidoMetadataMatchKind { aaguid, attestationCertificateKeyIdentifier }
+enum FidoMetadataMatchKind {
+  /// The authenticator's AAGUID matched the metadata entry.
+  aaguid,
+
+  /// An attestation-certificate key identifier matched the metadata entry.
+  attestationCertificateKeyIdentifier,
+}
 
 /// The reason attached to a typed metadata evaluation.
 enum FidoMetadataEvaluationReason {
+  /// The metadata entry and status allowed the attestation.
   accepted,
+
+  /// The metadata entry allowed the attestation with reduced trust.
   downgraded,
+
+  /// No metadata entry matched the attestation.
   noMatchingEntry,
+
+  /// The attestation certificate path could not be trusted to a metadata root.
   certificatePathUntrusted,
+
+  /// The metadata status rejected the authenticator.
   statusRejected,
+
+  /// The metadata status was unknown or unavailable.
   statusUnavailable,
+
+  /// The authenticator version did not satisfy an update requirement.
   updateVersionMismatch,
 }
 
@@ -110,10 +170,19 @@ final class FidoMetadataStatusReport {
   /// distinguishable without exposing parser diagnostics.
   final String rawStatus;
 
+  /// Date on which this status became effective, when supplied by MDS.
   final DateTime? effectiveDate;
+
+  /// Authenticator firmware version associated with the report, when supplied.
   final int? authenticatorVersion;
+
+  /// SHA-256 fingerprint of the affected certificate, when supplied.
   final String? certificateSha256Fingerprint;
+
+  /// SHA-256 fingerprint of the affected batch certificate, when supplied.
   final String? batchCertificateSha256Fingerprint;
+
+  /// Reference URL supplied with the status report, when available.
   final Uri? url;
 }
 
@@ -135,13 +204,28 @@ final class FidoMetadataStatement {
          List<FidoMetadataCertificate>.from(attestationRootCertificates),
        );
 
+  /// Metadata statement schema number.
   final int schema;
+
+  /// Human-readable authenticator description.
   final String description;
+
+  /// Authenticator firmware version described by the statement.
   final int authenticatorVersion;
+
+  /// Protocol family used by the authenticator.
   final String protocolFamily;
+
+  /// Authenticator AAGUID, when the statement identifies one.
   final String? aaguid;
+
+  /// Authenticator AAID, when the statement identifies one.
   final String? aaid;
+
+  /// Key identifiers for attestation certificates recognized by the statement.
   final List<String> attestationCertificateKeyIdentifiers;
+
+  /// Root certificates trusted for authenticator attestation.
   final List<FidoMetadataCertificate> attestationRootCertificates;
 }
 
@@ -161,11 +245,22 @@ final class FidoMetadataEntry {
          List<FidoMetadataStatusReport>.from(statusReports),
        );
 
+  /// Authenticator AAGUID used to select this entry, when present.
   final String? aaguid;
+
+  /// Authenticator AAID used to select this entry, when present.
   final String? aaid;
+
+  /// Attestation-certificate key identifiers used to select this entry.
   final List<String> attestationCertificateKeyIdentifiers;
+
+  /// Metadata statement describing the authenticator.
   final FidoMetadataStatement metadataStatement;
+
+  /// Status reports ordered as supplied by the authenticated MDS blob.
   final List<FidoMetadataStatusReport> statusReports;
+
+  /// Date of the most recent status change in the entry.
   final DateTime timeOfLastStatusChange;
 }
 
@@ -182,6 +277,7 @@ final class FidoMetadataBlob {
          List<FidoMetadataEntry>.from(entries),
        );
 
+  /// Monotonically increasing MDS blob number.
   final int number;
 
   /// Caller-supplied time at which this blob was cryptographically verified.
@@ -196,7 +292,11 @@ final class FidoMetadataBlob {
 
   /// Deprecated advisory update date, absent in future-compatible blobs.
   final DateTime? nextUpdate;
+
+  /// JWS algorithm used to authenticate this blob.
   final String algorithm;
+
+  /// Metadata entries contained in the authenticated blob.
   final List<FidoMetadataEntry> entries;
 }
 
@@ -213,11 +313,22 @@ final class FidoMetadataProvenance {
          List<String>.from(metadataRootFingerprints),
        );
 
+  /// MDS blob number that supplied the matched entry.
   final int blobNumber;
+
+  /// AAGUID presented by the attestation.
   final String attestationAaguid;
+
+  /// AAGUID on the matched entry, when present.
   final String? entryAaguid;
+
+  /// Mechanism used to find the matched entry.
   final FidoMetadataMatchKind matchKind;
+
+  /// Current status report used for the trust decision.
   final FidoMetadataStatusReport status;
+
+  /// SHA-256 fingerprints of the metadata roots used by the entry.
   final List<String> metadataRootFingerprints;
 }
 
@@ -229,7 +340,12 @@ final class FidoMetadataEvaluation {
     this.provenance,
   });
 
+  /// Trust decision returned to the WebAuthn verifier.
   final WebAuthnAttestationTrustDecision decision;
+
+  /// Structured reason for [decision].
   final FidoMetadataEvaluationReason reason;
+
+  /// Matched metadata provenance, or `null` when no trusted match exists.
   final FidoMetadataProvenance? provenance;
 }

@@ -24,6 +24,7 @@ const String authWebAuthnPluginId = 'webauthn';
 
 /// Public registration options returned to a WebAuthn client.
 final class AuthWebAuthnRegistrationOptions {
+  /// Creates the public options for a registration ceremony.
   const AuthWebAuthnRegistrationOptions({
     required this.challenge,
     required this.relyingParty,
@@ -36,16 +37,34 @@ final class AuthWebAuthnRegistrationOptions {
     required this.userVerification,
   });
 
+  /// Base64url challenge that the authenticator must sign.
   final String challenge;
+
+  /// Relying-party identifier and display name.
   final WebAuthnRelyingParty relyingParty;
+
+  /// Opaque user handle sent to the authenticator.
   final String userId;
+
+  /// User name shown to the authenticator.
   final String userName;
+
+  /// User display name shown to the authenticator.
   final String displayName;
+
+  /// Maximum duration allowed for the ceremony.
   final Duration timeout;
+
+  /// Attestation conveyance preference.
   final String attestation;
+
+  /// Existing credentials that the authenticator must not register again.
   final List<String> excludeCredentials;
+
+  /// User-verification requirement sent to the authenticator.
   final String userVerification;
 
+  /// Serializes these options for the browser WebAuthn API.
   Map<String, dynamic> toJson() => <String, dynamic>{
     'challenge': challenge,
     'rp': <String, dynamic>{'id': relyingParty.id, 'name': relyingParty.name},
@@ -77,6 +96,7 @@ final class AuthWebAuthnRegistrationOptions {
 
 /// Public authentication options returned to a WebAuthn client.
 final class AuthWebAuthnAuthenticationOptions {
+  /// Creates the public options for an authentication ceremony.
   const AuthWebAuthnAuthenticationOptions({
     required this.challenge,
     required this.relyingPartyId,
@@ -86,13 +106,25 @@ final class AuthWebAuthnAuthenticationOptions {
     this.userId,
   });
 
+  /// Base64url challenge that the authenticator must sign.
   final String challenge;
+
+  /// Relying-party identifier used by the browser.
   final String relyingPartyId;
+
+  /// Maximum duration allowed for the ceremony.
   final Duration timeout;
+
+  /// User-verification requirement sent to the authenticator.
   final String userVerification;
+
+  /// Credential IDs allowed for a user-bound ceremony.
   final List<String> allowCredentials;
+
+  /// Asserted user identifier, when the ceremony is user-bound.
   final String? userId;
 
+  /// Serializes these options for the browser WebAuthn API.
   Map<String, dynamic> toJson() => <String, dynamic>{
     'challenge': challenge,
     'rpId': relyingPartyId,
@@ -112,12 +144,16 @@ final class AuthWebAuthnAuthenticationOptions {
 
 /// Result of a verified passkey assertion.
 final class AuthWebAuthnAuthenticationResult {
+  /// Creates the result of a verified passkey assertion.
   const AuthWebAuthnAuthenticationResult({
     required this.user,
     required this.authenticator,
   });
 
+  /// User authenticated by the passkey.
   final AuthUser user;
+
+  /// Credential whose assertion was verified and counter advanced.
   final WebAuthnAuthenticator authenticator;
 }
 
@@ -150,7 +186,13 @@ enum WebAuthnAttestationTrustDecision {
 /// These forms carry no hardware provenance, so downgrading is not a distinct
 /// operation: a relying party can only accept the ordinary passkey or reject
 /// the registration.
-enum WebAuthnUnprovenAttestationDecision { accept, reject }
+enum WebAuthnUnprovenAttestationDecision {
+  /// Accept a `none` or self-attested registration.
+  accept,
+
+  /// Reject a `none` or self-attested registration.
+  reject,
+}
 
 /// One certificate in a format-validated WebAuthn attestation trust path.
 ///
@@ -163,7 +205,10 @@ final class WebAuthnAttestationCertificate {
     : derBytes = List<int>.unmodifiable(List<int>.from(derBytes)),
       sha256Fingerprint = crypto.sha256.convert(derBytes).toString();
 
+  /// Immutable DER-encoded certificate bytes.
   final List<int> derBytes;
+
+  /// Lowercase hexadecimal SHA-256 fingerprint of [derBytes].
   final String sha256Fingerprint;
 }
 
@@ -183,7 +228,10 @@ final class WebAuthnAttestationMetadata {
          certificateTrustPath,
        );
 
+  /// Attestation format identifier, such as `packed` or `fido-u2f`.
   final String format;
+
+  /// Provenance kind established by format verification.
   final WebAuthnAttestationKind kind;
 
   /// Lowercase UUID representation of the authenticator AAGUID.
@@ -209,6 +257,7 @@ typedef WebAuthnCertificateAttestationTrustEvaluator =
 /// certificate-backed attestation to an ordinary passkey. It never silently
 /// treats a supplied certificate as a trusted hardware provenance claim.
 final class WebAuthnAttestationTrustPolicy {
+  /// Creates an explicit policy for each attestation provenance form.
   const WebAuthnAttestationTrustPolicy({
     this.none = WebAuthnUnprovenAttestationDecision.accept,
     this.self = WebAuthnUnprovenAttestationDecision.accept,
@@ -271,7 +320,10 @@ final class WebAuthnAttestationTrustPolicy {
   }) : evaluateCertificate = null,
        _trustedRoots = trustedRoots;
 
+  /// Decision for an attestation with no provenance statement.
   final WebAuthnUnprovenAttestationDecision none;
+
+  /// Decision for a self-attested credential.
   final WebAuthnUnprovenAttestationDecision self;
 
   /// Decision used when [evaluateCertificate] is absent.
@@ -307,6 +359,11 @@ final class WebAuthnPlugin<TContext>
         AuthAuthenticationMethodInventoryContributor,
         AuthAuthenticationMethodInventoryBinding,
         AuthUserDeletionPlanContributor {
+  /// Creates a WebAuthn plugin backed by [provider].
+  ///
+  /// [storage] may provide WebAuthn stores separately from the root auth store.
+  /// [challengeTtl] bounds ceremony lifetime, and [attestationTrustPolicy]
+  /// controls whether certificate-backed provenance is accepted.
   WebAuthnPlugin({
     required this.provider,
     this.storage,
@@ -315,6 +372,7 @@ final class WebAuthnPlugin<TContext>
         const WebAuthnAttestationTrustPolicy.passkeys(),
   }) : assert(challengeTtl > Duration.zero);
 
+  /// Provider configuration used to derive relying-party and ceremony options.
   final WebAuthnProvider provider;
 
   /// Optional passkey storage when the root auth store does not own WebAuthn.
@@ -322,7 +380,11 @@ final class WebAuthnPlugin<TContext>
   /// Durable account unlink remains available only when the root mutation
   /// coordinator can transact this store together with every other method.
   final AuthWebAuthnStoreCapabilities? storage;
+
+  /// Maximum lifetime of a registration or authentication challenge.
   final Duration challengeTtl;
+
+  /// Policy applied after attestation format verification.
   final WebAuthnAttestationTrustPolicy attestationTrustPolicy;
 
   late AuthWebAuthnChallengeStore _challengeStore;
@@ -333,9 +395,11 @@ final class WebAuthnPlugin<TContext>
   late AuthAuthenticationMethodService _authenticationMethods;
   bool _configured = false;
 
+  /// Stable plugin identifier used during registration.
   @override
   String get id => authWebAuthnPluginId;
 
+  /// Persistence and authentication-method contract exposed to host tooling.
   @override
   AuthServerPluginDataContract get dataContract =>
       const AuthServerPluginDataContract(
@@ -344,20 +408,25 @@ final class WebAuthnPlugin<TContext>
         removalEndpointIds: <String>['webauthn.credentialDelete'],
       );
 
+  /// User-data namespace removed when a user is deleted.
   @override
   String get userDataNamespace => 'webauthn';
 
+  /// Authentication-method namespace used for passkeys.
   @override
   String get authenticationMethodNamespace => authWebAuthnPluginId;
 
+  /// Store exposed to authentication-method coordination.
   @override
   Object get authenticationMethodStore => _authenticatorStore;
 
+  /// Authentication-method kinds contributed by this plugin.
   @override
   Set<AuthAuthenticationMethodKind> get authenticationMethodKinds => const {
     AuthAuthenticationMethodKind.passkey,
   };
 
+  /// Returns the user's passkeys as authentication-method inventory.
   @override
   Future<AuthAuthenticationMethodSnapshot> authenticationMethodsForUser(
     String userId,
@@ -372,6 +441,7 @@ final class WebAuthnPlugin<TContext>
     );
   }
 
+  /// Creates a plan that removes this user's challenges and credentials.
   @override
   Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) {
     _ensureConfigured();
@@ -409,6 +479,7 @@ final class WebAuthnPlugin<TContext>
     );
   }
 
+  /// Binds the plugin to the host's WebAuthn stores and coordinators.
   @override
   void configure(AuthServerPluginContext<TContext> context) {
     final capabilities =
@@ -447,6 +518,7 @@ final class WebAuthnPlugin<TContext>
     _configured = true;
   }
 
+  /// HTTP endpoints contributed by the plugin.
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints =>
       <AuthEndpointDescriptor<TContext>>[
@@ -510,6 +582,7 @@ final class WebAuthnPlugin<TContext>
         ),
       ];
 
+  /// Client operation descriptors corresponding to [endpoints].
   @override
   Iterable<AuthClientOperationDescriptor> get clientOperations => endpoints.map(
     (endpoint) => AuthClientOperationDescriptor(
@@ -676,6 +749,7 @@ final class WebAuthnPlugin<TContext>
         encode: (value) => value,
       );
 
+  /// Persistence entities and atomic operations required by WebAuthn.
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
     AuthPersistenceSchema(
@@ -746,6 +820,7 @@ final class WebAuthnPlugin<TContext>
     ),
   ];
 
+  /// Rate-limit operations contributed by the plugin.
   @override
   Iterable<AuthRateLimitOperation> get rateLimitOperations => const [
     AuthRateLimitOperation('webauthn', 'registration-options'),
@@ -1087,12 +1162,14 @@ final class WebAuthnPlugin<TContext>
     return AuthWebAuthnAuthenticationResult(user: user, authenticator: updated);
   }
 
+  /// Lists passkeys belonging to [userId].
   Future<List<WebAuthnAuthenticator>> listCredentials(String userId) async {
     _ensureConfigured();
     if (userId.trim().isEmpty) throw AuthFlowException('unauthorized');
     return _authenticatorStore.listForUser(userId);
   }
 
+  /// Deletes one passkey belonging to [userId].
   Future<void> deleteCredential({
     required String userId,
     required String credentialId,

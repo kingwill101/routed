@@ -6,7 +6,13 @@ import 'models.dart';
 import 'providers.dart';
 
 /// The WebAuthn ceremony for which a challenge was issued.
-enum AuthWebAuthnCeremony { registration, authentication }
+enum AuthWebAuthnCeremony {
+  /// A ceremony that creates a new passkey.
+  registration,
+
+  /// A ceremony that authenticates with an existing passkey.
+  authentication,
+}
 
 /// A persisted, one-time WebAuthn challenge.
 ///
@@ -14,6 +20,7 @@ enum AuthWebAuthnCeremony { registration, authentication }
 /// digest through [challengeHash], so a database dump cannot be used as a
 /// ready-to-submit ceremony response.
 final class AuthWebAuthnChallenge {
+  /// Creates a persisted, one-time WebAuthn challenge.
   const AuthWebAuthnChallenge({
     required this.id,
     required this.challengeHash,
@@ -25,21 +32,38 @@ final class AuthWebAuthnChallenge {
     this.userId,
   });
 
+  /// Stable identifier for the challenge record.
   final String id;
+
+  /// Digest of the raw challenge returned to the browser.
   final String challengeHash;
+
+  /// Ceremony for which this challenge was issued.
   final AuthWebAuthnCeremony ceremony;
+
+  /// Relying-party identifier bound to the challenge.
   final String relyingPartyId;
+
+  /// Canonical origin bound to the challenge.
   final String origin;
+
+  /// Time at which the challenge was created.
   final DateTime createdAt;
+
+  /// Time at which the challenge expires.
   final DateTime expiresAt;
+
+  /// User bound to the challenge, or `null` for discoverable authentication.
   final String? userId;
 
+  /// Returns whether the challenge is active at [now].
   bool isActive({DateTime? now}) {
     final current = (now ?? DateTime.now()).toUtc();
     return !current.isBefore(createdAt.toUtc()) &&
         current.isBefore(expiresAt.toUtc());
   }
 
+  /// Serializes non-secret challenge metadata for diagnostics or persistence.
   Map<String, dynamic> toJson() => <String, dynamic>{
     'id': id,
     'ceremony': ceremony.name,
@@ -53,6 +77,7 @@ final class AuthWebAuthnChallenge {
 
 /// Persistence boundary for one-time WebAuthn challenges.
 abstract interface class AuthWebAuthnChallengeStore {
+  /// Persists a new one-time [challenge].
   FutureOr<void> save(AuthWebAuthnChallenge challenge);
 
   /// Removes every pending challenge bound to [userId].
@@ -77,8 +102,10 @@ abstract interface class AuthWebAuthnChallengeStore {
 
 /// Persistence boundary for registered passkeys.
 abstract interface class AuthWebAuthnAuthenticatorStore {
+  /// Finds a passkey by its credential identifier.
   FutureOr<WebAuthnAuthenticator?> findByCredentialId(String credentialId);
 
+  /// Lists passkeys belonging to [userId].
   FutureOr<List<WebAuthnAuthenticator>> listForUser(String userId);
 
   /// Creates a credential and rejects duplicate credential IDs.
@@ -109,6 +136,7 @@ abstract interface class AuthWebAuthnAuthenticatorStore {
 
 /// Complete input to an exact passkey-removal transaction.
 final class AuthWebAuthnCredentialRemovalCommand {
+  /// Creates the input for an exact passkey-removal transaction.
   AuthWebAuthnCredentialRemovalCommand({
     required this.userId,
     required this.credentialId,
@@ -128,7 +156,10 @@ final class AuthWebAuthnCredentialRemovalCommand {
     }
   }
 
+  /// User who must own the credential.
   final String userId;
+
+  /// Credential to remove.
   final String credentialId;
 
   /// Loads the bounded composed topology as evidence for the backend command.
@@ -143,6 +174,8 @@ final class AuthWebAuthnCredentialRemovalCommand {
 /// Stores that cannot join the complete authentication-method topology must
 /// return [AuthAuthenticationMethodMutationResult.atomicityUnavailable].
 abstract interface class AuthWebAuthnAuthenticatorMutationStore {
+  /// Removes a credential only when the complete authentication-method
+  /// topology proves that the mutation is safe.
   FutureOr<AuthAuthenticationMethodMutationResult> removeCredentialIfSafe(
     AuthWebAuthnCredentialRemovalCommand command,
   );
@@ -153,8 +186,10 @@ abstract interface class AuthWebAuthnAuthenticatorMutationStore {
 /// Keeping these stores outside the base auth store lets existing adapters
 /// continue to implement core authentication without opting into passkeys.
 abstract interface class AuthWebAuthnStoreCapabilities {
+  /// Challenge store owned by the capability provider.
   AuthWebAuthnChallengeStore get webAuthnChallenges;
 
+  /// Authenticator store owned by the capability provider.
   AuthWebAuthnAuthenticatorStore get webAuthnAuthenticators;
 }
 
@@ -165,6 +200,7 @@ abstract interface class AuthWebAuthnStoreCapabilities {
 /// individual store so split or mixed durable storage cannot claim one atomic
 /// deletion boundary.
 abstract interface class AuthWebAuthnUserDeletionPlanFactory {
+  /// Creates an atomic deletion plan for one user's WebAuthn data.
   FutureOr<AuthUserDeletionPlan> createWebAuthnDeletionPlan({
     required AuthUserDeletionDomain domain,
     required AuthUser user,
@@ -178,9 +214,11 @@ abstract interface class AuthWebAuthnUserDeletionPlanFactory {
 /// same atomic consume, unique credential, and compare-and-set guarantees.
 final class InMemoryAuthWebAuthnChallengeStore
     implements AuthWebAuthnChallengeStore, AuthInMemoryUserDeletionStore {
+  /// Creates a bounded challenge store for tests and local development.
   InMemoryAuthWebAuthnChallengeStore({this.maxEntries = 1024})
     : assert(maxEntries > 0);
 
+  /// Maximum number of active challenges retained by this store.
   final int maxEntries;
   final Map<String, AuthWebAuthnChallenge> _records =
       <String, AuthWebAuthnChallenge>{};
@@ -250,6 +288,9 @@ final class InMemoryAuthWebAuthnChallengeStore
 /// In-memory registered-passkey store for tests and local development.
 final class InMemoryAuthWebAuthnAuthenticatorStore
     implements AuthWebAuthnAuthenticatorStore, AuthInMemoryUserDeletionStore {
+  /// Creates an empty passkey store for tests and local development.
+  InMemoryAuthWebAuthnAuthenticatorStore();
+
   final Map<String, WebAuthnAuthenticator> _records =
       <String, WebAuthnAuthenticator>{};
 

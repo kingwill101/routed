@@ -8,7 +8,10 @@ final class FidoMetadataAttestationPathVerificationInput {
     required this.entry,
   });
 
+  /// Attestation whose certificate path requires application verification.
   final WebAuthnAttestationMetadata attestation;
+
+  /// Metadata entry whose roots should be used for path verification.
   final FidoMetadataEntry entry;
 }
 
@@ -22,6 +25,13 @@ typedef FidoMetadataAttestationPathVerifier =
 
 /// Maps verified WebAuthn attestation provenance to an authenticated MDS entry.
 final class FidoMetadataWebAuthnTrustEvaluator {
+  /// Creates an evaluator for an authenticated metadata [blob].
+  ///
+  /// [updateAvailable] controls the decision for a certified authenticator
+  /// that has an update available but is still at the metadata version. The
+  /// [uncertified] decision applies to uncertified and self-asserted statuses.
+  /// When supplied, [verifyAttestationPath] may validate paths whose metadata
+  /// root is not present in the attestation's supplied certificate path.
   FidoMetadataWebAuthnTrustEvaluator({
     required this.blob,
     this.updateAvailable = WebAuthnAttestationTrustDecision.downgrade,
@@ -29,9 +39,16 @@ final class FidoMetadataWebAuthnTrustEvaluator {
     this.verifyAttestationPath,
   });
 
+  /// Authenticated metadata blob used for lookups.
   final FidoMetadataBlob blob;
+
+  /// Decision applied to certified authenticators with an available update.
   final WebAuthnAttestationTrustDecision updateAvailable;
+
+  /// Decision applied to uncertified or self-asserted authenticators.
   final WebAuthnAttestationTrustDecision uncertified;
+
+  /// Optional application-owned certificate path verifier.
   final FidoMetadataAttestationPathVerifier? verifyAttestationPath;
 
   /// Evaluates and preserves typed provenance without exposing parser errors.

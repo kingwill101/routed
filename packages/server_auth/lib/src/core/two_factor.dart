@@ -22,8 +22,10 @@ const String _base32Alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 /// system. The plugin never persists the raw secret directly; it only passes
 /// the protected value to [AuthTwoFactorStore].
 abstract interface class AuthTwoFactorSecretProtector {
+  /// Protects a raw TOTP secret before persistence.
   String protect(String secret);
 
+  /// Recovers a raw TOTP secret for verification.
   String reveal(String protectedSecret);
 }
 
@@ -32,6 +34,7 @@ abstract interface class AuthTwoFactorSecretProtector {
 /// Do not use this implementation for durable production storage.
 final class PlaintextAuthTwoFactorSecretProtector
     implements AuthTwoFactorSecretProtector {
+  /// Creates the intentionally unencrypted test protector.
   const PlaintextAuthTwoFactorSecretProtector();
 
   @override
@@ -47,6 +50,7 @@ final class PlaintextAuthTwoFactorSecretProtector
 /// the output of the configured [AuthTwoFactorSecretProtector]. Recovery codes
 /// are stored as digests and are removed atomically when consumed.
 class AuthTwoFactorRecord {
+  /// Creates persisted state for a user's two-factor enrollment.
   AuthTwoFactorRecord({
     required this.userId,
     required this.protectedSecret,
@@ -127,6 +131,7 @@ class AuthTwoFactorRecord {
 
 /// Typed persistence contract owned by the two-factor plugin.
 abstract interface class AuthTwoFactorStore {
+  /// Looks up the factor record belonging to [userId].
   FutureOr<AuthTwoFactorRecord?> findByUserId(String userId);
 
   /// Creates or replaces the factor record for [record].
@@ -140,6 +145,7 @@ abstract interface class AuthTwoFactorStore {
     AuthTwoFactorRecord replacement,
   );
 
+  /// Deletes the factor record belonging to [userId].
   FutureOr<void> delete(String userId);
 
   /// Consumes one matching recovery-code digest atomically and clears a
@@ -304,6 +310,7 @@ bool _sameRecord(AuthTwoFactorRecord left, AuthTwoFactorRecord right) {
 
 /// Data returned when a user starts TOTP enrollment.
 class AuthTwoFactorEnrollment {
+  /// Creates the client-facing enrollment details.
   const AuthTwoFactorEnrollment({
     required this.secret,
     required this.otpauthUri,
@@ -319,6 +326,7 @@ class AuthTwoFactorEnrollment {
   /// Time after which the enrollment must be restarted.
   final DateTime expiresAt;
 
+  /// Serializes the enrollment details for an API response.
   Map<String, dynamic> toJson() => {
     'secret': secret,
     'otpauthUri': otpauthUri.toString(),
@@ -328,17 +336,20 @@ class AuthTwoFactorEnrollment {
 
 /// Recovery codes returned after verified enrollment or explicit regeneration.
 class AuthTwoFactorRecoveryCodes {
+  /// Creates a response containing one-time plaintext recovery [codes].
   const AuthTwoFactorRecoveryCodes(this.codes);
 
   /// One-time codes. Applications must show these once and encourage secure
   /// offline storage; the plugin does not persist the plaintext values.
   final List<String> codes;
 
+  /// Serializes the recovery codes for the one-time response.
   Map<String, dynamic> toJson() => {'recoveryCodes': codes};
 }
 
 /// A short-lived pending sign-in challenge returned to a client.
 class AuthTwoFactorSignInChallenge {
+  /// Creates a pending challenge that expires at [expiresAt].
   const AuthTwoFactorSignInChallenge({
     required this.token,
     required this.expiresAt,
@@ -353,19 +364,26 @@ class AuthTwoFactorSignInChallenge {
 
 /// Atomic result of a pending-challenge verification attempt.
 class AuthTwoFactorChallengeAttempt {
+  /// Creates the outcome of one atomic challenge-code attempt.
   const AuthTwoFactorChallengeAttempt({
     required this.accepted,
     required this.locked,
     required this.expired,
   });
 
+  /// Whether the submitted code was accepted.
   final bool accepted;
+
+  /// Whether the challenge is currently locked.
   final bool locked;
+
+  /// Whether the challenge was missing or expired.
   final bool expired;
 }
 
 /// A short-lived trusted-device token returned only after TOTP verification.
 class AuthTwoFactorTrustedDeviceToken {
+  /// Creates a bearer token for a trusted device.
   const AuthTwoFactorTrustedDeviceToken({
     required this.token,
     required this.expiresAt,
@@ -380,6 +398,7 @@ class AuthTwoFactorTrustedDeviceToken {
 
 /// Persisted state for one trusted device.
 class AuthTwoFactorTrustedDeviceRecord {
+  /// Creates persisted state for one trusted device.
   AuthTwoFactorTrustedDeviceRecord({
     required this.id,
     required this.userId,
@@ -407,19 +426,34 @@ class AuthTwoFactorTrustedDeviceRecord {
     }
   }
 
+  /// Stable identifier for this trusted-device record.
   final String id;
+
+  /// User who owns the trusted device.
   final String userId;
+
+  /// Digest of the bearer token.
   final String tokenHash;
+
+  /// Time at which the trusted device was issued.
   final DateTime createdAt;
+
+  /// Time at which the trusted device expires.
   final DateTime expiresAt;
+
+  /// Most recent successful use, when one has occurred.
   final DateTime? lastUsedAt;
+
+  /// Revocation time, or `null` while the device is not revoked.
   final DateTime? revokedAt;
 
+  /// Returns whether the device is neither revoked nor expired.
   bool isActive({DateTime? now}) {
     final current = (now ?? DateTime.now()).toUtc();
     return revokedAt == null && current.isBefore(expiresAt.toUtc());
   }
 
+  /// Creates a record with selected mutable fields replaced.
   AuthTwoFactorTrustedDeviceRecord copyWith({
     DateTime? lastUsedAt,
     DateTime? revokedAt,
@@ -445,6 +479,7 @@ abstract interface class AuthTwoFactorTrustedDeviceStore {
     required DateTime now,
   });
 
+  /// Persists a newly issued trusted-device record.
   FutureOr<AuthTwoFactorTrustedDeviceRecord> create(
     AuthTwoFactorTrustedDeviceRecord record,
   );
@@ -456,6 +491,7 @@ abstract interface class AuthTwoFactorTrustedDeviceStore {
 /// In-memory trusted-device store for tests and local examples.
 final class InMemoryAuthTwoFactorTrustedDeviceStore
     implements AuthTwoFactorTrustedDeviceStore, AuthInMemoryUserDeletionStore {
+  /// Creates a bounded trusted-device store for tests and local examples.
   InMemoryAuthTwoFactorTrustedDeviceStore({
     DateTime Function()? clock,
     this.maxEntries = 1024,
@@ -550,6 +586,7 @@ final class InMemoryAuthTwoFactorTrustedDeviceStore
 
 /// Result of completing a pending sign-in challenge.
 class AuthTwoFactorSignInCompletion {
+  /// Creates the result of completing a pending two-factor sign-in.
   const AuthTwoFactorSignInCompletion({
     required this.userId,
     this.user,
@@ -558,15 +595,25 @@ class AuthTwoFactorSignInCompletion {
     this.trustedDevice,
   });
 
+  /// Identifier of the authenticated user.
   final String userId;
+
+  /// Authenticated user record, when the sign-in flow loaded one.
   final AuthUser? user;
+
+  /// Provider that supplied the original credentials, when applicable.
   final String? providerId;
+
+  /// Credentials associated with the completed sign-in, when available.
   final AuthCredentials? credentials;
+
+  /// Trusted-device token issued during completion, when requested.
   final AuthTwoFactorTrustedDeviceToken? trustedDevice;
 }
 
 /// Persisted state for a pending two-factor sign-in.
 class AuthTwoFactorChallengeRecord {
+  /// Creates persisted state for a pending two-factor sign-in.
   AuthTwoFactorChallengeRecord({
     required this.id,
     required this.tokenHash,
@@ -605,23 +652,46 @@ class AuthTwoFactorChallengeRecord {
     }
   }
 
+  /// Stable identifier for this challenge.
   final String id;
+
+  /// Digest of the opaque challenge token.
   final String tokenHash;
+
+  /// User who must complete the challenge.
   final String userId;
+
+  /// Time at which the challenge was created.
   final DateTime createdAt;
+
+  /// Time at which the challenge expires.
   final DateTime expiresAt;
+
+  /// User record carried from the first authentication step, when available.
   final AuthUser? user;
+
+  /// Provider that supplied the first authentication step, when applicable.
   final String? providerId;
+
+  /// Credentials carried from the first authentication step, when available.
   final AuthCredentials? credentials;
+
+  /// Number of failed verification attempts.
   final int failedVerificationCount;
+
+  /// Temporary lockout expiry after too many failed attempts.
   final DateTime? lockedUntil;
+
+  /// Completion time, or `null` while the challenge is pending.
   final DateTime? completedAt;
 
+  /// Returns whether the challenge is pending and unexpired.
   bool isActive({DateTime? now}) {
     final current = (now ?? DateTime.now()).toUtc();
     return completedAt == null && current.isBefore(expiresAt.toUtc());
   }
 
+  /// Creates a record with selected attempt state replaced.
   AuthTwoFactorChallengeRecord copyWith({
     int? failedVerificationCount,
     DateTime? lockedUntil,
@@ -646,8 +716,10 @@ class AuthTwoFactorChallengeRecord {
 
 /// Typed persistence contract for pending two-factor sign-ins.
 abstract interface class AuthTwoFactorChallengeStore {
+  /// Finds a pending challenge by its token digest.
   FutureOr<AuthTwoFactorChallengeRecord?> findByTokenHash(String tokenHash);
 
+  /// Persists a newly issued challenge.
   FutureOr<AuthTwoFactorChallengeRecord> create(
     AuthTwoFactorChallengeRecord record,
   );
@@ -665,6 +737,7 @@ abstract interface class AuthTwoFactorChallengeStore {
 /// In-memory pending-challenge store for tests and local examples.
 final class InMemoryAuthTwoFactorChallengeStore
     implements AuthTwoFactorChallengeStore, AuthInMemoryUserDeletionStore {
+  /// Creates a bounded pending-challenge store for tests and local examples.
   InMemoryAuthTwoFactorChallengeStore({
     DateTime Function()? clock,
     this.maxEntries = 1024,
@@ -784,6 +857,7 @@ final class InMemoryAuthTwoFactorChallengeStore
 
 /// A short-lived proof that a user recently completed TOTP verification.
 class AuthTwoFactorStepUpToken {
+  /// Creates a short-lived proof token.
   const AuthTwoFactorStepUpToken({
     required this.token,
     required this.expiresAt,
@@ -792,8 +866,10 @@ class AuthTwoFactorStepUpToken {
   /// Opaque proof value intended for an HTTP-only cookie.
   final String token;
 
+  /// Time after which the proof is no longer accepted.
   final DateTime expiresAt;
 
+  /// Serializes the proof status for an API response.
   Map<String, dynamic> toJson() => {
     'verified': true,
     'expiresAt': expiresAt.toUtc().toIso8601String(),
@@ -802,6 +878,7 @@ class AuthTwoFactorStepUpToken {
 
 /// Persisted state for a recent step-up proof.
 class AuthTwoFactorStepUpRecord {
+  /// Creates persisted state for a step-up proof.
   AuthTwoFactorStepUpRecord({
     required this.id,
     required this.userId,
@@ -835,13 +912,25 @@ class AuthTwoFactorStepUpRecord {
     }
   }
 
+  /// Stable identifier for this proof record.
   final String id;
+
+  /// User who completed step-up verification.
   final String userId;
+
+  /// Digest binding the proof to one authenticated session.
   final String sessionBindingHash;
+
+  /// Digest of the opaque proof token.
   final String tokenHash;
+
+  /// Time at which the proof was issued.
   final DateTime createdAt;
+
+  /// Time at which the proof expires.
   final DateTime expiresAt;
 
+  /// Returns whether the proof has not expired.
   bool isActive({DateTime? now}) {
     final current = (now ?? DateTime.now()).toUtc();
     return current.isBefore(expiresAt.toUtc());
@@ -850,8 +939,10 @@ class AuthTwoFactorStepUpRecord {
 
 /// Persistence contract for short-lived step-up proofs.
 abstract interface class AuthTwoFactorStepUpStore {
+  /// Persists a newly issued step-up proof.
   FutureOr<AuthTwoFactorStepUpRecord> create(AuthTwoFactorStepUpRecord record);
 
+  /// Finds an unexpired proof bound to the supplied user and session.
   FutureOr<AuthTwoFactorStepUpRecord?> findActive(
     String userId,
     String sessionBindingHash,
@@ -859,6 +950,7 @@ abstract interface class AuthTwoFactorStepUpStore {
     required DateTime now,
   });
 
+  /// Revokes proofs for one user and session binding.
   FutureOr<void> revokeAll(String userId, String sessionBindingHash);
 
   /// Revokes every proof issued for [userId], regardless of session binding.
@@ -868,6 +960,7 @@ abstract interface class AuthTwoFactorStepUpStore {
 /// In-memory step-up store for tests and local examples.
 final class InMemoryAuthTwoFactorStepUpStore
     implements AuthTwoFactorStepUpStore, AuthInMemoryUserDeletionStore {
+  /// Creates a bounded step-up store for tests and local examples.
   InMemoryAuthTwoFactorStepUpStore({
     DateTime Function()? clock,
     this.maxEntries = 1024,
@@ -964,12 +1057,25 @@ final class InMemoryAuthTwoFactorStepUpStore
 
 /// Outcome of a backend-owned two-factor atomic command.
 enum AuthTwoFactorCommandStatus {
+  /// The command applied its requested state change.
   applied,
+
+  /// The command was intentionally bypassed by policy.
   bypassed,
+
+  /// The supplied code or command input was invalid.
   invalid,
+
+  /// The account or challenge is locked.
   locked,
+
+  /// The referenced enrollment, challenge, or proof has expired.
   expired,
+
+  /// The referenced state could not be found.
   notFound,
+
+  /// The command lost an optimistic-concurrency race.
   conflict,
 }
 
@@ -978,34 +1084,47 @@ enum AuthTwoFactorCommandStatus {
 /// [challenge] is populated only for commands operating on a pending sign-in.
 /// It contains the already-redacted credential snapshot stored by the plugin.
 class AuthTwoFactorCommandResult {
+  /// Creates a command result with an optional pending [challenge].
   const AuthTwoFactorCommandResult(this.status, {this.challenge});
 
+  /// Status returned by the atomic command.
   final AuthTwoFactorCommandStatus status;
+
+  /// Pending challenge snapshot, when the command operates on one.
   final AuthTwoFactorChallengeRecord? challenge;
 }
 
 /// Attempt and lockout policy evaluated inside an atomic command.
 class AuthTwoFactorAttemptPolicy {
+  /// Creates the time and lockout parameters for an atomic command.
   const AuthTwoFactorAttemptPolicy({
     required this.now,
     required this.maxAttempts,
     required this.lockoutDuration,
   });
 
+  /// Time at which the command evaluates the attempt.
   final DateTime now;
+
+  /// Number of failed attempts permitted before lockout.
   final int maxAttempts;
+
+  /// Duration of a lockout after the attempt limit is reached.
   final Duration lockoutDuration;
 }
 
 /// Atomically starts or replaces an unverified enrollment.
 class AuthTwoFactorBeginEnrollmentCommand {
+  /// Creates the command for starting or replacing an enrollment.
   const AuthTwoFactorBeginEnrollmentCommand(this.record);
 
+  /// Enrollment record to persist.
   final AuthTwoFactorRecord record;
 }
 
 /// Atomically activates an enrollment or records its failed TOTP attempt.
 class AuthTwoFactorVerifyEnrollmentCommand {
+  /// Creates the command for activating an enrollment.
   const AuthTwoFactorVerifyEnrollmentCommand({
     required this.expected,
     required this.valid,
@@ -1013,40 +1132,60 @@ class AuthTwoFactorVerifyEnrollmentCommand {
     required this.policy,
   });
 
+  /// Enrollment record expected by the atomic update.
   final AuthTwoFactorRecord expected;
+
+  /// Whether the submitted TOTP code was valid.
   final bool valid;
+
+  /// Digests to store when activation succeeds.
   final List<String> recoveryCodeHashes;
+
+  /// Attempt and lockout policy for this command.
   final AuthTwoFactorAttemptPolicy policy;
 }
 
 /// Atomically verifies TOTP and updates the account attempt state.
 class AuthTwoFactorVerifyTotpCommand {
+  /// Creates the command for verifying an active factor.
   const AuthTwoFactorVerifyTotpCommand({
     required this.expected,
     required this.valid,
     required this.policy,
   });
 
+  /// Factor record expected by the atomic update.
   final AuthTwoFactorRecord expected;
+
+  /// Whether the submitted TOTP code was valid.
   final bool valid;
+
+  /// Attempt and lockout policy for this command.
   final AuthTwoFactorAttemptPolicy policy;
 }
 
 /// Atomically consumes a recovery code or records the failed attempt.
 class AuthTwoFactorUseRecoveryCodeCommand {
+  /// Creates the command for consuming one recovery-code digest.
   const AuthTwoFactorUseRecoveryCodeCommand({
     required this.userId,
     required this.recoveryCodeHash,
     required this.policy,
   });
 
+  /// User whose recovery code is being consumed.
   final String userId;
+
+  /// Digest of the recovery code supplied by the client.
   final String recoveryCodeHash;
+
+  /// Attempt and lockout policy for this command.
   final AuthTwoFactorAttemptPolicy policy;
 }
 
 /// Atomically verifies TOTP and replaces every recovery-code digest.
 class AuthTwoFactorRegenerateRecoveryCodesCommand {
+  /// Creates the command for replacing recovery-code digests.
   const AuthTwoFactorRegenerateRecoveryCodesCommand({
     required this.expected,
     required this.valid,
@@ -1054,27 +1193,41 @@ class AuthTwoFactorRegenerateRecoveryCodesCommand {
     required this.policy,
   });
 
+  /// Factor record expected by the atomic update.
   final AuthTwoFactorRecord expected;
+
+  /// Whether the submitted TOTP code was valid.
   final bool valid;
+
+  /// Replacement recovery-code digests.
   final List<String> recoveryCodeHashes;
+
+  /// Attempt and lockout policy for this command.
   final AuthTwoFactorAttemptPolicy policy;
 }
 
 /// Atomically verifies TOTP and removes all two-factor state for a user.
 class AuthTwoFactorDisableCommand {
+  /// Creates the command for disabling two-factor authentication.
   const AuthTwoFactorDisableCommand({
     required this.expected,
     required this.valid,
     required this.policy,
   });
 
+  /// Factor record expected by the atomic deletion.
   final AuthTwoFactorRecord expected;
+
+  /// Whether the submitted TOTP code was valid.
   final bool valid;
+
+  /// Attempt and lockout policy for this command.
   final AuthTwoFactorAttemptPolicy policy;
 }
 
 /// Atomically accepts a trusted device or creates a pending sign-in challenge.
 class AuthTwoFactorBeginChallengeCommand {
+  /// Creates the command for beginning or bypassing a sign-in challenge.
   const AuthTwoFactorBeginChallengeCommand({
     required this.userId,
     required this.challenge,
@@ -1082,14 +1235,22 @@ class AuthTwoFactorBeginChallengeCommand {
     this.trustedDeviceTokenHash,
   });
 
+  /// User completing the first authentication step.
   final String userId;
+
+  /// Challenge to persist when no trusted device is accepted.
   final AuthTwoFactorChallengeRecord challenge;
+
+  /// Time used for trusted-device and challenge expiry checks.
   final DateTime now;
+
+  /// Digest of a presented trusted-device token, when supplied.
   final String? trustedDeviceTokenHash;
 }
 
 /// Atomically completes a pending TOTP challenge and optionally trusts a device.
 class AuthTwoFactorCompleteChallengeCommand {
+  /// Creates the command for completing a pending TOTP challenge.
   const AuthTwoFactorCompleteChallengeCommand({
     required this.tokenHash,
     required this.expectedFactor,
@@ -1098,28 +1259,44 @@ class AuthTwoFactorCompleteChallengeCommand {
     this.trustedDevice,
   });
 
+  /// Digest of the pending challenge token.
   final String tokenHash;
+
+  /// Factor record expected by the atomic verification.
   final AuthTwoFactorRecord expectedFactor;
+
+  /// Whether the submitted TOTP code was valid.
   final bool valid;
+
+  /// Attempt and lockout policy for this command.
   final AuthTwoFactorAttemptPolicy policy;
+
+  /// Trusted-device record to create after successful verification.
   final AuthTwoFactorTrustedDeviceRecord? trustedDevice;
 }
 
 /// Atomically consumes recovery material and completes a pending challenge.
 class AuthTwoFactorCompleteRecoveryChallengeCommand {
+  /// Creates the command for completing a challenge with a recovery code.
   const AuthTwoFactorCompleteRecoveryChallengeCommand({
     required this.tokenHash,
     required this.recoveryCodeHash,
     required this.policy,
   });
 
+  /// Digest of the pending challenge token.
   final String tokenHash;
+
+  /// Digest of the recovery code supplied by the client.
   final String recoveryCodeHash;
+
+  /// Attempt and lockout policy for this command.
   final AuthTwoFactorAttemptPolicy policy;
 }
 
 /// Atomically verifies TOTP and creates a trusted-device record.
 class AuthTwoFactorIssueTrustedDeviceCommand {
+  /// Creates the command for issuing a trusted-device record.
   const AuthTwoFactorIssueTrustedDeviceCommand({
     required this.expectedFactor,
     required this.valid,
@@ -1127,14 +1304,22 @@ class AuthTwoFactorIssueTrustedDeviceCommand {
     required this.policy,
   });
 
+  /// Factor record expected by the atomic verification.
   final AuthTwoFactorRecord expectedFactor;
+
+  /// Whether the submitted TOTP code was valid.
   final bool valid;
+
+  /// Trusted-device record to create after successful verification.
   final AuthTwoFactorTrustedDeviceRecord trustedDevice;
+
+  /// Attempt and lockout policy for this command.
   final AuthTwoFactorAttemptPolicy policy;
 }
 
 /// Atomically verifies TOTP and creates a session-bound recent proof.
 class AuthTwoFactorVerifyStepUpCommand {
+  /// Creates the command for issuing a session-bound step-up proof.
   const AuthTwoFactorVerifyStepUpCommand({
     required this.expectedFactor,
     required this.valid,
@@ -1142,29 +1327,46 @@ class AuthTwoFactorVerifyStepUpCommand {
     required this.policy,
   });
 
+  /// Factor record expected by the atomic verification.
   final AuthTwoFactorRecord expectedFactor;
+
+  /// Whether the submitted TOTP code was valid.
   final bool valid;
+
+  /// Session-bound proof to create after successful verification.
   final AuthTwoFactorStepUpRecord proof;
+
+  /// Attempt and lockout policy for this command.
   final AuthTwoFactorAttemptPolicy policy;
 }
 
+/// Command that revokes every trusted device for a user.
 class AuthTwoFactorRevokeTrustedDevicesCommand {
+  /// Creates the command for revoking trusted devices.
   const AuthTwoFactorRevokeTrustedDevicesCommand({
     required this.userId,
     required this.now,
   });
 
+  /// User whose devices should be revoked.
   final String userId;
+
+  /// Revocation time recorded by the backend.
   final DateTime now;
 }
 
+/// Command that revokes step-up proofs for one session binding.
 class AuthTwoFactorRevokeStepUpCommand {
+  /// Creates the command for revoking session-bound step-up proofs.
   const AuthTwoFactorRevokeStepUpCommand({
     required this.userId,
     required this.sessionBindingHash,
   });
 
+  /// User whose proof should be revoked.
   final String userId;
+
+  /// Session binding whose proofs should be revoked.
   final String sessionBindingHash;
 }
 
@@ -1174,75 +1376,106 @@ class AuthTwoFactorRevokeStepUpCommand {
 /// transactions. The plugin never supplies a transaction callback and never
 /// falls back to coordinating individual writes itself.
 abstract interface class AuthTwoFactorBackend {
+  /// Typed factor-record persistence owned by this backend.
   AuthTwoFactorStore get factorStore;
+
+  /// Typed pending-challenge persistence owned by this backend.
   AuthTwoFactorChallengeStore get challengeStore;
+
+  /// Typed trusted-device persistence owned by this backend.
   AuthTwoFactorTrustedDeviceStore get trustedDeviceStore;
+
+  /// Typed step-up-proof persistence owned by this backend.
   AuthTwoFactorStepUpStore get stepUpStore;
 
+  /// Atomically starts or replaces an enrollment.
   FutureOr<AuthTwoFactorCommandResult> beginEnrollment(
     AuthTwoFactorBeginEnrollmentCommand command,
   );
 
+  /// Atomically activates an enrollment.
   FutureOr<AuthTwoFactorCommandResult> verifyEnrollment(
     AuthTwoFactorVerifyEnrollmentCommand command,
   );
 
+  /// Atomically verifies a TOTP code.
   FutureOr<AuthTwoFactorCommandResult> verifyTotp(
     AuthTwoFactorVerifyTotpCommand command,
   );
 
+  /// Atomically consumes a recovery code.
   FutureOr<AuthTwoFactorCommandResult> useRecoveryCode(
     AuthTwoFactorUseRecoveryCodeCommand command,
   );
 
+  /// Atomically replaces recovery-code digests.
   FutureOr<AuthTwoFactorCommandResult> regenerateRecoveryCodes(
     AuthTwoFactorRegenerateRecoveryCodesCommand command,
   );
 
+  /// Atomically disables two-factor state.
   FutureOr<AuthTwoFactorCommandResult> disable(
     AuthTwoFactorDisableCommand command,
   );
 
+  /// Atomically starts or bypasses a pending challenge.
   FutureOr<AuthTwoFactorCommandResult> beginChallenge(
     AuthTwoFactorBeginChallengeCommand command,
   );
 
+  /// Atomically completes a pending TOTP challenge.
   FutureOr<AuthTwoFactorCommandResult> completeChallenge(
     AuthTwoFactorCompleteChallengeCommand command,
   );
 
+  /// Atomically completes a pending recovery challenge.
   FutureOr<AuthTwoFactorCommandResult> completeRecoveryChallenge(
     AuthTwoFactorCompleteRecoveryChallengeCommand command,
   );
 
+  /// Atomically issues a trusted-device record.
   FutureOr<AuthTwoFactorCommandResult> issueTrustedDevice(
     AuthTwoFactorIssueTrustedDeviceCommand command,
   );
 
+  /// Atomically issues a session-bound step-up proof.
   FutureOr<AuthTwoFactorCommandResult> verifyStepUp(
     AuthTwoFactorVerifyStepUpCommand command,
   );
 
+  /// Revokes trusted devices according to [command].
   FutureOr<void> revokeTrustedDevices(
     AuthTwoFactorRevokeTrustedDevicesCommand command,
   );
 
+  /// Revokes step-up proofs according to [command].
   FutureOr<void> revokeStepUp(AuthTwoFactorRevokeStepUpCommand command);
 
+  /// Revokes every step-up proof belonging to [userId].
   FutureOr<void> revokeAllStepUp(String userId);
 }
 
 /// In-memory fault locations used to prove rollback behavior.
 enum AuthTwoFactorAtomicFaultPoint {
+  /// Failure injected after the factor record is written.
   afterFactorWrite,
+
+  /// Failure injected after the challenge record is written.
   afterChallengeWrite,
+
+  /// Failure injected after a trusted-device record is written.
   afterTrustedDeviceWrite,
+
+  /// Failure injected after a step-up record is written.
   afterStepUpWrite,
 }
 
+/// Exception raised when an in-memory atomic fault is injected.
 final class AuthTwoFactorInjectedFault implements Exception {
+  /// Creates a fault associated with [point].
   const AuthTwoFactorInjectedFault(this.point);
 
+  /// Atomic write boundary at which the fault was raised.
   final AuthTwoFactorAtomicFaultPoint point;
 
   @override
@@ -1254,6 +1487,7 @@ final class AuthTwoFactorFaultInjector {
   final Set<AuthTwoFactorAtomicFaultPoint> _pending =
       <AuthTwoFactorAtomicFaultPoint>{};
 
+  /// Fails the next command that reaches [point].
   void failNext(AuthTwoFactorAtomicFaultPoint point) => _pending.add(point);
 
   void _check(AuthTwoFactorAtomicFaultPoint point) {
@@ -1267,6 +1501,10 @@ final class AuthTwoFactorFaultInjector {
 /// stores and restores them if a write or injected fault fails.
 final class InMemoryAuthTwoFactorBackend
     implements AuthTwoFactorBackend, AuthInMemoryDeletionState {
+  /// Creates a transactional in-memory two-factor backend.
+  ///
+  /// Individual stores may be supplied to inspect or seed state in tests. If
+  /// omitted, bounded in-memory stores are created for each capability.
   InMemoryAuthTwoFactorBackend({
     InMemoryAuthTwoFactorStore? factorStore,
     InMemoryAuthTwoFactorChallengeStore? challengeStore,
@@ -1283,18 +1521,23 @@ final class InMemoryAuthTwoFactorBackend
        stepUpStore =
            stepUpStore ?? InMemoryAuthTwoFactorStepUpStore(clock: clock);
 
+  /// Factor store used by this backend.
   @override
   final InMemoryAuthTwoFactorStore factorStore;
 
+  /// Pending-challenge store used by this backend.
   @override
   final InMemoryAuthTwoFactorChallengeStore challengeStore;
 
+  /// Trusted-device store used by this backend.
   @override
   final InMemoryAuthTwoFactorTrustedDeviceStore trustedDeviceStore;
 
+  /// Step-up-proof store used by this backend.
   @override
   final InMemoryAuthTwoFactorStepUpStore stepUpStore;
 
+  /// Optional fault injector used to exercise rollback paths.
   final AuthTwoFactorFaultInjector? faultInjector;
   final Map<String, Future<void>> _userTails = <String, Future<void>>{};
 
@@ -1775,14 +2018,17 @@ bool _sameFactorIdentity(AuthTwoFactorRecord left, AuthTwoFactorRecord right) =>
 
 /// Exception used by an adapter to return a pending sign-in response.
 class AuthTwoFactorRequiredException extends AuthFlowException {
+  /// Creates an exception carrying a challenge that the adapter must present.
   AuthTwoFactorRequiredException({required this.challenge})
     : super('two_factor_required');
 
+  /// Pending challenge that must be completed before sign-in can finish.
   final AuthTwoFactorSignInChallenge challenge;
 }
 
 /// Public two-factor status that never exposes the secret or code digests.
 class AuthTwoFactorStatus {
+  /// Creates a redacted public status snapshot.
   const AuthTwoFactorStatus({
     required this.enabled,
     required this.recoveryCodesRemaining,
@@ -1790,11 +2036,19 @@ class AuthTwoFactorStatus {
     this.lockedUntil,
   });
 
+  /// Whether an enrollment has been verified and enabled.
   final bool enabled;
+
+  /// Number of unused recovery codes remaining.
   final int recoveryCodesRemaining;
+
+  /// Expiry of an unverified enrollment, when one is pending.
   final DateTime? enrollmentExpiresAt;
+
+  /// Active verification lockout expiry, when the factor is locked.
   final DateTime? lockedUntil;
 
+  /// Serializes the redacted status for an API response.
   Map<String, dynamic> toJson() => {
     'enabled': enabled,
     'recoveryCodesRemaining': recoveryCodesRemaining,
@@ -1818,6 +2072,12 @@ final class TwoFactorPlugin<TContext>
         AuthHostEndpointContributor<TContext>,
         AuthPersistenceContributor,
         AuthUserDeletionPlanContributor {
+  /// Creates a framework-neutral TOTP and recovery-code plugin.
+  ///
+  /// [backend] must implement the atomic persistence boundary. [secretProtector]
+  /// protects TOTP secrets before they are handed to that backend. Cookie names,
+  /// time-to-live values, and verification limits can be adjusted for the host
+  /// application.
   TwoFactorPlugin({
     required this.backend,
     required this.secretProtector,
@@ -1902,30 +2162,60 @@ final class TwoFactorPlugin<TContext>
     }
   }
 
+  /// Stable plugin identifier used during registration.
   @override
   String get id => authTwoFactorPluginId;
 
+  /// Persistence contract exposed to host schema tooling.
   @override
   AuthServerPluginDataContract get dataContract =>
       const AuthServerPluginDataContract(userDataNamespace: 'two_factor');
 
+  /// Atomic persistence backend used by every two-factor operation.
   final AuthTwoFactorBackend backend;
+
+  /// Protector used for TOTP secrets at the persistence boundary.
   final AuthTwoFactorSecretProtector secretProtector;
+
+  /// Issuer embedded in generated `otpauth` URIs.
   final String issuer;
+
+  /// Lifetime of an unverified enrollment.
   final Duration enrollmentTtl;
+
+  /// TOTP time period in seconds.
   final int period;
+
+  /// Number of digits generated by TOTP codes.
   final int digits;
+
+  /// Number of adjacent time periods accepted during verification.
   final int allowedClockSkew;
+
+  /// Failed verification attempts permitted before lockout.
   final int maxFailedVerificationAttempts;
+
+  /// Duration applied after the failed-attempt limit is reached.
   final Duration lockoutDuration;
+
+  /// Lifetime of a pending sign-in challenge.
   final Duration challengeTtl;
+
+  /// Lifetime of a trusted-device token.
   final Duration trustedDeviceTtl;
+
+  /// Cookie name recommended for trusted-device tokens.
   final String trustedDeviceCookieName;
+
+  /// Lifetime of a session-bound step-up proof.
   final Duration stepUpTtl;
+
+  /// Cookie name recommended for step-up proofs.
   final String stepUpCookieName;
   final List<int> Function(int length) _secretGenerator;
   late AuthUserDeletionDomain _deletionDomain;
 
+  /// Captures the host deletion domain required by this plugin.
   @override
   void configure(AuthServerPluginContext<TContext> context) {
     final host = context.store;
@@ -1937,6 +2227,7 @@ final class TwoFactorPlugin<TContext>
         .domain;
   }
 
+  /// Host endpoints contributed by the plugin.
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get hostEndpoints =>
       <AuthEndpointDescriptor<TContext>>[
@@ -2018,6 +2309,7 @@ final class TwoFactorPlugin<TContext>
         ),
       ];
 
+  /// Persistence entities and atomic operations required by the plugin.
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
     AuthPersistenceSchema(
@@ -2191,9 +2483,11 @@ final class TwoFactorPlugin<TContext>
     ),
   ];
 
+  /// User-data namespace removed when a user is deleted.
   @override
   String get userDataNamespace => 'two_factor';
 
+  /// Creates the deletion plan for an in-memory two-factor backend.
   @override
   Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) async {
     if (_deletionDomain is! AuthInMemoryUserDeletionDomain ||
@@ -2840,7 +3134,7 @@ List<int>? decodeAuthBase32(String value) {
   return output;
 }
 
-/// Generates an RFC 6238 TOTP code using the maintained [hashlib] OTP core.
+/// Generates an RFC 6238 TOTP code using the maintained `hashlib` OTP core.
 String generateAuthTotpCode(
   String base32Secret, {
   int? timestampSeconds,

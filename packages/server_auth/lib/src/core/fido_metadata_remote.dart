@@ -4,7 +4,16 @@ part of 'fido_metadata.dart';
 typedef FidoMetadataClock = DateTime Function();
 
 /// Outcome required from an application-owned certificate revocation check.
-enum FidoMetadataCertificateRevocationStatus { good, revoked, unknown }
+enum FidoMetadataCertificateRevocationStatus {
+  /// The certificate is not known to be revoked.
+  good,
+
+  /// The certificate is revoked.
+  revoked,
+
+  /// Revocation status could not be determined.
+  unknown,
+}
 
 /// Checks one verified certificate against application-owned revocation data.
 ///
@@ -36,9 +45,16 @@ final class FidoMetadataVerifiedCertificate {
   final String sha256Fingerprint;
 
   /// Positive X.509 certificate serial number.
+  /// Positive X.509 certificate serial number.
   final BigInt serialNumber;
+
+  /// Start of the certificate validity interval.
   final DateTime notBefore;
+
+  /// End of the certificate validity interval.
   final DateTime notAfter;
+
+  /// Whether the certificate asserts certificate-authority capabilities.
   final bool isCertificateAuthority;
 
   /// Extended-key-usage object identifiers, when the extension is present.
@@ -53,13 +69,19 @@ final class FidoMetadataCertificateRevocationInput {
     required this.now,
   });
 
+  /// Certificate whose revocation status is being checked.
   final FidoMetadataVerifiedCertificate certificate;
+
+  /// Issuer certificate used to validate [certificate].
   final FidoMetadataVerifiedCertificate issuer;
+
+  /// Verification time used for revocation policy decisions.
   final DateTime now;
 }
 
 /// Pinned trust and revocation dependencies for the built-in MDS verifier.
 final class FidoMetadataPkixTrust {
+  /// Creates pinned trust and revocation dependencies.
   FidoMetadataPkixTrust({
     required Iterable<List<int>> trustAnchors,
     required this.checkRevocation,
@@ -70,7 +92,10 @@ final class FidoMetadataPkixTrust {
          limits.maxCertificateBytes,
        );
 
+  /// Callback used to check each non-anchor certificate for revocation.
   final FidoMetadataCertificateRevocationChecker checkRevocation;
+
+  /// Resource bounds applied while parsing the certificate path.
   final FidoMetadataLimits limits;
   final List<List<int>> _trustAnchors;
 
@@ -86,8 +111,10 @@ final class FidoMetadataPkixTrust {
 /// different CRL caches, proxies, and compliance stores; [FidoMetadataPkixTrust]
 /// makes that decision explicit and fail-closed.
 final class FidoMetadataJwsPkixVerifier {
+  /// Creates a verifier using the pinned [trust] configuration.
   const FidoMetadataJwsPkixVerifier({required this.trust});
 
+  /// Trust anchors, limits, and revocation callback used by verification.
   final FidoMetadataPkixTrust trust;
 
   /// Verifies an input produced by [FidoMetadataBlobLoader].
@@ -181,15 +208,25 @@ final class FidoMetadataHttpRequest {
     required this.maxResponseHeaderBytes,
   }) : headers = Map<String, String>.unmodifiable(headers);
 
+  /// HTTPS URI requested by the downloader.
   final Uri uri;
+
+  /// Request headers sent by the transport.
   final Map<String, String> headers;
+
+  /// Absolute timeout for this request.
   final Duration timeout;
+
+  /// Maximum response body size accepted by the request.
   final int maxResponseBytes;
+
+  /// Maximum response-header size accepted by the request.
   final int maxResponseHeaderBytes;
 }
 
 /// A bounded response returned by [FidoMetadataHttpTransport].
 final class FidoMetadataHttpResponse {
+  /// Creates a bounded response from [bodyBytes] and [headers].
   FidoMetadataHttpResponse({
     required this.statusCode,
     required Iterable<int> bodyBytes,
@@ -197,8 +234,13 @@ final class FidoMetadataHttpResponse {
   }) : bodyBytes = _copyHttpResponseBody(bodyBytes),
        headers = _copyHttpResponseHeaders(headers);
 
+  /// HTTP status code returned by the transport.
   final int statusCode;
+
+  /// Complete response body, bounded and copied on construction.
   final List<int> bodyBytes;
+
+  /// Lowercase response headers.
   final Map<String, String> headers;
 }
 
@@ -226,6 +268,7 @@ abstract interface class FidoMetadataHttpTransport {
   factory FidoMetadataHttpTransport.packageHttp({http.Client? client}) =
       _PackageHttpFidoMetadataTransport;
 
+  /// Performs one bounded GET request without following redirects.
   Future<FidoMetadataHttpResponse> get(FidoMetadataHttpRequest request);
 
   /// Releases resources owned by this transport.
@@ -234,6 +277,7 @@ abstract interface class FidoMetadataHttpTransport {
 
 /// Security and resource bounds for remote MDS refreshes.
 final class FidoMetadataDownloadPolicy {
+  /// Creates security and resource bounds for remote refreshes.
   const FidoMetadataDownloadPolicy({
     this.maxRedirects = 3,
     this.perRequestTimeout = const Duration(seconds: 15),
@@ -253,7 +297,11 @@ final class FidoMetadataDownloadPolicy {
 
   /// Non-resetting budget for all hops, verification, and revocation checks.
   final Duration totalRefreshTimeout;
+
+  /// Maximum response body size accepted from the transport.
   final int maxResponseBytes;
+
+  /// Maximum combined response-header size accepted from the transport.
   final int maxResponseHeaderBytes;
 
   /// Maximum age of a signed `iat` claim when one is present.
@@ -261,6 +309,8 @@ final class FidoMetadataDownloadPolicy {
 
   /// Maximum local verification age accepted after an HTTP 304 response.
   final Duration maxCachedAge;
+
+  /// Clock tolerance used for metadata freshness comparisons.
   final Duration clockSkew;
 }
 
@@ -273,8 +323,13 @@ final class FidoMetadataRefreshResult {
     this.etag,
   }) : _cacheBinding = cacheBinding;
 
+  /// Authenticated metadata blob available after the refresh.
   final FidoMetadataBlob blob;
+
+  /// Whether the refresh downloaded and verified a new blob.
   final bool wasDownloaded;
+
+  /// ETag returned by the source, when available.
   final String? etag;
   final String _cacheBinding;
 }
@@ -286,6 +341,11 @@ final class FidoMetadataRefreshResult {
 /// existing offline [FidoMetadataBlobLoader]. No network access occurs until
 /// [refresh] is called.
 final class FidoMetadataDownloader {
+  /// Creates a downloader for the configured metadata [source].
+  ///
+  /// If [httpTransport] is omitted, the package HTTP transport is created and
+  /// owned by this instance. Supplying a transport is useful for custom
+  /// runtimes and deterministic tests.
   FidoMetadataDownloader({
     required this.trust,
     FidoMetadataHttpTransport? httpTransport,
@@ -314,8 +374,13 @@ final class FidoMetadataDownloader {
   /// The well-known public FIDO Metadata Service endpoint.
   static final Uri officialSource = Uri.parse('https://mds.fidoalliance.org/');
 
+  /// Pinned certificate and revocation configuration.
   final FidoMetadataPkixTrust trust;
+
+  /// HTTPS MDS endpoint used for refreshes.
   final Uri source;
+
+  /// Bounds and freshness rules applied to each refresh.
   final FidoMetadataDownloadPolicy policy;
   final FidoMetadataClock _clock;
   final FidoMetadataHttpTransport _transport;
