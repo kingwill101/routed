@@ -40,7 +40,7 @@ extension ServerExtension on Engine {
         _setupShutdownController();
 
         // Handle incoming connections
-        await for (HttpRequest httpRequest in _server!) {
+        await for (final HttpRequest httpRequest in _server!) {
           // Handle each request concurrently
           // ignore: unawaited_futures
           handleRequest(httpRequest).catchError((e, s) async {
@@ -62,13 +62,14 @@ extension ServerExtension on Engine {
     return WebSocketTransformer.isUpgradeRequest(httpRequest);
   }
 
+  /// Handles a WebSocket upgrade request when a route matches.
   Future<bool> handleWs(HttpRequest httpRequest) async {
     if (!WebSocketTransformer.isUpgradeRequest(httpRequest)) {
       return false;
     }
     final requestPath = httpRequest.uri.path;
     WebSocketEngineRoute? route;
-    Map<String, dynamic> pathParams = const {};
+    var pathParams = const <String, dynamic>{};
     for (final candidate in _wsRoutes.values) {
       if (!candidate.pattern.hasMatch(requestPath) &&
           !candidate.pattern.hasMatch(
@@ -130,16 +131,16 @@ extension ServerExtension on Engine {
 
     final maxRequestSize = config.security.maxRequestSize;
 
-    final HttpRequest effectiveRequest = maxRequestSize > 0
+    final effectiveRequest = maxRequestSize > 0
         ? WrappedRequest(httpRequest, maxRequestSize)
         : httpRequest;
 
     final normalizedPath = _normalizePath(path);
     final candidateRoutes = _routesByMethod[method] ?? const <EngineRoute>[];
-    final bool useTrie = config.features.enableTrieRouting;
-    final RouteTrie? trie = useTrie ? _trieByMethod[method] : null;
+    final useTrie = config.features.enableTrieRouting;
+    final trie = useTrie ? _trieByMethod[method] : null;
 
-    bool matchesCurrentPath = false;
+    var matchesCurrentPath = false;
     EngineRoute? matchedRoute;
 
     final staticRoutes = _staticRoutesByMethod[method];
@@ -301,7 +302,7 @@ extension ServerExtension on Engine {
     if (fallbackCandidates.isNotEmpty) {
       // Find the most specific fallback route using fuzzy matching
       EngineRoute? mostSpecificFallback;
-      int maxSimilarityScore = 0;
+      var maxSimilarityScore = 0;
 
       for (final fallbackRoute in fallbackCandidates) {
         // Extract the static part of the fallback route's path
@@ -310,7 +311,7 @@ extension ServerExtension on Engine {
         // Calculate the similarity score between the request path and the static path
         final similarityScore = fuzzy.ratio(
           path,
-          staticPath.isNotEmpty ? staticPath : "/",
+          staticPath.isNotEmpty ? staticPath : '/',
         );
 
         // Update the most specific fallback route if the similarity score is higher
@@ -321,7 +322,7 @@ extension ServerExtension on Engine {
       }
 
       if (mostSpecificFallback != null) {
-        return await _handleMatchedRoute(
+        return _handleMatchedRoute(
           mostSpecificFallback,
           effectiveRequest,
           ensureRequestContainer(),
@@ -330,7 +331,7 @@ extension ServerExtension on Engine {
     }
 
     // No matches found
-    return await _respondWithNotFound(
+    return _respondWithNotFound(
       effectiveRequest,
       ensureRequestContainer(),
     );
@@ -503,14 +504,14 @@ extension ServerExtension on Engine {
     final response = Response(httpRequest.response);
     _onRequestStarted(request);
 
-    final List<Middleware> chain = [
+    final chain = <Middleware>[
       ..._cachedGlobalMiddlewares,
       ...route.middlewares,
     ];
     chain.add((EngineContext ctx, Next next) async {
       WebSocket? webSocket;
       try {
-        // ignore: close_sinks, handed off to the registered WebSocket handler
+        // ignore: handed off to the registered WebSocket handler
         webSocket = await WebSocketTransformer.upgrade(httpRequest);
         ctx.markUpgraded();
         final wsContext = WebSocketContext(IoRoutedWebSocket(webSocket), ctx);

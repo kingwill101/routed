@@ -1,4 +1,4 @@
 export 'package:server_contracts/server_contracts.dart'
-    show Store, Repository, Factory, Lock, LockProvider, LockTimeoutException;
+    show Factory, Lock, LockProvider, LockTimeoutException, Repository, Store;
 export 'translation/loader.dart';
 export 'translation/translator.dart';

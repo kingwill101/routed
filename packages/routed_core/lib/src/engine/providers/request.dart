@@ -13,18 +13,18 @@ import 'package:routed_core/routed_core.dart';
 /// These services are typically scoped to a single request and cleaned up
 /// after the request is complete.
 class RequestServiceProvider extends ServiceProvider {
-  /// The HTTP request instance
-  final HttpRequest request;
-
-  /// The HTTP response instance
-  final HttpResponse response;
-
   /// Creates a new request service provider.
   ///
   /// Parameters:
   /// - [request]: The HTTP request instance
   /// - [response]: The HTTP response instance
   RequestServiceProvider(this.request, this.response);
+
+  /// The HTTP request instance
+  final HttpRequest request;
+
+  /// The HTTP response instance
+  final HttpResponse response;
 
   @override
   void register(Container container) {

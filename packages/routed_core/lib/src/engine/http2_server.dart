@@ -35,6 +35,8 @@ class Http2ServerBinding {
 
   final SecureServerSocket _secureSocket;
   final _ServerSocketController _http11Controller;
+
+  /// The HTTP/1.1 server view backed by this binding.
   final HttpServer http1Server;
   final http2.ServerSettings _settings;
 
@@ -69,7 +71,6 @@ class Http2ServerBinding {
       address,
       port,
       context,
-      backlog: 0,
       v6Only: v6Only,
       requestClientCertificate: requestClientCertificate,
       shared: shared,
@@ -231,6 +232,7 @@ class _StreamServerSocket extends StreamView<Socket> implements ServerSocket {
 /// sync with their string representations. It does **not** perform any
 /// validation beyond what `dart:io` already provides.
 class Http2Headers implements HttpHeaders {
+  /// Creates an empty mutable header collection.
   Http2Headers();
 
   final Map<String, List<String>> _headers = <String, List<String>>{};
@@ -491,6 +493,7 @@ class Http2Headers implements HttpHeaders {
     _chunkedTransferEncoding = false;
   }
 
+  /// The header names currently present in this collection.
   Iterable<String> get keys sync* {
     for (final entry in _headers.entries) {
       yield _originalNames[entry.key] ?? entry.key;
@@ -553,7 +556,6 @@ class Http2Headers implements HttpHeaders {
         _contentLength = values == null || values.isEmpty
             ? -1
             : int.tryParse(values.last.trim()) ?? -1;
-        break;
       case HttpHeaders.contentTypeHeader:
         if (values == null || values.isEmpty) {
           _contentType = null;
@@ -564,7 +566,6 @@ class Http2Headers implements HttpHeaders {
             _contentType = null;
           }
         }
-        break;
       case HttpHeaders.hostHeader:
         if (values == null || values.isEmpty) {
           _host = null;
@@ -582,21 +583,16 @@ class Http2Headers implements HttpHeaders {
             _port = null;
           }
         }
-        break;
       case HttpHeaders.dateHeader:
         _date = _parseHttpDate(values);
-        break;
       case HttpHeaders.expiresHeader:
         _expires = _parseHttpDate(values);
-        break;
       case HttpHeaders.ifModifiedSinceHeader:
         _ifModifiedSince = _parseHttpDate(values);
-        break;
       case HttpHeaders.transferEncodingHeader:
-        _chunkedTransferEncoding = values == null
-            ? false
-            : values.any((value) => value.toLowerCase() == 'chunked');
-        break;
+        _chunkedTransferEncoding =
+            !(values == null) &&
+            values.any((value) => value.toLowerCase() == 'chunked');
       case HttpHeaders.connectionHeader:
         if (values == null || values.isEmpty) {
           _persistentConnection = true;
@@ -608,7 +604,6 @@ class Http2Headers implements HttpHeaders {
             _persistentConnection = true;
           }
         }
-        break;
     }
   }
 
@@ -627,6 +622,7 @@ class Http2Headers implements HttpHeaders {
 ///
 /// The request body is exposed as a broadcast stream of [Uint8List] chunks.
 class Http2HttpRequestAdapter extends Stream<Uint8List> implements HttpRequest {
+  /// Adapts an HTTP/2 request stream to the [HttpRequest] interface.
   Http2HttpRequestAdapter({
     required this.method,
     required this.requestedUri,
@@ -700,10 +696,13 @@ class Http2HttpRequestAdapter extends Stream<Uint8List> implements HttpRequest {
   @override
   int get contentLength => headers.contentLength;
 
+  /// The parsed request content type, when supplied.
   ContentType? get contentType => headers.contentType;
 
+  /// Whether this request arrived over a secure connection.
   bool get isSecure => isSecureConnection;
 
+  /// Whether the underlying HTTP/2 connection is secure.
   final bool isSecureConnection;
   final Stream<Uint8List> _bodyStream;
 
@@ -720,23 +719,30 @@ class Http2HttpRequestAdapter extends Stream<Uint8List> implements HttpRequest {
     cancelOnError: cancelOnError,
   );
 
+  /// HTTP/2 does not support detaching the request socket.
   Future<Socket> detachSocket({bool writeHeaders = true}) =>
       throw UnsupportedError('detachSocket is not supported for HTTP/2');
 
+  /// HTTP/2 does not support upgrading this request.
   Future<HttpClientResponse> upgrade(
     Future<void> Function(Socket) readHandler,
   ) => throw UnsupportedError('upgrade is not supported for HTTP/2');
 }
 
-/// An [HttpResponse] implementation that writes HTTP/2 frames.
+/// An `HttpResponse` implementation that writes HTTP/2 frames.
 ///
 /// The response automatically converts header/cookie additions into the
 /// appropriate `HEADERS` frame when data is sent for the first time.
+///
+/// This class implements the `dart:io` `HttpResponse` contract.
 class Http2HttpResponseAdapter implements HttpResponse {
+  /// Creates an HTTP/2 response adapter for the supplied stream.
   Http2HttpResponseAdapter(this._stream, {this.isSecure = true})
     : _headers = Http2Headers();
 
   final http2.ServerTransportStream _stream;
+
+  /// Whether the response is associated with a secure connection.
   final bool isSecure;
 
   bool _headersSent = false;
@@ -807,7 +813,7 @@ class Http2HttpResponseAdapter implements HttpResponse {
       );
     }
 
-    _stream.sendHeaders(headerFrames, endStream: false);
+    _stream.sendHeaders(headerFrames);
     _headersSent = true;
   }
 
@@ -866,6 +872,7 @@ class Http2HttpResponseAdapter implements HttpResponse {
   @override
   HttpConnectionInfo? get connectionInfo => null;
 
+  /// Adds [cookie] to the response headers.
   void setCookie(Cookie cookie) {
     _cookies.add(cookie);
     headers.add(HttpHeaders.setCookieHeader, cookie.toString());
@@ -945,16 +952,12 @@ class Http2Adapter {
       switch (name) {
         case ':method':
           method = value;
-          break;
         case ':scheme':
           scheme = value;
-          break;
         case ':path':
           path = value;
-          break;
         case ':authority':
           authority = value;
-          break;
         default:
           headerMap.putIfAbsent(name, () => <String>[]).add(value);
       }

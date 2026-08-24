@@ -4,7 +4,13 @@ import 'package:routed_core/src/security/network.dart';
 ///
 /// If no rules match, the [IpFilterAction.allow] permits the IP, while
 /// [IpFilterAction.deny] blocks it.
-enum IpFilterAction { allow, deny }
+enum IpFilterAction {
+  /// Allows the address when the rule matches.
+  allow,
+
+  /// Denies the address when the rule matches.
+  deny,
+}
 
 /// A filter for controlling access based on IP addresses.
 ///

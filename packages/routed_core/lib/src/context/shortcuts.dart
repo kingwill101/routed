@@ -1,5 +1,6 @@
 part of 'context.dart';
 
+/// Convenience methods for required values and not-found responses.
 extension ContextShortcuts on EngineContext {
   /// Returns [value] when it is non-null; otherwise throws a [NotFoundError].
   ///

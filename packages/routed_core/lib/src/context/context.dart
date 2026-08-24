@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:routed_core/src/config/typed.dart' show ConfigStore;
 // HTTP form/query/SSE helpers live in package:routed_http (import that package).
 import 'package:routed_core/src/container/container.dart' show Container;
-import 'package:routed_core/src/config/typed.dart' show ConfigStore;
 import 'package:routed_core/src/contracts/translation/translator.dart';
 import 'package:routed_core/src/engine/config.dart';
 import 'package:routed_core/src/engine/engine.dart';
@@ -16,17 +16,32 @@ import 'package:routed_core/src/response.dart';
 import 'package:routed_core/src/router/types.dart' show Middleware;
 
 part 'error.dart';
-
 part 'helpers.dart';
-
-part 'shortcuts.dart';
-
 part 'response_format.dart';
+part 'shortcuts.dart';
 
 /// The EngineContext is loosely inspired by gin.Context in Go.
 /// It wraps [Request] and [Response], holds arbitrary keys/values,
 /// tracks errors, and can control flow in a chain of handlers.
 class EngineContext {
+  /// Create a new context around a [Request] and [Response].
+  EngineContext({
+    required this.request,
+    required Response response,
+    List<Middleware>? handlers,
+    Engine? engine,
+    EngineRoute? route,
+    Container? container,
+  }) : _response = response,
+       _engine = engine,
+       _route = route,
+       _container = container,
+       id = request.id {
+    if (handlers != null && handlers.isNotEmpty) {
+      _handlers = handlers;
+    }
+  }
+
   /// The current HTTP request data.
   final Request request;
 
@@ -58,6 +73,7 @@ class EngineContext {
   /// Unique identifier for tracking, same as request.id.
   final String id;
 
+  /// The engine that created this context, when one is available.
   Engine? get engine => _engine;
 
   /// Retrieves the engine configuration.
@@ -78,27 +94,14 @@ class EngineContext {
     return container;
   }
 
-  /// Create a new context around a [Request] and [Response].
-  EngineContext({
-    required this.request,
-    required Response response,
-    List<Middleware>? handlers,
-    Engine? engine,
-    EngineRoute? route,
-    Container? container,
-  }) : _response = response,
-       _engine = engine,
-       _route = route,
-       _container = container,
-       id = request.id {
-    if (handlers != null && handlers.isNotEmpty) {
-      _handlers = handlers;
-    }
-  }
-
   // Cache keys shared with package:routed_http form/query extensions.
-  final String queryCacheKey = "__queryCache";
-  final String formCacheKey = "__formCache";
+  /// The request attribute key used to cache parsed query parameters.
+  final String queryCacheKey = '__queryCache';
+
+  /// The request attribute key used to cache parsed form data.
+  final String formCacheKey = '__formCache';
+
+  /// The request attribute key used to cache parsed multipart form data.
   final String multipartFormKey = '__multipartForm';
 
   /// Retrieve a stored value by [key].
@@ -264,7 +267,7 @@ class EngineContext {
   /// Helper to start processing the chain from the first handler.
   Future<Response> run() async {
     resetHandlers();
-    return await _nextImpl(); // start from index = -1 -> 0
+    return _nextImpl(); // start from index = -1 -> 0
   }
 
   /// Upgrades the HTTP connection and yields the underlying socket to the caller.
@@ -360,7 +363,7 @@ class EngineContext {
   /// Retrieve a query parameter from the request.
   ///
   /// For multi-value query maps and binding helpers, import
-  /// `package:routed_http` and use [queryCache] / [getQuery].
+  /// `package:routed_http` and use its `queryCache` and `getQuery` helpers.
   dynamic query(String s) {
     return uri.queryParameters[s];
   }
@@ -384,8 +387,8 @@ class EngineContext {
 
   /// Filter flags from a content string.
   String filterFlags(String content) {
-    for (int i = 0; i < content.length; i++) {
-      var char = content[i];
+    for (var i = 0; i < content.length; i++) {
+      final char = content[i];
       if (char == ' ' || char == ';') {
         return content.substring(0, i);
       }
@@ -421,6 +424,7 @@ class EngineContext {
     _response.headers.add(s, t);
   }
 
+  /// Returns the response header named [s], or `null` when it is absent.
   String? header(String s) {
     final value = _response.headers[s]?.join(', ');
     if (value == null) {

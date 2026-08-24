@@ -1,9 +1,11 @@
 import 'dart:convert';
 
-import 'engine.dart';
+import 'package:routed_core/src/engine/engine.dart';
 
 /// A serializable snapshot of the engine's registered routes.
 class RouteManifest {
+  /// Creates a route manifest snapshot.
+  /// Creates a route manifest.
   RouteManifest({
     DateTime? generatedAt,
     Iterable<RouteManifestEntry> routes = const [],
@@ -14,6 +16,7 @@ class RouteManifest {
        webSockets = List<WebSocketRouteManifestEntry>.unmodifiable(webSockets),
        validationRuleNames = List<String>.unmodifiable(validationRuleNames);
 
+  /// Reconstructs a manifest from a JSON-compatible map.
   factory RouteManifest.fromJson(Map<String, Object?> json) {
     final generatedAtRaw = json['generatedAt'];
     DateTime? generatedAt;
@@ -68,6 +71,7 @@ class RouteManifest {
   /// Names of validation rules registered in the engine.
   final List<String> validationRuleNames;
 
+  /// Converts this manifest to a JSON-compatible map.
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'generatedAt': generatedAt.toIso8601String(),
@@ -91,6 +95,7 @@ class RouteManifest {
 
 /// Describes a single HTTP route registered with the engine.
 class RouteManifestEntry {
+  /// Creates a manifest entry for an HTTP route.
   RouteManifestEntry({
     required this.method,
     required this.path,
@@ -108,13 +113,13 @@ class RouteManifestEntry {
        constraints = Map<String, Object?>.unmodifiable(constraints),
        metadata = Map<String, Object?>.unmodifiable(metadata);
 
+  /// Creates an entry from a compiled [route].
   factory RouteManifestEntry.fromEngineRoute(EngineRoute route) {
     // Keep generic Object for handlerIdentity/schema to support both routed and routed_openapi RouteSchema
     return RouteManifestEntry(
       method: route.method,
       path: route.path,
       name: route.name,
-      handlerIdentity: null,
       middleware: route.middlewares.map(_describeMiddleware),
       constraints: _serializeConstraints(route.constraints),
       metadata: _serializeMetadata(route.metadata.asMap),
@@ -126,29 +131,30 @@ class RouteManifestEntry {
     );
   }
 
+  /// Reconstructs an entry from a JSON-compatible map.
   factory RouteManifestEntry.fromJson(Map<String, Object?> json) {
     final method = json['method']?.toString() ?? 'GET';
     final path = json['path']?.toString() ?? '/';
     final name = json['name']?.toString();
     final middleware = json['middleware'] is List
-        ? (json['middleware'] as List)
+        ? (json['middleware']! as List)
               .whereType<Object>()
               .map((value) => value.toString())
               .toList()
         : const <String>[];
     final constraints = json['constraints'] is Map
-        ? _stringKeyed(json['constraints'] as Map)
+        ? _stringKeyed(json['constraints']! as Map)
         : const <String, Object?>{};
     final isFallback = json['isFallback'] == true;
     return RouteManifestEntry(
       method: method,
       path: path,
-      name: name?.isEmpty == true ? null : name,
+      name: name?.isEmpty ?? false ? null : name,
       handlerIdentity: json['handlerIdentity'],
       middleware: middleware,
       constraints: constraints,
       metadata: json['metadata'] is Map
-          ? _stringKeyed(json['metadata'] as Map)
+          ? _stringKeyed(json['metadata']! as Map)
           : const <String, Object?>{},
       sourceFile: json['sourceFile']?.toString(),
       sourceLine: (json['sourceLine'] as num?)?.toInt(),
@@ -158,21 +164,43 @@ class RouteManifestEntry {
     );
   }
 
+  /// The HTTP method registered for the route.
   final String method;
+
+  /// The route path pattern.
   final String path;
+
+  /// The optional route name used for URL generation.
   final String? name;
+
+  /// A serializable identity for the route handler, when available.
   final Object? handlerIdentity;
+
+  /// Descriptions of middleware attached to the route.
   final List<String> middleware;
+
+  /// Serializable route constraint values.
   final Map<String, Object?> constraints;
+
+  /// Serializable route metadata.
   final Map<String, Object?> metadata;
+
+  /// The source file where the route was registered.
   final String? sourceFile;
+
+  /// The source line where the route was registered.
   final int? sourceLine;
+
+  /// The source column where the route was registered.
   final int? sourceColumn;
+
+  /// Whether this entry represents a fallback route.
   final bool isFallback;
 
   /// Optional API schema metadata for this route.
   final Object? schema;
 
+  /// Converts this entry to a JSON-compatible map.
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'method': method,
@@ -193,11 +221,13 @@ class RouteManifestEntry {
 
 /// Describes a WebSocket route in the manifest output.
 class WebSocketRouteManifestEntry {
+  /// Creates a manifest entry for a WebSocket route.
   WebSocketRouteManifestEntry({
     required this.path,
     Iterable<String> middleware = const [],
   }) : middleware = List<String>.unmodifiable(middleware);
 
+  /// Creates an entry from a compiled WebSocket [route].
   factory WebSocketRouteManifestEntry.fromRoute(
     String path,
     WebSocketEngineRoute route,
@@ -208,10 +238,11 @@ class WebSocketRouteManifestEntry {
     );
   }
 
+  /// Reconstructs an entry from a JSON-compatible map.
   factory WebSocketRouteManifestEntry.fromJson(Map<String, Object?> json) {
     final path = json['path']?.toString() ?? '/';
     final middleware = json['middleware'] is List
-        ? (json['middleware'] as List)
+        ? (json['middleware']! as List)
               .whereType<Object>()
               .map((value) => value.toString())
               .toList()
@@ -219,9 +250,13 @@ class WebSocketRouteManifestEntry {
     return WebSocketRouteManifestEntry(path: path, middleware: middleware);
   }
 
+  /// The WebSocket route path pattern.
   final String path;
+
+  /// Descriptions of middleware attached to the route.
   final List<String> middleware;
 
+  /// Converts this entry to a JSON-compatible map.
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'path': path,
@@ -230,6 +265,7 @@ class WebSocketRouteManifestEntry {
   }
 }
 
+/// A engine route manifest x used by Routed.
 extension EngineRouteManifestX on Engine {
   /// Generates a [RouteManifest] for the current engine.
   RouteManifest buildRouteManifest() {

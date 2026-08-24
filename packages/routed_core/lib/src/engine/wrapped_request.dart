@@ -22,25 +22,6 @@ class WrappedRequest
         HostContextCarrier,
         SyntheticRequestCarrier,
         PortableRemoteAddressCarrier {
-  /// The original HTTP request being wrapped.
-  final HttpRequest _originalRequest;
-
-  /// Maximum allowed size for the request body in bytes.
-  final int _maxRequestSize;
-
-  /// Total number of bytes read so far from the request stream.
-  int _totalBytesRead = 0;
-
-  /// Whether the request body size limit has been exceeded.
-  bool _limitExceeded = false;
-
-  /// Stream controller for the size-limited request stream.
-  final StreamController<List<int>> _limitedStreamController =
-      StreamController<List<int>>();
-
-  /// Subscription to the original request stream.
-  StreamSubscription<List<int>>? _originalSubscription;
-
   /// Creates a new wrapped request with a size limit.
   ///
   /// The [_originalRequest] is the HTTP request to wrap, and [_maxRequestSize]
@@ -85,6 +66,25 @@ class WrappedRequest
       cancelOnError: true,
     );
   }
+
+  /// The original HTTP request being wrapped.
+  final HttpRequest _originalRequest;
+
+  /// Maximum allowed size for the request body in bytes.
+  final int _maxRequestSize;
+
+  /// Total number of bytes read so far from the request stream.
+  int _totalBytesRead = 0;
+
+  /// Whether the request body size limit has been exceeded.
+  bool _limitExceeded = false;
+
+  /// Stream controller for the size-limited request stream.
+  final StreamController<List<int>> _limitedStreamController =
+      StreamController<List<int>>();
+
+  /// Subscription to the original request stream.
+  StreamSubscription<List<int>>? _originalSubscription;
 
   @override
   Object? get hostContext => _originalRequest is HostContextCarrier
@@ -259,7 +259,7 @@ class WrappedRequest
   }
 
   @override
-  Future<String> join([String separator = ""]) async {
+  Future<String> join([String separator = '']) async {
     return _limitedStreamController.stream.join(separator);
   }
 

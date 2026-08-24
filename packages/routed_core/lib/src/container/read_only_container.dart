@@ -1,7 +1,8 @@
-import 'container.dart';
+import 'package:routed_core/src/container/container.dart';
 
 /// Read-only view of a [Container] that prevents mutations.
 class ReadOnlyContainer extends Container {
+  /// Creates a read-only view over [_inner].
   ReadOnlyContainer(this._inner);
 
   final Container _inner;

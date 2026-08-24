@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:routed_core/src/http/transport.dart';
+import 'package:routed_core/src/request.dart' show Request;
 
 /// Builds a synthetic [HttpRequest]/[HttpResponse] pair from portable adapters
 /// so the existing engine pipeline can handle non-`dart:io` hosts.
@@ -15,8 +16,9 @@ import 'package:routed_core/src/http/transport.dart';
 final class AdapterHttpBridge {
   AdapterHttpBridge._();
 
-  /// Create an [HttpRequest] whose body/headers come from [connection.request]
-  /// and whose response writes through [connection.response].
+  /// Creates an `HttpRequest` whose body and headers come from
+  /// `HttpConnection.request` and whose response writes through
+  /// `HttpConnection.response`.
   ///
   /// The synthetic response is closed by the engine pipeline after the request
   /// finishes (same lifecycle as a real `dart:io` response).
@@ -29,6 +31,7 @@ final class AdapterHttpBridge {
 
 /// Map-backed [HttpHeaders] suitable for adapter hosts.
 final class AdapterHttpHeaders implements HttpHeaders {
+  /// Creates headers populated with [initial] values.
   AdapterHttpHeaders([Map<String, List<String>>? initial]) {
     if (initial != null) {
       initial.forEach((name, values) {
@@ -354,9 +357,9 @@ final class AdapterHttpHeaders implements HttpHeaders {
       case HttpHeaders.ifModifiedSinceHeader:
         _ifModifiedSince = _parseHttpDate(values);
       case HttpHeaders.transferEncodingHeader:
-        _chunkedTransferEncoding = values == null
-            ? false
-            : values.any((value) => value.toLowerCase() == 'chunked');
+        _chunkedTransferEncoding =
+            !(values == null) &&
+            values.any((value) => value.toLowerCase() == 'chunked');
       case HttpHeaders.connectionHeader:
         if (values == null || values.isEmpty) {
           _persistentConnection = true;
@@ -402,7 +405,7 @@ abstract interface class PortableRemoteAddressCarrier {
   String? get portableRemoteAddress;
 }
 
-/// [HttpRequest] backed by a portable [RequestAdapter].
+/// An `HttpRequest` backed by a portable [RequestAdapter].
 final class AdapterHttpRequest extends Stream<Uint8List>
     implements
         HttpRequest,
@@ -410,6 +413,8 @@ final class AdapterHttpRequest extends Stream<Uint8List>
         SyntheticRequestCarrier,
         PortableRemoteAddressCarrier,
         HostContextCarrier {
+  /// Adapts a [RequestAdapter] to a synthetic `HttpRequest` writing to a
+  /// `ResponseAdapter`.
   AdapterHttpRequest(this._adapter, this.response)
     : headers = AdapterHttpHeaders(_adapter.headers),
       requestedUri = _adapter.uri,
@@ -505,8 +510,9 @@ final class AdapterHttpRequest extends Stream<Uint8List>
   }
 }
 
-/// [HttpResponse] that writes through a portable [ResponseAdapter].
+/// An `HttpResponse` that writes through a portable [ResponseAdapter].
 final class AdapterHttpResponse implements HttpResponse {
+  /// Creates an HTTP response backed by a `ResponseAdapter`.
   AdapterHttpResponse(this._adapter) : headers = AdapterHttpHeaders();
 
   final ResponseAdapter _adapter;

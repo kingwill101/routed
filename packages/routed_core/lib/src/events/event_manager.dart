@@ -26,14 +26,14 @@ import 'package:routed_core/src/events/event.dart';
 /// eventManager.publish(UserCreatedEvent('123'));
 /// ```
 class EventManager implements Disposable {
-  /// The underlying event bus instance.
-  final EventBus _eventBus;
-  bool _closed = false;
-
   /// Creates a new event manager with an optional custom event bus.
   ///
   /// If no event bus is provided, a new one will be created.
   EventManager([EventBus? eventBus]) : _eventBus = eventBus ?? EventBus();
+
+  /// The underlying event bus instance.
+  final EventBus _eventBus;
+  bool _closed = false;
 
   /// Publishes an event to all subscribers.
   ///
@@ -67,6 +67,8 @@ class EventManager implements Disposable {
     return _eventBus.on<T>();
   }
 
+  /// Creates a [EventManager].
+  /// Subscribes [onData] to events of type [T].
   StreamSubscription<T> listen<T extends Event>(void Function(T event) onData) {
     return _eventBus.on<T>().listen(onData);
   }

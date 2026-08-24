@@ -1,7 +1,7 @@
 import 'package:routed_core/src/context/context.dart';
 import 'package:routed_core/src/engine/engine.dart';
 
-import '../../events/event.dart' show Event;
+import 'package:routed_core/src/events/event.dart' show Event;
 
 /// Event fired before route matching begins.
 ///
@@ -17,13 +17,13 @@ import '../../events/event.dart' show Event;
 /// });
 /// ```
 final class BeforeRoutingEvent extends Event {
+  /// Creates a new before routing event.
+  BeforeRoutingEvent(this.context) : super();
+
   /// The engine context for the current request.
   ///
   /// Provides access to the request, response, and container for this request.
   final EngineContext context;
-
-  /// Creates a new before routing event.
-  BeforeRoutingEvent(this.context) : super();
 }
 
 /// Event fired when a route is successfully matched.
@@ -44,6 +44,9 @@ final class BeforeRoutingEvent extends Event {
 /// });
 /// ```
 final class RouteMatchedEvent extends Event {
+  /// Creates a new route matched event.
+  RouteMatchedEvent(this.context, this.route) : super();
+
   /// The engine context for the current request.
   ///
   /// Provides access to the request, response, and container for this request.
@@ -53,9 +56,6 @@ final class RouteMatchedEvent extends Event {
   ///
   /// Contains the route's path, method, handler, middleware, and parameters.
   final EngineRoute route;
-
-  /// Creates a new route matched event.
-  RouteMatchedEvent(this.context, this.route) : super();
 }
 
 /// Event fired when no matching route is found.
@@ -76,13 +76,13 @@ final class RouteMatchedEvent extends Event {
 /// });
 /// ```
 final class RouteNotFoundEvent extends Event {
+  /// Creates a new route not found event.
+  RouteNotFoundEvent(this.context) : super();
+
   /// The engine context for the current request.
   ///
   /// Provides access to the request, response, and container for this request.
   final EngineContext context;
-
-  /// Creates a new route not found event.
-  RouteNotFoundEvent(this.context) : super();
 }
 
 /// Event fired after a route handler has completed.
@@ -106,6 +106,9 @@ final class RouteNotFoundEvent extends Event {
 /// });
 /// ```
 final class AfterRoutingEvent extends Event {
+  /// Creates a new after routing event.
+  AfterRoutingEvent(this.context, {this.route, this.error}) : super();
+
   /// The engine context for the current request.
   ///
   /// Provides access to the request, response, and container for this request.
@@ -120,9 +123,6 @@ final class AfterRoutingEvent extends Event {
   ///
   /// This is `null` if the request was handled successfully without errors.
   final Object? error;
-
-  /// Creates a new after routing event.
-  AfterRoutingEvent(this.context, {this.route, this.error}) : super();
 }
 
 /// Event fired when a route handler throws an error.
@@ -145,6 +145,10 @@ final class AfterRoutingEvent extends Event {
 /// });
 /// ```
 final class RoutingErrorEvent extends Event {
+  /// Creates a new routing error event.
+  RoutingErrorEvent(this.context, this.route, this.error, this.stackTrace)
+    : super();
+
   /// The engine context for the current request.
   ///
   /// Provides access to the request, response, and container for this request.
@@ -163,8 +167,4 @@ final class RoutingErrorEvent extends Event {
   ///
   /// Provides the call stack at the point where the error was thrown.
   final StackTrace stackTrace;
-
-  /// Creates a new routing error event.
-  RoutingErrorEvent(this.context, this.route, this.error, this.stackTrace)
-    : super();
 }

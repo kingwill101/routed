@@ -6,8 +6,10 @@ import 'package:routed_core/src/http/transport.dart';
 
 /// Adapter around Dart's native WebSocket implementation.
 final class IoRoutedWebSocket implements RoutedWebSocket {
+  /// Creates a [IoRoutedWebSocket].
   IoRoutedWebSocket(this.socket);
 
+  /// The socket value.
   final WebSocket socket;
 
   @override
@@ -25,13 +27,14 @@ final class IoRoutedWebSocket implements RoutedWebSocket {
 
 /// Represents the context for a WebSocket connection.
 class WebSocketContext {
+  /// Creates a [WebSocketContext].
+  WebSocketContext(this.webSocket, this.initialContext);
+
   /// The underlying host-neutral WebSocket connection.
   final RoutedWebSocket webSocket;
 
   /// The initial HTTP context from the upgrade request.
   final EngineContext initialContext;
-
-  WebSocketContext(this.webSocket, this.initialContext);
 
   /// Sends data over the WebSocket.
   void send(dynamic data) {

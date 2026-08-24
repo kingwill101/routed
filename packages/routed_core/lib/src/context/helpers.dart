@@ -116,6 +116,7 @@ extension EngineContextHelpers on EngineContext {
     return null;
   }
 
+  /// Writes [data] as a JSON response with [statusCode].
   Response json(Object? data, {int statusCode = 200}) {
     response.statusCode = statusCode;
     response.headers.set('Content-Type', 'application/json; charset=utf-8');
@@ -123,12 +124,14 @@ extension EngineContextHelpers on EngineContext {
     return response;
   }
 
+  /// Writes [content] as a text response with [statusCode].
   Response string(String content, {int statusCode = 200}) {
     response.statusCode = statusCode;
     response.write(content);
     return response;
   }
 
+  /// Writes [content] as an HTML response with [statusCode].
   Response html(String content, {int statusCode = 200}) {
     response.statusCode = statusCode;
     response.headers.set('Content-Type', 'text/html; charset=utf-8');
@@ -136,6 +139,7 @@ extension EngineContextHelpers on EngineContext {
     return response;
   }
 
+  /// Sets a redirect response to [location] with [statusCode].
   Future<Response> redirect(
     String location, {
     int statusCode = HttpStatus.found,

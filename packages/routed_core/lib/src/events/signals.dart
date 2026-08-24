@@ -16,14 +16,17 @@ import 'package:routed_core/src/events/event_manager.dart';
 /// management. Exceptions are caught and re-published as [UnhandledSignalError]
 /// events for observability.
 class Signal<T extends Event> {
+  /// Creates a named signal backed by [manager].
   Signal({required this.name, required EventManager manager})
     : _manager = manager;
 
+  /// The stable signal name.
   final String name;
   final EventManager _manager;
 
   final Map<SignalHandlerKey<T>, SignalHandlerEntry<T>> _handlers = {};
 
+  /// Connects [handler] and returns its disposable subscription.
   SignalSubscription<T> connect(
     FutureOr<void> Function(T event) handler, {
     Object? key,
@@ -46,6 +49,7 @@ class Signal<T extends Event> {
     return SignalSubscription<T>(_handlers, handlerKey, entry);
   }
 
+  /// Disconnects a handler or keyed registration.
   void disconnect(FutureOr<void> Function(T event)? handler, {Object? key}) {
     if (key == null && handler == null) {
       throw ArgumentError(
@@ -60,6 +64,7 @@ class Signal<T extends Event> {
     entry?.active = false;
   }
 
+  /// Dispatches [event] to active matching handlers.
   Future<void> dispatch(T event, {Object? sender}) async {
     final entries = List<SignalHandlerEntry<T>>.from(_handlers.values);
     for (final entry in entries) {
@@ -87,6 +92,7 @@ class Signal<T extends Event> {
 
 /// Emitted when a signal handler fails.
 final class UnhandledSignalError extends Event {
+  /// Creates an error event for a failed signal handler.
   UnhandledSignalError({
     required this.name,
     required this.event,
@@ -96,15 +102,28 @@ final class UnhandledSignalError extends Event {
     this.sender,
   });
 
+  /// The signal name that failed.
   final String name;
+
+  /// The event being dispatched when the failure occurred.
   final Event event;
+
+  /// The optional registration key.
   final Object? key;
+
+  /// The sender associated with the dispatch.
   final Object? sender;
+
+  /// The thrown error.
   final Object error;
+
+  /// The stack trace captured from the handler.
   final StackTrace stack;
 }
 
+/// Signals emitted for the engine request lifecycle.
 class RequestSignals {
+  /// Creates request lifecycle signals backed by [manager].
   RequestSignals(EventManager manager)
     : started = Signal<RequestStartedEvent>(
         name: 'routed.request.started',
@@ -127,14 +146,25 @@ class RequestSignals {
         manager: manager,
       );
 
+  /// Emitted when request processing starts.
   final Signal<RequestStartedEvent> started;
+
+  /// Emitted when request processing finishes.
   final Signal<RequestFinishedEvent> finished;
+
+  /// Emitted when a route matches.
   final Signal<RouteMatchedEvent> routeMatched;
+
+  /// Emitted when routing fails.
   final Signal<RoutingErrorEvent> routingError;
+
+  /// Emitted after routing completes.
   final Signal<AfterRoutingEvent> afterRouting;
 }
 
+/// Bridges engine events to typed request lifecycle signals.
 class SignalHub {
+  /// Creates a signal hub backed by [manager].
   SignalHub(this.manager) : requests = RequestSignals(manager) {
     _subscriptions = [
       manager.listen<RequestStartedEvent>(
@@ -179,10 +209,14 @@ class SignalHub {
     ];
   }
 
+  /// The event manager supplying source events.
   final EventManager manager;
+
+  /// The request lifecycle signals exposed by this hub.
   final RequestSignals requests;
   late final List<StreamSubscription<dynamic>> _subscriptions;
 
+  /// Cancels all subscriptions held by this hub.
   void dispose() {
     for (final sub in _subscriptions) {
       sub.cancel();
@@ -209,14 +243,19 @@ bool _matchesSender(Object? expected, Object? actual) {
   return false;
 }
 
+/// A signal handler key used by Routed.
 class SignalHandlerKey<T extends Event> {
+  /// Creates a key from a handler reference or explicit [key].
   SignalHandlerKey({required this.handler, required this.key}) {
     if (key == null && handler == null) {
       throw ArgumentError('Either handler or key must be provided.');
     }
   }
 
+  /// The handler reference used for identity-based registrations.
   final FutureOr<void> Function(T event)? handler;
+
+  /// The explicit de-duplication key.
   final Object? key;
 
   @override
@@ -232,29 +271,44 @@ class SignalHandlerKey<T extends Event> {
   int get hashCode => key?.hashCode ?? identityHashCode(handler);
 }
 
+/// A signal handler entry used by Routed.
 class SignalHandlerEntry<T extends Event> {
+  /// Creates a signal handler entry.
   SignalHandlerEntry({
     required this.handler,
     required this.sender,
     required this.key,
   });
 
+  /// The handler callback.
   final FutureOr<void> Function(T event) handler;
+
+  /// The sender scope for this handler.
   final Object? sender;
+
+  /// The optional de-duplication key.
   final Object? key;
+
+  /// Whether this registration can still receive events.
   bool active = true;
 }
 
+/// A signal subscription used by Routed.
 final class SignalSubscription<T extends Event> {
+  /// Creates a subscription for a registered signal handler.
   SignalSubscription(this._handlers, this._key, this._entry);
 
   final Map<SignalHandlerKey<T>, SignalHandlerEntry<T>> _handlers;
   final SignalHandlerKey<T> _key;
   final SignalHandlerEntry<T> _entry;
 
+  /// The explicit registration key, when one was supplied.
   Object? get key => _entry.key;
+
+  /// The sender scope, when one was supplied.
   Object? get sender => _entry.sender;
 
+  /// Cancels this subscription.
   Future<void> cancel() async {
     final current = _handlers[_key];
     if (identical(current, _entry)) {
@@ -268,8 +322,12 @@ final class SignalSubscription<T extends Event> {
 /// [EngineContext] and optional [EngineRoute].
 @immutable
 class RequestSignalSender {
+  /// Creates a sender descriptor for [context] and optional [route].
   const RequestSignalSender({required this.context, this.route});
 
+  /// The request context that emitted the signal.
   final EngineContext context;
+
+  /// The route associated with the signal, when available.
   final EngineRoute? route;
 }

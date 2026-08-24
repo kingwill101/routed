@@ -10,6 +10,20 @@ export 'route_builder.dart';
 /// - Route-level middlewares
 /// - Hierarchical naming
 class Router {
+  /// Constructor
+  ///
+  /// [path]: base path for this router, e.g. `/api`
+  /// [groupName]: optional name for hierarchical naming, e.g. `api`
+  /// [middlewares]: group-level middlewares declared for *this* router
+  Router({
+    String path = '',
+    this.groupName,
+    List<Middleware> middlewares = const [],
+  }) : _prefix = path {
+    // We store only the *new* middlewares declared for this router.
+    groupMiddlewares.addAll(middlewares);
+  }
+
   /// Base path for this router (e.g. `/api`)
   final String _prefix;
 
@@ -31,20 +45,6 @@ class Router {
 
   /// Public getter so tests or merges can inspect routes.
   List<RegisteredRoute> get routes => _routes;
-
-  /// Constructor
-  ///
-  /// [path]: base path for this router, e.g. `/api`
-  /// [groupName]: optional name for hierarchical naming, e.g. `api`
-  /// [middlewares]: group-level middlewares declared for *this* router
-  Router({
-    String path = '',
-    this.groupName,
-    List<Middleware> middlewares = const [],
-  }) : _prefix = path {
-    // We store only the *new* middlewares declared for this router.
-    groupMiddlewares.addAll(middlewares);
-  }
 
   /// Create a sub-group (child router).
   ///
@@ -125,7 +125,7 @@ class Router {
     Object? schema,
   }) {
     return handle(
-      "GET",
+      'GET',
       path,
       handler,
       middlewares: middlewares,
@@ -149,7 +149,7 @@ class Router {
     Object? schema,
   }) {
     return handle(
-      "POST",
+      'POST',
       path,
       handler,
       middlewares: middlewares,
@@ -173,7 +173,7 @@ class Router {
     Object? schema,
   }) {
     return handle(
-      "PUT",
+      'PUT',
       path,
       handler,
       middlewares: middlewares,
@@ -197,7 +197,7 @@ class Router {
     Object? schema,
   }) {
     return handle(
-      "DELETE",
+      'DELETE',
       path,
       handler,
       middlewares: middlewares,
@@ -221,7 +221,7 @@ class Router {
     Object? schema,
   }) {
     return handle(
-      "PATCH",
+      'PATCH',
       path,
       handler,
       middlewares: middlewares,
@@ -245,7 +245,7 @@ class Router {
     Object? schema,
   }) {
     return handle(
-      "HEAD",
+      'HEAD',
       path,
       handler,
       middlewares: middlewares,
@@ -269,7 +269,7 @@ class Router {
     Object? schema,
   }) {
     return handle(
-      "OPTIONS",
+      'OPTIONS',
       path,
       handler,
       middlewares: middlewares,
@@ -293,7 +293,7 @@ class Router {
     Object? schema,
   }) {
     return handle(
-      "CONNECT",
+      'CONNECT',
       path,
       handler,
       middlewares: middlewares,
@@ -477,6 +477,7 @@ class Router {
     return results;
   }
 
+  /// Creates a [Router].
   List<RouterWebSocketRoute> getAllWebSocketRoutes() {
     final results = <RouterWebSocketRoute>[];
     results.addAll(_wsRoutes);
@@ -571,15 +572,24 @@ class Router {
   }
 }
 
+/// A router web socket route used by Routed.
 class RouterWebSocketRoute {
+  /// Creates a [RouterWebSocketRoute].
   RouterWebSocketRoute({
     required this.path,
     required this.handler,
     List<Middleware> routeMiddlewares = const [],
   }) : routeMiddlewares = List<Middleware>.from(routeMiddlewares);
 
+  /// The path value.
   String path;
+
+  /// The handler value.
   final WebSocketHandler handler;
+
+  /// The route middlewares value.
   final List<Middleware> routeMiddlewares;
+
+  /// The final middlewares value.
   List<Middleware> finalMiddlewares = [];
 }

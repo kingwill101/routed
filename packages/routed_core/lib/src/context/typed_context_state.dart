@@ -1,5 +1,5 @@
-import 'context.dart';
-import 'context_key.dart';
+import 'package:routed_core/src/context/context.dart';
+import 'package:routed_core/src/context/context_key.dart';
 
 /// Typed accessors for [EngineContext] request-scoped state.
 ///

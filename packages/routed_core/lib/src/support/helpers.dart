@@ -1,10 +1,12 @@
 import 'package:routed_core/src/container/container.dart';
 import 'package:routed_core/src/context/context.dart';
 import 'package:routed_core/src/contracts/translation/translator.dart';
-import 'zone.dart';
+import 'package:routed_core/src/support/zone.dart';
 
+/// The request attribute key used to store the active locale.
 const kRequestLocaleAttribute = 'routed.locale';
 
+/// Returns the typed configuration of type [T] for the current request.
 T config<T extends Object>() {
   final ctx = _contextOrNull();
   if (ctx != null) {
@@ -17,6 +19,7 @@ T config<T extends Object>() {
 //
 // EngineConfig get engineConfig => AppZone.engineConfig;
 
+/// Creates a [route].
 String route(String name, [Map<String, dynamic>? parameters]) {
   final ctx = _contextOrNull();
   if (ctx != null) {

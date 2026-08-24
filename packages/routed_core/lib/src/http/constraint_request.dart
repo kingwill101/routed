@@ -24,8 +24,10 @@ abstract interface class ConstraintRequestView {
 
 /// [ConstraintRequestView] over `dart:io` [HttpRequest].
 final class HttpConstraintView implements ConstraintRequestView {
+  /// Creates a constraint view over [request].
   const HttpConstraintView(this.request);
 
+  /// The native request being viewed.
   final HttpRequest request;
 
   @override
@@ -43,8 +45,10 @@ final class HttpConstraintView implements ConstraintRequestView {
 
 /// [ConstraintRequestView] over a portable [RequestAdapter].
 final class AdapterConstraintView implements ConstraintRequestView {
+  /// Creates a constraint view over [adapter].
   const AdapterConstraintView(this.adapter);
 
+  /// The portable request adapter being viewed.
   final RequestAdapter adapter;
 
   @override

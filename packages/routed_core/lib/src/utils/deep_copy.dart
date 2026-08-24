@@ -17,6 +17,7 @@ dynamic deepCopyValue(dynamic value) {
   return value;
 }
 
+/// Creates a recursive copy of [source] and its nested values.
 Map<String, dynamic> deepCopyMap(Map<String, dynamic> source) {
   final result = <String, dynamic>{};
   source.forEach((key, value) {
@@ -25,6 +26,7 @@ Map<String, dynamic> deepCopyMap(Map<String, dynamic> source) {
   return result;
 }
 
+/// Creates a recursive copy of the values in [source].
 List<dynamic> deepCopyList(Iterable<dynamic> source) {
   return source.map(deepCopyValue).toList();
 }

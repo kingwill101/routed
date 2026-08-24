@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'ip_address.dart';
+import 'package:routed_core/src/security/ip_address.dart';
 
 /// Utility for matching IP addresses against CIDR ranges.
 ///

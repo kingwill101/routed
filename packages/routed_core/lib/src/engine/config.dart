@@ -2,14 +2,23 @@ import 'dart:io';
 
 import 'package:file/file.dart';
 import 'package:file/local.dart' as local;
-import 'package:routed_core/src/runtime/shutdown.dart';
-import 'package:routed_core/src/utils/debug.dart';
 import 'package:routed_core/src/config/typed.dart';
 import 'package:routed_core/src/provider/typed_provider.dart';
+import 'package:routed_core/src/runtime/shutdown.dart';
 import 'package:routed_core/src/security/network.dart';
+import 'package:routed_core/src/utils/debug.dart';
 
 /// Default ETag generation strategies supported by the engine.
-enum EtagStrategy { disabled, strong, weak }
+enum EtagStrategy {
+  /// Does not generate or validate entity tags.
+  disabled,
+
+  /// Generates a content-sensitive entity tag.
+  strong,
+
+  /// Generates a representation-equivalent weak entity tag.
+  weak,
+}
 
 /// Configuration for handling multipart file uploads.
 ///
@@ -27,6 +36,23 @@ enum EtagStrategy { disabled, strong, weak }
 /// );
 /// ```
 class MultipartConfig implements ValidatableConfiguration {
+  /// Creates a multipart configuration with the given settings.
+  ///
+  /// All parameters are optional and have sensible defaults for typical applications.
+  MultipartConfig({
+    this.maxMemory = 32 * 1024 * 1024, // 32MB default
+    this.maxFileSize = 10 * 1024 * 1024, // 10MB default
+    int? maxDiskUsage,
+    Set<String>? allowedExtensions,
+    this.uploadDirectory = 'uploads',
+    this.filePermissions = 0x1e8,
+  }) : maxDiskUsage = maxDiskUsage ?? maxMemory,
+       allowedExtensions = Set<String>.unmodifiable(
+         (allowedExtensions ?? const {'jpg', 'jpeg', 'png', 'gif', 'pdf'})
+             .map((extension) => extension.toLowerCase().trim())
+             .where((extension) => extension.isNotEmpty),
+       );
+
   /// Maximum memory size allowed for file uploads in bytes.
   ///
   /// This limits how much memory can be used for buffering uploads before
@@ -59,23 +85,6 @@ class MultipartConfig implements ValidatableConfiguration {
   ///
   /// Default is 0750 (owner: read/write/execute, group: read/execute, others: none).
   final int filePermissions;
-
-  /// Creates a multipart configuration with the given settings.
-  ///
-  /// All parameters are optional and have sensible defaults for typical applications.
-  MultipartConfig({
-    this.maxMemory = 32 * 1024 * 1024, // 32MB default
-    this.maxFileSize = 10 * 1024 * 1024, // 10MB default
-    int? maxDiskUsage,
-    Set<String>? allowedExtensions,
-    this.uploadDirectory = 'uploads',
-    this.filePermissions = 0x1e8,
-  }) : maxDiskUsage = maxDiskUsage ?? maxMemory,
-       allowedExtensions = Set<String>.unmodifiable(
-         (allowedExtensions ?? const {'jpg', 'jpeg', 'png', 'gif', 'pdf'})
-             .map((extension) => extension.toLowerCase().trim())
-             .where((extension) => extension.isNotEmpty),
-       );
 
   @override
   void validate(ConfigValidationContext context) {
@@ -124,6 +133,14 @@ class MultipartConfig implements ValidatableConfiguration {
 /// );
 /// ```
 class Http2Config {
+  /// Creates an HTTP/2 configuration with the given settings.
+  const Http2Config({
+    this.enabled = false,
+    this.allowCleartext = false,
+    this.maxConcurrentStreams,
+    this.idleTimeout,
+  });
+
   /// Whether HTTP/2 is enabled.
   ///
   /// When disabled, the engine will only accept HTTP/1.1 connections.
@@ -146,14 +163,6 @@ class Http2Config {
   /// Connections with no active streams for this duration will be terminated.
   /// If `null`, connections can remain idle indefinitely.
   final Duration? idleTimeout;
-
-  /// Creates an HTTP/2 configuration with the given settings.
-  const Http2Config({
-    this.enabled = false,
-    this.allowCleartext = false,
-    this.maxConcurrentStreams,
-    this.idleTimeout,
-  });
 
   /// Creates a copy of this configuration with updated values.
   ///
@@ -178,6 +187,12 @@ class Http2Config {
 /// This class groups security-related settings that protect the application
 /// from common attacks and vulnerabilities.
 class SecurityConfig {
+  /// Creates a security configuration with the given settings.
+  const SecurityConfig({
+    this.maxRequestSize = 5 * 1024 * 1024, // 5MB default
+    this.trustedProxies = const [],
+  });
+
   /// Maximum request size in bytes.
   ///
   /// Requests larger than this will be rejected to prevent memory exhaustion
@@ -189,12 +204,6 @@ class SecurityConfig {
   /// When the application runs behind proxies, this list defines which proxies
   /// are trusted to provide the real client IP address.
   final List<String> trustedProxies;
-
-  /// Creates a security configuration with the given settings.
-  const SecurityConfig({
-    this.maxRequestSize = 5 * 1024 * 1024, // 5MB default
-    this.trustedProxies = const [],
-  });
 }
 
 /// Configuration for feature flags.
@@ -202,6 +211,14 @@ class SecurityConfig {
 /// Feature flags allow enabling or disabling specific engine capabilities.
 /// This provides fine-grained control over the engine's behavior.
 class FeaturesConfig {
+  /// Creates a features configuration with the given flags.
+  const FeaturesConfig({
+    this.enableSecurityFeatures = true,
+    this.enableProxySupport = false,
+    this.redirectTrailingSlash = true,
+    this.handleMethodNotAllowed = true,
+  });
+
   /// Whether to enable security features.
   ///
   /// When enabled, applies security headers, CSRF protection, and other
@@ -226,20 +243,15 @@ class FeaturesConfig {
   /// When enabled, returns 405 Method Not Allowed (with an `Allow` header)
   /// instead of 404 Not Found when the path matches but the method doesn't.
   final bool handleMethodNotAllowed;
-
-  /// Creates a features configuration with the given flags.
-  const FeaturesConfig({
-    this.enableSecurityFeatures = true,
-    this.enableProxySupport = false,
-    this.redirectTrailingSlash = true,
-    this.handleMethodNotAllowed = true,
-  });
 }
 
 /// Configuration for view engine settings.
 ///
 /// This class controls how templates are loaded and rendered by the view engine.
 class ViewConfig {
+  /// Creates a view configuration with the given settings.
+  const ViewConfig({this.viewPath = 'views', this.cache = true});
+
   /// The base directory for view templates.
   ///
   /// This path is relative to the application root. Default is 'views'.
@@ -250,9 +262,6 @@ class ViewConfig {
   /// When enabled, templates are compiled once and reused, improving performance
   /// in production. Disable for development to see changes immediately.
   final bool cache;
-
-  /// Creates a view configuration with the given settings.
-  const ViewConfig({this.viewPath = 'views', this.cache = true});
 }
 
 /// Configuration for engine-level feature flags.
@@ -260,6 +269,17 @@ class ViewConfig {
 /// These flags control core engine behaviors related to platform integration,
 /// proxies, and security.
 class EngineFeatures {
+  /// Creates an engine features configuration with the given flags.
+  const EngineFeatures({
+    this.enableTrustedPlatform = false,
+    this.enableProxySupport = false,
+    this.enableSecurityFeatures = true,
+    this.enableRequestZones = true,
+    this.enableRequestContainerFastPath = false,
+    this.enableTrieRouting = false,
+    this.enableSecureRequestIds = false,
+  });
+
   /// Whether to trust platform-provided headers for client IP.
   ///
   /// When enabled, the engine trusts headers from known platforms like
@@ -298,17 +318,6 @@ class EngineFeatures {
   ///
   /// Defaults to `false` for faster request ID generation.
   final bool enableSecureRequestIds;
-
-  /// Creates an engine features configuration with the given flags.
-  const EngineFeatures({
-    this.enableTrustedPlatform = false,
-    this.enableProxySupport = false,
-    this.enableSecurityFeatures = true,
-    this.enableRequestZones = true,
-    this.enableRequestContainerFastPath = false,
-    this.enableTrieRouting = false,
-    this.enableSecureRequestIds = false,
-  });
 }
 
 /// Configuration for engine security features.
@@ -316,6 +325,18 @@ class EngineFeatures {
 /// This class provides fine-grained control over security headers, CSRF
 /// protection, CORS, and request size limits.
 class EngineSecurityFeatures {
+  /// Creates an engine security features configuration.
+  const EngineSecurityFeatures({
+    this.csrfProtection = true,
+    this.csrfCookieName = 'csrf_token',
+    this.csp,
+    this.xContentTypeOptionsNoSniff = false,
+    this.hstsMaxAge,
+    this.xFrameOptions,
+    this.maxRequestSize = 1024 * 1024 * 10, // 10MB Default
+    this.cors = const CorsConfig(),
+  });
+
   /// Whether CSRF protection is enabled.
   ///
   /// When enabled, state-changing requests (POST, PUT, DELETE) must include
@@ -361,18 +382,6 @@ class EngineSecurityFeatures {
   /// Controls cross-origin resource sharing policies.
   final CorsConfig cors;
 
-  /// Creates an engine security features configuration.
-  const EngineSecurityFeatures({
-    this.csrfProtection = true,
-    this.csrfCookieName = 'csrf_token',
-    this.csp,
-    this.xContentTypeOptionsNoSniff = false,
-    this.hstsMaxAge,
-    this.xFrameOptions,
-    this.maxRequestSize = 1024 * 1024 * 10, // 10MB Default
-    this.cors = const CorsConfig(),
-  });
-
   /// Creates a copy of this configuration with updated values.
   ///
   /// Any parameters not provided will retain their current values.
@@ -415,6 +424,24 @@ class EngineSecurityFeatures {
 /// );
 /// ```
 class CorsConfig {
+  /// Creates a CORS configuration with the given settings.
+  const CorsConfig({
+    this.enabled = false,
+    this.allowedOrigins = const ['*'],
+    this.allowedMethods = const [
+      'GET',
+      'POST',
+      'PUT',
+      'DELETE',
+      'PATCH',
+      'OPTIONS',
+    ],
+    this.allowedHeaders = const [],
+    this.allowCredentials = false,
+    this.maxAge,
+    this.exposedHeaders = const [],
+  });
+
   /// Whether CORS is enabled.
   final bool enabled;
 
@@ -451,24 +478,6 @@ class CorsConfig {
   /// This sets the `Access-Control-Expose-Headers` header. Headers not in
   /// this list won't be accessible to JavaScript in the browser.
   final List<String> exposedHeaders;
-
-  /// Creates a CORS configuration with the given settings.
-  const CorsConfig({
-    this.enabled = false,
-    this.allowedOrigins = const ['*'],
-    this.allowedMethods = const [
-      'GET',
-      'POST',
-      'PUT',
-      'DELETE',
-      'PATCH',
-      'OPTIONS',
-    ],
-    this.allowedHeaders = const [],
-    this.allowCredentials = false,
-    this.maxAge,
-    this.exposedHeaders = const [],
-  });
 }
 
 /// Primary configuration for the routing engine.
@@ -489,52 +498,6 @@ class CorsConfig {
 /// );
 /// ```
 class EngineConfig implements ValidatableConfiguration {
-  final EngineFeatures features;
-  final EngineSecurityFeatures security;
-  final ViewConfig views;
-  final ShutdownConfig shutdown;
-  final Http2Config http2;
-  final String? tlsCertificatePath;
-  final String? tlsKeyPath;
-  final String? tlsCertificatePassword;
-  final bool? tlsRequestClientCertificate;
-  final bool? tlsShared;
-  final bool? tlsV6Only;
-
-  // Routing behavior
-  final bool redirectTrailingSlash;
-  final bool redirectFixedPath;
-  final bool handleMethodNotAllowed;
-  final bool removeExtraSlash;
-  final bool useRawPath;
-  final bool unescapePathValues;
-  final int pathInternCacheSize;
-
-  // IP and forwarding
-  final bool forwardedByClientIP;
-  final List<String> remoteIPHeaders;
-  List<String> _trustedProxies = [];
-  String? _trustedPlatform;
-  List<NetworkMatcher> _parsedProxyNetworks = [];
-  bool _trustedProxiesParsed = false;
-
-  final String templateDirectory;
-  final dynamic templateEngine;
-  final FileSystem fileSystem;
-  final MultipartConfig multipart;
-  final String? appKey;
-  final bool defaultOptionsEnabled;
-  final EtagStrategy etagStrategy;
-
-  /// Cloudflare's client IP header name.
-  static const platformCloudflare = 'CF-Connecting-IP';
-
-  /// Google App Engine's client IP header name.
-  static const platformGoogleAppEngine = 'X-Appengine-Remote-Addr';
-
-  /// Fly.io's client IP header name.
-  static const platformFlyIO = 'Fly-Client-IP';
-
   /// Creates an engine configuration with the given settings.
   ///
   /// All parameters are optional and have sensible defaults. Common settings
@@ -620,6 +583,102 @@ class EngineConfig implements ValidatableConfiguration {
     }
   }
 
+  /// Feature flags controlling platform, proxy, and routing behavior.
+  final EngineFeatures features;
+
+  /// Security headers, request limits, and CORS settings.
+  final EngineSecurityFeatures security;
+
+  /// View-template loading settings.
+  final ViewConfig views;
+
+  /// Graceful shutdown settings.
+  final ShutdownConfig shutdown;
+
+  /// HTTP/2 protocol settings.
+  final Http2Config http2;
+
+  /// Path to the TLS certificate file.
+  final String? tlsCertificatePath;
+
+  /// Path to the TLS private key file.
+  final String? tlsKeyPath;
+
+  /// Password used to unlock the TLS certificate, when required.
+  final String? tlsCertificatePassword;
+
+  /// Whether the TLS server requests a client certificate.
+  final bool? tlsRequestClientCertificate;
+
+  /// Whether the TLS server allows shared listening sockets.
+  final bool? tlsShared;
+
+  /// Whether the TLS listener is restricted to IPv6-only connections.
+  final bool? tlsV6Only;
+
+  // Routing behavior
+  /// Whether routes may redirect between trailing-slash forms.
+  final bool redirectTrailingSlash;
+
+  /// Whether fixed-path normalization redirects are enabled.
+  final bool redirectFixedPath;
+
+  /// Whether matching paths with an unsupported method return `405`.
+  final bool handleMethodNotAllowed;
+
+  /// Whether repeated slashes are removed during path normalization.
+  final bool removeExtraSlash;
+
+  /// Whether the raw request path is used instead of the decoded path.
+  final bool useRawPath;
+
+  /// Whether percent-encoded path parameter values are decoded.
+  final bool unescapePathValues;
+
+  /// Maximum number of normalized paths retained in the intern cache.
+  final int pathInternCacheSize;
+
+  // IP and forwarding
+  /// Whether forwarded headers are used to determine the client address.
+  final bool forwardedByClientIP;
+
+  /// Header names checked for forwarded client addresses.
+  final List<String> remoteIPHeaders;
+  List<String> _trustedProxies = [];
+  String? _trustedPlatform;
+  List<NetworkMatcher> _parsedProxyNetworks = [];
+  bool _trustedProxiesParsed = false;
+
+  /// Directory containing application templates.
+  final String templateDirectory;
+
+  /// Optional template engine instance supplied by the application.
+  final dynamic templateEngine;
+
+  /// File system used for template and upload access.
+  final FileSystem fileSystem;
+
+  /// Multipart upload limits and storage settings.
+  final MultipartConfig multipart;
+
+  /// Application key used by providers that need a signing secret.
+  final String? appKey;
+
+  /// Whether the engine automatically responds to `OPTIONS` requests.
+  final bool defaultOptionsEnabled;
+
+  /// Entity-tag generation strategy.
+  final EtagStrategy etagStrategy;
+
+  /// Cloudflare's client IP header name.
+  static const platformCloudflare = 'CF-Connecting-IP';
+
+  /// Google App Engine's client IP header name.
+  static const platformGoogleAppEngine = 'X-Appengine-Remote-Addr';
+
+  /// Fly.io's client IP header name.
+  static const platformFlyIO = 'Fly-Client-IP';
+
   /// Parses trusted proxy networks without requiring socket APIs for IP/CIDR
   /// values. Hostname proxies retain Dart IO DNS lookup support when available.
   Future<void> parseTrustedProxies() async {
@@ -661,6 +720,7 @@ class EngineConfig implements ValidatableConfiguration {
     _trustedProxiesParsed = true;
   }
 
+  /// Ensures configured trusted proxy networks have been parsed.
   Future<void> ensureTrustedProxiesParsed() async {
     if (!features.enableProxySupport || _trustedProxiesParsed) {
       return;
@@ -696,10 +756,12 @@ class EngineConfig implements ValidatableConfiguration {
     return _parsedProxyNetworks.any((network) => network.containsText(address));
   }
 
+  /// The configured trusted proxy network strings.
   List<String> get trustedProxies {
     return _trustedProxies;
   }
 
+  /// Replaces the trusted proxy networks and clears the parsed cache.
   set trustedProxies(List<String> value) {
     if (!features.enableProxySupport) {
       throw StateError(
@@ -711,8 +773,11 @@ class EngineConfig implements ValidatableConfiguration {
     _trustedProxiesParsed = false;
   }
 
+  /// The configured platform name used for trusted client-address headers.
+  /// The platform whose forwarded client-IP headers are trusted.
   String? get trustedPlatform => _trustedPlatform;
 
+  /// Sets the platform whose forwarded client-IP headers are trusted.
   set trustedPlatform(String? value) {
     if (!features.enableTrustedPlatform) {
       throw StateError(

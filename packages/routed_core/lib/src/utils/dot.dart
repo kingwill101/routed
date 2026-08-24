@@ -5,6 +5,7 @@
 /// `DotContext(map)` to perform repeated operations against the same map.
 const Dot dot = Dot._internal();
 
+/// Provides dotted-path lookup and mutation for nested maps.
 class Dot {
   const Dot._internal();
 
@@ -112,7 +113,7 @@ class Dot {
     if (segments.isEmpty) {
       return;
     }
-    Map<String, dynamic> current = target;
+    var current = target;
     for (var i = 0; i < segments.length; i++) {
       final segment = segments[i];
       final isLast = i == segments.length - 1;
@@ -143,16 +144,21 @@ class Dot {
 /// Contextual wrapper returned by [Dot.call] allowing chained operations,
 /// e.g. `dot(map).get('a.b')`.
 class DotContext {
+  /// Creates a [DotContext].
   DotContext(this._root);
 
   final Map<String, dynamic> _root;
 
+  /// Creates a [DotContext].
   Object? get(String path) => dot.get(_root, path);
 
+  /// Creates a [DotContext].
   void set(String path, Object? value) => dot.set(_root, path, value);
 
+  /// Creates a [DotContext].
   bool contains(String path) => dot.contains(_root, path);
 
+  /// Creates a [DotContext].
   DotLookupResult lookup(String path) => dot.lookup(_root, path);
 }
 
@@ -248,7 +254,9 @@ dynamic _normalizeValue(Object? value) {
   return value;
 }
 
+/// Describes the value and parent location found by a dotted-path lookup.
 class DotLookupResult {
+  /// Creates a [DotLookupResult].
   const DotLookupResult({
     required this.exists,
     required this.parent,
@@ -256,8 +264,15 @@ class DotLookupResult {
     required this.value,
   });
 
+  /// Whether the dotted path resolved to a value.
   final bool exists;
+
+  /// The map containing the resolved key, when one exists.
   final Map<String, dynamic>? parent;
+
+  /// The final key in the resolved path.
   final String? key;
+
+  /// The value found at the resolved path.
   final dynamic value;
 }

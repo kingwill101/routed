@@ -30,7 +30,7 @@ void deepMerge(
         deepMerge(next, value, override: override);
       } else if (override || next == null) {
         final clone = <String, dynamic>{};
-        deepMerge(clone, value, override: true);
+        deepMerge(clone, value);
         if (override || !target.containsKey(key)) {
           target[key] = clone;
         }

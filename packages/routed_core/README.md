@@ -21,6 +21,7 @@ Future<void> main() async {
 
 Feature adapters such as `routed_sessions` or `routed_views` are added to the
 provider list alongside `Engine.defaultProviders`. Applications that want the
-official feature bundle should depend on [`package:routed`](../routed), call
+official feature bundle should depend on
+[`package:routed`](https://pub.dev/packages/routed), call
 `registerRoutedProviders()`, and then use `Engine.create()`. Adapter packages
 depend on `routed_core` directly.

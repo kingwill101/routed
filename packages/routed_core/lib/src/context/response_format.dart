@@ -4,6 +4,7 @@ part of 'context.dart';
 ///
 /// Full Accept negotiation lives in `package:routed_http`.
 extension EngineContextResponseFormat on EngineContext {
+  /// Whether the request prefers a JSON response.
   bool get wantsJson {
     final accept =
         request.headers.value(HttpHeaders.acceptHeader)?.toLowerCase() ?? '';
@@ -22,6 +23,7 @@ extension EngineContextResponseFormat on EngineContext {
     return false;
   }
 
+  /// Whether the request accepts an HTML response.
   bool get acceptsHtml {
     final accept =
         request.headers.value(HttpHeaders.acceptHeader)?.toLowerCase() ?? '';
@@ -29,6 +31,7 @@ extension EngineContextResponseFormat on EngineContext {
         accept.contains('application/xhtml+xml');
   }
 
+  /// Writes an error response in the format preferred by the request.
   Response errorResponse({
     required int statusCode,
     required String message,

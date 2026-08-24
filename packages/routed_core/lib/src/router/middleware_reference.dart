@@ -33,5 +33,6 @@ class MiddlewareReference {
 class MiddlewareRef {
   const MiddlewareRef._();
 
+  /// Creates a [MiddlewareRef].
   static Middleware of(String name) => MiddlewareReference.create(name);
 }

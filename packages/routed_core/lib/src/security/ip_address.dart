@@ -1,3 +1,5 @@
+import 'dart:io' show InternetAddress;
+
 /// A host-neutral parsed IP address.
 ///
 /// Unlike `dart:io`'s [InternetAddress], this value can be parsed and matched

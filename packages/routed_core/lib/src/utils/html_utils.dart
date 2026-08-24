@@ -8,9 +8,11 @@ String escapeHtml(String text) =>
 /// This is used to indicate that the string has already been properly escaped
 /// and should not be escaped again
 class SafeString {
-  final String value;
-
+  /// Creates a [SafeString].
   const SafeString(this.value);
+
+  /// The already-safe HTML value.
+  final String value;
 
   @override
   String toString() => value;

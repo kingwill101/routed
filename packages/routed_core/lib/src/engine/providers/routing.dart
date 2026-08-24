@@ -1,10 +1,10 @@
 import 'package:routed_core/src/config/specs/routing.dart';
+import 'package:routed_core/src/container/container.dart' show Container;
+import 'package:routed_core/src/engine/engine.dart';
 import 'package:routed_core/src/events/event_manager.dart';
 import 'package:routed_core/src/events/signals.dart';
-import '../../container/container.dart' show Container;
-import '../../engine/engine.dart';
-import '../../provider/provider.dart';
-import '../../provider/typed_provider.dart';
+import 'package:routed_core/src/provider/provider.dart';
+import 'package:routed_core/src/provider/typed_provider.dart';
 
 /// A service provider that registers routing and event-related services.
 ///
@@ -20,6 +20,7 @@ import '../../provider/typed_provider.dart';
 /// ```
 class RoutingServiceProvider extends ServiceProvider
     with ProvidesTypedConfiguration<RoutingConfig> {
+  /// Creates a routing provider with optional [configuration].
   RoutingServiceProvider([RoutingConfig? configuration])
     : configuration = configuration ?? const RoutingConfig();
 

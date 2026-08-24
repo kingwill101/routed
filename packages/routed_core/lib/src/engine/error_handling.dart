@@ -1,5 +1,6 @@
 part of 'engine.dart';
 
+/// Observes an error before or after the engine invokes error handlers.
 typedef EngineErrorObserver =
     FutureOr<void> Function(
       EngineContext context,
@@ -7,6 +8,7 @@ typedef EngineErrorObserver =
       StackTrace stackTrace,
     );
 
+/// Handles an error of type [T] and reports whether it was handled.
 typedef EngineErrorHandler<T extends Object> =
     FutureOr<bool> Function(
       EngineContext context,
@@ -14,7 +16,9 @@ typedef EngineErrorHandler<T extends Object> =
       StackTrace stackTrace,
     );
 
+/// Stores ordered error observers and typed handlers for an engine.
 class ErrorHandlingRegistry {
+  /// Creates an empty error handling registry.
   ErrorHandlingRegistry() : _before = [], _handlers = [], _after = [];
 
   ErrorHandlingRegistry._({
@@ -29,14 +33,17 @@ class ErrorHandlingRegistry {
   final List<_TypedErrorHandler> _handlers;
   final List<EngineErrorObserver> _after;
 
+  /// Adds an observer that runs before typed handlers.
   void addBefore(EngineErrorObserver observer) {
     _before.add(observer);
   }
 
+  /// Adds an observer that runs after typed handlers.
   void addAfter(EngineErrorObserver observer) {
     _after.add(observer);
   }
 
+  /// Adds a typed [handler] to the registry.
   void addHandler<T extends Object>(EngineErrorHandler<T> handler) {
     _handlers.add(
       _TypedErrorHandler(
@@ -46,6 +53,7 @@ class ErrorHandlingRegistry {
     );
   }
 
+  /// Runs all registered before-error observers.
   Future<void> runBefore(
     EngineContext context,
     Object error,
@@ -57,6 +65,7 @@ class ErrorHandlingRegistry {
     }
   }
 
+  /// Invokes handlers until one reports that it handled the error.
   Future<bool> handle(
     EngineContext context,
     Object error,
@@ -78,6 +87,7 @@ class ErrorHandlingRegistry {
     return false;
   }
 
+  /// Runs all registered after-error observers.
   Future<void> runAfter(
     EngineContext context,
     Object error,
@@ -89,6 +99,7 @@ class ErrorHandlingRegistry {
     }
   }
 
+  /// Creates an independent copy of this registry.
   ErrorHandlingRegistry clone() {
     return ErrorHandlingRegistry._(
       before: List.of(_before),

@@ -2,14 +2,20 @@ part of 'context.dart';
 
 /// Represents a generic error in the engine with a message and an optional code.
 class EngineError {
+  /// Constructs an [EngineError] with the given [message] and optional [code].
+  EngineError({required this.message, this.code});
+
+  /// Creates an [EngineError] from a JSON-compatible map.
+  factory EngineError.fromJson(Map<String, dynamic> json) => EngineError(
+    message: json['message'] as String,
+    code: json['code'] != null ? json['code'] as int? : null,
+  );
+
   /// The error message.
   final String message;
 
   /// The optional error code.
   final int? code;
-
-  /// Constructs an [EngineError] with the given [message] and optional [code].
-  EngineError({required this.message, this.code});
 
   /// Returns a string representation of the error.
   ///
@@ -26,23 +32,26 @@ class EngineError {
     'message': message,
     if (code != null) 'code': code,
   };
-
-  /// Creates an [EngineError] from a JSON-compatible map.
-  factory EngineError.fromJson(Map<String, dynamic> json) => EngineError(
-    message: json['message'] as String,
-    code: json['code'] != null ? json['code'] as int? : null,
-  );
 }
 
 /// Represents a validation error in the engine.
 class ValidationError implements EngineError {
-  /// A map of validation errors where the key is the field name and the value is a list of error messages.
-  Map<String, List<String>> errors;
-
   /// Constructs a [ValidationError] with an optional [errors] map.
   ///
   /// If no [errors] map is provided, it defaults to an empty map.
   ValidationError([this.errors = const {}]);
+
+  /// Creates a [ValidationError] from a JSON-compatible map.
+  factory ValidationError.fromJson(Map<String, dynamic> json) =>
+      ValidationError(
+        (json['errors'] as Map).map(
+          (key, value) =>
+              MapEntry(key as String, (value as List).cast<String>()),
+        ),
+      );
+
+  /// A map of validation errors where the key is the field name and the value is a list of error messages.
+  Map<String, List<String>> errors;
 
   /// The error code for validation errors, which is always 422.
   @override
@@ -51,8 +60,10 @@ class ValidationError implements EngineError {
   /// The error message for validation errors.
   ///
   /// If there are no errors, it returns 'Validation failed.'.
-  /// If there are multiple fields with errors, it returns 'Validation failed. [number of fields] errors.'.
-  /// Otherwise, it returns 'Validation failed. [number of errors in the first field] errors.'.
+  /// If there are multiple fields with errors, it returns
+  /// `Validation failed. <number of fields> errors.`
+  /// Otherwise, it returns
+  /// `Validation failed. <number of errors in the first field> errors.`
   @override
   String get message {
     if (errors.isEmpty) return 'Validation failed.';
@@ -75,19 +86,11 @@ class ValidationError implements EngineError {
     'code': code,
     'message': message,
   };
-
-  /// Creates a [ValidationError] from a JSON-compatible map.
-  factory ValidationError.fromJson(Map<String, dynamic> json) =>
-      ValidationError(
-        (json['errors'] as Map).map(
-          (key, value) =>
-              MapEntry(key as String, (value as List).cast<String>()),
-        ),
-      );
 }
 
 /// Represents a "Not Found" error in the engine.
 class NotFoundError extends EngineError {
+  /// Creates a not-found error with an optional [message].
   NotFoundError({super.message = 'Not found.'});
 
   /// The error code for "Not Found" errors, which is always 404.
@@ -97,6 +100,7 @@ class NotFoundError extends EngineError {
 
 /// Represents an "Unauthorized" error in the engine.
 class UnauthorizedError extends EngineError {
+  /// Creates an unauthorized error.
   UnauthorizedError({required super.message});
 
   /// The error code for "Unauthorized" errors, which is always 401.
@@ -110,6 +114,7 @@ class UnauthorizedError extends EngineError {
 
 /// Represents a "Forbidden" error in the engine.
 class ForbiddenError extends EngineError {
+  /// Creates a forbidden error.
   ForbiddenError({required super.message});
 
   /// The error code for "Forbidden" errors, which is always 403.
@@ -123,6 +128,7 @@ class ForbiddenError extends EngineError {
 
 /// Represents an "Internal Server Error" in the engine.
 class InternalServerError extends EngineError {
+  /// Creates an internal server error.
   InternalServerError({required super.message});
 
   /// The error code for "Internal Server Error" errors, which is always 500.
@@ -136,6 +142,7 @@ class InternalServerError extends EngineError {
 
 /// Represents a "Bad Request" error in the engine.
 class BadRequestError extends EngineError {
+  /// Creates a bad-request error.
   BadRequestError() : super(message: 'Bad request.');
 
   /// The error code for "Bad Request" errors, which is always 400.
@@ -148,10 +155,11 @@ class BadRequestError extends EngineError {
 /// Thrown when the request body contains malformed JSON or JSON that
 /// cannot be parsed into the expected type (e.g., array instead of object).
 class JsonParseError extends EngineError {
+  /// Creates an invalid-JSON error with optional parser [details].
+  JsonParseError({this.details = ''}) : super(message: 'Invalid JSON payload.');
+
   /// The original parsing error message.
   final String details;
-
-  JsonParseError({this.details = ''}) : super(message: 'Invalid JSON payload.');
 
   @override
   int? get code => 400;
@@ -171,6 +179,7 @@ class JsonParseError extends EngineError {
 
 /// Represents a "Conflict" error in the engine.
 class ConflictError extends EngineError {
+  /// Creates a conflict error.
   ConflictError({required super.message});
 
   /// The error code for "Conflict" errors, which is always 409.

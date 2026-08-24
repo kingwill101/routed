@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'service_resolver.dart';
+import 'package:routed_core/src/container/service_resolver.dart';
 
 /// Represents a binding for a type, including its factory and singleton status.
 ///
@@ -14,6 +14,15 @@ import 'service_resolver.dart';
 /// );
 /// ```
 class Binding<T> {
+  /// Creates a new binding with the given factory function.
+  ///
+  /// Parameters:
+  /// - [factory]: Function that creates instances of type [T]
+  /// - [singleton]: Whether this binding is a singleton (defaults to false)
+  /// - [instance]: Optional pre-existing instance for singleton bindings
+  Binding(this.factory, {this.singleton = false, T? instance})
+    : _instance = instance;
+
   /// The factory function that creates instances of type [T].
   /// Takes a [Container] instance and returns a [Future<T>].
   final Future<T> Function(Container) factory;
@@ -25,15 +34,6 @@ class Binding<T> {
   /// The cached instance for singleton bindings.
   /// Will be null for non-singleton bindings or before first resolution.
   T? _instance;
-
-  /// Creates a new binding with the given factory function.
-  ///
-  /// Parameters:
-  /// - [factory]: Function that creates instances of type [T]
-  /// - [singleton]: Whether this binding is a singleton (defaults to false)
-  /// - [instance]: Optional pre-existing instance for singleton bindings
-  Binding(this.factory, {this.singleton = false, T? instance})
-    : _instance = instance;
 
   /// Gets the cached instance if available
   // ignore: unnecessary_getters_setters
@@ -90,6 +90,9 @@ class Binding<T> {
 /// ```
 
 class Container implements ServiceResolver {
+  /// Creates a new container, optionally with a parent container.
+  Container({Container? parent}) : _parent = parent;
+
   /// Map of type to binding
   final Map<Type, Binding<dynamic>> _bindings = {};
 
@@ -120,9 +123,6 @@ class Container implements ServiceResolver {
 
   /// Optional parent container for hierarchical DI
   final Container? _parent;
-
-  /// Creates a new container, optionally with a parent container.
-  Container({Container? parent}) : _parent = parent;
 
   /// Binds a factory function for type [T].
   ///
@@ -272,7 +272,7 @@ class Container implements ServiceResolver {
   /// ```
   void alias<T, U>() {
     if (T == U) {
-      throw StateError('Cannot alias a type to itself: ${T.toString()}');
+      throw StateError('Cannot alias a type to itself: $T');
     }
     _aliases[T] = U;
     bind<T>((container) async {
@@ -367,7 +367,7 @@ class Container implements ServiceResolver {
     if (_contextual.containsKey(T)) {
       final contextualImpl = _contextual[T]![T];
       if (contextualImpl != null) {
-        return await _resolve(contextualImpl as Future<T> Function(Container));
+        return _resolve(contextualImpl as Future<T> Function(Container));
       }
     }
 
@@ -455,7 +455,7 @@ class Container implements ServiceResolver {
   ///
   /// Returns a list of resolved instances in the same order as the input types.
   Future<List<dynamic>> makeAll(List<Type> types) async {
-    return await Future.wait(
+    return Future.wait(
       types.map((type) {
         final binding = _bindings[type] ?? _parent?._bindings[type];
         if (binding == null) {
@@ -500,7 +500,7 @@ class Container implements ServiceResolver {
     // Clean up singletons that need disposal
     for (final instance in _instances.values) {
       if (instance is Disposable) {
-        await (instance).dispose();
+        await instance.dispose();
       }
     }
 
@@ -560,7 +560,7 @@ class Container implements ServiceResolver {
     if (_contextual.containsKey(type)) {
       final contextualImpl = _contextual[type]![type];
       if (contextualImpl != null) {
-        return await _resolve(
+        return _resolve(
           contextualImpl as Future<dynamic> Function(Container),
         );
       }

@@ -11,6 +11,33 @@ import 'package:routed_core/src/utils/request_id.dart';
 /// Represents an HTTP request and provides various utilities to access
 /// request data and metadata.
 class Request {
+  /// Constructs a [Request] object.
+  ///
+  /// The `httpRequest` parameter is the underlying HTTP request.
+  /// The [pathParameters] parameter is a map of path parameters.
+  Request(this._httpRequest, this.pathParameters, this.config)
+    : queryParameters = _safeQueryParameters(_httpRequest.uri),
+      _attributes = {},
+      id = config.features.enableSecureRequestIds
+          ? RequestId.generateSecure()
+          : RequestId.generate(),
+      startedAt = DateTime.now();
+
+  /// Constructs a portable [Request] from a host adapter.
+  factory Request.fromAdapter(
+    RequestAdapter adapter,
+    Map<String, dynamic> pathParameters,
+    EngineConfig config,
+  ) {
+    return Request(
+      AdapterHttpBridge.toHttpRequest(
+        HttpConnection(adapter, _RequestBridgeResponseAdapter()),
+      ),
+      pathParameters,
+      config,
+    );
+  }
+
   /// The underlying native [HttpRequest] object.
   ///
   /// Portable requests do not expose a native request and throw
@@ -46,35 +73,9 @@ class Request {
   Uint8List? _bodyBytes;
   bool _bodyConsumed = false;
 
+  /// The config value.
   EngineConfig config;
   String? _overrideClientIp;
-
-  /// Constructs a [Request] object.
-  ///
-  /// The [httpRequest] parameter is the underlying HTTP request.
-  /// The [pathParameters] parameter is a map of path parameters.
-  Request(this._httpRequest, this.pathParameters, this.config)
-    : queryParameters = _safeQueryParameters(_httpRequest.uri),
-      _attributes = {},
-      id = config.features.enableSecureRequestIds
-          ? RequestId.generateSecure()
-          : RequestId.generate(),
-      startedAt = DateTime.now();
-
-  /// Constructs a portable [Request] from a host adapter.
-  factory Request.fromAdapter(
-    RequestAdapter adapter,
-    Map<String, dynamic> pathParameters,
-    EngineConfig config,
-  ) {
-    return Request(
-      AdapterHttpBridge.toHttpRequest(
-        HttpConnection(adapter, _RequestBridgeResponseAdapter()),
-      ),
-      pathParameters,
-      config,
-    );
-  }
 
   /// Whether this request is backed by a real native `dart:io` request.
   bool get hasNativeHttpRequest {
@@ -169,7 +170,7 @@ class Request {
   Future<Uint8List> get bytes async {
     if (_bodyBytes != null) return _bodyBytes!;
     _bodyConsumed = true;
-    BytesBuilder bytes = BytesBuilder();
+    final bytes = BytesBuilder();
     await for (final chunk in _httpRequest) {
       bytes.add(chunk);
     }
@@ -226,6 +227,7 @@ class Request {
     return null;
   }
 
+  /// Creates a [Request].
   void overrideClientIp(String ip) {
     _overrideClientIp = ip;
   }

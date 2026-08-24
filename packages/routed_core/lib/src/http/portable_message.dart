@@ -2,12 +2,15 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:routed_core/routed_core.dart' show Engine;
+import 'package:routed_core/src/engine/engine.dart' show Engine;
 import 'package:routed_core/src/http/transport.dart';
 
 /// Multi-value HTTP headers without `dart:io` types.
 ///
 /// Case-insensitive names; values are preserved in insertion order per name.
 final class PortableHeaders {
+  /// Creates headers populated with [initial] values.
   PortableHeaders([Map<String, List<String>>? initial]) {
     if (initial != null) {
       initial.forEach(setAll);
@@ -26,37 +29,44 @@ final class PortableHeaders {
     return out;
   }
 
+  /// Returns all values for [name], or `null` when the header is absent.
   List<String>? operator [](String name) {
     final values = _values[_key(name)];
     return values == null ? null : List<String>.from(values);
   }
 
+  /// Returns the values for [name] joined as one header string.
   String? get(String name) {
     final values = this[name];
     if (values == null || values.isEmpty) return null;
     return values.join(', ');
   }
 
+  /// Replaces all values for [name] with [value].
   void set(String name, String value) {
     final key = _key(name);
     _canonical[key] = name;
     _values[key] = [value];
   }
 
+  /// Replaces all values for [name].
   void setAll(String name, List<String> values) {
     final key = _key(name);
     _canonical[key] = name;
     _values[key] = List<String>.from(values);
   }
 
+  /// Appends [value] to the values for [name].
   void add(String name, String value) {
     final key = _key(name);
     _canonical.putIfAbsent(key, () => name);
     _values.putIfAbsent(key, () => <String>[]).add(value);
   }
 
+  /// Whether a value for [name] is present.
   bool contains(String name) => _values.containsKey(_key(name));
 
+  /// Iterates over header names and defensive copies of their values.
   void forEach(void Function(String name, List<String> values) action) {
     _values.forEach((key, values) {
       action(_canonical[key] ?? key, List<String>.from(values));
@@ -71,6 +81,7 @@ final class PortableHeaders {
 /// Built by host packages from their native request type, then passed to
 /// [Engine.handlePortable] or wrapped as a [RequestAdapter].
 final class PortableRequest {
+  /// Creates a host-neutral request value.
   PortableRequest({
     required this.method,
     required this.uri,
@@ -121,6 +132,7 @@ final class PortableRequest {
 ///
 /// Produced by [Engine.handlePortable] or built by hosts that buffer responses.
 final class PortableResponse {
+  /// Creates a host-neutral response value.
   PortableResponse({
     this.statusCode = 200,
     PortableHeaders? headers,
@@ -130,7 +142,10 @@ final class PortableResponse {
        _bodyBytes = bodyBytes,
        _bodyStream = body;
 
+  /// The HTTP status code.
   final int statusCode;
+
+  /// The response headers.
   final PortableHeaders headers;
   final List<int>? _bodyBytes;
   final Stream<List<int>>? _bodyStream;
@@ -159,6 +174,7 @@ final class PortableResponse {
 
 /// What a host claims to support. Not a promise of identical behavior everywhere.
 final class HostCapabilities {
+  /// Creates a capability description for a host.
   const HostCapabilities({
     this.streaming = true,
     this.websocket = false,
@@ -178,26 +194,25 @@ final class HostCapabilities {
   /// Work that may outlive the response (waitUntil-style).
   final bool backgroundWork;
 
+  /// Capability set for a host with no optional features.
   static const HostCapabilities none = HostCapabilities();
 
+  /// Capability set for a Dart IO process.
   static const HostCapabilities ioProcess = HostCapabilities(
-    streaming: true,
     websocket: true,
     fileSystem: true,
     backgroundWork: true,
   );
 
+  /// Capability set for a Node.js process.
   static const HostCapabilities nodeProcess = HostCapabilities(
-    streaming: true,
     websocket: true,
     fileSystem: true,
     backgroundWork: true,
   );
 
+  /// Capability set for an edge Fetch host.
   static const HostCapabilities edgeFetch = HostCapabilities(
-    streaming: true,
-    websocket: false,
-    fileSystem: false,
     backgroundWork: true,
   );
 }
@@ -205,7 +220,12 @@ final class HostCapabilities {
 /// [ResponseAdapter] that records status, headers, and body for
 /// [PortableResponse] materialization.
 final class RecordingResponseAdapter implements ResponseAdapter {
+  /// Creates an empty response recorder.
+  RecordingResponseAdapter();
+
   int _statusCode = 200;
+
+  /// Creates a [RecordingResponseAdapter].
   final PortableHeaders headers = PortableHeaders();
   final BytesBuilder _body = BytesBuilder(copy: false);
   bool _closed = false;
@@ -247,8 +267,10 @@ final class RecordingResponseAdapter implements ResponseAdapter {
     _closed = true;
   }
 
+  /// Whether the response has been closed.
   bool get isClosed => _closed;
 
+  /// Materializes the recorded values as a portable response.
   PortableResponse toPortableResponse() {
     return PortableResponse(
       statusCode: _statusCode,

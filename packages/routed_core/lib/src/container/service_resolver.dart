@@ -1,5 +1,9 @@
 import 'dart:async';
 
+import 'package:routed_core/routed_core.dart' show Container;
+
+import 'package:routed_core/src/container/container.dart' show Container;
+
 /// Narrow read-only view for feature packages.
 ///
 /// Prefer this over [Container] in library code that only needs lookup

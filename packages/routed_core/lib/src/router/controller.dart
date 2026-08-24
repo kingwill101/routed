@@ -1,5 +1,9 @@
-import 'router.dart';
-import 'types.dart';
+import 'package:routed_core/routed_core.dart' show Engine;
+
+import 'package:routed_core/src/engine/engine.dart' show Engine;
+
+import 'package:routed_core/src/router/router.dart';
+import 'package:routed_core/src/router/types.dart';
 
 /// Base class for controllers in routed.
 ///

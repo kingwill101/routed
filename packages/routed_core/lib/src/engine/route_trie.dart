@@ -1,17 +1,20 @@
 part of 'engine.dart';
 
+/// The result of matching a request path against a route trie.
 class RouteTrieMatch {
+  /// Creates a match result with the matched [route] and path status.
   const RouteTrieMatch({required this.route, required this.pathMatched});
 
+  /// The matched route, or `null` when constraints rejected all candidates.
   final EngineRoute? route;
+
+  /// Whether the path shape matched at least one route.
   final bool pathMatched;
 }
 
+/// Segment trie used for fast route path matching.
 class RouteTrie {
-  RouteTrie._(this._root);
-
-  final _RouteTrieNode _root;
-
+  /// Builds a trie from [routes].
   factory RouteTrie.fromRoutes(List<EngineRoute> routes) {
     final root = _RouteTrieNode();
     for (final route in routes) {
@@ -19,7 +22,11 @@ class RouteTrie {
     }
     return RouteTrie._(root);
   }
+  RouteTrie._(this._root);
 
+  final _RouteTrieNode _root;
+
+  /// Matches [path] and evaluates constraints against [request].
   /// Matches [path] against the trie.
   ///
   /// [request] may be an [HttpRequest], [RequestAdapter], or

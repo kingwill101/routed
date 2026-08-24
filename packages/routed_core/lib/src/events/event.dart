@@ -13,9 +13,9 @@
 /// }
 /// ```
 base class Event {
-  /// The timestamp when the event was created.
-  final DateTime timestamp;
-
   /// Creates a new event with the current timestamp.
   Event() : timestamp = DateTime.now();
+
+  /// The timestamp when the event was created.
+  final DateTime timestamp;
 }

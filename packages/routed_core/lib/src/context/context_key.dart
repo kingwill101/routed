@@ -10,6 +10,7 @@
 /// final user = ctx.read(authenticatedUserKey);
 /// ```
 final class ContextKey<T> {
+  /// Creates a typed key with the namespaced [name].
   const ContextKey(this.name);
 
   /// Namespaced key name, e.g. 'routed.auth.user'.

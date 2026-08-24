@@ -6,12 +6,25 @@ import 'dart:typed_data';
 import 'package:routed_core/src/http/adapter_http.dart';
 import 'package:routed_core/src/http/transport.dart';
 
+/// Transforms buffered response body bytes before they are sent.
 typedef ResponseBodyFilter = List<int> Function(List<int> body);
 
 /// A class that represents an HTTP response.
 ///
 /// Dual-mode: native `dart:io` [HttpResponse] **or** portable [ResponseAdapter].
 class Response {
+  /// Constructs a Response with a native [HttpResponse].
+  Response(HttpResponse httpResponse)
+    : _httpResponse = httpResponse,
+      _adapter = null,
+      _portableHeaders = null;
+
+  /// Constructs a Response that writes through a portable [ResponseAdapter].
+  Response.fromAdapter(ResponseAdapter adapter)
+    : _httpResponse = null,
+      _adapter = adapter,
+      _portableHeaders = AdapterHttpHeaders();
+
   /// Native IO response when constructed via [Response.new].
   final HttpResponse? _httpResponse;
 
@@ -32,18 +45,6 @@ class Response {
   int _portableStatusCode = HttpStatus.ok;
   ResponseBodyFilter? _bodyFilter;
   final Completer<void> _portableDone = Completer<void>();
-
-  /// Constructs a Response with a native [HttpResponse].
-  Response(HttpResponse httpResponse)
-    : _httpResponse = httpResponse,
-      _adapter = null,
-      _portableHeaders = null;
-
-  /// Constructs a Response that writes through a portable [ResponseAdapter].
-  Response.fromAdapter(ResponseAdapter adapter)
-    : _httpResponse = null,
-      _adapter = adapter,
-      _portableHeaders = AdapterHttpHeaders();
 
   /// Whether this response is backed by a real `dart:io` [HttpResponse].
   bool get hasNativeHttpResponse => _httpResponse != null;
@@ -219,7 +220,7 @@ class Response {
   /// Writes the buffered data to the HTTP response and starts the body.
   void writeNow() {
     _ensureNotClosed();
-    Uint8List bytes = _buffer.takeBytes();
+    var bytes = _buffer.takeBytes();
     if (_bodyFilter != null) {
       try {
         final transformed = _bodyFilter!(bytes);
@@ -358,7 +359,7 @@ class Response {
       );
     }
     _isClosed = true;
-    return await native.detachSocket(writeHeaders: writeHeaders);
+    return native.detachSocket(writeHeaders: writeHeaders);
   }
 
   /// Sends a file [file] as a downloadable attachment (native path preferred).
@@ -424,7 +425,7 @@ class Response {
     SameSite? sameSite,
   }) {
     _ensureNotClosed();
-    final String stringValue = value is String ? value : value.toString();
+    final stringValue = value is String ? value : value.toString();
     final cookie = Cookie(name, stringValue)
       ..maxAge = maxAge
       ..path = path
@@ -532,10 +533,15 @@ class Response {
 
 /// A class that represents a streamed HTTP response.
 class StreamedResponse {
-  final Stream<List<int>> stream;
-  final int statusCode;
-  final Map<String, String>? headers;
-
   /// Constructs a StreamedResponse with the given [stream], [statusCode], and optional [headers].
   StreamedResponse(this.stream, this.statusCode, {this.headers});
+
+  /// The stream value.
+  final Stream<List<int>> stream;
+
+  /// The status code value.
+  final int statusCode;
+
+  /// The headers value.
+  final Map<String, String>? headers;
 }

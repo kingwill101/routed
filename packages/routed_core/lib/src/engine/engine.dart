@@ -19,8 +19,8 @@ import 'package:routed_core/src/engine/middleware_registry.dart';
 import 'package:routed_core/src/engine/providers/core.dart';
 import 'package:routed_core/src/engine/providers/registry.dart';
 import 'package:routed_core/src/engine/providers/routing.dart';
-import 'package:routed_core/src/engine/route_match.dart';
 import 'package:routed_core/src/engine/request_scope.dart';
+import 'package:routed_core/src/engine/route_match.dart';
 import 'package:routed_core/src/engine/wrapped_request.dart';
 import 'package:routed_core/src/events/event_manager.dart';
 import 'package:routed_core/src/http/adapter_http.dart';
@@ -30,10 +30,10 @@ import 'package:routed_core/src/http/transport.dart';
 import 'package:routed_core/src/provider/provider.dart';
 import 'package:routed_core/src/request.dart';
 import 'package:routed_core/src/response.dart';
-import 'package:routed_core/src/router/router.dart';
-import 'package:routed_core/src/router/router_group_builder.dart';
 import 'package:routed_core/src/router/middleware_reference.dart';
 import 'package:routed_core/src/router/route_metadata.dart';
+import 'package:routed_core/src/router/router.dart';
+import 'package:routed_core/src/router/router_group_builder.dart';
 import 'package:routed_core/src/router/types.dart';
 import 'package:routed_core/src/runtime/shutdown.dart';
 import 'package:routed_core/src/support/named_registry.dart';
@@ -48,8 +48,8 @@ part 'error_handling.dart';
 part 'mount.dart';
 part 'param_utils.dart';
 part 'patterns.dart';
-part 'route_trie.dart';
 part 'request.dart';
+part 'route_trie.dart';
 
 /// The core HTTP engine of the Routed framework.
 ///
@@ -129,6 +129,158 @@ part 'request.dart';
 /// final engine = Engine(providers: [DatabaseServiceProvider()]);
 /// ```
 class Engine with ContainerMixin {
+  /// Creates a new [Engine] instance with the given configuration.
+  ///
+  /// All parameters are optional and have sensible defaults for typical applications.
+  ///
+  /// ## Parameters
+  ///
+  /// - [config]: An [EngineConfig] object to customize core engine behavior
+  ///   including security, routing, and TLS settings.
+  ///
+  /// - [middlewares]: Global middleware applied to all routes. These execute
+  ///   before any route-specific middleware.
+  ///
+  /// - [options]: A list of [EngineOpt] functions for additional configuration.
+  ///   These are applied in sequence after providers are registered.
+  ///
+  /// - [errorHandling]: Customize error handling behavior through an
+  ///   [ErrorHandlingRegistry]. If not provided, a default registry is used.
+  ///
+  /// - [providers]: Service providers to register. Use [Engine.defaultProviders]
+  ///   for the core + routing profile.
+  ///
+  /// ## Examples
+  ///
+  /// Bare engine (minimal, no providers):
+  /// ```dart
+  /// final engine = Engine();
+  /// engine.get('/hello', (ctx) => ctx.string('Hello'));
+  /// ```
+  ///
+  /// Core engine with the default core providers:
+  /// ```dart
+  /// final engine = Engine(providers: Engine.defaultProviders);
+  /// await engine.initialize();
+  /// ```
+  ///
+  /// Custom core-provider composition:
+  /// ```dart
+  /// final engine = Engine(
+  ///   config: EngineConfig(
+  ///     security: EngineSecurityFeatures(maxRequestSize: 5 * 1024 * 1024),
+  ///   ),
+  ///   providers: [
+  ///     CoreServiceProvider(
+  ///       EngineConfig(
+  ///         security: EngineSecurityFeatures(maxRequestSize: 5 * 1024 * 1024),
+  ///       ),
+  ///     ),
+  ///     RoutingServiceProvider(),
+  ///   ],
+  /// );
+  /// ```
+  Engine({
+    EngineConfig? config,
+    RuntimeContext? runtime,
+    List<Middleware>? middlewares,
+    List<EngineOpt>? options,
+    ErrorHandlingRegistry? errorHandling,
+    List<ServiceProvider>? providers,
+  }) : middlewares = middlewares ?? [],
+       errorHooks = errorHandling?.clone() ?? ErrorHandlingRegistry() {
+    setRuntimeContext(runtime ?? RuntimeContext());
+    _registerBareDefaults(config: config);
+
+    final effectiveProviders = <ServiceProvider>[...?providers];
+    if (config != null) {
+      final coreIndex = effectiveProviders.indexWhere(
+        (provider) => provider is CoreServiceProvider,
+      );
+      if (coreIndex >= 0) {
+        effectiveProviders[coreIndex] = CoreServiceProvider(config);
+      }
+    }
+
+    if (effectiveProviders.isNotEmpty) {
+      for (final provider in effectiveProviders) {
+        // Skip duplicate provider types to prevent overwriting config
+        if (_registeredProviderTypes.contains(provider.runtimeType)) {
+          continue;
+        }
+        registerProvider(provider);
+        _registeredProviderTypes.add(provider.runtimeType);
+      }
+    }
+
+    // Apply options in order
+    options?.forEach((opt) => opt(this));
+    _rebuildMiddlewareStacks();
+  }
+
+  /// Creates a new engine instance from an existing engine.
+  ///
+  /// This factory creates a copy of [other], preserving its configuration,
+  /// routes, middlewares, and error handling settings. Useful for creating
+  /// variations of an engine with modified settings.
+  ///
+  /// Note: Providers are not copied. If you need the same providers, pass them
+  /// explicitly or copy them from the source engine's container.
+  ///
+  /// Example:
+  /// ```dart
+  /// final baseEngine = Engine(
+  ///   config: EngineConfig(redirectTrailingSlash: true),
+  /// );
+  /// final testEngine = Engine.from(baseEngine);
+  /// ```
+  factory Engine.from(Engine other) {
+    final engine = Engine(
+      config: other.config,
+      errorHandling: other.errorHooks,
+    );
+    if (other.container.has<RoutePatternRegistry>()) {
+      final registry = other.container.get<RoutePatternRegistry>();
+      engine.container.instance<RoutePatternRegistry>(
+        RoutePatternRegistry.clone(registry),
+      );
+    }
+    engine._mounts.addAll(other._mounts);
+    engine._engineRoutes.addAll(other._engineRoutes);
+    engine.middlewares.addAll(other.middlewares);
+    return engine;
+  }
+
+  /// Creates an engine instance with the default core providers and common
+  /// production configuration hooks.
+  ///
+  /// Example:
+  /// ```dart
+  /// final engine = Engine.d(
+  ///   config: EngineConfig(
+  ///     security: EngineSecurityFeatures(maxRequestSize: 10 * 1024 * 1024),
+  ///   ),
+  ///   providers: [
+  ///     CoreServiceProvider(
+  ///       EngineConfig(
+  ///         security: EngineSecurityFeatures(
+  ///           cors: CorsConfig(enabled: true),
+  ///         ),
+  ///       ),
+  ///     ),
+  ///     RoutingServiceProvider(),
+  ///   ],
+  /// );
+  /// ```
+  factory Engine.d({EngineConfig? config, List<EngineOpt>? options}) {
+    return Engine(
+      config: config ?? EngineConfig(),
+      middlewares: [],
+      options: options,
+      providers: Engine.defaultProviders,
+    );
+  }
+
   /// The default providers for a full-featured engine.
   ///
   /// Includes:
@@ -245,124 +397,44 @@ class Engine with ContainerMixin {
   /// Returns the total number of requests handled by this engine.
   int get totalRequests => _totalRequests;
 
+  /// Whether the engine is accepting new requests.
   bool get isReady => !_draining && _ready;
 
+  /// The port used by the active HTTP or HTTP/2 listener.
   int? get httpPort => _server?.port ?? _http2Binding?.port;
 
+  /// Provides the shutdown controller for test inspection.
   @visibleForTesting
   ShutdownController? get shutdownController => _shutdownController;
 
+  /// Attaches the native server used by the engine.
   @internal
   void attachServer(HttpServer server) {
     _server = server;
     _setupShutdownController();
   }
 
+  /// The registered WebSocket routes exposed for diagnostics.
   Map<String, WebSocketEngineRoute> get debugWebSocketRoutes => _wsRoutes;
 
+  /// Returns the registered WebSocket routes for test inspection.
   @visibleForTesting
   List<EngineRoute> get debugEngineRoutes => _engineRoutes;
 
+  /// Returns the current path interning size for test inspection.
   @visibleForTesting
   int get debugPathInternCacheSize => _pathInternCache.length;
 
+  /// Normalizes [path] for test inspection.
   @visibleForTesting
   String debugNormalizePath(String path) => _normalizePath(path);
 
+  /// Returns whether event-manager initialization was checked.
   @visibleForTesting
   bool get debugEventManagerChecked => _eventManagerChecked;
 
   /// Stores WebSocket route handlers mapped by path.
   final Map<String, WebSocketEngineRoute> _wsRoutes = {};
-
-  /// Creates a new [Engine] instance with the given configuration.
-  ///
-  /// All parameters are optional and have sensible defaults for typical applications.
-  ///
-  /// ## Parameters
-  ///
-  /// - [config]: An [EngineConfig] object to customize core engine behavior
-  ///   including security, routing, and TLS settings.
-  ///
-  /// - [middlewares]: Global middleware applied to all routes. These execute
-  ///   before any route-specific middleware.
-  ///
-  /// - [options]: A list of [EngineOpt] functions for additional configuration.
-  ///   These are applied in sequence after providers are registered.
-  ///
-  /// - [errorHandling]: Customize error handling behavior through an
-  ///   [ErrorHandlingRegistry]. If not provided, a default registry is used.
-  ///
-  /// - [providers]: Service providers to register. Use [Engine.defaultProviders]
-  ///   for the core + routing profile.
-  ///
-  /// ## Examples
-  ///
-  /// Bare engine (minimal, no providers):
-  /// ```dart
-  /// final engine = Engine();
-  /// engine.get('/hello', (ctx) => ctx.string('Hello'));
-  /// ```
-  ///
-  /// Core engine with the default core providers:
-  /// ```dart
-  /// final engine = Engine(providers: Engine.defaultProviders);
-  /// await engine.initialize();
-  /// ```
-  ///
-  /// Custom core-provider composition:
-  /// ```dart
-  /// final engine = Engine(
-  ///   config: EngineConfig(
-  ///     security: EngineSecurityFeatures(maxRequestSize: 5 * 1024 * 1024),
-  ///   ),
-  ///   providers: [
-  ///     CoreServiceProvider(
-  ///       EngineConfig(
-  ///         security: EngineSecurityFeatures(maxRequestSize: 5 * 1024 * 1024),
-  ///       ),
-  ///     ),
-  ///     RoutingServiceProvider(),
-  ///   ],
-  /// );
-  /// ```
-  Engine({
-    EngineConfig? config,
-    RuntimeContext? runtime,
-    List<Middleware>? middlewares,
-    List<EngineOpt>? options,
-    ErrorHandlingRegistry? errorHandling,
-    List<ServiceProvider>? providers,
-  }) : middlewares = middlewares ?? [],
-       errorHooks = errorHandling?.clone() ?? ErrorHandlingRegistry() {
-    setRuntimeContext(runtime ?? RuntimeContext());
-    _registerBareDefaults(config: config);
-
-    final effectiveProviders = <ServiceProvider>[...?providers];
-    if (config != null) {
-      final coreIndex = effectiveProviders.indexWhere(
-        (provider) => provider is CoreServiceProvider,
-      );
-      if (coreIndex >= 0) {
-        effectiveProviders[coreIndex] = CoreServiceProvider(config);
-      }
-    }
-
-    if (effectiveProviders.isNotEmpty) {
-      for (final provider in effectiveProviders) {
-        // Skip duplicate provider types to prevent overwriting config
-        if (_registeredProviderTypes.contains(provider.runtimeType)) {
-          continue;
-        }
-        registerProvider(provider);
-        _registeredProviderTypes.add(provider.runtimeType);
-      }
-    }
-
-    // Apply options in order
-    options?.forEach((opt) => opt(this));
-    _rebuildMiddlewareStacks();
-  }
 
   void _registerBareDefaults({EngineConfig? config}) {
     final engineConfig = config ?? EngineConfig();
@@ -383,69 +455,6 @@ class Engine with ContainerMixin {
     }
     _configuredMiddlewareGroups.clear();
     _markRoutesDirty();
-  }
-
-  /// Creates a new engine instance from an existing engine.
-  ///
-  /// This factory creates a copy of [other], preserving its configuration,
-  /// routes, middlewares, and error handling settings. Useful for creating
-  /// variations of an engine with modified settings.
-  ///
-  /// Note: Providers are not copied. If you need the same providers, pass them
-  /// explicitly or copy them from the source engine's container.
-  ///
-  /// Example:
-  /// ```dart
-  /// final baseEngine = Engine(
-  ///   config: EngineConfig(redirectTrailingSlash: true),
-  /// );
-  /// final testEngine = Engine.from(baseEngine);
-  /// ```
-  factory Engine.from(Engine other) {
-    final engine = Engine(
-      config: other.config,
-      errorHandling: other.errorHooks,
-    );
-    if (other.container.has<RoutePatternRegistry>()) {
-      final registry = other.container.get<RoutePatternRegistry>();
-      engine.container.instance<RoutePatternRegistry>(
-        RoutePatternRegistry.clone(registry),
-      );
-    }
-    engine._mounts.addAll(other._mounts);
-    engine._engineRoutes.addAll(other._engineRoutes);
-    engine.middlewares.addAll(other.middlewares);
-    return engine;
-  }
-
-  /// Creates an engine instance with the default core providers and common
-  /// production configuration hooks.
-  ///
-  /// Example:
-  /// ```dart
-  /// final engine = Engine.d(
-  ///   config: EngineConfig(
-  ///     security: EngineSecurityFeatures(maxRequestSize: 10 * 1024 * 1024),
-  ///   ),
-  ///   providers: [
-  ///     CoreServiceProvider(
-  ///       EngineConfig(
-  ///         security: EngineSecurityFeatures(
-  ///           cors: CorsConfig(enabled: true),
-  ///         ),
-  ///       ),
-  ///     ),
-  ///     RoutingServiceProvider(),
-  ///   ],
-  /// );
-  /// ```
-  factory Engine.d({EngineConfig? config, List<EngineOpt>? options}) {
-    return Engine(
-      config: config ?? EngineConfig(),
-      middlewares: [],
-      options: options,
-      providers: Engine.defaultProviders,
-    );
   }
 
   /// Generates a URL for a named route with parameter substitution.
@@ -583,7 +592,7 @@ class Engine with ContainerMixin {
         parentPrefix: mount.prefix,
       );
 
-      List<Middleware> resolvedMountMiddlewares = mount.middlewares;
+      var resolvedMountMiddlewares = mount.middlewares;
       if (registry != null) {
         mount.router.resolveMiddlewareReferences(registry, container);
         resolvedMountMiddlewares = registry.resolveAll(
@@ -987,7 +996,7 @@ class Engine with ContainerMixin {
     final upgrade = request is WebSocketUpgradeRequest
         ? request as WebSocketUpgradeRequest
         : null;
-    if (upgrade?.isWebSocketUpgrade == true) {
+    if (upgrade?.isWebSocketUpgrade ?? false) {
       await _handlePortableWebSocket(connection, upgrade!);
       return;
     }
@@ -1008,7 +1017,7 @@ class Engine with ContainerMixin {
     _ensureRoutes();
     final path = connection.request.uri.path;
     WebSocketEngineRoute? route;
-    Map<String, dynamic> pathParameters = const {};
+    var pathParameters = const <String, dynamic>{};
     for (final candidate in _wsRoutes.values) {
       if (!candidate.pattern.hasMatch(path)) continue;
       route = candidate;
@@ -1106,7 +1115,7 @@ class Engine with ContainerMixin {
     if (_closed) {
       throw StateError('Cannot handle requests on a closed engine');
     }
-    if ((_draining || _shutdownController?.isDraining == true)) {
+    if (_draining || (_shutdownController?.isDraining ?? false)) {
       httpRequest.response.statusCode = HttpStatus.serviceUnavailable;
       httpRequest.response.headers.set(HttpHeaders.connectionHeader, 'close');
       await httpRequest.response.close();
@@ -1115,10 +1124,9 @@ class Engine with ContainerMixin {
     if (!_providersBooted) await initialize();
     _ensureRoutes();
     Container? requestContainer;
-    final Container rootContainer = container;
-    final bool fastPathContainers =
-        config.features.enableRequestContainerFastPath;
-    final Container readOnlyRoot = fastPathContainers
+    final rootContainer = container;
+    final fastPathContainers = config.features.enableRequestContainerFastPath;
+    final readOnlyRoot = fastPathContainers
         ? ReadOnlyContainer(rootContainer)
         : rootContainer;
     Container ensureRequestContainer() {
@@ -1185,7 +1193,7 @@ class Engine with ContainerMixin {
   }
 
   void _configureShutdownHooks() {
-    if (_shutdownController?.isDraining == true) {
+    if (_shutdownController?.isDraining ?? false) {
       return;
     }
     _setupShutdownController();
@@ -1215,11 +1223,11 @@ class Engine with ContainerMixin {
         }
         try {
           if (_http2Binding != null) {
-            await _http2Binding!.close(force: false);
+            await _http2Binding!.close();
             _http2Binding = null;
             _server = null;
           } else {
-            await server.close(force: false);
+            await server.close();
           }
         } catch (_) {}
       },
@@ -1278,6 +1286,8 @@ class Engine with ContainerMixin {
         // Prefer closing through the tracked response when available; fall back
         // to native socket close for IO-only requests.
         if (request.hasNativeHttpRequest) {
+          // The legacy accessor is required for the native response close path.
+          // ignore: deprecated_member_use_from_same_package
           await request.httpRequest.response.close();
         }
       } catch (_) {}
@@ -1352,11 +1362,13 @@ class Engine with ContainerMixin {
     return engine;
   }
 
+  /// Adds [middleware] to the global middleware chain.
   void addGlobalMiddleware(Middleware middleware) {
     middlewares.add(middleware);
     _markRoutesDirty();
   }
 
+  /// Returns a copy of the middleware group named [name].
   List<Middleware> middlewareGroup(String name) {
     final stack = _configuredMiddlewareGroups[name];
     if (stack == null) {
@@ -1365,14 +1377,17 @@ class Engine with ContainerMixin {
     return List<Middleware>.from(stack);
   }
 
+  /// Registers a typed error [handler].
   void onError<T extends Object>(EngineErrorHandler<T> handler) {
     errorHooks.addHandler(handler);
   }
 
+  /// Registers an observer called before error handlers run.
   void beforeError(EngineErrorObserver observer) {
     errorHooks.addBefore(observer);
   }
 
+  /// Registers an observer called after error handling completes.
   void afterError(EngineErrorObserver observer) {
     errorHooks.addAfter(observer);
   }
@@ -1391,7 +1406,9 @@ String _routeSource(EngineRoute route) {
   return column == null ? '$file:$line' : '$file:$line:$column';
 }
 
+/// Adds TLS serving to an [Engine].
 extension SecureEngine on Engine {
+  /// Serves the engine over TLS using the configured certificate and key.
   Future<void> serveSecure({
     String address = 'localhost',
     int port = 443,
@@ -1431,7 +1448,7 @@ extension SecureEngine on Engine {
     if (config.http2.enabled) {
       final settings = config.http2.maxConcurrentStreams != null
           ? http2.ServerSettings(
-              concurrentStreamLimit: config.http2.maxConcurrentStreams!,
+              concurrentStreamLimit: config.http2.maxConcurrentStreams,
             )
           : const http2.ServerSettings();
 

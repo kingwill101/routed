@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Maintenance
+- Adopt `very_good_analysis` and complete public API documentation for the
+  core routing, request, response, provider, and transport APIs.
+
 ### Fixes
 - Prevent portable Fetch responses from emitting each `Set-Cookie` header
   twice. This keeps OAuth state cleanup and newly issued session cookies

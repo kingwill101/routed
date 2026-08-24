@@ -1,9 +1,8 @@
-library;
-
 import 'package:routed_core/src/support/named_registry.dart';
 
 /// Immutable metadata captured when registering a driver.
 class DriverRegistration<TBuilder, TValidator> {
+  /// Creates a [DriverRegistration].
   DriverRegistration({required this.builder, this.validator});
 
   /// Function that produces the driver instance.
@@ -22,6 +21,7 @@ abstract class DriverRegistryBase<
   TRegistration extends DriverRegistration<TBuilder, TValidator>
 >
     extends NamedRegistry<TRegistration> {
+  /// Creates a [DriverRegistryBase].
   DriverRegistryBase();
 
   /// Creates a registration object for the given driver [builder].

@@ -1,9 +1,7 @@
-library;
-
 export 'src/events/signals.dart'
     show
-        RequestSignals,
         RequestSignalSender,
+        RequestSignals,
         Signal,
         SignalHub,
         SignalSubscription,

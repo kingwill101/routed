@@ -10,6 +10,7 @@ Map<String, String> readProcessEnvironment() {
   }
 }
 
+/// Whether this host reports a Windows operating system.
 bool get hostIsWindows {
   try {
     return Platform.isWindows;

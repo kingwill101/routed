@@ -1,21 +1,20 @@
 import 'package:routed_core/src/router/registered_route.dart';
 import 'package:routed_core/src/router/route_metadata.dart';
 import 'package:routed_core/src/router/router.dart';
+import 'package:routed_core/src/router/router_group_builder.dart';
 import 'package:routed_core/src/router/types.dart';
-
-import 'router_group_builder.dart';
 
 /// The `RouteBuilder` class is returned by methods like `router.get(...)`
 /// to allow for additional configuration of the route, such as setting its name.
 class RouteBuilder {
+  /// Constructs a `RouteBuilder` with the given registered route and router.
+  RouteBuilder(this._route, this._router);
+
   /// The registered route that this builder is configuring.
   final RegisteredRoute _route;
 
   /// The router instance that this builder is associated with.
   final Router _router;
-
-  /// Constructs a `RouteBuilder` with the given registered route and router.
-  RouteBuilder(this._route, this._router);
 
   /// Sets the name of the route.
   ///

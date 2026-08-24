@@ -44,6 +44,7 @@ Map<String, String> readProcessEnvironment() {
   }
 }
 
+/// Whether this host reports a Windows operating system.
 bool get hostIsWindows {
   try {
     final process = globalContext.getProperty('process'.toJS);

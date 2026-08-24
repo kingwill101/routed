@@ -27,6 +27,7 @@ typedef MiddlewareFactory = Middleware Function(Container container);
 /// final middleware = registry.build('auth', container);
 /// ```
 class MiddlewareRegistry extends NamedRegistry<MiddlewareFactory> {
+  /// Creates an empty middleware registry.
   MiddlewareRegistry();
 
   /// Registers a new middleware [factory] under [id].

@@ -8,6 +8,7 @@ import 'package:routed_core/src/events/event_manager.dart';
 import 'package:routed_core/src/events/signals.dart';
 
 // Helper to get zone values with better error messages
+/// Returns the value stored under [key] in the current application zone.
 T zoneValue<T>(Symbol key, String name) {
   final value = Zone.current[key];
   if (value == null) {
@@ -18,6 +19,7 @@ T zoneValue<T>(Symbol key, String name) {
   return value as T;
 }
 
+/// Provides request-scoped Routed state through a zone.
 class AppZone {
   static const _configurationKey = #configuration;
   static const _engineKey = #engine;
@@ -25,9 +27,10 @@ class AppZone {
   static const _signalsKey = #signals;
 
   // Access the current zone's values
+  /// The configuration value.
   static ConfigStore get configuration {
     final engine = zoneValue<Engine>(_engineKey, 'Engine');
-    final EngineContext? context = Zone.current[_contextKey] as EngineContext?;
+    final context = Zone.current[_contextKey] as EngineContext?;
 
     if (context != null) {
       try {
@@ -47,17 +50,20 @@ class AppZone {
   /// Backwards-readable alias for the typed configuration store.
   static ConfigStore get config => configuration;
 
+  /// The engine value.
   static Engine get engine => zoneValue<Engine>(_engineKey, 'Engine');
 
+  /// The context value.
   static EngineContext get context =>
       zoneValue<EngineContext>(_contextKey, 'EngineContext');
 
+  /// The signals value.
   static SignalHub get signals {
     final current = Zone.current[_signalsKey];
     if (current is SignalHub) return current;
 
     final engine = zoneValue<Engine>(_engineKey, 'Engine');
-    final EngineContext? ctx = Zone.current[_contextKey] as EngineContext?;
+    final ctx = Zone.current[_contextKey] as EngineContext?;
     final hub = _resolveSignalHub(engine: engine, context: ctx);
     if (hub == null) {
       throw StateError(
@@ -68,9 +74,11 @@ class AppZone {
   }
 
   // Helper to get the engine config
+  /// The engine config value.
   static EngineConfig get engineConfig => engine.config;
 
   // Helper for route generation
+  /// Creates a [AppZone].
   static String route(String name, [Map<String, dynamic>? parameters]) {
     final path = engine.route(name, parameters);
     if (path == null) {
@@ -80,6 +88,7 @@ class AppZone {
   }
 
   // Run code with zone values
+  /// Runs [body] with the supplied engine and request-scoped values.
   static FutureOr<R> run<R>({
     required FutureOr<R> Function() body,
     required Engine engine,
@@ -105,12 +114,13 @@ class AppZone {
     );
   }
 
+  /// Runs [body] with an explicit typed [configuration] store.
   static FutureOr<R> runWithConfiguration<R>({
     required ConfigStore configuration,
     required FutureOr<R> Function() body,
   }) async {
     final engine = AppZone.engine;
-    final EngineContext? context = Zone.current[_contextKey] as EngineContext?;
+    final context = Zone.current[_contextKey] as EngineContext?;
     return await runZoned(
       body,
       zoneValues: {

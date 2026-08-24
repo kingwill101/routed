@@ -10,6 +10,7 @@ import 'package:routed_core/src/provider/typed_provider.dart';
 /// Configures multipart upload defaults.
 class UploadsServiceProvider extends ServiceProvider
     with ProvidesTypedConfiguration<MultipartConfig> {
+  /// Creates an uploads provider with optional [configuration].
   UploadsServiceProvider([MultipartConfig? configuration])
     : configuration = configuration ?? MultipartConfig();
 

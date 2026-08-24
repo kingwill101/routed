@@ -1,7 +1,6 @@
 import 'package:routed_core/routed_core.dart';
 import 'package:test/test.dart';
 
-
 void main() {
   test(
     'runtime environment is available during typed configuration boot',

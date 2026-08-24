@@ -6,6 +6,7 @@
 /// const openApiOperationKey = RouteMetadataKey<OpenApiOperation>('routed.openapi.operation');
 /// ```
 final class RouteMetadataKey<T> {
+  /// Creates a [RouteMetadataKey].
   const RouteMetadataKey(this.name);
 
   /// Namespaced key name, e.g. 'routed.auth.policy'.

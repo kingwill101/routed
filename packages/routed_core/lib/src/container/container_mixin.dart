@@ -6,7 +6,7 @@ import 'package:routed_core/src/container/container.dart';
 import 'package:routed_core/src/engine/providers/request.dart'
     show RequestServiceProvider;
 
-import '../provider/provider.dart';
+import 'package:routed_core/src/provider/provider.dart';
 
 /// A mixin that adds container functionality to the Engine class.
 ///
@@ -87,7 +87,8 @@ mixin ContainerMixin {
 
   /// Registers a service provider with the container.
   ///
-  /// The provider's [register] method is called immediately, but its [boot]
+  /// The provider's `ServiceProvider.register` method is called immediately,
+  /// but its `ServiceProvider.boot`
   /// method is deferred until [bootProviders] is called.
   ///
   /// Example:
@@ -114,7 +115,8 @@ mixin ContainerMixin {
   ///
   /// This method:
   /// 1. Checks if providers have already been booted
-  /// 2. If not, calls each provider's [boot] method in registration order
+  /// 2. If not, calls each provider's `ServiceProvider.boot` method in
+  /// registration order
   /// 3. Marks providers as booted
   ///
   /// This method is idempotent - calling it multiple times will only boot

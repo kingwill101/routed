@@ -8,6 +8,58 @@ part of 'engine.dart';
 /// This class represents a compiled and configured route within the routing engine.
 /// {@endtemplate}
 class EngineRoute {
+  /// Creates a new route with the given properties.
+  EngineRoute({
+    required this.method,
+    required this.path,
+    required this.handler,
+    required RoutePatternRegistry patternRegistry,
+    this.name,
+    this.middlewares = const [],
+    this.constraints = const {},
+    RouteMetadata? metadata,
+    this.schema,
+    this.isFallback = false,
+    this.sourceFile,
+    this.sourceLine,
+    this.sourceColumn,
+  }) : metadata = metadata ?? RouteMetadata(),
+       _patternRegistry = patternRegistry {
+    final patternData = _buildUriPattern(path, _patternRegistry);
+    _uriPattern = patternData.pattern;
+    _parameterPatterns = patternData.paramInfo;
+    isStatic = _isStaticPath(path) && !isFallback;
+    staticPath = path.isEmpty ? '/' : path;
+    hasMiddlewareReference = middlewares.any(
+      (middleware) => MiddlewareReference.lookup(middleware) != null,
+    );
+    _handlerMiddleware = (EngineContext ctx, Next _) => handler(ctx);
+  }
+
+  /// Creates a fallback route.
+  EngineRoute.fallback({
+    required this.handler,
+    required RoutePatternRegistry patternRegistry,
+    this.middlewares = const [],
+    RouteMetadata? metadata,
+  }) : metadata = metadata ?? RouteMetadata(),
+       method = '*',
+       path = '*',
+       name = null,
+       constraints = const {},
+       schema = null,
+       isFallback = true,
+       sourceFile = null,
+       sourceLine = null,
+       sourceColumn = null,
+       _patternRegistry = patternRegistry {
+    _uriPattern = RegExp('.*');
+    _parameterPatterns = const {};
+    isStatic = false;
+    staticPath = '*';
+    _handlerMiddleware = (EngineContext ctx, Next _) => handler(ctx);
+  }
+
   /// HTTP method (GET, POST, etc.).
   final String method;
 
@@ -81,66 +133,16 @@ class EngineRoute {
 
   List<Middleware> _cachedHandlers = const <Middleware>[];
 
-  /// Creates a new route with the given properties.
-  EngineRoute({
-    required this.method,
-    required this.path,
-    required this.handler,
-    required RoutePatternRegistry patternRegistry,
-    this.name,
-    this.middlewares = const [],
-    this.constraints = const {},
-    RouteMetadata? metadata,
-    this.schema,
-    this.isFallback = false,
-    this.sourceFile,
-    this.sourceLine,
-    this.sourceColumn,
-  }) : metadata = metadata ?? RouteMetadata(),
-       _patternRegistry = patternRegistry {
-    final patternData = _buildUriPattern(path, _patternRegistry);
-    _uriPattern = patternData.pattern;
-    _parameterPatterns = patternData.paramInfo;
-    isStatic = _isStaticPath(path) && !isFallback;
-    staticPath = path.isEmpty ? '/' : path;
-    hasMiddlewareReference = middlewares.any(
-      (middleware) => MiddlewareReference.lookup(middleware) != null,
-    );
-    _handlerMiddleware = (EngineContext ctx, Next _) => handler(ctx);
-  }
-
-  /// Creates a fallback route.
-  EngineRoute.fallback({
-    required this.handler,
-    required RoutePatternRegistry patternRegistry,
-    this.middlewares = const [],
-    RouteMetadata? metadata,
-  }) : metadata = metadata ?? RouteMetadata(),
-       method = '*',
-       path = '*',
-       name = null,
-       constraints = const {},
-       schema = null,
-       isFallback = true,
-       sourceFile = null,
-       sourceLine = null,
-       sourceColumn = null,
-       _patternRegistry = patternRegistry {
-    _uriPattern = RegExp('.*');
-    _parameterPatterns = const {};
-    isStatic = false;
-    staticPath = '*';
-    _handlerMiddleware = (EngineContext ctx, Next _) => handler(ctx);
-  }
-
   /// Checks if a request matches this route.
   bool matches(HttpRequest request) {
     final match = tryMatch(request);
     return match?.matched ?? false;
   }
 
+  /// The middleware chain cached for this route, when cacheable.
   List<Middleware> get cachedHandlers => _cachedHandlers;
 
+  /// Caches the composed middleware chain for this route.
   void cacheHandlers(
     List<Middleware> globalMiddlewares, {
     bool cacheable = true,
@@ -157,6 +159,7 @@ class EngineRoute {
     _cachedHandlers = [...globalMiddlewares, ...middlewares, ...tail];
   }
 
+  /// Composes global and route middleware with the route handler.
   List<Middleware> composeHandlers(
     List<Middleware> globalMiddlewares,
     List<Middleware> routeMiddlewares,
@@ -171,6 +174,7 @@ class EngineRoute {
   /// The tail of the middleware chain: the route handler.
   List<Middleware> get _tailMiddlewares => <Middleware>[_handlerMiddleware];
 
+  /// Whether [path] matches this route's path pattern.
   bool matchesPath(String path, {bool allowTrailingSlash = true}) {
     if (isFallback) {
       return true;
@@ -234,7 +238,7 @@ class EngineRoute {
     String uri,
   ) {
     final match =
-        _uriPattern.firstMatch(uri) ?? _uriPattern.firstMatch("$uri/");
+        _uriPattern.firstMatch(uri) ?? _uriPattern.firstMatch('$uri/');
     if (match == null) return [];
 
     return _parameterPatterns.entries.map((entry) {
@@ -267,7 +271,7 @@ class EngineRoute {
   /// Extracts parameters from a URI string.
   Map<String, dynamic> extractParameters(String uri) {
     final match =
-        _uriPattern.firstMatch(uri) ?? _uriPattern.firstMatch("$uri/");
+        _uriPattern.firstMatch(uri) ?? _uriPattern.firstMatch('$uri/');
     if (match == null) return {};
 
     return _parameterPatterns.map((key, info) {
@@ -347,7 +351,7 @@ class EngineRoute {
   @override
   String toString() {
     final mwCount = middlewares.isEmpty ? 0 : middlewares.length;
-    final name = this.name != null ? "with name \"${this.name}\"" : "";
+    final name = this.name != null ? 'with name "${this.name}"' : '';
     return '[$method] $path $name [middlewares: $mwCount]';
   }
 
@@ -391,11 +395,9 @@ class EngineRoute {
 
       paramInfo[paramName] = ParamInfo(
         type: explicitType ?? 'string',
-        isOptional: false,
-        isWildcard: false,
       );
 
-      return '(?<$paramName>${effectivePattern ?? r'[^/]+'})';
+      return '(?<$paramName>${effectivePattern ?? '[^/]+'})';
     });
 
     return _PatternData(RegExp('^$pattern\$'), paramInfo);
@@ -417,23 +419,29 @@ class EngineRoute {
   }
 }
 
+/// Describes the type and shape of a route path parameter.
 class ParamInfo {
-  final String type;
-  final bool isOptional;
-  final bool isWildcard;
-
+  /// Creates parameter metadata for [type].
   ParamInfo({
     required this.type,
     this.isOptional = false,
     this.isWildcard = false,
   });
+
+  /// The registered parameter type name.
+  final String type;
+
+  /// Whether the parameter may be omitted from the path.
+  final bool isOptional;
+
+  /// Whether the parameter consumes the remainder of the path.
+  final bool isWildcard;
 }
 
 class _PatternData {
+  _PatternData(this.pattern, this.paramInfo);
   final RegExp pattern;
   final Map<String, ParamInfo> paramInfo;
-
-  _PatternData(this.pattern, this.paramInfo);
 }
 
 extension on Engine {

@@ -7,6 +7,7 @@ import 'package:routed_core/src/utils/process_env.dart';
 /// Runtime configuration for graceful shutdown.
 @immutable
 class ShutdownConfig {
+  /// Creates a [ShutdownConfig].
   const ShutdownConfig({
     required this.enabled,
     required this.gracePeriod,
@@ -34,6 +35,7 @@ class ShutdownConfig {
   /// Set of process signals that should trigger graceful shutdown.
   final Set<ProcessSignal> signals;
 
+  /// Creates a [ShutdownConfig].
   ShutdownConfig copyWith({
     bool? enabled,
     Duration? gracePeriod,
@@ -55,6 +57,7 @@ class ShutdownConfig {
 
 /// Tracks the state of a graceful shutdown.
 class ShutdownController {
+  /// Creates a [ShutdownController].
   ShutdownController({
     required this.config,
     required FutureOr<void> Function() onShutdown,
@@ -64,6 +67,7 @@ class ShutdownController {
        _onDrain = onDrain,
        _onForceClose = onForceClose;
 
+  /// The config value.
   final ShutdownConfig config;
 
   final FutureOr<void> Function() _onShutdown;
@@ -77,16 +81,22 @@ class ShutdownController {
   bool _forced = false;
   ProcessSignal? _triggerSignal;
 
+  /// Whether this is draining is enabled.
   bool get isDraining => _draining;
 
+  /// Whether this is closed is enabled.
   bool get isClosed => _closed;
 
+  /// Whether this was forced is enabled.
   bool get wasForced => _forced;
 
+  /// The trigger signal value.
   ProcessSignal? get triggerSignal => _triggerSignal;
 
+  /// The done value.
   Future<void> get done => _completer.future;
 
+  /// Creates a [ShutdownController].
   void watchSignals([void Function(ProcessSignal signal)? onTriggered]) {
     if (!config.enabled || _listeners.isNotEmpty) return;
 
@@ -117,6 +127,7 @@ class ShutdownController {
     return signal == ProcessSignal.sigint;
   }
 
+  /// Creates a [ShutdownController].
   Future<void> trigger([ProcessSignal? signal]) async {
     if (_draining || _closed) {
       return;
@@ -172,6 +183,7 @@ class ShutdownController {
     }
   }
 
+  /// Creates a [ShutdownController].
   void dispose() {
     for (final sub in _listeners) {
       sub.cancel();

@@ -29,6 +29,7 @@ mixin ProvidesDependencies on ServiceProvider {
 /// Thrown when a provider receives an invalid typed configuration or runtime
 /// option.
 class ProviderConfigException implements Exception {
+  /// Creates a [ProviderConfigException].
   ProviderConfigException(this.message);
 
   /// Description of the invalid option.
