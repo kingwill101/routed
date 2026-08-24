@@ -7,7 +7,8 @@ import 'secure_cookie.dart';
 import 'session.dart';
 import 'store.dart';
 
-/// A [Store] implementation that uses cookies to store session data.
+/// A [SessionStore] implementation that stores the complete session in a
+/// protected client cookie.
 class CookieStore implements SessionStore {
   /// Primary codec used when encoding new payloads.
   final SecureCookie _primaryCodec;
@@ -18,10 +19,11 @@ class CookieStore implements SessionStore {
   /// Default options for sessions created by this store.
   final SessionOptions defaultOptions;
 
-  /// Creates a new [CookieStore] instance.
+  /// Creates a cookie-backed store using [codecs].
   ///
-  /// [codecs] is required and must not be empty. It is a list of [SecureCookie] objects used to encode and decode session data.
-  /// [defaultOptions] are the default options used for creating new sessions. If not provided, a default set of options is used.
+  /// The first codec encodes new cookies; later codecs are accepted as
+  /// fallbacks for reading legacy cookies. [defaultOptions] apply to new
+  /// sessions and default to a one-day, secure, HttpOnly cookie.
   CookieStore({
     required List<SecureCookie> codecs,
     SessionOptions? defaultOptions,
@@ -42,6 +44,10 @@ class CookieStore implements SessionStore {
              sameSite: SameSite.lax,
            );
 
+  /// Decodes the request cookie into a session or returns a new session.
+  ///
+  /// URI encoding and the configured codec chain are supported. Missing,
+  /// malformed, or invalid cookies are treated as new sessions.
   @override
   Future<Session> read(SessionRequest request, String name) async {
     Cookie cookie = request.cookies.firstWhere(
@@ -116,6 +122,9 @@ class CookieStore implements SessionStore {
     }
   }
 
+  /// Serializes [session], protects it with the primary codec, and sets it on
+  /// [response]. Destroyed sessions receive an empty, immediately expired
+  /// cookie.
   @override
   Future<void> write(
     SessionRequest request,

@@ -2,34 +2,38 @@
 
 import 'dart:io';
 
+/// Cookie attributes and lifetime defaults applied to a [Session].
 class SessionOptions {
-  /// The cookie path (defaults to "/")
+  /// The cookie path, defaulting to `/`.
   final String? path;
 
-  /// The cookie domain (optional)
+  /// The cookie domain, when one is configured.
   final String? domain;
 
-  /// Whether this cookie requires HTTPS
+  /// Whether this cookie requires HTTPS.
   final bool? secure;
 
-  /// Whether this cookie is marked HttpOnly
+  /// Whether this cookie is marked `HttpOnly`.
   final bool? httpOnly;
 
-  /// Whether this cookie is partitioned
+  /// Whether this cookie is partitioned.
   final bool? partitioned;
 
-  /// Cookie SameSite policy.
+  /// The cookie's [SameSite] policy.
   final SameSite? sameSite;
 
-  /// MaxAge = 0 means no expiration set
-  /// MaxAge < 0 deletes cookie immediately
-  /// MaxAge > 0 means the cookie will expire in [MaxAge] seconds from now
+  /// The cookie lifetime in seconds.
+  ///
+  /// A negative value requests deletion. A null value lets the store choose
+  /// its default lifetime. Store implementations define how zero is handled;
+  /// for example, file-backed storage treats it as non-expiring, while
+  /// server-side stores may treat an effective zero lifetime as deletion.
   int? _maxAge;
 
-  /// Public getter for maxAge
+  /// The configured cookie lifetime in seconds.
   int? get maxAge => _maxAge;
 
-  /// Constructor with named parameters and default values
+  /// Creates cookie options with the supplied attributes.
   SessionOptions({
     this.path = '/',
     this.domain,
@@ -40,7 +44,7 @@ class SessionOptions {
     this.sameSite,
   }) : _maxAge = maxAge;
 
-  /// Creates a new SessionOptions instance with updated values
+  /// Creates a copy with the supplied non-null values replaced.
   SessionOptions copyWith({
     String? path,
     String? domain,
@@ -61,12 +65,12 @@ class SessionOptions {
     );
   }
 
-  /// Updates the maxAge value
+  /// Updates the cookie lifetime to [value] seconds.
   void setMaxAge(int? value) {
     _maxAge = value;
   }
 
-  /// Converts SessionOptions to JSON representation
+  /// Converts these options to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
     'path': path,
     'domain': domain,
@@ -77,7 +81,7 @@ class SessionOptions {
     'sameSite': sameSite?.name,
   };
 
-  /// Creates SessionOptions from JSON representation
+  /// Creates options from a map produced by [toJson].
   factory SessionOptions.fromJson(Map<String, dynamic> json) => SessionOptions(
     path: json['path'] as String?,
     domain: json['domain'] as String?,
@@ -90,7 +94,7 @@ class SessionOptions {
         : null,
   );
 
-  /// Creates a copy of SessionOptions with all fields
+  /// Creates a copy that preserves every configured option.
   SessionOptions clone() => SessionOptions(
     path: path,
     domain: domain,

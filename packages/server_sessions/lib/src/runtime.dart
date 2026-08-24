@@ -14,14 +14,18 @@ import 'secure_cookie.dart';
 /// framework adapters can delegate runtime assembly without re-implementing
 /// store wiring.
 class SessionRuntimeFactory {
+  /// Creates a factory with no configuration.
   const SessionRuntimeFactory();
 
-  /// Builds cookie-backed session storage.
+  /// Builds cookie-backed session storage using [codecs].
   CookieStore cookie({required List<SecureCookie> codecs}) {
     return CookieStore(codecs: codecs);
   }
 
   /// Builds in-memory session storage.
+  ///
+  /// [defaultOptions] configure cookies and [lifetime] controls the
+  /// server-side retention period.
   MemorySessionStore memory({
     required List<SecureCookie> codecs,
     required SessionOptions defaultOptions,
@@ -35,6 +39,9 @@ class SessionRuntimeFactory {
   }
 
   /// Builds file-backed session storage.
+  ///
+  /// [storagePath] identifies the directory and [lottery] optionally enables
+  /// opportunistic pruning.
   FilesystemStore file({
     required List<SecureCookie> codecs,
     required String storagePath,
@@ -52,6 +59,8 @@ class SessionRuntimeFactory {
   }
 
   /// Builds cache-backed session storage.
+  ///
+  /// [repository] stores payloads, while [cachePrefix] namespaces their keys.
   CacheSessionStore cache({
     required Repository repository,
     required List<SecureCookie> codecs,
@@ -69,5 +78,5 @@ class SessionRuntimeFactory {
   }
 }
 
-/// Shared singleton for adapters that prefer function-style access.
+/// Shared [SessionRuntimeFactory] for adapters that prefer function-style access.
 const SessionRuntimeFactory sessionRuntimeFactory = SessionRuntimeFactory();

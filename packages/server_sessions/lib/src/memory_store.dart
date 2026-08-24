@@ -15,6 +15,10 @@ class _MemorySession {
 
 /// In-memory, process-local session store mirroring Laravel's `array` driver.
 class MemorySessionStore implements SessionStore {
+  /// Creates an in-memory store using [codecs], [defaultOptions], and [lifetime].
+  ///
+  /// The store keeps serialized sessions only in this process and uses a
+  /// signed and encrypted codec when [codecs] is empty.
   MemorySessionStore({
     required List<SecureCookie> codecs,
     required SessionOptions defaultOptions,
@@ -26,12 +30,19 @@ class MemorySessionStore implements SessionStore {
        lifetime = lifetime ?? const Duration(hours: 2);
 
   final Map<String, _MemorySession> _sessions = {};
+
+  /// Codecs tried when reading cookies; the first codec writes new cookies.
   final List<SecureCookie> codecs;
+
+  /// Cloned defaults applied to sessions created by this store.
   final SessionOptions defaultOptions;
+
+  /// Server-side lifetime used when session options omit [SessionOptions.maxAge].
   final Duration lifetime;
 
   SessionOptions _cloneOptions() => defaultOptions.clone();
 
+  /// Reads a session from process-local storage or creates one when absent.
   @override
   Future<Session> read(SessionRequest request, String name) async {
     final cookie = _resolveCookie(request, name);
@@ -64,6 +75,9 @@ class MemorySessionStore implements SessionStore {
     }
   }
 
+  /// Persists [session] in process-local storage and sets its response cookie.
+  ///
+  /// A non-positive effective lifetime deletes the stored session.
   @override
   Future<void> write(
     SessionRequest request,

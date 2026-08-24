@@ -8,11 +8,11 @@ import 'package:pointycastle/api.dart' show AEADParameters, KeyParameter;
 import 'package:pointycastle/block/aes.dart';
 import 'package:pointycastle/block/modes/gcm.dart';
 
-/// A secure cookie implementation supporting both HMAC signing and AES encryption.
-/// Provides three security modes:
-/// - HMAC only: Signs data to prevent tampering
-/// - AES only: Encrypts data for confidentiality
-/// - Both: Combines encryption and signing for maximum security
+/// Protects cookie payloads with HMAC signing, AES encryption, or both.
+///
+/// HMAC prevents tampering, AES provides confidentiality, and [SecurityMode.both]
+/// combines the protections. Cookie names are authenticated as part of the
+/// payload protection.
 class SecureCookie {
   final List<int>? _hmacKey;
   final Uint8List? _aesKey;
@@ -21,10 +21,13 @@ class SecureCookie {
   /// Private constructor for SecureCookie.
   SecureCookie._(this._hmacKey, this._aesKey, this._mode);
 
-  /// Factory constructor to create a new SecureCookie with the provided key and security mode.
+  /// Creates a cookie protector with the supplied key and security mode.
   ///
-  /// [key] - The base64 encoded key (should be at least 32 bytes for AES) or Uint8List
-  /// [mode] - The security mode to use (defaults to both encryption and signing)
+  /// [key] may be a base64 string (optionally prefixed with `base64:`) or a
+  /// [Uint8List]. When omitted, `APP_KEY` is used when available; otherwise a
+  /// random key is generated. AES modes require at least 32 key bytes. When
+  /// [mode] is omitted, [useEncryption] and [useSigning] select the mode, or
+  /// both protections are enabled when neither flag is set.
   factory SecureCookie({
     dynamic key,
     SecurityMode? mode,
@@ -74,6 +77,9 @@ class SecureCookie {
     return _generateRandomKeyBytes();
   }
 
+  /// Generates a base64-prefixed, cryptographically random key.
+  ///
+  /// The result is suitable for passing as [SecureCookie.key].
   static String generateKey() {
     return 'base64:${base64.encode(_generateRandomKeyBytes())}';
   }
@@ -83,7 +89,11 @@ class SecureCookie {
     return List<int>.generate(length, (_) => rng.nextInt(256));
   }
 
-  /// Encode session values into a secured string based on the security mode.
+  /// Encodes [values] for the cookie named [name].
+  ///
+  /// The output is URL-safe base64. The cookie name is bound to the
+  /// authentication or encryption operation, so it must be unchanged when
+  /// [decode] is called.
   String encode(String name, Map<String, dynamic> values) {
     final payload = jsonEncode(values);
 
@@ -97,7 +107,10 @@ class SecureCookie {
     }
   }
 
-  /// Decode a secured string back into session values.
+  /// Decodes a protected cookie value for [name].
+  ///
+  /// Throws when [cookieValue] is malformed, tampered with, encrypted with a
+  /// different key, or bound to another cookie name.
   Map<String, dynamic> decode(String name, String cookieValue) {
     final decodedBytes = base64Url.decode(cookieValue);
     final decodedStr = utf8.decode(decodedBytes);
@@ -121,7 +134,12 @@ class SecureCookie {
   String _encodeAesOnly(String payload, String name) {
     if (_aesKey == null) throw StateError('Encrypter not initialized');
     final iv = _secureRandomBytes(12);
-    final encryptedBytes = _encryptAesGcm(_aesKey, iv, utf8.encode(payload), name);
+    final encryptedBytes = _encryptAesGcm(
+      _aesKey,
+      iv,
+      utf8.encode(payload),
+      name,
+    );
     return base64Url.encode(
       utf8.encode('${base64.encode(encryptedBytes)}|${base64.encode(iv)}'),
     );
@@ -132,7 +150,12 @@ class SecureCookie {
     if (_hmacKey == null) throw StateError('HMAC not initialized');
 
     final iv = _secureRandomBytes(12);
-    final encryptedBytes = _encryptAesGcm(_aesKey, iv, utf8.encode(payload), name);
+    final encryptedBytes = _encryptAesGcm(
+      _aesKey,
+      iv,
+      utf8.encode(payload),
+      name,
+    );
     final combined = '${base64.encode(encryptedBytes)}|${base64.encode(iv)}';
     final signature = _sign(combined, name);
 

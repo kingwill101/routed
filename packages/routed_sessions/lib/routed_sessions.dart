@@ -1,3 +1,7 @@
+/// Session middleware and [EngineContext] helpers for Routed applications.
+///
+/// This library re-exports [Session], [SessionStore], and the built-in stores
+/// from `server_sessions` and adds request lifecycle integration.
 library;
 
 import 'dart:io';
@@ -11,17 +15,25 @@ import 'package:server_sessions/server_sessions.dart';
 
 export 'package:server_sessions/server_sessions.dart';
 
+/// Context key used by [sessionMiddleware] to store the current session.
 const sessionKey = ContextKey<Session>('routed.session');
 
+/// Convenience accessors for the session attached to an [EngineContext].
 extension SessionEngineContext on EngineContext {
+  /// Returns the current session.
+  ///
+  /// Throws a [StateError] when [sessionMiddleware] has not run for this
+  /// request.
   Session get session {
     final s = get<Session>(sessionKey.name);
     if (s == null) throw StateError('Session middleware not configured');
     return s;
   }
 
+  /// Whether [sessionMiddleware] attached a session to this context.
   bool get hasSession => get<Session>(sessionKey.name) != null;
 
+  /// Returns the typed value stored under [key], or `null` when unavailable.
   T? getSession<T>(String key) {
     try {
       return session.getValue<T>(key);
@@ -30,19 +42,32 @@ extension SessionEngineContext on EngineContext {
     }
   }
 
+  /// Stores [value] under [key] when a session is available.
   void setSession(String key, dynamic value) {
     try {
       session.setValue(key, value);
     } catch (_) {}
   }
 
+  /// Removes the value stored under [key].
   void removeSession(String key) => session.values.remove(key);
+
+  /// Removes all values from the current session.
   void clearSession() => session.values.clear();
+
+  /// Whether the current session contains [key].
   bool hasSessionKey(String key) => session.values.containsKey(key);
+
+  /// A copy of the current session data.
   Map<String, dynamic> get sessionData => Map.from(session.values);
+
+  /// The current session identifier.
   String get sessionId => session.id;
+
+  /// Destroys the current session and expires it when written.
   void destroySession() => session.destroy();
 
+  /// Adds a one-time flash [message] under [category].
   void flash(String message, [String category = 'message']) {
     try {
       final existing = session.values['_flash'];
@@ -57,6 +82,7 @@ extension SessionEngineContext on EngineContext {
     } catch (_) {}
   }
 
+  /// Whether the current session contains flash messages.
   bool hasFlashMessages() {
     try {
       final flashes = session.values['_flash'] as List?;
@@ -66,6 +92,11 @@ extension SessionEngineContext on EngineContext {
     }
   }
 
+  /// Returns and removes flash messages from the current session.
+  ///
+  /// When [withCategories] is true, each item is `[category, message]`;
+  /// otherwise each item is the message string. [categoryFilter] limits the
+  /// returned messages without changing the one-time removal behavior.
   List<dynamic> getFlashMessages({
     bool withCategories = false,
     List<String>? categoryFilter,
@@ -167,6 +198,11 @@ class _EngineSessionResponse implements SessionResponse {
   }
 }
 
+/// Creates middleware that loads and persists a session for each request.
+///
+/// Uses [store] when supplied, then a configured [SessionConfig] or registered
+/// [SessionStore]. If none is available, it falls back to a cookie store with
+/// signed and encrypted cookies.
 Middleware sessionMiddleware([SessionStore? store]) {
   return (EngineContext ctx, Next next) async {
     SessionConfig? config;
@@ -230,9 +266,10 @@ Middleware sessionMiddleware([SessionStore? store]) {
   };
 }
 
+/// Registers [SessionConfig] and its [SessionStore] with a Routed container.
 class RoutedSessionsProvider extends ServiceProvider
     with ProvidesTypedConfiguration<SessionConfig> {
-  /// Defaults to an in-memory session store with signed cookies.
+  /// Creates a provider, defaulting to an in-memory store with protected cookies.
   RoutedSessionsProvider([SessionConfig? configuration])
     : configuration =
           configuration ??
@@ -254,9 +291,11 @@ class RoutedSessionsProvider extends ServiceProvider
             ),
           );
 
+  /// The configuration registered by this provider.
   @override
   final SessionConfig configuration;
 
+  /// Registers the configured session objects in [container].
   @override
   void register(Container container) {
     final store = configuration.store;
@@ -264,11 +303,12 @@ class RoutedSessionsProvider extends ServiceProvider
     container.singleton<SessionStore>((_) async => store);
   }
 
+  /// Completes provider startup; session registration requires no boot work.
   @override
   Future<void> boot(Container container) async {}
 }
 
-/// Registers the session provider factory in the shared registry.
+/// Registers the session provider factory in the shared provider registry.
 void registerRoutedSessionsProviders() {
   ProviderRegistry.instance.register(
     'routed.sessions',

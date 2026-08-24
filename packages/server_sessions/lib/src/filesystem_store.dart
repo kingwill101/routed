@@ -9,8 +9,10 @@ import 'secure_cookie.dart';
 import 'session.dart';
 import 'store.dart';
 
-/// A simple Dart adaptation of Gorilla's FilesystemStore, storing session data in files.
-/// For demonstration only. This is minimal and not production-hardened.
+/// Stores session values in files and keeps only the session ID in the cookie.
+///
+/// This implementation is minimal and should be hardened for production
+/// deployments, including its storage directory and file permissions.
 class FilesystemStore implements SessionStore {
   /// Directory where session files will be stored.
   final String storageDir;
@@ -24,7 +26,7 @@ class FilesystemStore implements SessionStore {
   /// Whether to prune expired session files when this store is constructed.
   final bool pruneOnStartup;
 
-  /// Lottery configuration for opportunistic pruning (e.g. [2, 100]).
+  /// Lottery configuration for opportunistic pruning, such as `2/100`.
   final List<int>? lottery;
 
   /// File system used to manage session files.
@@ -32,8 +34,11 @@ class FilesystemStore implements SessionStore {
 
   final Random _random = Random.secure();
 
-  /// Constructor for FilesystemStore.
-  /// Ensures the storage directory exists.
+  /// Creates a file-backed store and ensures [storageDir] exists.
+  ///
+  /// The first [codecs] entry protects new cookies. [lottery] may configure
+  /// opportunistic pruning as a `wins/outOf` probability; invalid values
+  /// disable the lottery.
   FilesystemStore({
     required this.storageDir,
     List<SecureCookie>? codecs,
@@ -64,8 +69,10 @@ class FilesystemStore implements SessionStore {
     }
   }
 
-  /// Retrieves a session based on the request and session name.
-  /// If no session exists, a new one is created.
+  /// Reads the cookie ID and loads its values from `session_<id>`.
+  ///
+  /// Creates a session with a generated ID when the cookie is missing,
+  /// invalid, or does not identify a readable file.
   @override
   Future<Session> read(SessionRequest request, String name) async {
     final cookie = request.cookies.firstWhere(
@@ -107,7 +114,10 @@ class FilesystemStore implements SessionStore {
     return session;
   }
 
-  /// Saves the session data to a file and sets the appropriate cookie.
+  /// Saves [session] to `session_<id>` and sets its response cookie.
+  ///
+  /// An explicit negative [SessionOptions.maxAge] or a destroyed session
+  /// removes the stored file. A configured [lottery] may prune expired files.
   @override
   Future<void> write(
     SessionRequest request,

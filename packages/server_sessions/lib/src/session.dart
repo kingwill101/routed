@@ -5,9 +5,7 @@ import 'options.dart';
 
 /// Represents a session with a unique ID and associated data.
 class Session {
-  /// The unique identifier for this session.
   String _id;
-  set id(String value) => _id = value;
 
   /// The previously persisted ID, retained until the backend store has had a
   /// chance to delete it.
@@ -16,10 +14,10 @@ class Session {
   /// the record still referenced by an old cookie instead of leaving it valid.
   String? _previousId;
 
-  /// Name of the session cookie
+  /// Name of the session cookie.
   final String name;
 
-  /// The session options
+  /// Cookie attributes and lifetime applied when the session is written.
   final SessionOptions options;
 
   /// Map containing the session data.
@@ -34,10 +32,12 @@ class Session {
   /// Whether the session has been destroyed.
   bool _destroyed = false;
 
-  /// Whether this is a new session
   bool _isNew = true;
 
-  /// Creates a new session with the given [id] and optionally [values].
+  /// Creates a session with the supplied cookie [name] and [options].
+  ///
+  /// Generates an identifier and timestamps when [id], [createdAt], or
+  /// [lastAccessed] is omitted.
   Session({
     String? id,
     required this.name,
@@ -50,10 +50,13 @@ class Session {
        _createdAt = createdAt ?? DateTime.now(),
        _lastAccessed = lastAccessed ?? DateTime.now();
 
-  /// Serializes the session to a JSON string.
+  /// Serializes this session to a JSON string.
   String serialize() => jsonEncode(toMap());
 
   /// Creates a session from a JSON string.
+  ///
+  /// Throws a [FormatException] or a [TypeError] when [data] does not contain
+  /// the session representation produced by [serialize].
   static Session deserialize(String data) {
     final Map<String, dynamic> map = jsonDecode(data) as Map<String, dynamic>;
     return Session(
@@ -77,7 +80,7 @@ class Session {
     return values.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
   }
 
-  /// Updates the last accessed time to now.
+  /// Updates the last-accessed time and marks this session as no longer new.
   void touch() {
     _lastAccessed = DateTime.now();
     _isNew = false; // Mark as not new after first access
@@ -86,7 +89,8 @@ class Session {
   /// Marks the session as destroyed and clears all values.
   ///
   /// The current persisted ID is retained in [previousId] so the backend store
-  /// can delete the original record when [write] runs; otherwise the old cookie
+  /// can delete the original record when [SessionStore.write] runs; otherwise
+  /// the old cookie
   /// would keep resolving to an orphaned session until it expires.
   void destroy() {
     _destroyed = true;
@@ -100,7 +104,8 @@ class Session {
   /// Regenerates the session ID while maintaining the session data.
   ///
   /// The ID that was active before regeneration is recorded in [previousId] so
-  /// the next [write] can invalidate the record referenced by the old cookie.
+  /// the next [SessionStore.write] can invalidate the record referenced by the
+  /// old cookie.
   void regenerate() {
     _previousId = _id;
     _id = _generateId();
@@ -108,32 +113,38 @@ class Session {
   }
 
   /// The unique identifier for this session.
+  ///
+  /// Assigning an identifier is intended for store implementations. Call
+  /// [regenerate] when application code needs to rotate an active session ID.
   // ignore: unnecessary_getters_setters
   String get id => _id;
+  set id(String value) => _id = value;
 
   /// The ID that was persisted before the last [destroy] or [regenerate], or
   /// null when the session ID has never been replaced.
   String? get previousId => _previousId;
 
-  /// When the session was created.
+  /// The time at which this session was created.
   DateTime get createdAt => _createdAt;
 
-  /// When the session was last accessed.
+  /// The time at which this session was last accessed.
   DateTime get lastAccessed => _lastAccessed;
 
   /// Whether the session has been destroyed.
   bool get isDestroyed => _destroyed;
 
-  /// Whether this is a new session
+  /// Whether this is a new session.
   // ignore: unnecessary_getters_setters
   bool get isNew => _isNew;
   set isNew(bool value) => _isNew = value;
 
+  /// The number of elapsed seconds since [createdAt].
   int get age => DateTime.now().difference(_createdAt).inSeconds;
 
+  /// The number of elapsed seconds since [lastAccessed].
   int get idleTime => DateTime.now().difference(_lastAccessed).inSeconds;
 
-  /// Convert session to a map for serialization
+  /// Converts this session to a JSON-compatible map.
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -147,6 +158,11 @@ class Session {
     };
   }
 
+  /// Returns the value for [key] when it has type [T].
+  ///
+  /// A value is converted to a string when [T] is `String`; otherwise a type
+  /// mismatch returns `null`. This method calls [touch], including when the
+  /// key is missing or the value has the wrong type.
   T? getValue<T>(String key) {
     touch(); // Update access time on reads
     final value = values[key];
@@ -167,6 +183,7 @@ class Session {
     return null;
   }
 
+  /// Stores [value] under [key] and updates the last-accessed time.
   void setValue(String key, dynamic value) {
     touch(); // Update access time on writes
     values[key] = value;

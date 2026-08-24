@@ -8,9 +8,13 @@ import 'session.dart';
 import 'secure_cookie.dart';
 import 'store.dart';
 
-/// Stores session payloads inside a cache repository while only persisting
-/// lightweight identifiers inside the client cookie.
+/// Stores session payloads in a cache repository while persisting only a
+/// lightweight identifier in the client cookie.
 class CacheSessionStore implements SessionStore {
+  /// Creates a cache-backed store with [repository] and cookie [codecs].
+  ///
+  /// [defaultOptions] apply to new sessions, [cachePrefix] namespaces cache
+  /// keys, and [lifetime] controls the server-side entry lifetime.
   CacheSessionStore({
     required this.repository,
     required List<SecureCookie> codecs,
@@ -42,6 +46,10 @@ class CacheSessionStore implements SessionStore {
 
   String _cacheKey(String id) => '$cachePrefix$id';
 
+  /// Reads the cookie identifier and loads its payload from [repository].
+  ///
+  /// Returns a new session when the cookie is missing, invalid, or has no
+  /// corresponding cache entry.
   @override
   Future<Session> read(SessionRequest request, String name) async {
     final cookie = _resolveCookie(request, name);
@@ -70,6 +78,10 @@ class CacheSessionStore implements SessionStore {
     return session;
   }
 
+  /// Stores [session] in [repository] and updates the response cookie.
+  ///
+  /// Rotating or destroying a session also removes the record referenced by
+  /// [Session.previousId].
   @override
   Future<void> write(
     SessionRequest request,

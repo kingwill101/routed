@@ -4,7 +4,10 @@ import 'package:file/file.dart';
 import 'package:routed_core/routed_core.dart';
 import 'package:server_sessions/server_sessions.dart';
 
-/// Configuration for session management.
+/// Configuration for session middleware, cookies, and storage.
+///
+/// Use [SessionConfig.cookie] or [SessionConfig.file] for common store
+/// configurations, or provide a custom [SessionStore].
 class SessionConfig implements ValidatableConfiguration {
   /// The name of the session cookie. Defaults to 'routed_session'.
   final String cookieName;
@@ -42,14 +45,10 @@ class SessionConfig implements ValidatableConfiguration {
   /// Lottery configuration surfaced for tooling/tests.
   final List<int>? lottery;
 
-  /// Creates a [SessionConfig].
+  /// Creates session middleware configuration for [store].
   ///
-  /// The [cookieName] parameter specifies the name of the session cookie.
-  /// The [store] parameter specifies the session store implementation.
-  /// The [maxAge] parameter specifies the maximum age of the session.
-  /// The [path] parameter specifies the path for which the cookie is valid.
-  /// The [secure] parameter specifies whether the cookie should only be sent over HTTPS.
-  /// The [httpOnly] parameter specifies whether the cookie should be marked as HttpOnly, preventing client-side JavaScript access.
+  /// [defaultOptions] overrides options derived from [path], [maxAge], and
+  /// the cookie security flags.
   SessionConfig({
     this.cookieName = 'routed_session',
     required this.store,
@@ -75,11 +74,10 @@ class SessionConfig implements ValidatableConfiguration {
            ),
        codecs = codecs ?? const [];
 
-  /// Creates a [SessionConfig] that uses cookie storage.
+  /// Creates configuration backed by [CookieStore].
   ///
-  /// The [appKey] parameter is required and is used to encrypt and sign the session data.
-  /// The [cookieName] parameter specifies the name of the session cookie. Defaults to 'routed_session'.
-  /// The [maxAge] parameter specifies the maximum age of the session. Defaults to 1 hour.
+  /// [appKey] supplies the key used to encrypt and sign session data when
+  /// [codecs] is omitted. [expireOnClose] leaves the cookie without a lifetime.
   factory SessionConfig.cookie({
     String? appKey,
     List<SecureCookie>? codecs,
@@ -118,12 +116,10 @@ class SessionConfig implements ValidatableConfiguration {
     );
   }
 
-  /// Creates a [SessionConfig] that uses file storage.
+  /// Creates configuration backed by [FilesystemStore].
   ///
-  /// The [appKey] parameter is required and is used to encrypt and sign the session data.
-  /// The [storagePath] parameter specifies the directory where session files will be stored.
-  /// The [cookieName] parameter specifies the name of the session cookie. Defaults to 'routed_session'.
-  /// The [maxAge] parameter specifies the maximum age of the session. Defaults to 1 hour.
+  /// [appKey] supplies the key used to encrypt and sign session IDs when
+  /// [codecs] is omitted. [storagePath] identifies the session directory.
   factory SessionConfig.file({
     required String appKey,
     List<SecureCookie>? codecs,
@@ -168,6 +164,7 @@ class SessionConfig implements ValidatableConfiguration {
     );
   }
 
+  /// Validates the cookie name, path, and non-negative [maxAge].
   @override
   void validate(ConfigValidationContext context) {
     context.require(
