@@ -10,6 +10,17 @@ const skillsRoot = path.join(repoRoot, 'skills');
 const catalogPath = path.join(repoRoot, 'docs', 'package-catalog.md');
 const checkOnly = process.argv.includes('--check');
 
+// Cross-cutting skills live beside the generated package skills but are not
+// derived from a single package manifest. Keep them explicit so the catalog
+// check can distinguish intentional skills from stale package directories.
+const supplementalSkills = [
+  {
+    directory: 'routed_web',
+    name: 'routed-web',
+    summary: 'Build polished, server-rendered websites with Routed and Liquify.',
+  },
+];
+
 function read(file) {
   return fs.readFileSync(file, 'utf8');
 }
@@ -883,6 +894,14 @@ node tool/generate_routed_skills.mjs --check
 | Package | Skill name | Version | Source package |
 | --- | --- | --- | --- |
 ${rows.join('\n')}
+
+## Cross-cutting skills
+
+These skills cover workflows that span multiple Routed packages:
+
+| Skill | Focus |
+| --- | --- |
+${supplementalSkills.map((skill) => `| [\`${skill.name}\`](./${skill.directory}/SKILL.md) | ${skill.summary} |`).join('\n')}
 `;
 }
 
@@ -903,7 +922,10 @@ if (!checkOnly) {
   for (const [file, contents] of expected) {
     if (!fs.existsSync(file) || read(file) !== contents) failures.push(path.relative(repoRoot, file));
   }
-  const expectedDirectories = new Set(infos.map((info) => info.name));
+  const expectedDirectories = new Set([
+    ...infos.map((info) => info.name),
+    ...supplementalSkills.map((skill) => skill.directory),
+  ]);
   if (fs.existsSync(skillsRoot)) {
     for (const entry of fs.readdirSync(skillsRoot, {withFileTypes: true})) {
       if (entry.isDirectory() && entry.name.startsWith('routed_') && !expectedDirectories.has(entry.name)) {

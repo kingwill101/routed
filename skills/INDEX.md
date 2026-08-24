@@ -37,3 +37,11 @@ node tool/generate_routed_skills.mjs --check
 | [`routed_testing`](./routed_testing/SKILL.md) | `routed-testing` | `0.4.0` | [package](../packages/server_testing/routed_testing) |
 | [`routed_validation`](./routed_validation/SKILL.md) | `routed-validation` | `0.1.0` | [package](../packages/routed_validation) |
 | [`routed_views`](./routed_views/SKILL.md) | `routed-views` | `0.2.0` | [package](../packages/routed_views) |
+
+## Cross-cutting skills
+
+These skills cover workflows that span multiple Routed packages:
+
+| Skill | Focus |
+| --- | --- |
+| [`routed-web`](./routed_web/SKILL.md) | Build polished, server-rendered websites with Routed and Liquify. |
