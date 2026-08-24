@@ -2,6 +2,13 @@
 
 - Add `defineCloudflareFetchFactoryWithEnvironmentAsync` for typed Worker
   startup with Cloudflare bindings such as D1 and secrets.
+- Add a sharded SQLite-backed `CloudflareDurableObjectStore` and
+  `CloudflareDurableObjectStoreObject` for shared cache and distributed-lock
+  state on Workers, including the locking contract used by
+  `CacheRateLimiterBackend`.
+- Preserve Cloudflare's `CF-Connecting-IP` through the Fetch bridge so
+  portable request IP policies, including rate limiting, work on Workers
+  without a socket remote address.
 
 ## 0.2.0
 

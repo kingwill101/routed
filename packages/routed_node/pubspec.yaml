@@ -19,11 +19,13 @@ environment:
 dependencies:
   crypto: ^3.0.0
   routed_core: ">=0.4.0 <1.0.0"
+  server_contracts: ">=0.1.0 <1.0.0"
   web: ^1.1.1
 
 dev_dependencies:
   lints: ^6.0.0
   routed_auth: any
+  sqlite3: ^3.1.6
   test: ^1.29.0
   routed_node_api_sample: any
   routed_sessions: any

@@ -6,6 +6,7 @@ import 'package:routed_core/routed_core.dart';
 import 'package:web/web.dart' as web;
 
 import '../runtime/runtime.dart';
+import 'cloudflare_ip.dart';
 import 'fetch_exchange.dart';
 import 'web_stream_bridge.dart';
 
@@ -62,6 +63,7 @@ final class WebFetchRequest implements FetchRequestView {
     // protocol headers.
     for (final name in const [
       'authorization',
+      'cf-connecting-ip',
       'cookie',
       'origin',
       'x-csrf-token',
@@ -92,7 +94,7 @@ final class WebFetchRequest implements FetchRequestView {
   }
 
   @override
-  String? get remoteAddress => null;
+  String? get remoteAddress => cloudflareClientIpFromHeaders(rawHeaders);
 
   @override
   RoutedNodeContext get hostContext => _hostContext;
