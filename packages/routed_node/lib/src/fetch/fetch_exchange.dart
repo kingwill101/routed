@@ -8,36 +8,60 @@ import '../runtime/runtime.dart';
 /// JavaScript host entrypoints adapt their native request object to this view;
 /// the Routed engine never imports a host's Fetch or execution-context types.
 abstract interface class FetchRequestView {
+  /// The method value.
   String get method;
+
+  /// The url value.
   String get url;
+
+  /// The rawHeaders value.
   Map<String, Object?> get rawHeaders;
+
+  /// The body value.
   Stream<List<int>> get body;
+
+  /// The remoteAddress value.
   String? get remoteAddress;
+
+  /// The hostContext value.
   RoutedNodeContext? get hostContext;
 }
 
 /// Host-neutral response value produced for Fetch-style hosts.
 final class FetchResponseView {
+  /// Performs the FetchResponseView operation.
   FetchResponseView({
     required this.statusCode,
     required this.headers,
     required this.body,
   });
 
+  /// The statusCode value.
   final int statusCode;
+
+  /// The headers value.
   final Map<String, List<String>> headers;
+
+  /// The body value.
   final Stream<List<int>> body;
 }
 
+/// Defines the public contract for this host integration.
 final class FetchWebSocketUpgrade {
+  /// Performs the FetchWebSocketUpgrade operation.
   FetchWebSocketUpgrade({
     required this.socket,
     required this.response,
     this.responseContainsWebSocket = false,
   });
 
+  /// The socket value.
   final RoutedWebSocket socket;
+
+  /// The response value.
   final Object response;
+
+  /// The responseContainsWebSocket value.
   final bool responseContainsWebSocket;
 }
 

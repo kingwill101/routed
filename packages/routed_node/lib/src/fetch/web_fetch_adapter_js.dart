@@ -12,6 +12,7 @@ import 'web_stream_bridge.dart';
 
 /// Adapts a native Fetch request to the shared Fetch view.
 final class WebFetchRequest implements FetchRequestView {
+  /// Performs the WebFetchRequest operation.
   WebFetchRequest(
     this.request, {
     required RoutedNodeContext hostContext,
@@ -31,6 +32,7 @@ final class WebFetchRequest implements FetchRequestView {
             false);
   }
 
+  /// Provides the declared host integration API member.
   final web.Request request;
   final Future<FetchWebSocketUpgrade> Function()? _acceptWebSocket;
   final RoutedNodeContext _hostContext;
@@ -99,6 +101,7 @@ final class WebFetchRequest implements FetchRequestView {
   @override
   RoutedNodeContext get hostContext => _hostContext;
 
+  /// Performs the Function operation.
   Future<FetchWebSocketUpgrade> Function()? get acceptWebSocket =>
       _acceptWebSocket;
 }
@@ -109,6 +112,7 @@ final class WebFetchRequest implements FetchRequestView {
 /// through the returned native `ReadableStream`.
 final class WebStreamingResponseAdapter
     implements ResponseAdapter, WebSocketResponseAdapter {
+  /// Performs the WebStreamingResponseAdapter operation.
   WebStreamingResponseAdapter() : _body = StreamController<List<int>>();
 
   final StreamController<List<int>> _body;
@@ -119,11 +123,19 @@ final class WebStreamingResponseAdapter
   bool _closed = false;
   Object? _upgradeResponse;
 
+  /// The upgradeResponse value.
   Object? get upgradeResponse => _upgradeResponse;
 
+  /// The statusCodeValue value.
   int get statusCodeValue => _statusCode;
+
+  /// The headersValue value.
   Map<String, List<String>> get headersValue => _headers;
+
+  /// The body value.
   Stream<List<int>> get body => _body.stream;
+
+  /// The headersReady value.
   Future<void> get headersReady => _headersReady.future;
 
   void _markHeadersReady() {
@@ -178,6 +190,7 @@ final class WebStreamingResponseAdapter
     await _body.close();
   }
 
+  /// Performs the fail operation.
   void fail(Object error, StackTrace stackTrace) {
     if (_closed) return;
     _closed = true;

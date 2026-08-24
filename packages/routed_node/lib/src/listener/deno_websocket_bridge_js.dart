@@ -17,12 +17,16 @@ extension type _DenoWebSocket._(JSObject _) implements JSObject {
   external void close([int code, String reason]);
 }
 
+/// Defines the public contract for this host integration.
 final class DenoWebSocketBridge implements RoutedWebSocket {
+  /// Performs the DenoWebSocketBridge operation.
   DenoWebSocketBridge(this.socket);
 
+  /// The socket value.
   final _DenoWebSocket socket;
   final StreamController<Object?> _messages = StreamController<Object?>();
 
+  /// Performs the attach operation.
   void attach() {
     socket.setProperty(
       'onmessage'.toJS,
@@ -73,6 +77,7 @@ final class DenoWebSocketBridge implements RoutedWebSocket {
   }
 }
 
+/// Performs the prepareDenoWebSocket operation.
 FetchWebSocketUpgrade prepareDenoWebSocket(JSObject request) {
   final deno = globalContext.getProperty('Deno'.toJS);
   if (deno == null || !deno.isA<JSObject>()) {
@@ -96,6 +101,7 @@ FetchWebSocketUpgrade prepareDenoWebSocket(JSObject request) {
   return FetchWebSocketUpgrade(socket: bridge, response: response);
 }
 
+/// Performs the denoUpgradeResponse operation.
 Object? denoUpgradeResponse(FetchWebSocketUpgrade upgrade) => upgrade.response;
 
 Object? _denoMessage(JSAny data) {

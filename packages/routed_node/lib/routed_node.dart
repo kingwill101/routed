@@ -4,8 +4,8 @@
 /// Pair with `package:routed_core` (or batteries `package:routed`). Keep
 /// separate from `package:routed_io` so VM and Node hosts stay independent.
 ///
-/// Preferred path: [dispatchNodeExchange] / [Engine.handlePortable].
-/// Stream-sink path: [NodeHttpConnection] + [Engine.handleConnection].
+/// Preferred path: `dispatchNodeExchange` / `Engine.handlePortable`.
+/// Stream-sink path: `NodeHttpConnection` + `Engine.handleConnection`.
 library;
 
 export 'src/runtime/runtime.dart';

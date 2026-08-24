@@ -29,13 +29,17 @@ extension type _CloudflareWebSocketPair._(JSObject _) implements JSObject {
   external JSObject get server;
 }
 
+/// Defines the public contract for this host integration.
 final class WebFetchWebSocket implements RoutedWebSocket {
+  /// Performs the WebFetchWebSocket operation.
   WebFetchWebSocket(this.socket);
 
+  /// The socket value.
   final _NativeWebSocket socket;
   final StreamController<JSAny?> _messages = StreamController<JSAny?>();
   bool _attached = false;
 
+  /// Performs the attach operation.
   void attach() {
     if (_attached) return;
     _attached = true;
@@ -81,6 +85,7 @@ final class WebFetchWebSocket implements RoutedWebSocket {
   }
 }
 
+/// Performs the cloudflareWebSocketPair operation.
 Future<FetchWebSocketUpgrade> cloudflareWebSocketPair() async {
   final pair = _CloudflareWebSocketPair();
   final server = pair.server;

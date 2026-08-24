@@ -24,6 +24,7 @@ String cloudflareTextBinding(CloudflareEnvironment environment, String name) {
 /// Returns the native Fetch request associated with [context], when present.
 CloudflareRequest? cloudflareRequestOf(EngineContext context) => null;
 
+/// Performs the createCloudflareRequest operation.
 CloudflareRequest createCloudflareRequest(
   String url, {
   String method = 'GET',

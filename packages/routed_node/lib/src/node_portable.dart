@@ -64,7 +64,7 @@ Future<void> writePortableResponseToNode(
   }
 }
 
-/// Runs [engine.handlePortable] for one Node exchange.
+/// Runs `engine.handlePortable` for one Node exchange.
 Future<void> dispatchNodeExchange(
   Engine engine,
   NodeIncomingView incoming,

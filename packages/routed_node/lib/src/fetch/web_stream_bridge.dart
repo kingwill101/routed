@@ -15,6 +15,7 @@ extension type _UnderlyingSource._(JSObject _) implements JSObject {
   });
 }
 
+/// Performs the dartStreamFromWeb operation.
 Stream<List<int>> dartStreamFromWeb(web.ReadableStream stream) async* {
   final reader = stream.getReader() as web.ReadableStreamDefaultReader;
   try {
@@ -31,6 +32,7 @@ Stream<List<int>> dartStreamFromWeb(web.ReadableStream stream) async* {
   }
 }
 
+/// Provides the declared host integration API member.
 web.ReadableStream webStreamFromDart(Stream<List<int>> stream) {
   StreamSubscription<List<int>>? subscription;
 

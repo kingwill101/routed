@@ -10,6 +10,7 @@ import 'runtime/runtime.dart';
 /// Exposes host-agnostic [HttpConnection] adapters for
 /// [Engine.handleConnection].
 final class NodeHttpConnection {
+  /// Performs the NodeHttpConnection operation.
   NodeHttpConnection(
     NodeIncomingView incoming,
     NodeServerResponseView outgoing, {

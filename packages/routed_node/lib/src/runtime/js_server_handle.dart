@@ -9,6 +9,7 @@ import 'runtime.dart';
 
 /// Server handle for a JavaScript-hosted listener.
 final class JsServerHandle implements ServerHandle {
+  /// Performs the JsServerHandle operation.
   JsServerHandle({
     required this.server,
     required this.engine,
@@ -19,14 +20,23 @@ final class JsServerHandle implements ServerHandle {
     this.waitForSockets,
   });
 
+  /// The server value.
   final JSObject server;
+
+  /// The engine value.
   final Engine engine;
+
+  /// The info value.
   final RoutedNodeRuntimeInfo info;
   @override
   final String host;
   @override
   final int port;
+
+  /// Performs the Function operation.
   final void Function()? closeSockets;
+
+  /// Performs the Function operation.
   final Future<void> Function()? waitForSockets;
   bool _closed = false;
 
@@ -72,6 +82,7 @@ final class JsServerHandle implements ServerHandle {
   }
 }
 
+/// Performs the publishHostBootRequested operation.
 void publishHostBootRequested(Engine engine, RoutedNodeRuntimeInfo info) {
   publishRoutedNodeLifecycle(
     engine,
@@ -82,6 +93,7 @@ void publishHostBootRequested(Engine engine, RoutedNodeRuntimeInfo info) {
   );
 }
 
+/// Performs the publishHostReady operation.
 void publishHostReady(Engine engine, RoutedNodeRuntimeInfo info) {
   publishRoutedNodeLifecycle(
     engine,

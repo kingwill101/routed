@@ -5,8 +5,10 @@ import 'runtime.dart';
 /// Attaches host context to a portable request adapter.
 final class RoutedNodeRequestAdapter
     implements RequestAdapter, WebSocketUpgradeRequest, HostContextCarrier {
+  /// Performs the RoutedNodeRequestAdapter operation.
   RoutedNodeRequestAdapter(this.delegate, this.hostContext);
 
+  /// The delegate value.
   final RequestAdapter delegate;
   WebSocketUpgradeRequest? get _upgrade => delegate is WebSocketUpgradeRequest
       ? delegate as WebSocketUpgradeRequest

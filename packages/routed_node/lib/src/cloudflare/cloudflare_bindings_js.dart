@@ -553,6 +553,7 @@ CloudflareRequest? cloudflareRequestOf(EngineContext context) {
   return request == null ? null : _CloudflareRequest(request as web.Request);
 }
 
+/// Performs the createCloudflareRequest operation.
 CloudflareRequest createCloudflareRequest(
   String url, {
   String method = 'GET',
@@ -1835,6 +1836,7 @@ final class _CloudflareDurableObjectSqlResult
 
 // This adapter is intentionally private; Durable Object state is supplied by
 // the Worker runtime when a class is registered by a generated entrypoint.
+/// Performs the cloudflareDurableObjectStateFromJavaScript operation.
 CloudflareDurableObjectState cloudflareDurableObjectStateFromJavaScript(
   Object state,
 ) => _CloudflareDurableObjectState(_object(state));

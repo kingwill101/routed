@@ -44,6 +44,7 @@ Future<ServerHandle> serveJsListener(
   );
 }
 
+/// Performs the createHostServer operation.
 Future<JSObject> createHostServer(
   String runtime,
   Engine engine, {

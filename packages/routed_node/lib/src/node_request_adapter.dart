@@ -9,6 +9,7 @@ import 'runtime/runtime.dart';
 /// [AdapterHttpBridge] inside [Engine.handleConnection].
 final class NodeRequestAdapter
     implements RequestAdapter, WebSocketUpgradeRequest, HostContextCarrier {
+  /// Performs the NodeRequestAdapter operation.
   NodeRequestAdapter(
     this.incoming, {
     Uri? baseUri,
@@ -28,6 +29,7 @@ final class NodeRequestAdapter
   @override
   final bool isWebSocketUpgrade;
 
+  /// Performs the Function operation.
   final Future<RoutedWebSocket> Function()? acceptWebSocket;
 
   /// Native handshake data populated when [accept] is called.

@@ -5,15 +5,15 @@ import 'node_runtime.dart' as node_runtime;
 import 'runtime/lifecycle.dart';
 import 'runtime/runtime.dart';
 
-/// Boots a Routed [engine] using the Node.js HTTP server transport.
+/// Boots a Routed `engine` using the Node.js HTTP server transport.
 ///
-/// Prefer this over [Engine.serve] when targeting Node. Uses
-/// [NodeServerTransport] + [Engine.handleConnection].
+/// Prefer this over `Engine.serve` when targeting Node. Uses
+/// `NodeServerTransport` + `Engine.handleConnection`.
 ///
 /// **Runtime note:** bind/listen only works when this package is compiled for
 /// a JavaScript/Node host. On the Dart VM, adapters and
-/// `Engine.handleConnection` still work with fakes; [serveNode] throws
-/// [UnsupportedError] pointing at `package:routed_io` for VM hosting.
+/// `Engine.handleConnection` still work with fakes; `serveNode` throws
+/// `UnsupportedError` pointing at `package:routed_io` for VM hosting.
 Future<ServerHandle> serveNode(
   Engine engine, {
   String host = '127.0.0.1',

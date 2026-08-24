@@ -73,27 +73,42 @@ void defineVercelNodeHandlerFactory(Future<Engine> Function() factory) {
 /// values are optional because they are not present for every request or local
 /// development environment.
 final class VercelRequestProperties {
+  /// Creates a VercelRequestProperties value.
   const VercelRequestProperties(this.request);
 
+  /// Provides the declared host integration API member.
   final web.Request request;
 
+  /// The ipAddress value.
   String? get ipAddress => request.headers.get('x-real-ip');
+
+  /// The city value.
   String? get city => request.headers.get('x-vercel-ip-city');
+
+  /// The country value.
   String? get country => request.headers.get('x-vercel-ip-country');
+
+  /// The region value.
   String? get region {
     final requestId = request.headers.get('x-vercel-id');
     if (requestId == null || requestId.isEmpty) return 'dev1';
     return requestId.split(':').first;
   }
 
+  /// The countryRegion value.
   String? get countryRegion =>
       request.headers.get('x-vercel-ip-country-region');
+
+  /// The latitude value.
   String? get latitude => request.headers.get('x-vercel-ip-latitude');
+
+  /// The longitude value.
   String? get longitude => request.headers.get('x-vercel-ip-longitude');
 }
 
 /// Returns Vercel metadata for a request handled by the Vercel Fetch entry.
 extension RoutedVercelRequest on Request {
+  /// The vc value.
   VercelRequestProperties? get vc {
     final context = hostContext;
     if (context is! RoutedNodeContext ||

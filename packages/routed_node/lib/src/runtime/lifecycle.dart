@@ -4,17 +4,31 @@ import 'runtime.dart';
 
 /// Lifecycle phases emitted by a `routed_node` host.
 enum RoutedNodeLifecyclePhase {
+  /// A host requested startup.
   bootRequested,
+
+  /// The host is ready to accept requests.
   ready,
+
+  /// A request started.
   requestStarted,
+
+  /// A request completed successfully.
   requestFinished,
+
+  /// A request failed.
   requestFailed,
+
+  /// A host requested shutdown.
   shutdownRequested,
+
+  /// The host stopped accepting requests.
   stopped,
 }
 
 /// Host lifecycle event published through Routed's existing [EventManager].
 final class RoutedNodeLifecycleEvent extends Event {
+  /// Performs the RoutedNodeLifecycleEvent operation.
   RoutedNodeLifecycleEvent({
     required this.phase,
     required this.info,
@@ -23,10 +37,19 @@ final class RoutedNodeLifecycleEvent extends Event {
     this.stackTrace,
   });
 
+  /// The phase value.
   final RoutedNodeLifecyclePhase phase;
+
+  /// The info value.
   final RoutedNodeRuntimeInfo info;
+
+  /// The requestId value.
   final String? requestId;
+
+  /// The error value.
   final Object? error;
+
+  /// The stackTrace value.
   final StackTrace? stackTrace;
 }
 

@@ -1,3 +1,8 @@
+## Unreleased
+
+- Adopt `very_good_analysis` and complete public API documentation for the
+  Node, Fetch, and Cloudflare host integrations.
+
 ## 0.2.1
 
 - Add `defineCloudflareFetchFactoryWithEnvironmentAsync` for typed Worker

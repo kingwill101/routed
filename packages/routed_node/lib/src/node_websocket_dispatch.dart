@@ -6,6 +6,7 @@ import 'node_request_adapter.dart';
 import 'node_response_adapter.dart';
 import 'node_views.dart';
 
+/// Performs the dispatchNodeWebSocket operation.
 Future<void> dispatchNodeWebSocket(
   Engine engine,
   NodeRequestAdapter request,

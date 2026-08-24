@@ -9,7 +9,7 @@ responses into Routed's portable core boundary while preserving the same
 
 It is intentionally separate from **`routed_core`** and **`routed_io`**.
 
-See [portable-host-architecture.md](../../docs/portable-host-architecture.md).
+See the [portable host architecture guide](https://github.com/kingwill101/routed/blob/master/docs/portable-host-architecture.md).
 
 ## Runtime entrypoints
 
@@ -565,10 +565,10 @@ dart run bin/smoke.dart
 # npm run build && npm start  # Node ≥22 host
 ```
 
-See [example/api/README.md](example/api/README.md).
+See the [sample API README](https://github.com/kingwill101/routed/blob/master/packages/routed_node/example/api/README.md).
 
 ## See also
 
-- [`routed_io`](../routed_io) — `dart:io` host
-- [`routed_core`](../routed_core) — engine + portable types
-- [package-boundary-contract.md](../../docs/package-boundary-contract.md)
+- [`routed_io`](https://github.com/kingwill101/routed/tree/master/packages/routed_io) — `dart:io` host
+- [`routed_core`](https://github.com/kingwill101/routed/tree/master/packages/routed_core) — engine + portable types
+- [Package boundary contract](https://github.com/kingwill101/routed/blob/master/docs/package-boundary-contract.md)

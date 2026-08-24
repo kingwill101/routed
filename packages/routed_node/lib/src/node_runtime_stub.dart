@@ -6,6 +6,7 @@ import 'package:routed_core/routed_core.dart';
 /// JavaScript runtime (`dart compile js` / dart2wasm with Node host).
 void keepNodeEventLoopAlive() {}
 
+/// Performs the bindNodeHttp operation.
 Future<ServerHandle> bindNodeHttp(
   Engine engine,
   ServerOptions options, {

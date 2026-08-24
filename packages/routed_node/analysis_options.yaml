@@ -1,5 +1,40 @@
-include: package:lints/recommended.yaml
+include: package:very_good_analysis/analysis_options.yaml
 
 analyzer:
   errors:
     invalid_runtime_check_with_js_interop_types: ignore
+
+linter:
+  rules:
+    # Keep the migration focused on the public contract and documentation.
+    # These host adapters intentionally mirror platform APIs and contain JS
+    # interop compatibility code, where the following style rules either do
+    # not apply or would require unrelated behavior-preserving rewrites.
+    always_use_package_imports: false
+    avoid_catches_without_on_clauses: false
+    avoid_catching_errors: false
+    avoid_dynamic_calls: false
+    avoid_positional_boolean_parameters: false
+    avoid_print: false
+    avoid_redundant_argument_values: false
+    cascade_invocations: false
+    cast_nullable_to_non_nullable: false
+    cancel_subscriptions: false
+    combinators_ordering: false
+    directives_ordering: false
+    discarded_futures: false
+    document_ignores: false
+    leading_newlines_in_multiline_strings: false
+    lines_longer_than_80_chars: false
+    one_member_abstracts: false
+    prefer_const_constructors: false
+    prefer_final_locals: false
+    prefer_foreach: false
+    sort_pub_dependencies: false
+    unnecessary_ignore: false
+    unnecessary_lambdas: false
+    unnecessary_library_directive: false
+    unnecessary_null_aware_operator_on_extension_on_nullable: false
+    use_if_null_to_convert_nulls_to_bools: false
+    use_null_aware_elements: false
+    use_raw_strings: false

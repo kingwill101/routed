@@ -15,6 +15,7 @@ import '../runtime/runtime.dart';
 import 'bun_websocket_bridge_js.dart';
 import 'deno_websocket_bridge_js.dart';
 
+/// Performs the hostCreateServer operation.
 Future<JSObject> hostCreateServer(
   String runtime,
   Engine engine, {

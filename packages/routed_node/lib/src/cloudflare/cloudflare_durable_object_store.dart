@@ -32,6 +32,7 @@ Object? _decodeCloudflareResponse(CloudflareResponse response) {
 /// small shard count avoids putting every cache key behind one globally hot
 /// object while keeping the number of Durable Object requests predictable.
 final class CloudflareDurableObjectStore implements Store, LockProvider {
+  /// Performs the CloudflareDurableObjectStore operation.
   CloudflareDurableObjectStore({
     required CloudflareDurableObjectNamespace namespace,
     this.objectPrefix = 'routed-store',
@@ -262,6 +263,7 @@ final class CloudflareDurableObjectStore implements Store, LockProvider {
 /// uses synchronous SQLite operations inside one Durable Object request, so
 /// a lock acquisition and its expiry cleanup are atomic.
 class CloudflareDurableObjectStoreObject extends CloudflareDurableObject {
+  /// Performs the CloudflareDurableObjectStoreObject operation.
   CloudflareDurableObjectStoreObject(super.state, super.env);
 
   Future<void>? _schemaFuture;

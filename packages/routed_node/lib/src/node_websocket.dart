@@ -9,19 +9,27 @@ import 'node_views.dart';
 
 /// Native handshake information for a Node upgrade.
 final class NodeWebSocketUpgradeResponse {
+  /// Creates a NodeWebSocketUpgradeResponse value.
   const NodeWebSocketUpgradeResponse({
     required this.socket,
     required this.key,
     this.protocol,
   });
 
+  /// The socket value.
   final NodeWebSocketSocketView socket;
+
+  /// The key value.
   final String key;
+
+  /// The protocol value.
   final String? protocol;
 
+  /// The acceptKey value.
   String get acceptKey =>
       base64.encode(sha1.convert(utf8.encode('$key$_webSocketGuid')).bytes);
 
+  /// The handshake value.
   List<int> get handshake => utf8.encode(
     'HTTP/1.1 101 Switching Protocols\r\n'
     'Upgrade: websocket\r\n'
@@ -33,14 +41,19 @@ final class NodeWebSocketUpgradeResponse {
 
 /// Result of accepting a Node WebSocket upgrade.
 final class NodeWebSocketAcceptance {
+  /// Creates a NodeWebSocketAcceptance value.
   const NodeWebSocketAcceptance({required this.socket, required this.response});
 
+  /// The socket value.
   final NodeRoutedWebSocket socket;
+
+  /// The response value.
   final NodeWebSocketUpgradeResponse response;
 }
 
 /// WebSocket implementation for a raw Node upgrade socket.
 final class NodeRoutedWebSocket implements RoutedWebSocket {
+  /// Performs the NodeRoutedWebSocket operation.
   NodeRoutedWebSocket({required this.socket, List<int> head = const []}) {
     _subscription = socket.incoming.listen(
       _onData,
@@ -51,6 +64,7 @@ final class NodeRoutedWebSocket implements RoutedWebSocket {
     if (head.isNotEmpty) _onData(head);
   }
 
+  /// The socket value.
   final NodeWebSocketSocketView socket;
   final StreamController<Object?> _messages = StreamController<Object?>();
   final BytesBuilder _buffer = BytesBuilder(copy: false);

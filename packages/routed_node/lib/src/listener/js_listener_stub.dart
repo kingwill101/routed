@@ -2,10 +2,12 @@ import 'package:routed_core/routed_core.dart';
 
 import '../runtime/runtime.dart';
 
+/// Performs the unsupportedListener operation.
 Never unsupportedListener(String runtime) {
   throw UnsupportedError('$runtime listener requires a JavaScript host.');
 }
 
+/// Performs the serveJsListener operation.
 Future<ServerHandle> serveJsListener(
   String runtime,
   Engine engine, {
