@@ -448,6 +448,114 @@ void main() {
       response.assertStatus(HttpStatus.ok);
     });
 
+    test(
+      'event context exposes bounded metadata but no request secrets',
+      () async {
+        AuthEventContext? observed;
+        final manager = AuthManager(
+          AuthOptions<EngineContext>(
+            store: InMemoryAuthStore(),
+            storeMode: AuthStoreMode.ephemeral,
+            providers: [CredentialsProvider()],
+            enforceCsrf: false,
+          ),
+        );
+        final engine = _authEngine(manager);
+        engine.defaultRouter.post('/event-context-probe', (ctx) {
+          observed = AuthSessionEvent(
+            context: ctx,
+            session: AuthSession(
+              user: AuthUser(id: 'user-1'),
+              expiresAt: DateTime.utc(2030),
+              strategy: AuthSessionStrategy.session,
+            ),
+            strategy: AuthSessionStrategy.session,
+            payload: const {'visible': true},
+          ).context;
+          return ctx.json({'ok': true});
+        });
+        await engine.initialize();
+
+        final client = TestClient(RoutedRequestHandler(engine));
+        addTearDown(() async => await client.close());
+        const querySecret = 'query-secret';
+        const headerSecret = 'header-secret';
+        const cookieSecret = 'cookie-secret';
+        const bodySecret = 'body-secret';
+        final response = await client.postJson(
+          '/event-context-probe?secret=$querySecret',
+          {'secret': bodySecret},
+          headers: {
+            HttpHeaders.hostHeader: ['server_testing.internal'],
+            'x-audit-secret': [headerSecret],
+            HttpHeaders.cookieHeader: ['audit=$cookieSecret'],
+          },
+        );
+
+        response.assertStatus(HttpStatus.ok);
+        final context = observed;
+        expect(context, isA<AuthEventContext>());
+        expect(context, isNot(isA<EngineContext>()));
+        expect(context, isNotNull);
+        expect(context!.requestId, isNotEmpty);
+        expect(context.requestId.length, lessThanOrEqualTo(256));
+        expect(context.method, equals('POST'));
+        expect(context.path, equals('/event-context-probe'));
+        expect(context.path, isNot(contains(querySecret)));
+        expect(context.host, isNot(contains(headerSecret)));
+        expect(context.host.length, lessThanOrEqualTo(256));
+        expect(context.scheme, equals('http'));
+        final publicMetadata = [
+          context.requestId,
+          context.method,
+          context.path,
+          context.host,
+          context.scheme,
+        ].join('|');
+        for (final secret in [
+          querySecret,
+          headerSecret,
+          cookieSecret,
+          bodySecret,
+        ]) {
+          expect(publicMetadata, isNot(contains(secret)));
+        }
+
+        final dynamic publicContext = context;
+        expect(() => publicContext.request, throwsA(isA<NoSuchMethodError>()));
+        expect(() => publicContext.headers, throwsA(isA<NoSuchMethodError>()));
+        expect(() => publicContext.cookies, throwsA(isA<NoSuchMethodError>()));
+        expect(
+          () => publicContext.queryParameters,
+          throwsA(isA<NoSuchMethodError>()),
+        );
+        expect(() => publicContext.body(), throwsA(isA<NoSuchMethodError>()));
+        expect(() => publicContext.response, throwsA(isA<NoSuchMethodError>()));
+        expect(
+          () => publicContext.container,
+          throwsA(isA<NoSuchMethodError>()),
+        );
+        expect(() => publicContext.engine, throwsA(isA<NoSuchMethodError>()));
+        expect(
+          () => publicContext.hostContext,
+          throwsA(isA<NoSuchMethodError>()),
+        );
+
+        final oversized = AuthEventContext(
+          requestId: 'r' * 512,
+          method: 'm' * 512,
+          path: 'p' * 4096,
+          host: 'h' * 512,
+          scheme: 's' * 512,
+        );
+        expect(oversized.requestId.length, lessThanOrEqualTo(256));
+        expect(oversized.method.length, lessThanOrEqualTo(256));
+        expect(oversized.path.length, lessThanOrEqualTo(2048));
+        expect(oversized.host.length, lessThanOrEqualTo(256));
+        expect(oversized.scheme.length, lessThanOrEqualTo(256));
+      },
+    );
+
     test('redirect callback receives request baseUrl', () async {
       String? observedBaseUrl;
 
