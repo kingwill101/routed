@@ -1,5 +1,7 @@
 ## Unreleased
 
+- Adopt `very_good_analysis` with strict typing and public API documentation
+  enforcement for the authentication runtime.
 - Complete public Dartdoc for authentication-method, JWT, and rate-limit APIs.
 - Complete public Dartdoc for the client, plugin, provider, and store contracts.
 - Complete public Dartdoc for admin, organization, account-lifecycle, and
