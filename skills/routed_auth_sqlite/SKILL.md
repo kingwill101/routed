@@ -1,21 +1,21 @@
 ---
-name: routed-auth-cloudflare
-description: Maintain, extend, document, test, or troubleshoot the routed_auth_cloudflare subsystem in the Routed Dart monorepo. Use when a task touches routed_auth_cloudflare APIs, implementation, examples, tests, dependency boundaries, or integration with the Routed ecosystem.
+name: routed-auth-sqlite
+description: Maintain, extend, document, test, or troubleshoot the routed_auth_sqlite subsystem in the Routed Dart monorepo. Use when a task touches routed_auth_sqlite APIs, implementation, examples, tests, dependency boundaries, or integration with the Routed ecosystem.
 ---
 
-# routed_auth_cloudflare
+# routed_auth_sqlite
 
-This skill is the complete working guide for the `routed_auth_cloudflare` subsystem.
+This skill is the complete working guide for the `routed_auth_sqlite` subsystem.
 The facts below are intentionally embedded here so the skill can be used
 without loading another document.
 
 ## Subsystem contract
 
-- **Package:** `routed_auth_cloudflare`
-- **Directory:** `packages/routed_auth_cloudflare`
-- **Version in this checkout:** `0.1.1`
-- **Role:** Durable Cloudflare D1 `AuthStore` adapter and typed migrations
-- **Purpose:** Durable Cloudflare D1 AuthStore persistence for Routed applications.
+- **Package:** `routed_auth_sqlite`
+- **Directory:** `packages/routed_auth_sqlite`
+- **Version in this checkout:** `0.1.0`
+- **Role:** Durable Dart IO SQLite `AuthStore` adapter and typed migrations
+- **Purpose:** Durable SQLite AuthStore persistence for Routed applications running on Dart IO.
 
 ### Public API
 
@@ -23,12 +23,12 @@ without loading another document.
 
 ### Public imports
 
-- `package:routed_auth_cloudflare/routed_auth_cloudflare.dart`
+- `package:routed_auth_sqlite/routed_auth_sqlite.dart`
 
 ### Runtime package dependencies
 
+- `routed_auth_cloudflare`
 - `routed_node`
-- `server_auth`
 
 ### Composition rules
 
@@ -41,12 +41,12 @@ without loading another document.
 ## Minimal usage
 
 ```dart
-import 'package:routed_auth_cloudflare/routed_auth_cloudflare.dart';
+import 'package:routed_auth_sqlite/routed_auth_sqlite.dart';
 ```
 
 ## Change workflow
 
-1. Preserve unrelated dirty work and keep changes scoped to `routed_auth_cloudflare`.
+1. Preserve unrelated dirty work and keep changes scoped to `routed_auth_sqlite`.
 2. Keep the public import names and exported symbols above stable unless the
    task explicitly changes the API. Never document a `lib/src` import.
 3. For provider or middleware changes, exercise registration, request-context
@@ -65,9 +65,9 @@ Run the focused package tests and add a regression test for changed behavior.
 ## Focused validation
 
 ```bash
-dart format --output=none --set-exit-if-changed packages/routed_auth_cloudflare
-dart analyze --fatal-infos packages/routed_auth_cloudflare
-dart test packages/routed_auth_cloudflare/test
+dart format --output=none --set-exit-if-changed packages/routed_auth_sqlite
+dart analyze --fatal-infos packages/routed_auth_sqlite
+dart test packages/routed_auth_sqlite/test
 ```
 
 Keep this skill's embedded facts synchronized when a public package version,

@@ -13,8 +13,8 @@ without loading another document.
 
 - **Package:** `routed_http`
 - **Directory:** `packages/routed_http`
-- **Version in this checkout:** `0.1.0`
-- **Role:** Binding, multipart, negotiation, buffered gzip compression, SSE, and conditional requests
+- **Version in this checkout:** `0.1.2`
+- **Role:** JSON/XML binding, multipart, negotiation, buffered gzip compression, SSE, and conditional requests
 - **Purpose:** HTTP request/response utilities layered on routed_core: typed binding, multipart uploads, content negotiation, conditional requests, SSE, proxy handling, and opt-in buffered gzip compression.
 
 ### Public API

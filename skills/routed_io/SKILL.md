@@ -13,7 +13,7 @@ without loading another document.
 
 - **Package:** `routed_io`
 - **Directory:** `packages/routed_io`
-- **Version in this checkout:** `0.1.0`
+- **Version in this checkout:** `0.1.1`
 - **Role:** `dart:io` server transport
 - **Purpose:** The dart:io host transport for Routed. It maps HttpRequest/HttpResponse and native socket connections into routed_core transport contracts.
 

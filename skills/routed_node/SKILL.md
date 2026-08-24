@@ -13,7 +13,7 @@ without loading another document.
 
 - **Package:** `routed_node`
 - **Directory:** `packages/routed_node`
-- **Version in this checkout:** `0.2.0`
+- **Version in this checkout:** `0.2.1`
 - **Role:** Node.js, Bun, Deno, and Fetch/Cloudflare edge transports and bindings
 - **Purpose:** The multi-host JavaScript and edge transport. It supports explicit Node.js, Bun, Deno, Cloudflare Workers, Vercel, and Netlify entrypoints over the same routed_core portable contracts.
 
@@ -39,6 +39,7 @@ without loading another document.
 ### Runtime package dependencies
 
 - `routed_core`
+- `server_contracts`
 
 ### Composition rules
 
