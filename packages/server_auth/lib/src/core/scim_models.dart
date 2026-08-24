@@ -30,7 +30,19 @@ const String authScimErrorSchema =
     'urn:ietf:params:scim:api:messages:2.0:Error';
 
 /// Operation scope granted to one authenticated SCIM credential.
-enum AuthScimScope { usersRead, usersWrite, groupsRead, groupsWrite }
+enum AuthScimScope {
+  /// Permits reading users.
+  usersRead,
+
+  /// Permits creating and changing users.
+  usersWrite,
+
+  /// Permits reading groups.
+  groupsRead,
+
+  /// Permits creating and changing groups.
+  groupsWrite,
+}
 
 /// Immutable connection identity resolved atomically from one bearer token.
 ///
@@ -38,6 +50,7 @@ enum AuthScimScope { usersRead, usersWrite, groupsRead, groupsWrite }
 /// isolation boundaries in one result. Routed performs no secondary tenant or
 /// connection lookup after authentication.
 final class AuthScimConnectionIdentity {
+  /// Creates an immutable connection identity from a verified bearer token.
   AuthScimConnectionIdentity({
     required String connectionId,
     required String credentialId,
@@ -59,15 +72,31 @@ final class AuthScimConnectionIdentity {
        subjectId = _requiredBounded(subjectId, 'subjectId', 256),
        scopes = Set<AuthScimScope>.unmodifiable(scopes);
 
+  /// Managed connection identifier.
   final String connectionId;
+
+  /// Credential identifier used for authentication.
   final String credentialId;
+
+  /// Tenant containing the connection.
   final String tenantId;
+
+  /// Organization containing the connection.
   final String organizationId;
+
+  /// Provisioning domain receiving the operation.
   final String provisioningDomainId;
+
+  /// Application subject that owns the connection.
   final String subjectId;
+
+  /// Scopes granted to the credential.
   final Set<AuthScimScope> scopes;
+
+  /// Credential expiry timestamp, when configured.
   final DateTime? expiresAt;
 
+  /// Whether [scope] is granted, including read access implied by write.
   bool allows(AuthScimScope scope) =>
       scopes.contains(scope) ||
       scope == AuthScimScope.usersRead &&
@@ -75,6 +104,7 @@ final class AuthScimConnectionIdentity {
       scope == AuthScimScope.groupsRead &&
           scopes.contains(AuthScimScope.groupsWrite);
 
+  /// Whether this identity is expired at [instant].
   bool isExpiredAt(DateTime instant) =>
       expiresAt != null && !expiresAt!.toUtc().isAfter(instant.toUtc());
 
@@ -90,19 +120,31 @@ final class AuthScimConnectionIdentity {
 
 /// Connection-scoped application store context for one SCIM request.
 final class AuthScimProvisioningContext {
+  /// Creates a request context for [connection].
   const AuthScimProvisioningContext({required this.connection});
 
+  /// Verified connection identity for the request.
   final AuthScimConnectionIdentity connection;
 
+  /// Managed connection identifier.
   String get connectionId => connection.connectionId;
+
+  /// Tenant containing the connection.
   String get tenantId => connection.tenantId;
+
+  /// Organization containing the connection.
   String get organizationId => connection.organizationId;
+
+  /// Provisioning domain receiving the operation.
   String get provisioningDomainId => connection.provisioningDomainId;
+
+  /// Application subject that owns the connection.
   String get subjectId => connection.subjectId;
 }
 
 /// Typed SCIM user name.
 final class AuthScimUserName {
+  /// Creates a bounded SCIM name value.
   AuthScimUserName({
     this.formatted,
     this.familyName,
@@ -123,13 +165,25 @@ final class AuthScimUserName {
     }
   }
 
+  /// Display-formatted name.
   final String? formatted;
+
+  /// Family name.
   final String? familyName;
+
+  /// Given name.
   final String? givenName;
+
+  /// Middle name.
   final String? middleName;
+
+  /// Honorific prefix.
   final String? honorificPrefix;
+
+  /// Honorific suffix.
   final String? honorificSuffix;
 
+  /// Decodes a bounded SCIM name object.
   factory AuthScimUserName.fromJson(Map<String, dynamic> json) {
     _onlyKeys(json, const <String>{
       'formatted',
@@ -149,6 +203,7 @@ final class AuthScimUserName {
     );
   }
 
+  /// Encodes this name object.
   Map<String, Object?> toJson() => <String, Object?>{
     if (formatted != null) 'formatted': formatted,
     if (familyName != null) 'familyName': familyName,
@@ -161,6 +216,7 @@ final class AuthScimUserName {
 
 /// Typed SCIM user email value.
 final class AuthScimUserEmail {
+  /// Creates a bounded SCIM email value.
   AuthScimUserEmail({
     required String value,
     this.type,
@@ -171,11 +227,19 @@ final class AuthScimUserEmail {
     if (display != null) _bounded(display!, 'email.display', 256);
   }
 
+  /// Email address value.
   final String value;
+
+  /// Application-defined email type.
   final String? type;
+
+  /// Presentation label for the email address.
   final String? display;
+
+  /// Whether this is the primary email address.
   final bool primary;
 
+  /// Decodes a bounded SCIM email object.
   factory AuthScimUserEmail.fromJson(Map<String, dynamic> json) {
     _onlyKeys(json, const <String>{'value', 'type', 'display', 'primary'});
     final primary = json['primary'];
@@ -190,6 +254,7 @@ final class AuthScimUserEmail {
     );
   }
 
+  /// Encodes this email object.
   Map<String, Object?> toJson() => <String, Object?>{
     'value': value,
     if (type != null) 'type': type,
@@ -200,6 +265,7 @@ final class AuthScimUserEmail {
 
 /// Strict application-owned data accepted for SCIM User provisioning.
 final class AuthScimUserData {
+  /// Creates strict application-owned data for a SCIM User.
   AuthScimUserData({
     required String userName,
     this.externalId,
@@ -214,13 +280,25 @@ final class AuthScimUserData {
     _validateEmails(this.emails);
   }
 
+  /// User name used by the SCIM directory.
   final String userName;
+
+  /// Application-owned external identifier.
   final String? externalId;
+
+  /// Whether the user is active in the directory.
   final bool active;
+
+  /// Structured name, when supplied.
   final AuthScimUserName? name;
+
+  /// Display name, when supplied.
   final String? displayName;
+
+  /// Email values associated with the user.
   final List<AuthScimUserEmail> emails;
 
+  /// Decodes strict SCIM User mutation data.
   factory AuthScimUserData.fromJson(Map<String, dynamic> json) {
     _onlyKeys(json, const <String>{
       'schemas',
@@ -246,6 +324,7 @@ final class AuthScimUserData {
     );
   }
 
+  /// Encodes this User data object.
   Map<String, Object?> toJson() => <String, Object?>{
     'schemas': const <String>[authScimUserSchema],
     if (externalId != null) 'externalId': externalId,
@@ -260,6 +339,7 @@ final class AuthScimUserData {
 
 /// SCIM resource metadata supplied by the application provisioning store.
 final class AuthScimResourceMeta {
+  /// Creates resource metadata normalized to UTC.
   AuthScimResourceMeta({
     required DateTime created,
     required DateTime lastModified,
@@ -272,12 +352,22 @@ final class AuthScimResourceMeta {
     if (version != null) _bounded(version!, 'version', 256);
   }
 
+  /// Resource creation timestamp.
   final DateTime created;
+
+  /// Last modification timestamp.
   final DateTime lastModified;
+
+  /// SCIM resource type name.
   final String resourceType;
+
+  /// Resource location, when exposed by the application.
   final Uri? location;
+
+  /// Application version or entity tag, when available.
   final String? version;
 
+  /// Encodes this resource metadata object.
   Map<String, Object?> toJson() => <String, Object?>{
     'resourceType': resourceType,
     'created': created.toIso8601String(),
@@ -288,10 +378,20 @@ final class AuthScimResourceMeta {
 }
 
 /// Explicit internal lifecycle of a connection-owned directory user.
-enum AuthScimDirectoryUserState { active, inactive, tombstoned }
+enum AuthScimDirectoryUserState {
+  /// The user is active.
+  active,
+
+  /// The user is provisioned but inactive.
+  inactive,
+
+  /// The user is retained as a deletion tombstone.
+  tombstoned,
+}
 
 /// Connection-bound SCIM User resource returned by an application store.
 final class AuthScimUser {
+  /// Creates a connection-bound SCIM User resource.
   AuthScimUser({
     required String connectionId,
     required String tenantId,
@@ -339,12 +439,22 @@ final class AuthScimUser {
   /// Application boundary receiving explicit provisioning projections.
   final String provisioningDomainId;
 
+  /// SCIM resource identifier.
   final String id;
+
+  /// Provisioned User attributes.
   final AuthScimUserData data;
+
+  /// Resource metadata returned to the client.
   final AuthScimResourceMeta meta;
+
+  /// Internal lifecycle state.
   final AuthScimDirectoryUserState state;
+
+  /// Tombstone timestamp, when [state] is [AuthScimDirectoryUserState.tombstoned].
   final DateTime? tombstonedAt;
 
+  /// Encodes this User resource without internal tenancy fields.
   Map<String, Object?> toJson() => <String, Object?>{
     ...data.toJson(),
     'id': id,
@@ -353,13 +463,29 @@ final class AuthScimUser {
 }
 
 /// Attribute supported by the bounded first-slice SCIM filter parser.
-enum AuthScimUserFilterAttribute { id, userName, externalId, email }
+enum AuthScimUserFilterAttribute {
+  /// Matches the SCIM resource identifier.
+  id,
+
+  /// Matches `userName`.
+  userName,
+
+  /// Matches `externalId`.
+  externalId,
+
+  /// Matches `emails.value`.
+  email,
+}
 
 /// A bounded SCIM equality filter.
 final class AuthScimUserFilter {
+  /// Creates an equality filter for [attribute] and [value].
   const AuthScimUserFilter({required this.attribute, required this.value});
 
+  /// Attribute tested by this filter.
   final AuthScimUserFilterAttribute attribute;
+
+  /// Exact value to compare.
   final String value;
 
   static final RegExp _expression = RegExp(
@@ -367,6 +493,7 @@ final class AuthScimUserFilter {
     caseSensitive: false,
   );
 
+  /// Parses the bounded SCIM equality filter syntax.
   factory AuthScimUserFilter.parse(String source) {
     if (source.length > 512 || _containsControl(source)) {
       throw const FormatException('Invalid SCIM filter.');
@@ -394,16 +521,23 @@ final class AuthScimUserFilter {
 
 /// Bounded query supplied to [AuthScimProvisioningStore.listUsers].
 final class AuthScimListUsersQuery {
+  /// Creates a bounded User listing query.
   const AuthScimListUsersQuery({
     required this.startIndex,
     required this.count,
     this.filter,
   });
 
+  /// One-based index of the first requested resource.
   final int startIndex;
+
+  /// Number of resources requested.
   final int count;
+
+  /// Optional equality filter.
   final AuthScimUserFilter? filter;
 
+  /// Decodes and bounds a SCIM User listing request.
   factory AuthScimListUsersQuery.fromJson(
     Map<String, dynamic> json, {
     required int defaultPageSize,
@@ -434,6 +568,7 @@ final class AuthScimListUsersQuery {
 
 /// Tenant-bound page returned by an application provisioning store.
 final class AuthScimUserPage {
+  /// Creates a page of connection-bound User resources.
   AuthScimUserPage({
     required Iterable<AuthScimUser> resources,
     required this.totalResults,
@@ -443,12 +578,21 @@ final class AuthScimUserPage {
     }
   }
 
+  /// Resources in this page.
   final List<AuthScimUser> resources;
+
+  /// Total matching resources before pagination.
   final int totalResults;
 }
 
 /// Kind of SCIM resource referenced directly by a Group member.
-enum AuthScimGroupMemberType { user, group }
+enum AuthScimGroupMemberType {
+  /// A User resource.
+  user,
+
+  /// A Group resource.
+  group,
+}
 
 /// One direct, stable SCIM resource reference in a Group.
 ///
@@ -456,6 +600,7 @@ enum AuthScimGroupMemberType { user, group }
 /// reference values are presentation metadata and must never be used to infer
 /// an authentication user, application role, or access grant.
 final class AuthScimGroupMember {
+  /// Creates a bounded direct resource reference.
   AuthScimGroupMember({
     required String value,
     required this.type,
@@ -468,11 +613,19 @@ final class AuthScimGroupMember {
     }
   }
 
+  /// Referenced SCIM resource identifier.
   final String value;
+
+  /// Referenced resource type.
   final AuthScimGroupMemberType type;
+
+  /// Optional display label.
   final String? display;
+
+  /// Optional resource reference URI.
   final Uri? reference;
 
+  /// Decodes a bounded Group member object.
   factory AuthScimGroupMember.fromJson(Map<String, dynamic> json) {
     _onlyKeys(json, const <String>{'value', 'type', 'display', r'$ref'});
     final rawType = _requiredString(json, 'type', 16).toLowerCase();
@@ -489,6 +642,7 @@ final class AuthScimGroupMember {
     );
   }
 
+  /// Encodes this Group member object.
   Map<String, Object?> toJson() => <String, Object?>{
     'value': value,
     r'$ref': ?reference?.toString(),
@@ -502,6 +656,7 @@ final class AuthScimGroupMember {
 
 /// Strict application-owned data accepted for SCIM Group provisioning.
 final class AuthScimGroupData {
+  /// Creates strict application-owned data for a SCIM Group.
   AuthScimGroupData({
     required String displayName,
     this.externalId,
@@ -513,10 +668,16 @@ final class AuthScimGroupData {
     _validateGroupMembers(this.members, maximumMembers: maximumMembers);
   }
 
+  /// Required display name.
   final String displayName;
+
+  /// Application-owned external identifier.
   final String? externalId;
+
+  /// Direct members of the group.
   final List<AuthScimGroupMember> members;
 
+  /// Decodes strict SCIM Group mutation data.
   factory AuthScimGroupData.fromJson(
     Map<String, dynamic> json, {
     int maximumMembers = 1000,
@@ -536,6 +697,7 @@ final class AuthScimGroupData {
     );
   }
 
+  /// Encodes this Group data object.
   Map<String, Object?> toJson() => <String, Object?>{
     'schemas': const <String>[authScimGroupSchema],
     if (externalId != null) 'externalId': externalId,
@@ -546,10 +708,17 @@ final class AuthScimGroupData {
 }
 
 /// Explicit internal lifecycle of a connection-owned directory group.
-enum AuthScimDirectoryGroupState { active, tombstoned }
+enum AuthScimDirectoryGroupState {
+  /// The group is active.
+  active,
+
+  /// The group is retained as a deletion tombstone.
+  tombstoned,
+}
 
 /// Connection-bound SCIM Group resource returned by an application store.
 final class AuthScimGroup {
+  /// Creates a connection-bound SCIM Group resource.
   AuthScimGroup({
     required String connectionId,
     required String tenantId,
@@ -580,16 +749,34 @@ final class AuthScimGroup {
     }
   }
 
+  /// Immutable connection that owns this directory resource.
   final String connectionId;
+
+  /// Internal tenant boundary omitted from SCIM JSON.
   final String tenantId;
+
+  /// Internal organization boundary omitted from SCIM JSON.
   final String organizationId;
+
+  /// Application provisioning boundary.
   final String provisioningDomainId;
+
+  /// SCIM resource identifier.
   final String id;
+
+  /// Provisioned Group attributes.
   final AuthScimGroupData data;
+
+  /// Resource metadata returned to the client.
   final AuthScimResourceMeta meta;
+
+  /// Internal lifecycle state.
   final AuthScimDirectoryGroupState state;
+
+  /// Tombstone timestamp, when [state] is tombstoned.
   final DateTime? tombstonedAt;
 
+  /// Encodes this Group resource without internal tenancy fields.
   Map<String, Object?> toJson() => <String, Object?>{
     ...data.toJson(),
     'id': id,
@@ -597,13 +784,27 @@ final class AuthScimGroup {
   };
 }
 
-enum AuthScimGroupFilterAttribute { id, displayName, externalId }
+/// Attribute supported by the bounded Group filter parser.
+enum AuthScimGroupFilterAttribute {
+  /// Matches the SCIM resource identifier.
+  id,
+
+  /// Matches `displayName`.
+  displayName,
+
+  /// Matches `externalId`.
+  externalId,
+}
 
 /// A bounded equality filter for Group listing.
 final class AuthScimGroupFilter {
+  /// Creates an equality filter for [attribute] and [value].
   const AuthScimGroupFilter({required this.attribute, required this.value});
 
+  /// Attribute tested by this filter.
   final AuthScimGroupFilterAttribute attribute;
+
+  /// Exact value to compare.
   final String value;
 
   static final RegExp _expression = RegExp(
@@ -611,6 +812,7 @@ final class AuthScimGroupFilter {
     caseSensitive: false,
   );
 
+  /// Parses the bounded SCIM Group equality filter syntax.
   factory AuthScimGroupFilter.parse(String source) {
     if (source.length > 512 || _containsControl(source)) {
       throw const FormatException('Invalid SCIM Group filter.');
@@ -638,16 +840,23 @@ final class AuthScimGroupFilter {
 
 /// Bounded query supplied to [AuthScimProvisioningStore.listGroups].
 final class AuthScimListGroupsQuery {
+  /// Creates a bounded Group listing query.
   const AuthScimListGroupsQuery({
     required this.startIndex,
     required this.count,
     this.filter,
   });
 
+  /// One-based index of the first requested resource.
   final int startIndex;
+
+  /// Number of resources requested.
   final int count;
+
+  /// Optional equality filter.
   final AuthScimGroupFilter? filter;
 
+  /// Decodes and bounds a SCIM Group listing request.
   factory AuthScimListGroupsQuery.fromJson(
     Map<String, dynamic> json, {
     required int defaultPageSize,
@@ -675,6 +884,7 @@ final class AuthScimListGroupsQuery {
 }
 
 final class AuthScimGroupPage {
+  /// Creates a page of connection-bound Group resources.
   AuthScimGroupPage({
     required Iterable<AuthScimGroup> resources,
     required this.totalResults,
@@ -684,23 +894,44 @@ final class AuthScimGroupPage {
     }
   }
 
+  /// Resources in this page.
   final List<AuthScimGroup> resources;
+
+  /// Total matching resources before pagination.
   final int totalResults;
 }
 
-enum AuthScimGroupPatchPath { displayName, externalId, members }
+/// Group attributes supported by the typed patch implementation.
+enum AuthScimGroupPatchPath {
+  /// Group display name.
+  displayName,
 
+  /// Application-owned external identifier.
+  externalId,
+
+  /// Direct group membership.
+  members,
+}
+
+/// One validated SCIM Group patch operation.
 final class AuthScimGroupPatchOperation {
+  /// Creates an internal validated Group patch operation.
   const AuthScimGroupPatchOperation._({
     required this.kind,
     required this.path,
     required this.value,
   });
 
+  /// Operation semantics.
   final AuthScimPatchOperationKind kind;
+
+  /// Group attribute targeted by the operation.
   final AuthScimGroupPatchPath path;
+
+  /// Typed operation value, when present.
   final Object? value;
 
+  /// Decodes and validates one Group patch operation.
   factory AuthScimGroupPatchOperation.fromJson(
     Map<String, dynamic> json, {
     required int maximumMembers,
@@ -755,6 +986,7 @@ final class AuthScimGroupPatchOperation {
 
 /// Strict, bounded SCIM Group PatchOp document.
 final class AuthScimGroupPatchDocument {
+  /// Creates a bounded Group patch document.
   AuthScimGroupPatchDocument({
     required Iterable<AuthScimGroupPatchOperation> operations,
   }) : operations = List<AuthScimGroupPatchOperation>.unmodifiable(operations) {
@@ -763,8 +995,10 @@ final class AuthScimGroupPatchDocument {
     }
   }
 
+  /// Operations applied in request order.
   final List<AuthScimGroupPatchOperation> operations;
 
+  /// Decodes and validates a Group PatchOp document.
   factory AuthScimGroupPatchDocument.fromJson(
     Map<String, dynamic> json, {
     int maximumOperations = 32,
@@ -792,6 +1026,7 @@ final class AuthScimGroupPatchDocument {
     );
   }
 
+  /// Applies this document to [current].
   AuthScimGroupData apply(
     AuthScimGroupData current, {
     required int maximumMembers,
@@ -838,10 +1073,21 @@ final class AuthScimGroupPatchDocument {
   }
 }
 
-enum AuthScimGroupMembershipMutationKind { add, remove, replace }
+/// Semantics of a direct Group membership mutation.
+enum AuthScimGroupMembershipMutationKind {
+  /// Adds the supplied members.
+  add,
+
+  /// Removes the supplied members.
+  remove,
+
+  /// Replaces all members with the supplied set.
+  replace,
+}
 
 /// Atomic direct-membership mutation requested from an application store.
 final class AuthScimGroupMembershipMutation {
+  /// Creates an atomic direct-membership mutation.
   AuthScimGroupMembershipMutation({
     required String groupResourceId,
     required this.kind,
@@ -856,36 +1102,68 @@ final class AuthScimGroupMembershipMutation {
     _validateGroupMembers(this.members, maximumMembers: maximumMembers);
   }
 
+  /// SCIM Group resource identifier.
   final String groupResourceId;
+
+  /// Membership mutation semantics.
   final AuthScimGroupMembershipMutationKind kind;
+
+  /// Members affected by the mutation.
   final List<AuthScimGroupMember> members;
 }
 
 /// SCIM patch operation kind.
-enum AuthScimPatchOperationKind { add, replace, remove }
+enum AuthScimPatchOperationKind {
+  /// Adds a value.
+  add,
+
+  /// Replaces a value.
+  replace,
+
+  /// Removes a value.
+  remove,
+}
 
 /// User property supported by the bounded typed patch implementation.
 enum AuthScimUserPatchPath {
+  /// User name.
   userName,
+
+  /// External identifier.
   externalId,
+
+  /// Active lifecycle attribute.
   active,
+
+  /// Display name.
   displayName,
+
+  /// Structured name.
   name,
+
+  /// Email collection.
   emails,
 }
 
 /// One validated SCIM user patch operation.
 final class AuthScimPatchOperation {
+  /// Creates an internal validated User patch operation.
   const AuthScimPatchOperation._({
     required this.kind,
     required this.path,
     required this.value,
   });
 
+  /// Operation semantics.
   final AuthScimPatchOperationKind kind;
+
+  /// User attribute targeted by the operation.
   final AuthScimUserPatchPath path;
+
+  /// Typed operation value, when present.
   final Object? value;
 
+  /// Decodes and validates one User patch operation.
   factory AuthScimPatchOperation.fromJson(Map<String, dynamic> json) {
     _onlyKeys(json, const <String>{'op', 'path', 'value'});
     final rawOp = _requiredString(json, 'op', 16).toLowerCase();
@@ -928,6 +1206,7 @@ final class AuthScimPatchOperation {
 
 /// Strict, bounded SCIM PatchOp document.
 final class AuthScimPatchDocument {
+  /// Creates a bounded User patch document.
   AuthScimPatchDocument({required Iterable<AuthScimPatchOperation> operations})
     : operations = List<AuthScimPatchOperation>.unmodifiable(operations) {
     if (this.operations.isEmpty || this.operations.length > 32) {
@@ -935,8 +1214,10 @@ final class AuthScimPatchDocument {
     }
   }
 
+  /// Operations applied in request order.
   final List<AuthScimPatchOperation> operations;
 
+  /// Decodes and validates a User PatchOp document.
   factory AuthScimPatchDocument.fromJson(
     Map<String, dynamic> json, {
     int maximumOperations = 32,
@@ -1001,14 +1282,19 @@ final class AuthScimPatchDocument {
 
 /// Typed ServiceProviderConfig response.
 final class AuthScimServiceProviderConfig {
+  /// Creates a typed service-provider configuration response.
   const AuthScimServiceProviderConfig({
     required this.maximumPageSize,
     required this.maximumPatchOperations,
   });
 
+  /// Maximum page size accepted by the provider.
   final int maximumPageSize;
+
+  /// Maximum PatchOp operations accepted by the provider.
   final int maximumPatchOperations;
 
+  /// Encodes the SCIM service-provider configuration response.
   Map<String, Object?> toJson() => <String, Object?>{
     'schemas': const <String>[authScimServiceProviderConfigSchema],
     'patch': const <String, Object?>{'supported': true},
@@ -1037,8 +1323,10 @@ final class AuthScimServiceProviderConfig {
 
 /// Typed ResourceType response for the supported SCIM User resource.
 final class AuthScimResourceType {
+  /// Creates the supported SCIM User resource-type descriptor.
   const AuthScimResourceType();
 
+  /// Encodes the User resource-type response.
   Map<String, Object?> toJson() => const <String, Object?>{
     'schemas': <String>[authScimResourceTypeSchema],
     'id': 'User',
@@ -1052,8 +1340,10 @@ final class AuthScimResourceType {
 
 /// Typed ResourceType response for the supported SCIM Group resource.
 final class AuthScimGroupResourceType {
+  /// Creates the supported SCIM Group resource-type descriptor.
   const AuthScimGroupResourceType();
 
+  /// Encodes the Group resource-type response.
   Map<String, Object?> toJson() => const <String, Object?>{
     'schemas': <String>[authScimResourceTypeSchema],
     'id': 'Group',
@@ -1067,8 +1357,10 @@ final class AuthScimGroupResourceType {
 
 /// Typed Schema response for the bounded core User attributes.
 final class AuthScimUserSchemaDefinition {
+  /// Creates the bounded SCIM User schema descriptor.
   const AuthScimUserSchemaDefinition();
 
+  /// Encodes the User schema response.
   Map<String, Object?> toJson() => const <String, Object?>{
     'schemas': <String>[authScimSchemaSchema],
     'id': authScimUserSchema,
@@ -1133,8 +1425,10 @@ final class AuthScimUserSchemaDefinition {
 
 /// Typed Schema response for bounded core Group attributes.
 final class AuthScimGroupSchemaDefinition {
+  /// Creates the bounded SCIM Group schema descriptor.
   const AuthScimGroupSchemaDefinition();
 
+  /// Encodes the Group schema response.
   Map<String, Object?> toJson() => const <String, Object?>{
     'schemas': <String>[authScimSchemaSchema],
     'id': authScimGroupSchema,

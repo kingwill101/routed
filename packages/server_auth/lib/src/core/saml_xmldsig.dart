@@ -16,24 +16,40 @@ const String _samlAssertionNamespace = 'urn:oasis:names:tc:SAML:2.0:assertion';
 
 /// Signature methods implemented by [AuthPortableSamlXmlDsigVerifier].
 enum AuthSamlXmlDsigSignatureAlgorithm {
+  /// RSA with SHA-256.
   rsaSha256('http://www.w3.org/2001/04/xmldsig-more#rsa-sha256'),
+
+  /// RSA with SHA-384.
   rsaSha384('http://www.w3.org/2001/04/xmldsig-more#rsa-sha384'),
+
+  /// RSA with SHA-512.
   rsaSha512('http://www.w3.org/2001/04/xmldsig-more#rsa-sha512');
 
+  /// Creates an algorithm backed by its XMLDSig URI.
   const AuthSamlXmlDsigSignatureAlgorithm(this.uri);
 
+  /// The XMLDSig signature-method URI.
   final String uri;
 }
 
 /// Digest methods implemented by [AuthPortableSamlXmlDsigVerifier].
 enum AuthSamlXmlDsigDigestAlgorithm {
+  /// SHA-256 with a 32-byte digest.
   sha256('http://www.w3.org/2001/04/xmlenc#sha256', 32),
+
+  /// SHA-384 with a 48-byte digest.
   sha384('http://www.w3.org/2001/04/xmldsig-more#sha384', 48),
+
+  /// SHA-512 with a 64-byte digest.
   sha512('http://www.w3.org/2001/04/xmlenc#sha512', 64);
 
+  /// Creates a digest algorithm backed by its XMLDSig URI.
   const AuthSamlXmlDsigDigestAlgorithm(this.uri, this.byteLength);
 
+  /// The XMLDSig digest-method URI.
   final String uri;
+
+  /// The digest length in bytes.
   final int byteLength;
 }
 
@@ -43,6 +59,10 @@ enum AuthSamlXmlDsigDigestAlgorithm {
 /// Applications must deliberately opt into every additional implemented
 /// algorithm. SHA-1 is not implemented and cannot be enabled.
 final class AuthSamlXmlDsigPolicy {
+  /// Creates an explicit XMLDSig algorithm and signature-count policy.
+  ///
+  /// Throws an [ArgumentError] when no algorithm is enabled or when
+  /// [maxSignatures] is outside the supported range of one to two.
   AuthSamlXmlDsigPolicy({
     Set<AuthSamlXmlDsigSignatureAlgorithm> signatureAlgorithms = const {
       AuthSamlXmlDsigSignatureAlgorithm.rsaSha256,
@@ -61,13 +81,19 @@ final class AuthSamlXmlDsigPolicy {
     }
   }
 
+  /// Signature algorithms accepted by the verifier.
   final Set<AuthSamlXmlDsigSignatureAlgorithm> signatureAlgorithms;
+
+  /// Digest algorithms accepted by the verifier.
   final Set<AuthSamlXmlDsigDigestAlgorithm> digestAlgorithms;
+
+  /// Maximum number of XML signatures accepted in one document.
   final int maxSignatures;
 }
 
 /// A stable, non-diagnostic failure from portable SAML XMLDSig verification.
 final class AuthSamlXmlDsigVerificationException implements Exception {
+  /// Creates the non-diagnostic verification failure.
   const AuthSamlXmlDsigVerificationException();
 
   @override
@@ -89,6 +115,10 @@ final class AuthSamlXmlDsigVerificationException implements Exception {
 /// InclusiveNamespaces prefix list.
 final class AuthPortableSamlXmlDsigVerifier
     implements AuthSamlAssertionVerifier {
+  /// Creates a bounded pure-Dart XMLDSig verifier.
+  ///
+  /// [policy] controls accepted algorithms. [limits] controls XML resource
+  /// consumption and defaults to [AuthSamlLimits].
   AuthPortableSamlXmlDsigVerifier({
     AuthSamlXmlDsigPolicy? policy,
     this.limits = const AuthSamlLimits(),
@@ -102,14 +132,24 @@ final class AuthPortableSamlXmlDsigVerifier
     }
   }
 
+  /// Exclusive XML canonicalization algorithm supported by this verifier.
   static const String exclusiveCanonicalizationAlgorithm =
       'http://www.w3.org/2001/10/xml-exc-c14n#';
+
+  /// Enveloped-signature transform supported by this verifier.
   static const String envelopedSignatureTransform =
       'http://www.w3.org/2000/09/xmldsig#enveloped-signature';
 
+  /// XMLDSig algorithm policy used during verification.
   final AuthSamlXmlDsigPolicy policy;
+
+  /// XML parsing limits used during verification.
   final AuthSamlLimits limits;
 
+  /// Verifies the signed response and returns its signature proof.
+  ///
+  /// Throws an [AuthSamlXmlDsigVerificationException] for malformed,
+  /// unsupported, or cryptographically invalid input.
   @override
   AuthSamlSignatureProof verify(AuthSamlVerificationInput input) {
     try {

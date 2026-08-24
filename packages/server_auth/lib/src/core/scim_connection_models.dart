@@ -4,19 +4,30 @@ import 'plugin.dart';
 import 'scim_models.dart';
 
 /// Lifecycle of one managed SCIM directory connection.
-enum AuthScimConnectionState { active, disabled }
+enum AuthScimConnectionState {
+  /// The connection accepts provisioning requests.
+  active,
+
+  /// The connection no longer accepts provisioning requests.
+  disabled,
+}
 
 /// Exact tenancy boundary used by managed SCIM connection operations.
 final class AuthScimConnectionBinding {
+  /// Creates a normalized tenant and organization binding.
   AuthScimConnectionBinding({
     required String tenantId,
     required String organizationId,
   }) : tenantId = _identifier(tenantId, 'tenantId'),
        organizationId = _identifier(organizationId, 'organizationId');
 
+  /// Tenant containing the organization.
   final String tenantId;
+
+  /// Organization containing the connection.
   final String organizationId;
 
+  /// Serializes this tenancy boundary.
   Map<String, Object?> toJson() => <String, Object?>{
     'tenantId': tenantId,
     'organizationId': organizationId,
@@ -25,6 +36,7 @@ final class AuthScimConnectionBinding {
 
 /// Safe, public metadata for one managed directory connection.
 final class AuthScimManagedConnection {
+  /// Creates a validated public connection record.
   AuthScimManagedConnection({
     required String id,
     required String tenantId,
@@ -60,30 +72,51 @@ final class AuthScimManagedConnection {
     }
   }
 
+  /// Stable connection identifier.
   final String id;
+
+  /// Tenant containing the connection.
   final String tenantId;
+
+  /// Organization containing the connection.
   final String organizationId;
+
+  /// Provisioning domain used by the SCIM endpoint.
   final String provisioningDomainId;
 
   /// Stable application subject that owns management of this connection.
   final String subjectId;
+
+  /// Human-readable connection name.
   final String name;
+
+  /// Scopes granted to credentials issued for this connection.
   final Set<AuthScimScope> scopes;
+
+  /// Creation timestamp in UTC.
   final DateTime createdAt;
+
+  /// Last update timestamp in UTC.
   final DateTime updatedAt;
+
+  /// Disable timestamp, or `null` while active.
   final DateTime? disabledAt;
 
+  /// Current lifecycle state derived from [disabledAt].
   AuthScimConnectionState get state => disabledAt == null
       ? AuthScimConnectionState.active
       : AuthScimConnectionState.disabled;
 
+  /// Whether this connection is currently active.
   bool get isActive => disabledAt == null;
 
+  /// The tenant and organization boundary for this connection.
   AuthScimConnectionBinding get binding => AuthScimConnectionBinding(
     tenantId: tenantId,
     organizationId: organizationId,
   );
 
+  /// Creates a copy with the supplied mutable fields replaced.
   AuthScimManagedConnection copyWith({
     String? name,
     String? provisioningDomainId,
@@ -103,6 +136,7 @@ final class AuthScimManagedConnection {
     disabledAt: disabledAt ?? this.disabledAt,
   );
 
+  /// Serializes the public connection representation.
   Map<String, Object?> toJson() => <String, Object?>{
     'id': id,
     'tenantId': tenantId,
@@ -117,6 +151,7 @@ final class AuthScimManagedConnection {
     if (disabledAt != null) 'disabledAt': disabledAt!.toIso8601String(),
   };
 
+  /// Decodes and validates a public connection representation.
   factory AuthScimManagedConnection.fromJson(Map<String, dynamic> json) {
     final state = _requiredString(json, 'state');
     final disabledAt = _optionalDate(json, 'disabledAt');
@@ -141,6 +176,7 @@ final class AuthScimManagedConnection {
 
 /// Persisted credential record. The raw bearer secret is never represented.
 final class AuthScimCredentialRecord {
+  /// Creates a storage record without retaining the raw bearer secret.
   AuthScimCredentialRecord({
     required String id,
     required String connectionId,
@@ -178,26 +214,51 @@ final class AuthScimCredentialRecord {
     }
   }
 
+  /// Stable credential identifier.
   final String id;
+
+  /// Connection that owns this credential.
   final String connectionId;
+
+  /// Tenant containing the credential.
   final String tenantId;
+
+  /// Organization containing the credential.
   final String organizationId;
+
+  /// Human-readable credential name.
   final String name;
+
+  /// Non-secret prefix used to identify the credential to operators.
   final String keyPrefix;
 
   /// Strong digest used for lookup. Never expose this from public projections.
   final String secretDigest;
+
+  /// Scopes granted by this credential.
   final Set<AuthScimScope> scopes;
+
+  /// Creation timestamp in UTC.
   final DateTime createdAt;
+
+  /// Last update timestamp in UTC.
   final DateTime updatedAt;
+
+  /// Expiry timestamp, or `null` when it does not expire.
   final DateTime? expiresAt;
+
+  /// Last successful-use timestamp, when known.
   final DateTime? lastUsedAt;
+
+  /// Revocation timestamp, or `null` while not revoked.
   final DateTime? revokedAt;
 
+  /// Whether this credential is usable at [now].
   bool isActiveAt(DateTime now) =>
       revokedAt == null &&
       (expiresAt == null || expiresAt!.isAfter(now.toUtc()));
 
+  /// Creates a copy with lifecycle timestamps replaced.
   AuthScimCredentialRecord copyWith({
     DateTime? updatedAt,
     DateTime? lastUsedAt,
@@ -218,6 +279,7 @@ final class AuthScimCredentialRecord {
     revokedAt: revokedAt ?? this.revokedAt,
   );
 
+  /// Projects this storage record without its secret digest or tenancy data.
   AuthScimCredential toPublic({required DateTime now}) => AuthScimCredential(
     id: id,
     connectionId: connectionId,
@@ -252,6 +314,7 @@ final class AuthScimCredentialRecord {
 
 /// Safe credential metadata returned by management APIs.
 final class AuthScimCredential {
+  /// Creates public credential metadata.
   const AuthScimCredential({
     required this.id,
     required this.connectionId,
@@ -266,18 +329,40 @@ final class AuthScimCredential {
     this.revokedAt,
   });
 
+  /// Stable credential identifier.
   final String id;
+
+  /// Connection that owns this credential.
   final String connectionId;
+
+  /// Human-readable credential name.
   final String name;
+
+  /// Non-secret prefix used to identify the credential.
   final String keyPrefix;
+
+  /// Scopes granted by this credential.
   final Set<AuthScimScope> scopes;
+
+  /// Creation timestamp in UTC.
   final DateTime createdAt;
+
+  /// Last update timestamp in UTC.
   final DateTime updatedAt;
+
+  /// Whether the credential is usable at projection time.
   final bool active;
+
+  /// Expiry timestamp, when configured.
   final DateTime? expiresAt;
+
+  /// Last successful-use timestamp, when known.
   final DateTime? lastUsedAt;
+
+  /// Revocation timestamp, when revoked.
   final DateTime? revokedAt;
 
+  /// Serializes the public credential representation.
   Map<String, Object?> toJson() => <String, Object?>{
     'id': id,
     'connectionId': connectionId,
@@ -292,6 +377,7 @@ final class AuthScimCredential {
     if (revokedAt != null) 'revokedAt': revokedAt!.toUtc().toIso8601String(),
   };
 
+  /// Decodes and validates public credential metadata.
   factory AuthScimCredential.fromJson(Map<String, dynamic> json) =>
       AuthScimCredential(
         id: _requiredString(json, 'id'),
@@ -310,24 +396,30 @@ final class AuthScimCredential {
 
 /// Result of one digest-only credential issuance transaction.
 final class AuthScimCredentialIssuance {
+  /// Creates an issuance result.
   const AuthScimCredentialIssuance({
     required this.credential,
     required this.replayed,
     this.secret,
   }) : assert((secret == null) == replayed);
 
+  /// Public metadata for the issued credential.
   final AuthScimCredential credential;
 
   /// Raw opaque bearer token. Present only for the first committed response.
   final String? secret;
+
+  /// Whether this response replays an earlier idempotent issuance.
   final bool replayed;
 
+  /// Serializes the issuance result.
   Map<String, Object?> toJson() => <String, Object?>{
     'credential': credential.toJson(),
     'replayed': replayed,
     if (secret != null) 'secret': secret,
   };
 
+  /// Decodes and validates an issuance response.
   factory AuthScimCredentialIssuance.fromJson(Map<String, dynamic> json) {
     final credential = json['credential'];
     if (credential is! Map) {
@@ -350,19 +442,25 @@ final class AuthScimCredentialIssuance {
 
 /// Result of creating a connection and its initial credential atomically.
 final class AuthScimConnectionCreation {
+  /// Creates an atomic connection-and-credential result.
   const AuthScimConnectionCreation({
     required this.connection,
     required this.issuance,
   });
 
+  /// The newly created connection.
   final AuthScimManagedConnection connection;
+
+  /// The initial credential issuance, including its one-time secret.
   final AuthScimCredentialIssuance issuance;
 
+  /// Serializes the creation result.
   Map<String, Object?> toJson() => <String, Object?>{
     'connection': connection.toJson(),
     'issuance': issuance.toJson(),
   };
 
+  /// Decodes and validates a creation result.
   factory AuthScimConnectionCreation.fromJson(Map<String, dynamic> json) {
     final connection = json['connection'];
     final issuance = json['issuance'];
@@ -382,6 +480,7 @@ final class AuthScimConnectionCreation {
 
 /// Bounded connection catalog page.
 final class AuthScimConnectionPage {
+  /// Creates a bounded page of connection metadata.
   const AuthScimConnectionPage({
     required this.items,
     required this.total,
@@ -389,11 +488,19 @@ final class AuthScimConnectionPage {
     required this.offset,
   });
 
+  /// Connections in this page.
   final List<AuthScimManagedConnection> items;
+
+  /// Total matching connections across all pages.
   final int total;
+
+  /// Maximum number of items requested for this page.
   final int limit;
+
+  /// Zero-based offset used to produce this page.
   final int offset;
 
+  /// Serializes the page.
   Map<String, Object?> toJson() => <String, Object?>{
     'items': items.map((value) => value.toJson()).toList(growable: false),
     'total': total,
@@ -404,6 +511,7 @@ final class AuthScimConnectionPage {
 
 /// Bounded credential catalog page.
 final class AuthScimCredentialPage {
+  /// Creates a bounded page of credential metadata.
   const AuthScimCredentialPage({
     required this.items,
     required this.total,
@@ -411,11 +519,19 @@ final class AuthScimCredentialPage {
     required this.offset,
   });
 
+  /// Credentials in this page.
   final List<AuthScimCredential> items;
+
+  /// Total matching credentials across all pages.
   final int total;
+
+  /// Maximum number of items requested for this page.
   final int limit;
+
+  /// Zero-based offset used to produce this page.
   final int offset;
 
+  /// Serializes the page.
   Map<String, Object?> toJson() => <String, Object?>{
     'items': items.map((value) => value.toJson()).toList(growable: false),
     'total': total,
@@ -426,26 +542,47 @@ final class AuthScimCredentialPage {
 
 /// Management permission checked by the application-owned authorizer.
 enum AuthScimConnectionManagementOperation {
+  /// Creates a connection.
   create,
+
+  /// Lists connections.
   list,
+
+  /// Updates a connection.
   update,
+
+  /// Disables a connection.
   disable,
+
+  /// Lists connection credentials.
   credentialsList,
+
+  /// Issues a connection credential.
   credentialsIssue,
+
+  /// Rotates a connection credential.
   credentialsRotate,
+
+  /// Revokes a connection credential.
   credentialsRevoke,
 }
 
 /// Authorization input for a managed SCIM operation.
 final class AuthScimConnectionAuthorizationRequest<TContext> {
+  /// Creates an authorization request for one management operation.
   const AuthScimConnectionAuthorizationRequest({
     required this.invocation,
     required this.operation,
     required this.organizationId,
   });
 
+  /// Invocation containing the authenticated request context.
   final AuthOperationInvocation<TContext> invocation;
+
+  /// Management operation being authorized.
   final AuthScimConnectionManagementOperation operation;
+
+  /// Organization whose connection is being accessed.
   final String organizationId;
 }
 
@@ -456,6 +593,7 @@ final class AuthScimConnectionAuthorizationRequest<TContext> {
 /// so credential ownership and coordinated user deletion cannot be assigned to
 /// another account by a faulty authorizer.
 final class AuthScimConnectionManagementPrincipal {
+  /// Creates the exact principal and tenancy returned by an authorizer.
   AuthScimConnectionManagementPrincipal({
     required String tenantId,
     required String organizationId,
@@ -464,10 +602,16 @@ final class AuthScimConnectionManagementPrincipal {
        organizationId = _identifier(organizationId, 'organizationId'),
        subjectId = _identifier(subjectId, 'subjectId');
 
+  /// Tenant containing the organization.
   final String tenantId;
+
+  /// Organization whose connection is being managed.
   final String organizationId;
+
+  /// Canonical subject authorized to manage the connection.
   final String subjectId;
 
+  /// The tenant and organization boundary represented by this principal.
   AuthScimConnectionBinding get binding => AuthScimConnectionBinding(
     tenantId: tenantId,
     organizationId: organizationId,
@@ -480,9 +624,11 @@ typedef AuthScimConnectionAuthorizer<TContext> =
       AuthScimConnectionAuthorizationRequest<TContext> request,
     );
 
+/// Parses and validates a SCIM scope collection.
 Set<AuthScimScope> authScimParseScopes(Object? value) =>
     _scopes(_scopeValues(value));
 
+/// Returns a stable sorted fingerprint for [scopes].
 String authScimScopeFingerprint(Iterable<AuthScimScope> scopes) =>
     (_scopes(scopes).map((value) => value.name).toList()..sort()).join(',');
 

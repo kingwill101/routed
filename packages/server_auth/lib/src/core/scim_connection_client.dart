@@ -8,11 +8,14 @@ import 'scim_models.dart';
 /// Installs only the managed-SCIM connection API selected by the application.
 final class AuthScimConnectionClientPlugin
     implements AuthClientPlugin<AuthScimConnectionClient> {
+  /// Creates a client plugin for managed SCIM connections.
   const AuthScimConnectionClientPlugin();
 
+  /// The stable managed-SCIM client plugin identifier.
   @override
   String get id => 'scim_connections';
 
+  /// Installs the client using [context]'s transport.
   @override
   AuthScimConnectionClient install(AuthClientPluginContext context) =>
       AuthScimConnectionClient(transport: context.transport);
@@ -20,10 +23,13 @@ final class AuthScimConnectionClientPlugin
 
 /// Typed client for the opt-in managed SCIM connection plugin.
 final class AuthScimConnectionClient {
+  /// Creates a client using [transport] for API requests.
   const AuthScimConnectionClient({required this.transport});
 
+  /// Transport used to call the managed SCIM endpoints.
   final AuthClientTransport transport;
 
+  /// Creates a managed SCIM connection and returns its one-time credential.
   Future<AuthScimConnectionCreation> create({
     required String organizationId,
     required String name,
@@ -47,6 +53,7 @@ final class AuthScimConnectionClient {
     ),
   );
 
+  /// Lists the managed SCIM connections for [organizationId].
   Future<AuthScimConnectionPage> list({
     required String organizationId,
     int limit = 100,
@@ -63,6 +70,7 @@ final class AuthScimConnectionClient {
     return _connectionPage(json);
   }
 
+  /// Updates a connection after checking [expectedUpdatedAt].
   Future<AuthScimManagedConnection> update({
     required String organizationId,
     required String connectionId,
@@ -84,6 +92,7 @@ final class AuthScimConnectionClient {
     ),
   );
 
+  /// Disables a managed SCIM connection.
   Future<AuthScimManagedConnection> disable({
     required String organizationId,
     required String connectionId,
@@ -97,6 +106,7 @@ final class AuthScimConnectionClient {
     ),
   );
 
+  /// Lists credentials belonging to a managed connection.
   Future<AuthScimCredentialPage> listCredentials({
     required String organizationId,
     required String connectionId,
@@ -115,6 +125,7 @@ final class AuthScimConnectionClient {
     return _credentialPage(json);
   }
 
+  /// Issues a one-time-displayed credential for a connection.
   Future<AuthScimCredentialIssuance> issueCredential({
     required String organizationId,
     required String connectionId,
@@ -136,6 +147,7 @@ final class AuthScimConnectionClient {
     ),
   );
 
+  /// Rotates [credentialId] and returns the replacement secret once.
   Future<AuthScimCredentialIssuance> rotateCredential({
     required String organizationId,
     required String connectionId,
@@ -159,6 +171,7 @@ final class AuthScimConnectionClient {
     ),
   );
 
+  /// Revokes [credentialId] and returns its updated record.
   Future<AuthScimCredential> revokeCredential({
     required String organizationId,
     required String connectionId,

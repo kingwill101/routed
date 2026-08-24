@@ -16,6 +16,7 @@ final String authScimEmptyApplicationProjectionSnapshotId = sha256
 
 /// Immutable application projection boundary for one SCIM connection.
 final class AuthScimApplicationProjectionScope {
+  /// Creates a normalized projection scope for one SCIM connection.
   AuthScimApplicationProjectionScope({
     required String connectionId,
     required String tenantId,
@@ -29,11 +30,19 @@ final class AuthScimApplicationProjectionScope {
          'provisioningDomainId',
        );
 
+  /// Managed SCIM connection identifier.
   final String connectionId;
+
+  /// Tenant containing the connection.
   final String tenantId;
+
+  /// Organization containing the connection.
   final String organizationId;
+
+  /// Provisioning domain represented by the projection.
   final String provisioningDomainId;
 
+  /// Whether [other] represents the same immutable binding.
   bool sameBindingAs(AuthScimApplicationProjectionScope other) =>
       connectionId == other.connectionId &&
       tenantId == other.tenantId &&
@@ -50,7 +59,13 @@ final class AuthScimApplicationProjectionScope {
 }
 
 /// Directory resource kind represented by an application projection.
-enum AuthScimApplicationSubjectKind { user, group }
+enum AuthScimApplicationSubjectKind {
+  /// A SCIM user resource.
+  user,
+
+  /// A SCIM group resource.
+  group,
+}
 
 /// Stable directory subject key used by application-owned projection state.
 ///
@@ -58,14 +73,20 @@ enum AuthScimApplicationSubjectKind { user, group }
 /// deliberately absent. A subject is identified only by its immutable
 /// connection binding and SCIM resource ID.
 final class AuthScimApplicationProjectionSubject {
+  /// Creates a stable subject key within [scope].
   AuthScimApplicationProjectionSubject({
     required this.scope,
     required String resourceId,
     required this.kind,
   }) : resourceId = _identifier(resourceId, 'resourceId');
 
+  /// Immutable connection scope for the resource.
   final AuthScimApplicationProjectionScope scope;
+
+  /// SCIM resource identifier.
   final String resourceId;
+
+  /// Kind of SCIM resource.
   final AuthScimApplicationSubjectKind kind;
 
   @override
@@ -83,7 +104,16 @@ final class AuthScimApplicationProjectionSubject {
 ///
 /// This state does not imply a sign-in method, an authentication role, or an
 /// auth user. Applications authorize those concerns independently.
-enum AuthScimApplicationProjectionState { active, disabled, tombstoned }
+enum AuthScimApplicationProjectionState {
+  /// The resource is active in the application projection.
+  active,
+
+  /// The resource is provisioned but disabled.
+  disabled,
+
+  /// The resource is retained as a deletion tombstone.
+  tombstoned,
+}
 
 /// Versioned, digest-bound directory state safe for application projection.
 ///
@@ -91,6 +121,7 @@ enum AuthScimApplicationProjectionState { active, disabled, tombstoned }
 /// projection input. Raw source attributes, bearer tokens, and credentials do
 /// not belong in this record.
 final class AuthScimApplicationProjectionSnapshot {
+  /// Creates a validated, digest-bound application snapshot.
   AuthScimApplicationProjectionSnapshot({
     required this.subject,
     required String sourceVersion,
@@ -128,12 +159,22 @@ final class AuthScimApplicationProjectionSnapshot {
     }
   }
 
+  /// Stable subject represented by this snapshot.
   final AuthScimApplicationProjectionSubject subject;
+
+  /// Application source version that produced the snapshot.
   final String sourceVersion;
+
+  /// Lowercase SHA-256 digest of canonical source input.
   final String sourceDigest;
+
+  /// Application-visible lifecycle state.
   final AuthScimApplicationProjectionState state;
+
+  /// Group members represented by this snapshot.
   final List<AuthScimApplicationProjectionSubject> members;
 
+  /// Whether [other] has identical source and projected state.
   bool sameSourceAs(AuthScimApplicationProjectionSnapshot other) =>
       subject == other.subject &&
       sourceVersion == other.sourceVersion &&
@@ -144,6 +185,7 @@ final class AuthScimApplicationProjectionSnapshot {
 
 /// Durable application-owned projection record.
 final class AuthScimApplicationProjectionRecord {
+  /// Creates a versioned projection record.
   AuthScimApplicationProjectionRecord({
     required this.snapshot,
     required this.version,
@@ -152,24 +194,40 @@ final class AuthScimApplicationProjectionRecord {
     if (version < 1) throw ArgumentError.value(version, 'version');
   }
 
+  /// Snapshot currently stored for the subject.
   final AuthScimApplicationProjectionSnapshot snapshot;
+
+  /// Monotonically increasing application projection version.
   final int version;
+
+  /// Last update timestamp in UTC.
   final DateTime updatedAt;
 
+  /// The subject represented by [snapshot].
   AuthScimApplicationProjectionSubject get subject => snapshot.subject;
 }
 
 /// Explicit application projection mutation.
 enum AuthScimApplicationProjectionMutation {
+  /// Creates a new projection record.
   create,
+
+  /// Updates an existing active projection.
   update,
+
+  /// Disables a user projection.
   disable,
+
+  /// Tombstones a projection.
   tombstone,
+
+  /// Changes members of a group projection.
   groupMembershipChange,
 }
 
 /// Idempotent, version-bound application projection command.
 final class AuthScimApplicationProjectionCommand {
+  /// Creates an idempotent, version-bound projection command.
   AuthScimApplicationProjectionCommand({
     required String operationId,
     required this.mutation,
@@ -213,25 +271,51 @@ final class AuthScimApplicationProjectionCommand {
     }
   }
 
+  /// Stable caller-supplied operation identifier.
   final String operationId;
+
+  /// Digest of the command payload used for replay protection.
   final String payloadDigest;
+
+  /// Mutation requested by the caller.
   final AuthScimApplicationProjectionMutation mutation;
+
+  /// Desired state after the mutation.
   final AuthScimApplicationProjectionSnapshot desired;
+
+  /// Existing record version required for non-create mutations.
   final int? expectedVersion;
 }
 
 enum AuthScimApplicationProjectionStatus {
+  /// The command changed the projection.
   applied,
+
+  /// The same command was accepted previously.
   replayed,
+
+  /// The operation identifier was reused with different data.
   replayMismatch,
+
+  /// The requested record does not exist.
   notFound,
+
+  /// The expected record version does not match.
   versionConflict,
+
+  /// A referenced member or membership invariant is invalid.
   memberConflict,
+
+  /// The target resource is already tombstoned.
   resourceTombstoned,
+
+  /// The projection scope has been permanently deleted.
   scopeDeleted,
 }
 
+/// Result of applying one projection command.
 final class AuthScimApplicationProjectionResult {
+  /// Creates a result with an optional committed [record].
   AuthScimApplicationProjectionResult({required this.status, this.record}) {
     final hasRecord = record != null;
     if ((status == AuthScimApplicationProjectionStatus.applied ||
@@ -243,19 +327,25 @@ final class AuthScimApplicationProjectionResult {
     }
   }
 
+  /// Outcome of the projection command.
   final AuthScimApplicationProjectionStatus status;
+
+  /// Committed record for applied or replayed results.
   final AuthScimApplicationProjectionRecord? record;
 
+  /// Whether the command has a committed record.
   bool get committed =>
       status == AuthScimApplicationProjectionStatus.applied ||
       status == AuthScimApplicationProjectionStatus.replayed;
 
+  /// Whether retrying with a fresh expected version may succeed.
   bool get retryable =>
       status == AuthScimApplicationProjectionStatus.versionConflict;
 }
 
 /// Bounded query over one exact application projection scope.
 final class AuthScimApplicationProjectionQuery {
+  /// Creates a bounded query for [scope].
   AuthScimApplicationProjectionQuery({
     required this.scope,
     this.offset = 0,
@@ -269,12 +359,19 @@ final class AuthScimApplicationProjectionQuery {
     }
   }
 
+  /// Exact scope to query.
   final AuthScimApplicationProjectionScope scope;
+
+  /// Zero-based result offset.
   final int offset;
+
+  /// Maximum number of records to return.
   final int limit;
 }
 
+/// A page of projection records for one scope.
 final class AuthScimApplicationProjectionPage {
+  /// Creates a validated projection page.
   AuthScimApplicationProjectionPage({
     required this.scope,
     required Iterable<AuthScimApplicationProjectionRecord> records,
@@ -302,15 +399,33 @@ final class AuthScimApplicationProjectionPage {
     }
   }
 
+  /// Scope shared by every record in the page.
   final AuthScimApplicationProjectionScope scope;
+
+  /// Records returned for the requested range.
   final List<AuthScimApplicationProjectionRecord> records;
+
+  /// Total records available in the scope.
   final int total;
+
+  /// Digest identifying the projection snapshot used for the page.
   final String projectionSnapshotId;
 }
 
-enum AuthScimApplicationProjectionDriftKind { missing, diverged, unexpected }
+/// Difference between authoritative source state and projected state.
+enum AuthScimApplicationProjectionDriftKind {
+  /// An authoritative subject has no projected record.
+  missing,
+
+  /// Both records exist but their source state differs.
+  diverged,
+
+  /// A projected subject is absent from authoritative state.
+  unexpected,
+}
 
 final class AuthScimApplicationProjectionDrift {
+  /// Creates a validated difference for one projection subject.
   AuthScimApplicationProjectionDrift({
     required this.kind,
     required this.subject,
@@ -335,14 +450,22 @@ final class AuthScimApplicationProjectionDrift {
     }
   }
 
+  /// Kind of difference represented by this result.
   final AuthScimApplicationProjectionDriftKind kind;
+
+  /// Subject whose state differs.
   final AuthScimApplicationProjectionSubject subject;
+
+  /// Authoritative snapshot, when one exists.
   final AuthScimApplicationProjectionSnapshot? authoritative;
+
+  /// Current projection record, when one exists.
   final AuthScimApplicationProjectionRecord? current;
 }
 
 /// Snapshot-bound, bounded drift query.
 final class AuthScimApplicationProjectionDriftQuery {
+  /// Creates a query against a complete authoritative source snapshot.
   AuthScimApplicationProjectionDriftQuery({
     required this.scope,
     required String sourceSnapshotId,
@@ -366,14 +489,25 @@ final class AuthScimApplicationProjectionDriftQuery {
     }
   }
 
+  /// Exact scope to inspect.
   final AuthScimApplicationProjectionScope scope;
+
+  /// Digest of [authoritative].
   final String sourceSnapshotId;
+
+  /// Complete authoritative snapshots for [scope].
   final List<AuthScimApplicationProjectionSnapshot> authoritative;
+
+  /// Zero-based finding offset.
   final int offset;
+
+  /// Maximum number of findings to return.
   final int limit;
 }
 
+/// A page of drift findings for one projection scope.
 final class AuthScimApplicationProjectionDriftPage {
+  /// Creates a validated drift page.
   AuthScimApplicationProjectionDriftPage({
     required this.scope,
     required Iterable<AuthScimApplicationProjectionDrift> findings,
@@ -401,9 +535,16 @@ final class AuthScimApplicationProjectionDriftPage {
     }
   }
 
+  /// Scope shared by every finding in the page.
   final AuthScimApplicationProjectionScope scope;
+
+  /// Drift findings returned for the requested range.
   final List<AuthScimApplicationProjectionDrift> findings;
+
+  /// Total findings available in the scope.
   final int total;
+
+  /// Digest identifying the projection snapshot used for the page.
   final String projectionSnapshotId;
 }
 
@@ -414,6 +555,7 @@ final class AuthScimApplicationProjectionDriftPage {
 /// tombstoned. A stale [expectedProjectionSnapshotId] must be rejected so a
 /// caller can inspect drift and retry without overwriting concurrent work.
 final class AuthScimApplicationReconciliationCommand {
+  /// Creates a complete, idempotent reconciliation command.
   AuthScimApplicationReconciliationCommand({
     required String operationId,
     required this.scope,
@@ -439,24 +581,48 @@ final class AuthScimApplicationReconciliationCommand {
     );
   }
 
+  /// Stable caller-supplied operation identifier.
   final String operationId;
+
+  /// Digest of the reconciliation payload.
   late final String payloadDigest;
+
+  /// Exact scope being reconciled.
   final AuthScimApplicationProjectionScope scope;
+
+  /// Digest of the authoritative source snapshot.
   late final String sourceSnapshotId;
+
+  /// Projection snapshot version expected before reconciliation.
   final String expectedProjectionSnapshotId;
+
+  /// Complete authoritative state for [scope].
   final List<AuthScimApplicationProjectionSnapshot> authoritative;
 }
 
 enum AuthScimApplicationReconciliationStatus {
+  /// The reconciliation changed the projection.
   applied,
+
+  /// The same reconciliation was accepted previously.
   replayed,
+
+  /// The operation identifier was reused with different data.
   replayMismatch,
+
+  /// The expected projection snapshot is stale.
   staleProjectionSnapshot,
+
+  /// A tombstone prevents the requested reconciliation.
   tombstoneConflict,
+
+  /// The projection scope has been permanently deleted.
   scopeDeleted,
 }
 
+/// Result of applying a complete projection reconciliation.
 final class AuthScimApplicationReconciliationResult {
+  /// Creates a reconciliation result and its committed record counts.
   AuthScimApplicationReconciliationResult({
     required this.status,
     required String projectionSnapshotId,
@@ -475,16 +641,27 @@ final class AuthScimApplicationReconciliationResult {
     }
   }
 
+  /// Reconciliation outcome.
   final AuthScimApplicationReconciliationStatus status;
+
+  /// Projection snapshot after a committed reconciliation.
   final String projectionSnapshotId;
+
+  /// Number of records created.
   final int created;
+
+  /// Number of records updated.
   final int updated;
+
+  /// Number of records tombstoned.
   final int tombstoned;
 
+  /// Whether the reconciliation has committed changes.
   bool get committed =>
       status == AuthScimApplicationReconciliationStatus.applied ||
       status == AuthScimApplicationReconciliationStatus.replayed;
 
+  /// Whether retrying with a fresh projection snapshot may succeed.
   bool get retryable =>
       status == AuthScimApplicationReconciliationStatus.staleProjectionSnapshot;
 }
@@ -495,6 +672,7 @@ final class AuthScimApplicationReconciliationResult {
 /// reconciliation commands for the same scope must return `scopeDeleted`
 /// rather than recreating state after connection deletion.
 final class AuthScimApplicationProjectionScopeDeletionCommand {
+  /// Creates an idempotent command that permanently fences [scope].
   AuthScimApplicationProjectionScopeDeletionCommand({
     required String operationId,
     required this.scope,
@@ -510,20 +688,36 @@ final class AuthScimApplicationProjectionScopeDeletionCommand {
     );
   }
 
+  /// Stable caller-supplied operation identifier.
   final String operationId;
+
+  /// Digest of the deletion payload.
   late final String payloadDigest;
+
+  /// Scope whose records will be deleted and fenced.
   final AuthScimApplicationProjectionScope scope;
+
+  /// Projection snapshot version expected before deletion.
   final String expectedProjectionSnapshotId;
 }
 
 enum AuthScimApplicationProjectionScopeDeletionStatus {
+  /// The scope was deleted and fenced.
   applied,
+
+  /// The same deletion was accepted previously.
   replayed,
+
+  /// The operation identifier was reused with different data.
   replayMismatch,
+
+  /// The expected projection snapshot is stale.
   staleProjectionSnapshot,
 }
 
+/// Result of deleting and fencing one projection scope.
 final class AuthScimApplicationProjectionScopeDeletionResult {
+  /// Creates a scope-deletion result.
   AuthScimApplicationProjectionScopeDeletionResult({
     required this.status,
     required this.deleted,
@@ -536,13 +730,18 @@ final class AuthScimApplicationProjectionScopeDeletionResult {
     }
   }
 
+  /// Deletion outcome.
   final AuthScimApplicationProjectionScopeDeletionStatus status;
+
+  /// Number of records removed by a committed deletion.
   final int deleted;
 
+  /// Whether the deletion has committed.
   bool get committed =>
       status == AuthScimApplicationProjectionScopeDeletionStatus.applied ||
       status == AuthScimApplicationProjectionScopeDeletionStatus.replayed;
 
+  /// Whether retrying with a fresh projection snapshot may succeed.
   bool get retryable =>
       status ==
       AuthScimApplicationProjectionScopeDeletionStatus.staleProjectionSnapshot;
@@ -562,22 +761,27 @@ final class AuthScimApplicationProjectionScopeDeletionResult {
 /// transaction they own. Routed does not claim atomicity across unrelated
 /// directory and application stores.
 abstract interface class AuthScimApplicationProjectionStore {
+  /// Applies one idempotent projection command.
   FutureOr<AuthScimApplicationProjectionResult> apply(
     AuthScimApplicationProjectionCommand command,
   );
 
+  /// Finds the current record for [subject], if it exists.
   FutureOr<AuthScimApplicationProjectionRecord?> find(
     AuthScimApplicationProjectionSubject subject,
   );
 
+  /// Lists projection records in [query].
   FutureOr<AuthScimApplicationProjectionPage> list(
     AuthScimApplicationProjectionQuery query,
   );
 
+  /// Compares projected state with the authoritative state in [query].
   FutureOr<AuthScimApplicationProjectionDriftPage> detectDrift(
     AuthScimApplicationProjectionDriftQuery query,
   );
 
+  /// Reconciles a complete authoritative snapshot into the projection.
   FutureOr<AuthScimApplicationReconciliationResult> reconcile(
     AuthScimApplicationReconciliationCommand command,
   );

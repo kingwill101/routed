@@ -3,6 +3,7 @@ import 'dart:async';
 import 'plugin.dart';
 import 'scim_models.dart';
 
+/// Route parameter used by SCIM User and Group resource endpoints.
 const AuthRouteParameterKey authScimResourceIdRouteParameter =
     AuthRouteParameterKey('id');
 
@@ -16,11 +17,13 @@ const String _scimPersistenceSchemaId = 'scim.directory';
 
 /// One transient bearer verification request.
 final class AuthScimBearerTokenRequest<TContext> {
+  /// Creates a transient token-resolution request.
   const AuthScimBearerTokenRequest({
     required this.context,
     required this.token,
   });
 
+  /// Application request context supplied to the resolver.
   final TContext context;
 
   /// Raw token received from the directory.
@@ -38,6 +41,7 @@ final class AuthScimBearerTokenRequest<TContext> {
 /// tenant, organization, provisioning domain, credential, and scopes. Routed
 /// never persists or issues bearer credentials.
 abstract interface class AuthScimBearerTokenResolver<TContext> {
+  /// Resolves [request] to an immutable connection identity, if valid.
   FutureOr<AuthScimConnectionIdentity?> resolve(
     AuthScimBearerTokenRequest<TContext> request,
   );
@@ -55,21 +59,25 @@ abstract interface class AuthScimBearerTokenResolver<TContext> {
 /// Applications that project directory state should compose the typed identity
 /// and lifecycle capabilities below inside their own safe transaction.
 abstract interface class AuthScimProvisioningStore {
+  /// Lists visible users in the exact connection context.
   FutureOr<AuthScimUserPage> listUsers(
     AuthScimProvisioningContext context,
     AuthScimListUsersQuery query,
   );
 
+  /// Finds one visible user by resource identifier.
   FutureOr<AuthScimUser?> findUser(
     AuthScimProvisioningContext context,
     String resourceId,
   );
 
+  /// Creates a user atomically and returns its committed resource.
   FutureOr<AuthScimUser> createUser(
     AuthScimProvisioningContext context,
     AuthScimUserData user,
   );
 
+  /// Replaces a live user, returning `null` when it is absent.
   FutureOr<AuthScimUser?> replaceUser(
     AuthScimProvisioningContext context,
     String resourceId,
@@ -93,21 +101,25 @@ abstract interface class AuthScimProvisioningStore {
     String resourceId,
   );
 
+  /// Lists visible groups in the exact connection context.
   FutureOr<AuthScimGroupPage> listGroups(
     AuthScimProvisioningContext context,
     AuthScimListGroupsQuery query,
   );
 
+  /// Finds one visible group by resource identifier.
   FutureOr<AuthScimGroup?> findGroup(
     AuthScimProvisioningContext context,
     String resourceId,
   );
 
+  /// Creates a group atomically and returns its committed resource.
   FutureOr<AuthScimGroup> createGroup(
     AuthScimProvisioningContext context,
     AuthScimGroupData group,
   );
 
+  /// Replaces a live group, returning `null` when it is absent.
   FutureOr<AuthScimGroup?> replaceGroup(
     AuthScimProvisioningContext context,
     String resourceId,
@@ -140,6 +152,7 @@ abstract interface class AuthScimProvisioningStore {
 
 /// Signals a persistence uniqueness conflict without exposing store details.
 final class AuthScimConflictException implements Exception {
+  /// Creates a sanitized persistence conflict.
   const AuthScimConflictException();
 
   @override
@@ -148,6 +161,7 @@ final class AuthScimConflictException implements Exception {
 
 /// Sanitized operation context supplied to an optional internal reporter.
 final class AuthScimInternalFailure {
+  /// Creates sanitized diagnostic data for an internal reporter.
   const AuthScimInternalFailure({
     required this.operation,
     required this.error,
@@ -157,11 +171,22 @@ final class AuthScimInternalFailure {
     this.subjectId,
   });
 
+  /// Stable operation identifier being reported.
   final String operation;
+
+  /// Internal error object retained for diagnostics.
   final Object error;
+
+  /// Internal stack trace retained for diagnostics.
   final StackTrace stackTrace;
+
+  /// Tenant associated with the failure, when known.
   final String? tenantId;
+
+  /// Organization associated with the failure, when known.
   final String? organizationId;
+
+  /// Subject associated with the failure, when known.
   final String? subjectId;
 }
 
@@ -170,6 +195,7 @@ typedef AuthScimFailureReporter =
 
 /// Bounded SCIM server settings.
 final class AuthScimOptions {
+  /// Creates bounded SCIM server settings.
   AuthScimOptions({
     this.defaultPageSize = 100,
     this.maximumPageSize = 200,
@@ -205,11 +231,22 @@ final class AuthScimOptions {
     }
   }
 
+  /// Default page size used when a request omits `count`.
   final int defaultPageSize;
+
+  /// Maximum page size accepted by list operations.
   final int maximumPageSize;
+
+  /// Maximum one-based start index accepted by list operations.
   final int maximumStartIndex;
+
+  /// Maximum patch operations accepted in one document.
   final int maximumPatchOperations;
+
+  /// Maximum direct members accepted in one Group.
   final int maximumGroupMembers;
+
+  /// Maximum bearer token length accepted by the endpoint.
   final int maximumBearerTokenLength;
 }
 
@@ -222,6 +259,7 @@ final class ScimPlugin<TContext>
         AuthServerPlugin<TContext>,
         AuthEndpointContributor<TContext>,
         AuthPersistenceContributor {
+  /// Creates a server-only SCIM provisioning plugin.
   ScimPlugin({
     required this.store,
     required this.tokenResolver,
@@ -229,21 +267,32 @@ final class ScimPlugin<TContext>
     this.reportFailure,
   }) : options = options ?? AuthScimOptions();
 
+  /// Application-owned directory persistence boundary.
   final AuthScimProvisioningStore store;
+
+  /// Application-owned bearer-token verification boundary.
   final AuthScimBearerTokenResolver<TContext> tokenResolver;
+
+  /// Bounded SCIM protocol settings.
   final AuthScimOptions options;
+
+  /// Optional internal failure reporter.
   final AuthScimFailureReporter? reportFailure;
 
+  /// Stable server-plugin identifier.
   @override
   String get id => authScimPluginId;
 
+  /// SCIM does not contribute an auth-user persistence contract.
   @override
   AuthServerPluginDataContract get dataContract =>
       const AuthServerPluginDataContract.none();
 
+  /// Configures the plugin in the server context.
   @override
   void configure(AuthServerPluginContext<TContext> context) {}
 
+  /// Describes the SCIM persistence schema and atomic operations.
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
     AuthPersistenceSchema(
@@ -357,6 +406,7 @@ final class ScimPlugin<TContext>
     ),
   ];
 
+  /// Describes the SCIM protocol endpoints.
   @override
   Iterable<AuthEndpointDescriptor<TContext>>
   get endpoints => <AuthEndpointDescriptor<TContext>>[

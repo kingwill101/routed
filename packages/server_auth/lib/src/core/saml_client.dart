@@ -5,18 +5,24 @@ import 'plugin.dart';
 import 'saml.dart';
 import 'saml_models.dart';
 
+/// Adds the opt-in SAML client operations to an [AuthClient].
 final class AuthSamlClientPlugin implements AuthClientPlugin<AuthSamlClient> {
+  /// Creates a SAML client plugin.
   const AuthSamlClientPlugin();
 
+  /// The stable identifier used to install this plugin.
   @override
   String get id => authSamlPluginId;
 
+  /// Installs a client backed by the transport in [context].
   @override
   AuthSamlClient install(AuthClientPluginContext context) =>
       AuthSamlClient(context.transport);
 }
 
+/// Selects a SAML connection for a sign-in request.
 final class AuthSamlSignInRequest {
+  /// Creates a request using exactly one of the supported connection selectors.
   const AuthSamlSignInRequest({
     this.providerId,
     this.verifiedDomain,
@@ -24,11 +30,19 @@ final class AuthSamlSignInRequest {
     this.callbackUrl,
   });
 
+  /// An explicit SAML provider identifier.
   final String? providerId;
+
+  /// A verified email domain used to locate a SAML connection.
   final String? verifiedDomain;
+
+  /// An organization slug used to locate a SAML connection.
   final String? organizationSlug;
+
+  /// The application callback to use after authentication.
   final Uri? callbackUrl;
 
+  /// Encodes the request for the SAML sign-in endpoint.
   Map<String, dynamic> toJson() => {
     if (providerId != null) 'providerId': providerId,
     if (verifiedDomain != null) 'domain': verifiedDomain,
@@ -39,16 +53,26 @@ final class AuthSamlSignInRequest {
 
 /// Browser-submittable HTTP-POST AuthnRequest returned by the server plugin.
 final class AuthSamlSignInForm {
+  /// Creates a validated browser-submittable SAML form.
   const AuthSamlSignInForm({
     required this.providerId,
     required this.destination,
     required this.fields,
   });
 
+  /// The provider that created the form.
   final String providerId;
+
+  /// The IdP endpoint to which the browser form is submitted.
   final Uri destination;
+
+  /// The form fields, including `SAMLRequest` and `RelayState`.
   final Map<String, String> fields;
 
+  /// Decodes and validates a server response into a sign-in form.
+  ///
+  /// Throws a [FormatException] when the response is not an HTTPS HTTP-POST
+  /// SAML form containing the required fields.
   factory AuthSamlSignInForm.fromJson(Map<String, dynamic> json) {
     final providerId = json['providerId']?.toString().trim() ?? '';
     final destination = Uri.tryParse(json['destination']?.toString() ?? '');
@@ -80,10 +104,14 @@ final class AuthSamlSignInForm {
   }
 }
 
+/// Client operations exposed by the SAML server plugin.
 final class AuthSamlClient {
+  /// Creates a client using [transport] for HTTP operations.
   const AuthSamlClient(this._transport);
+
   final AuthClientTransport _transport;
 
+  /// Starts SAML sign-in and returns the form to submit to the IdP.
   Future<AuthSamlSignInForm> signIn(AuthSamlSignInRequest request) async {
     final response = await _transport.mutate(
       'POST',
@@ -97,6 +125,9 @@ final class AuthSamlClient {
     return AuthSamlSignInForm.fromJson(Map<String, dynamic>.from(decoded));
   }
 
+  /// Fetches service-provider metadata for [providerId].
+  ///
+  /// Throws an [ArgumentError] when [providerId] is blank.
   Future<String> serviceProviderMetadata(String providerId) async {
     final normalized = providerId.trim();
     if (normalized.isEmpty) throw ArgumentError.value(providerId, 'providerId');

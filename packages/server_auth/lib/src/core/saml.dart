@@ -11,6 +11,7 @@ import 'saml_models.dart';
 import 'saml_store.dart';
 import 'tokens.dart' show secureRandomToken;
 
+/// Route parameter used by SAML metadata and assertion-consumer endpoints.
 const AuthRouteParameterKey authSamlProviderIdRouteParameter =
     AuthRouteParameterKey('providerId');
 
@@ -19,10 +20,13 @@ const _samlAssertion = 'urn:oasis:names:tc:SAML:2.0:assertion';
 const _samlPostBinding = 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST';
 const _samlBearer = 'urn:oasis:names:tc:SAML:2.0:cm:bearer';
 
+/// Resolves a stable, request-bound browser value for SAML replay protection.
 typedef AuthSamlBrowserBindingResolver<TContext> =
     FutureOr<String> Function(TContext context);
 
+/// Resource and parsing limits applied to SAML messages and metadata.
 final class AuthSamlLimits {
+  /// Creates SAML limits with conservative bounded defaults.
   const AuthSamlLimits({
     this.maxEncodedResponseBytes = 384 * 1024,
     this.maxDecodedXmlBytes = 256 * 1024,
@@ -33,16 +37,31 @@ final class AuthSamlLimits {
     this.maxTextBytes = 128 * 1024,
   });
 
+  /// Maximum encoded response size in bytes.
   final int maxEncodedResponseBytes;
+
+  /// Maximum decoded XML size in bytes.
   final int maxDecodedXmlBytes;
+
+  /// Maximum generated metadata size in bytes.
   final int maxMetadataBytes;
+
+  /// Maximum number of XML nodes accepted in one message.
   final int maxNodes;
+
+  /// Maximum XML nesting depth accepted in one message.
   final int maxDepth;
+
+  /// Maximum number of XML attributes accepted in one message.
   final int maxAttributes;
+
+  /// Maximum text content size in bytes.
   final int maxTextBytes;
 }
 
+/// Runtime policy for SAML request lifetime, redirects, and storage.
 final class AuthSamlOptions {
+  /// Creates SAML options with secure defaults.
   const AuthSamlOptions({
     this.requestTtl = const Duration(minutes: 5),
     this.clockSkew = const Duration(minutes: 1),
@@ -53,12 +72,25 @@ final class AuthSamlOptions {
     this.allowInMemoryStoreForTesting = false,
   });
 
+  /// Lifetime of a service-provider-initiated request.
   final Duration requestTtl;
+
+  /// Clock tolerance applied to SAML timestamps.
   final Duration clockSkew;
+
+  /// Maximum permitted assertion lifetime.
   final Duration maximumAssertionLifetime;
+
+  /// Message and metadata resource limits.
   final AuthSamlLimits limits;
+
+  /// Callback URI validation policy.
   final AuthSamlRedirectPolicy redirectPolicy;
+
+  /// IdP-initiated response policy.
   final AuthSamlIdpInitiatedPolicy idpInitiated;
+
+  /// Whether the test-only in-memory replay store is permitted.
   final bool allowInMemoryStoreForTesting;
 }
 
@@ -75,6 +107,11 @@ final class AuthSamlPlugin<TContext>
         AuthClientOperationContributor,
         AuthRateLimitContributor,
         AuthProductionPostureContributor {
+  /// Creates a SAML server plugin from application-owned trust and storage.
+  ///
+  /// Production deployments must provide an [AuthDurableSamlReplayStore]. The
+  /// in-memory store is accepted only when
+  /// [AuthSamlOptions.allowInMemoryStoreForTesting] is enabled.
   AuthSamlPlugin({
     required this.connections,
     required this.replayStore,
@@ -98,24 +135,39 @@ final class AuthSamlPlugin<TContext>
     }
   }
 
+  /// Catalog used to resolve configured SAML connections.
   final AuthSamlConnectionCatalog connections;
+
+  /// Atomic store used for request and assertion replay state.
   final AuthSamlReplayStore replayStore;
+
+  /// Application-owned verifier for the signed SAML response.
   final AuthSamlAssertionVerifier assertionVerifier;
+
+  /// Resolves or provisions the authenticated application user.
   final AuthSamlIdentityResolver<TContext> identityResolver;
+
+  /// Binds SAML requests to the initiating browser context.
   final AuthSamlBrowserBindingResolver<TContext> browserBindingResolver;
+
+  /// Runtime policy and resource limits.
   final AuthSamlOptions options;
   final DateTime Function() _clock;
 
+  /// The stable plugin identifier.
   @override
   String get id => authSamlPluginId;
 
+  /// SAML does not contribute a user persistence data contract.
   @override
   AuthServerPluginDataContract get dataContract =>
       const AuthServerPluginDataContract.none();
 
+  /// Configures the plugin in the server context.
   @override
   void configure(AuthServerPluginContext<TContext> context) {}
 
+  /// Verifies that the configured replay store is production-safe.
   @override
   void validateProductionPosture() {
     if (replayStore is! AuthDurableSamlReplayStore) {
@@ -123,6 +175,7 @@ final class AuthSamlPlugin<TContext>
     }
   }
 
+  /// Describes the metadata, sign-in, and assertion-consumer endpoints.
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints => [
     _endpoint(
@@ -588,6 +641,7 @@ final class AuthSamlPlugin<TContext>
     }
   }
 
+  /// Describes the client operations corresponding to SAML endpoints.
   @override
   Iterable<AuthClientOperationDescriptor> get clientOperations => endpoints.map(
     (endpoint) => AuthClientOperationDescriptor(
@@ -599,12 +653,14 @@ final class AuthSamlPlugin<TContext>
     ),
   );
 
+  /// Describes the rate-limit buckets used by SAML mutations.
   @override
   Iterable<AuthRateLimitOperation> get rateLimitOperations => const [
     AuthRateLimitOperation('saml', 'sign-in'),
     AuthRateLimitOperation('saml', 'acs'),
   ];
 
+  /// Describes the persistence schema and atomic SAML operations.
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
     AuthPersistenceSchema(

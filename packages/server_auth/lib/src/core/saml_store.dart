@@ -1,6 +1,8 @@
 import 'dart:async';
 
+/// Persisted state for one service-provider-initiated SAML request.
 final class AuthSamlAuthenticationAttempt {
+  /// Creates an authentication attempt with its replay and browser bindings.
   const AuthSamlAuthenticationAttempt({
     required this.providerId,
     required this.requestId,
@@ -11,32 +13,61 @@ final class AuthSamlAuthenticationAttempt {
     required this.expiresAt,
   });
 
+  /// The SAML provider associated with the request.
   final String providerId;
+
+  /// The request identifier sent in the SAML `InResponseTo` value.
   final String requestId;
+
+  /// A digest of the browser-visible `RelayState` value.
   final String relayStateHash;
+
+  /// A digest binding the request to the initiating browser context.
   final String browserBindingHash;
+
+  /// The callback to use after successful authentication.
   final Uri callback;
+
+  /// The time at which this attempt was created.
   final DateTime createdAt;
+
+  /// The time after which this attempt cannot be consumed.
   final DateTime expiresAt;
 }
 
+/// Reasons why a SAML response cannot consume its authentication attempt.
 enum AuthSamlConsumptionFailure {
+  /// The request was absent, expired, or did not match its bindings.
   requestNotFound,
+
+  /// The assertion identifier has already been consumed.
   assertionReplayed,
+
+  /// The bounded replay store cannot accept another receipt.
   capacityExceeded,
 }
 
+/// Result of atomically consuming SAML request and replay state.
 final class AuthSamlConsumptionResult {
+  /// Creates an accepted result containing [attempt].
   const AuthSamlConsumptionResult.accepted(this.attempt) : failure = null;
+
+  /// Creates a rejected result containing [failure].
   const AuthSamlConsumptionResult.rejected(this.failure) : attempt = null;
 
+  /// The consumed authentication attempt, or `null` when rejected.
   final AuthSamlAuthenticationAttempt? attempt;
+
+  /// The rejection reason, or `null` when accepted.
   final AuthSamlConsumptionFailure? failure;
+
+  /// Whether an authentication attempt was consumed successfully.
   bool get accepted => attempt != null;
 }
 
 /// Atomic multi-instance persistence boundary for SAML request and replay state.
 abstract interface class AuthSamlReplayStore {
+  /// Persists a new request and rejects duplicate request identifiers.
   FutureOr<void> createAttempt(AuthSamlAuthenticationAttempt attempt);
 
   /// Atomically consumes one request/RelayState tuple and records assertion ID.
@@ -65,15 +96,20 @@ abstract interface class AuthDurableSamlReplayStore
 
 /// Bounded local store for deterministic tests only.
 final class InMemoryAuthSamlReplayStore implements AuthSamlReplayStore {
+  /// Creates a store retaining at most [maxEntries] active records.
+  ///
+  /// Throws an [ArgumentError] when [maxEntries] is less than one.
   InMemoryAuthSamlReplayStore({this.maxEntries = 1024}) {
     if (maxEntries < 1) throw ArgumentError.value(maxEntries, 'maxEntries');
   }
 
+  /// Maximum number of active attempts or assertion receipts retained.
   final int maxEntries;
   final Map<String, AuthSamlAuthenticationAttempt> _attempts = {};
   final Map<String, DateTime> _assertions = {};
   Future<void> _tail = Future<void>.value();
 
+  /// Persists [attempt] after pruning expired state.
   @override
   Future<void> createAttempt(AuthSamlAuthenticationAttempt attempt) =>
       _atomic(() {
@@ -87,6 +123,7 @@ final class InMemoryAuthSamlReplayStore implements AuthSamlReplayStore {
         _attempts[attempt.requestId] = attempt;
       });
 
+  /// Atomically consumes a service-provider-initiated response.
   @override
   Future<AuthSamlConsumptionResult> consumeSpInitiated({
     required String providerId,
@@ -124,6 +161,7 @@ final class InMemoryAuthSamlReplayStore implements AuthSamlReplayStore {
     return AuthSamlConsumptionResult.accepted(attempt);
   });
 
+  /// Records an IdP-initiated assertion identifier once.
   @override
   Future<bool> consumeIdpInitiated({
     required String providerId,

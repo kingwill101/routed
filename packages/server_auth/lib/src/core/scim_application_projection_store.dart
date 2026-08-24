@@ -4,6 +4,7 @@ import 'scim_application_projection.dart';
 
 /// Bounded retention settings for the reference in-memory projection store.
 final class AuthScimApplicationProjectionStoreOptions {
+  /// Creates bounded receipt retention settings.
   AuthScimApplicationProjectionStoreOptions({
     this.maximumReceipts = 2048,
     this.receiptRetention = const Duration(days: 7),
@@ -17,14 +18,22 @@ final class AuthScimApplicationProjectionStoreOptions {
     }
   }
 
+  /// Maximum number of idempotency receipts retained.
   final int maximumReceipts;
+
+  /// Maximum age of an idempotency receipt.
   final Duration receiptRetention;
 }
 
 /// Deterministic fault points exposed by the in-memory reference adapter.
 enum AuthScimApplicationProjectionFaultPoint {
+  /// Fault injection point after a direct projection write.
   afterProjectionWrite,
+
+  /// Fault injection point during reconciliation.
   duringReconciliation,
+
+  /// Fault injection point during scope deletion.
   duringScopeDeletion,
 }
 
@@ -41,6 +50,7 @@ typedef AuthScimApplicationProjectionFaultInjector =
 /// `package:server_auth/testing.dart`.
 final class InMemoryAuthScimApplicationProjectionStore
     implements AuthScimApplicationProjectionStore {
+  /// Creates a serialized, rollback-capable reference store.
   InMemoryAuthScimApplicationProjectionStore({
     AuthScimApplicationProjectionStoreOptions? options,
     DateTime Function()? clock,
@@ -49,6 +59,7 @@ final class InMemoryAuthScimApplicationProjectionStore
        _clock = clock ?? DateTime.now,
        _faultInjector = faultInjector;
 
+  /// Retention settings used by this store.
   final AuthScimApplicationProjectionStoreOptions options;
   final DateTime Function() _clock;
   final AuthScimApplicationProjectionFaultInjector? _faultInjector;
@@ -68,6 +79,7 @@ final class InMemoryAuthScimApplicationProjectionStore
       <AuthScimApplicationProjectionScope>{};
   Future<void> _tail = Future<void>.value();
 
+  /// Applies one command atomically and records its idempotency receipt.
   @override
   Future<AuthScimApplicationProjectionResult> apply(
     AuthScimApplicationProjectionCommand command,
@@ -169,6 +181,7 @@ final class InMemoryAuthScimApplicationProjectionStore
     }
   });
 
+  /// Finds the current record for [subject], if it exists.
   @override
   Future<AuthScimApplicationProjectionRecord?> find(
     AuthScimApplicationProjectionSubject subject,
@@ -177,6 +190,7 @@ final class InMemoryAuthScimApplicationProjectionStore
     return _records[subject];
   });
 
+  /// Lists records in [query].
   @override
   Future<AuthScimApplicationProjectionPage> list(
     AuthScimApplicationProjectionQuery query,
@@ -194,6 +208,7 @@ final class InMemoryAuthScimApplicationProjectionStore
     );
   });
 
+  /// Compares projected state with authoritative state in [query].
   @override
   Future<AuthScimApplicationProjectionDriftPage> detectDrift(
     AuthScimApplicationProjectionDriftQuery query,
@@ -263,6 +278,7 @@ final class InMemoryAuthScimApplicationProjectionStore
     );
   });
 
+  /// Reconciles a complete authoritative snapshot atomically.
   @override
   Future<AuthScimApplicationReconciliationResult> reconcile(
     AuthScimApplicationReconciliationCommand command,
@@ -394,10 +410,12 @@ final class InMemoryAuthScimApplicationProjectionStore
     }
   });
 
+  /// Whether a deletion fence exists for [scope].
   @override
   Future<bool> isScopeDeleted(AuthScimApplicationProjectionScope scope) =>
       _atomic(() => _deletedScopes.contains(scope));
 
+  /// Deletes all records in [command.scope] and installs its fence.
   @override
   Future<AuthScimApplicationProjectionScopeDeletionResult> deleteScope(
     AuthScimApplicationProjectionScopeDeletionCommand command,
