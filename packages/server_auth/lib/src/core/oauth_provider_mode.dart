@@ -16,6 +16,7 @@ import 'store.dart';
 import 'tokens.dart' show hashOpaqueToken, secureRandomToken;
 import 'users.dart' show authUserIsDisabled;
 
+/// Stable identifier for [OAuthProviderModePlugin].
 const String authOAuthProviderModePluginId = 'oauth_provider_mode';
 
 /// Plugin that enables the application to act as an OAuth/OIDC provider.
@@ -38,6 +39,10 @@ final class OAuthProviderModePlugin<TContext>
         AuthUserAccessRevocationContributor,
         AuthProductionPostureContributor,
         AuthOAuthTokenEndpointHost<TContext> {
+  /// Creates an OAuth/OIDC provider plugin.
+  ///
+  /// [clientStore] and [authorizationCodeExchangeStore] must belong to the
+  /// same persistence domain when the plugin is used with durable storage.
   OAuthProviderModePlugin({
     required this.clientStore,
     required this.authorizationCodeExchangeStore,
@@ -194,6 +199,10 @@ final class OAuthProviderModePlugin<TContext>
   }
 
   @override
+  /// Registers an application-owned token grant handler for [grantType].
+  ///
+  /// The normalized grant type must be non-empty and may be registered only
+  /// once. The handler is invoked by the token endpoint for that grant.
   void registerOAuthTokenGrant(
     String grantType,
     AuthOAuthTokenGrantHandler<TContext> handler,

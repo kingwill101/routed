@@ -30,13 +30,22 @@ typedef AuthSessionCallback<TContext> =
 
 /// Container for auth callbacks.
 class AuthCallbacks<TContext> {
+  /// Creates a callback collection.
   const AuthCallbacks({this.signIn, this.redirect, this.jwt, this.session});
 
+  /// Callback evaluated before a sign-in completes.
   final AuthSignInCallback<TContext>? signIn;
+
+  /// Callback used to resolve a redirect target.
   final AuthRedirectCallback<TContext>? redirect;
+
+  /// Callback used to customize issued JWT claims.
   final AuthJwtCallback<TContext>? jwt;
+
+  /// Callback used to customize the session response payload.
   final AuthSessionCallback<TContext>? session;
 
+  /// Whether no callbacks are configured.
   bool get isEmpty =>
       signIn == null && redirect == null && jwt == null && session == null;
 }
@@ -70,7 +79,7 @@ Future<String?> resolveAuthSignInRedirectOrThrow<TContext>({
   return decision.redirectUrl;
 }
 
-/// Resolves sign-in callback using [callbacks.signIn], returning redirect when
+/// Resolves sign-in callback using [AuthCallbacks.signIn], returning redirect when
 /// allowed and throwing [AuthFlowException] when denied.
 Future<String?> resolveAuthSignInRedirectWithCallbacks<TContext>({
   required AuthCallbacks<TContext> callbacks,
@@ -185,7 +194,7 @@ Future<String?> resolveAuthRedirectTargetWithFallback<TContext>({
   return resolved ?? fallbackUrl;
 }
 
-/// Resolves redirect URL through [callbacks.redirect] with pass-through
+/// Resolves redirect URL through [AuthCallbacks.redirect] with pass-through
 /// fallback behavior.
 Future<String?> resolveAuthRedirectWithCallbacks<TContext>({
   required AuthCallbacks<TContext> callbacks,
@@ -209,7 +218,7 @@ Future<String?> resolveAuthRedirectWithCallbacks<TContext>({
   );
 }
 
-/// Resolves JWT claims through [callbacks.jwt] using standard auth context.
+/// Resolves JWT claims through [AuthCallbacks.jwt] using standard auth context.
 Future<Map<String, dynamic>> resolveAuthJwtClaimsWithCallbacks<TContext>({
   required AuthCallbacks<TContext> callbacks,
   required TContext context,
@@ -241,7 +250,7 @@ Future<Map<String, dynamic>> resolveAuthJwtClaimsWithCallbacks<TContext>({
   return <String, dynamic>{...resolved, ...?protectedClaims};
 }
 
-/// Resolves session payload through [callbacks.session] using standard auth
+/// Resolves session payload through [AuthCallbacks.session] using standard auth
 /// session callback context.
 Future<Map<String, dynamic>> resolveAuthSessionPayloadWithCallbacks<TContext>({
   required AuthCallbacks<TContext> callbacks,
@@ -267,22 +276,32 @@ Future<Map<String, dynamic>> resolveAuthSessionPayloadWithCallbacks<TContext>({
 
 /// Result of issuing a JWT session with callbacks.
 class AuthJwtSessionIssue {
+  /// Creates a JWT session issue result.
   const AuthJwtSessionIssue({
     required this.claims,
     required this.issued,
     required this.session,
   });
 
+  /// Claims supplied to the JWT issuer after callback processing.
   final Map<String, dynamic> claims;
+
+  /// Token and cookie produced by the JWT issuer.
   final AuthIssuedJwtToken issued;
+
+  /// Session representation associated with [issued].
   final AuthSession session;
 }
 
 /// Result of resolving a sign-in response for a session strategy.
 class AuthResolvedSignInResult {
+  /// Creates a resolved sign-in result.
   const AuthResolvedSignInResult({required this.result, this.issuedJwt});
 
+  /// User and session result returned to the caller.
   final AuthResult result;
+
+  /// JWT issuance details when the selected strategy is JWT.
   final AuthIssuedJwtToken? issuedJwt;
 }
 
@@ -395,16 +414,22 @@ resolveAuthSignInResultForStrategyWithCallbacks<TContext>({
 
 /// Result of a sign-in callback decision.
 class AuthSignInResult {
+  /// Allows sign-in and optionally supplies a redirect URL.
   const AuthSignInResult.allow({this.redirectUrl}) : allowed = true;
 
+  /// Denies sign-in without a redirect URL.
   const AuthSignInResult.deny() : allowed = false, redirectUrl = null;
 
+  /// Whether the sign-in may continue.
   final bool allowed;
+
+  /// Optional redirect selected by the callback.
   final String? redirectUrl;
 }
 
 /// Context passed to sign-in callbacks.
 class AuthSignInCallbackContext<TContext> {
+  /// Creates the context supplied to a sign-in callback.
   AuthSignInCallbackContext({
     required this.context,
     required this.user,
@@ -417,19 +442,37 @@ class AuthSignInCallbackContext<TContext> {
     this.callbackUrl,
   });
 
+  /// Framework-specific callback context.
   final TContext context;
+
+  /// User attempting to sign in.
   final AuthUser user;
+
+  /// Session strategy selected for the sign-in.
   final AuthSessionStrategy strategy;
+
+  /// Provider used to authenticate the user, when applicable.
   final AuthProvider? provider;
+
+  /// Linked account used by the provider, when applicable.
   final AuthAccount? account;
+
+  /// Provider profile received during authentication.
   final Map<String, dynamic>? profile;
+
+  /// Credentials supplied by the authentication flow, when applicable.
   final AuthCredentials? credentials;
+
+  /// Whether this sign-in created the user.
   final bool isNewUser;
+
+  /// Redirect requested by the caller, when one was supplied.
   final String? callbackUrl;
 }
 
 /// Context passed to redirect callbacks.
 class AuthRedirectCallbackContext<TContext> {
+  /// Creates the context supplied to a redirect callback.
   AuthRedirectCallbackContext({
     required this.context,
     required this.url,
@@ -437,14 +480,22 @@ class AuthRedirectCallbackContext<TContext> {
     this.provider,
   });
 
+  /// Framework-specific callback context.
   final TContext context;
+
+  /// Candidate redirect URL.
   final String url;
+
+  /// Application base URL used to resolve redirects.
   final String baseUrl;
+
+  /// Provider associated with the flow, when applicable.
   final AuthProvider? provider;
 }
 
 /// Context passed to JWT callbacks.
 class AuthJwtCallbackContext<TContext> {
+  /// Creates the context supplied to a JWT callback.
   AuthJwtCallbackContext({
     required this.context,
     required this.token,
@@ -456,18 +507,34 @@ class AuthJwtCallbackContext<TContext> {
     this.isNewUser = false,
   });
 
+  /// Framework-specific callback context.
   final TContext context;
+
+  /// Mutable claims being customized by the callback.
   final Map<String, dynamic> token;
+
+  /// User represented by the token.
   final AuthUser user;
+
+  /// Session strategy that caused the token to be issued.
   final AuthSessionStrategy strategy;
+
+  /// Provider used to authenticate the user, when applicable.
   final AuthProvider? provider;
+
+  /// Linked account used by the provider, when applicable.
   final AuthAccount? account;
+
+  /// Provider profile received during authentication.
   final Map<String, dynamic>? profile;
+
+  /// Whether this sign-in created the user.
   final bool isNewUser;
 }
 
 /// Context passed to session callbacks.
 class AuthSessionCallbackContext<TContext> {
+  /// Creates the context supplied to a session callback.
   AuthSessionCallbackContext({
     required this.context,
     required this.session,
@@ -477,10 +544,21 @@ class AuthSessionCallbackContext<TContext> {
     this.provider,
   });
 
+  /// Framework-specific callback context.
   final TContext context;
+
+  /// Session being serialized for the response.
   final AuthSession session;
+
+  /// Mutable payload being customized by the callback.
   final Map<String, dynamic> payload;
+
+  /// User represented by the session.
   final AuthUser user;
+
+  /// Session strategy that produced the session.
   final AuthSessionStrategy strategy;
+
+  /// Provider used to authenticate the user, when applicable.
   final AuthProvider? provider;
 }

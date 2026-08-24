@@ -28,9 +28,13 @@ typedef AuthOAuthValidatedCallback<TContext> =
 
 /// Represents an exception that occurs during OAuth2 operations.
 class OAuth2Exception implements Exception {
+  /// Creates an OAuth2 exception with an optional HTTP [statusCode].
   OAuth2Exception(this.message, [this.statusCode]);
 
+  /// Human-readable description of the failure.
   final String message;
+
+  /// HTTP status returned by the remote endpoint, when available.
   final int? statusCode;
 
   @override
@@ -39,9 +43,13 @@ class OAuth2Exception implements Exception {
 
 /// Result of validating a bearer authorization header via introspection.
 class OAuthBearerValidationResult {
+  /// Creates a bearer-validation result.
   OAuthBearerValidationResult({required this.token, required this.result});
 
+  /// Bearer token extracted from the authorization header.
   final String token;
+
+  /// Introspection result associated with [token].
   final OAuthIntrospectionResult result;
 }
 
@@ -57,6 +65,7 @@ void writeOAuthValidationAttributes(
 
 /// Represents the response from an OAuth2 token endpoint.
 class OAuthTokenResponse {
+  /// Creates a token-endpoint response.
   OAuthTokenResponse({
     required this.accessToken,
     required this.tokenType,
@@ -66,6 +75,7 @@ class OAuthTokenResponse {
     required this.raw,
   });
 
+  /// Creates a token response from an OAuth token-endpoint payload.
   factory OAuthTokenResponse.fromJson(Map<String, dynamic> json) {
     return OAuthTokenResponse(
       accessToken: json['access_token'] as String? ?? '',
@@ -79,11 +89,22 @@ class OAuthTokenResponse {
     );
   }
 
+  /// Access token returned by the endpoint.
   final String accessToken;
+
+  /// Token type returned by the endpoint, usually `Bearer`.
   final String tokenType;
+
+  /// Access-token lifetime in seconds, when supplied.
   final int? expiresIn;
+
+  /// Refresh token returned by the endpoint, when supplied.
   final String? refreshToken;
+
+  /// Space-delimited scope returned by the endpoint, when supplied.
   final String? scope;
+
+  /// Original decoded response payload.
   final Map<String, dynamic> raw;
 }
 
@@ -137,15 +158,22 @@ validateOAuthBearerAuthorizationAndWriteAttributes<TContext>({
 
 /// Parsed response from an RFC 7662 token introspection endpoint.
 class OAuthIntrospectionResult {
+  /// Creates an introspection result from its active flag and raw claims.
   OAuthIntrospectionResult({required this.active, required this.raw});
 
+  /// Whether the introspection endpoint considers the token active.
   final bool active;
+
+  /// Decoded claims returned by the introspection endpoint.
   final Map<String, dynamic> raw;
 
+  /// Subject claim identifying the token owner, when present.
   String? get subject => raw['sub'] as String?;
 
+  /// Space-delimited scope claim, when present.
   String? get scope => raw['scope'] as String?;
 
+  /// Audience values normalized from the `aud` claim.
   List<String> get audience {
     final value = raw['aud'];
     if (value is String && value.trim().isNotEmpty) return [value.trim()];
@@ -159,6 +187,7 @@ class OAuthIntrospectionResult {
     return const <String>[];
   }
 
+  /// Expiration time decoded from the numeric `exp` claim.
   DateTime? get expiresAt {
     final exp = raw['exp'];
     if (exp is num) {
@@ -171,6 +200,7 @@ class OAuthIntrospectionResult {
     return null;
   }
 
+  /// Not-before time decoded from the numeric `nbf` claim.
   DateTime? get notBefore {
     final nbf = raw['nbf'];
     if (nbf is num) {
@@ -186,6 +216,7 @@ class OAuthIntrospectionResult {
 
 /// Options for RFC 7662 token introspection.
 class OAuthIntrospectionOptions {
+  /// Creates introspection options for [endpoint].
   const OAuthIntrospectionOptions({
     required this.endpoint,
     this.clientId,
@@ -199,10 +230,19 @@ class OAuthIntrospectionOptions {
     this.additionalParameters = const <String, String>{},
   });
 
+  /// Introspection endpoint that receives token checks.
   final Uri endpoint;
+
+  /// Client identifier used for endpoint authentication, when supplied.
   final String? clientId;
+
+  /// Client secret used for endpoint authentication, when supplied.
   final String? clientSecret;
+
+  /// Optional `token_type_hint` sent with each request.
   final String? tokenTypeHint;
+
+  /// Duration for which successful results remain cached.
   final Duration cacheTtl;
 
   /// Maximum number of distinct token digests retained by the local cache.
@@ -211,9 +251,17 @@ class OAuthIntrospectionOptions {
   /// bounded because callers can present an unlimited number of distinct
   /// bearer tokens. The oldest entry is evicted when this limit is reached.
   final int maxCacheEntries;
+
+  /// Clock tolerance applied to `exp` and `nbf` claims.
   final Duration clockSkew;
+
+  /// Maximum time allowed for an introspection request.
   final Duration requestTimeout;
+
+  /// Audience that every active token must contain, when configured.
   final String? requiredAudience;
+
+  /// Additional form parameters sent to the endpoint.
   final Map<String, String> additionalParameters;
 }
 
@@ -269,14 +317,20 @@ class _CachedIntrospection {
 
 /// Reusable RFC 7662 token introspection runtime with in-memory caching.
 class OAuth2TokenIntrospector {
+  /// Creates an introspector with [options] and an optional HTTP client.
   OAuth2TokenIntrospector(this.options, {http.Client? httpClient})
     : _httpClient = httpClient ?? http.Client();
 
+  /// Options controlling endpoint authentication, validation, and caching.
   final OAuthIntrospectionOptions options;
   final http.Client _httpClient;
   final Map<String, _CachedIntrospection> _cache =
       <String, _CachedIntrospection>{};
 
+  /// Sends [token] to the introspection endpoint and returns its claims.
+  ///
+  /// Successful results may be served from the configured in-memory cache.
+  /// Throws [OAuth2Exception] for non-success responses or malformed payloads.
   Future<OAuthIntrospectionResult> introspect(String token) async {
     final cacheKey = sha256.convert(utf8.encode(token)).toString();
     if (options.cacheTtl > Duration.zero) {
@@ -336,6 +390,10 @@ class OAuth2TokenIntrospector {
     return result;
   }
 
+  /// Introspects [token] and enforces its active, time, and audience claims.
+  ///
+  /// Throws [OAuth2Exception] when the token is inactive, outside its allowed
+  /// time window, or missing the configured audience.
   Future<OAuthIntrospectionResult> validate(String token) async {
     final result = await introspect(token);
     if (!result.active) {
@@ -366,6 +424,7 @@ class OAuth2TokenIntrospector {
 
 /// Generic OAuth2 client for token exchange and userinfo requests.
 class OAuth2Client {
+  /// Creates an OAuth2 client for [tokenEndpoint].
   OAuth2Client({
     required this.tokenEndpoint,
     this.clientId,
@@ -376,14 +435,29 @@ class OAuth2Client {
     http.Client? httpClient,
   }) : _httpClient = httpClient ?? http.Client();
 
+  /// Token endpoint used by grant and refresh operations.
   final Uri tokenEndpoint;
+
+  /// OAuth client identifier, when supplied.
   final String? clientId;
+
+  /// OAuth client secret, when supplied.
   final String? clientSecret;
+
+  /// Headers merged into requests sent by this client.
   final Map<String, String> defaultHeaders;
+
+  /// Whether client credentials are sent using HTTP Basic authentication.
   final bool useBasicAuth;
+
+  /// Maximum time allowed for each HTTP request.
   final Duration requestTimeout;
   final http.Client _httpClient;
 
+  /// Exchanges an authorization [code] for an access token.
+  ///
+  /// Includes [redirectUri] and the optional PKCE [codeVerifier], [scope], and
+  /// [additionalParameters] in the token request.
   Future<OAuthTokenResponse> exchangeAuthorizationCode({
     required String code,
     required Uri redirectUri,
@@ -403,6 +477,7 @@ class OAuth2Client {
     return _sendTokenRequest(body);
   }
 
+  /// Requests an access token using the client-credentials grant.
   Future<OAuthTokenResponse> clientCredentials({
     String? scope,
     Map<String, String>? additionalParameters,
@@ -416,6 +491,7 @@ class OAuth2Client {
     return _sendTokenRequest(body);
   }
 
+  /// Exchanges [refreshToken] for a new access token.
   Future<OAuthTokenResponse> refreshToken({
     required String refreshToken,
     String? scope,
@@ -494,6 +570,7 @@ class OAuth2Client {
     }
   }
 
+  /// Fetches and decodes a JSON user-info response using [accessToken].
   Future<Map<String, dynamic>> fetchUserInfo(
     Uri endpoint,
     String accessToken,

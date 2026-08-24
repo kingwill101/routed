@@ -4,10 +4,12 @@ import 'exceptions.dart';
 import 'plugin.dart';
 import 'rate_limit.dart';
 
+/// Stable identifier for [McpAuthPlugin].
 const String authMcpPluginId = 'mcp_auth';
 
 /// RFC 9728 protected-resource metadata for an MCP HTTP server.
 final class AuthOAuthProtectedResourceMetadata {
+  /// Creates protected-resource metadata for an MCP resource.
   const AuthOAuthProtectedResourceMetadata({
     required this.resource,
     required this.authorizationServers,
@@ -17,13 +19,25 @@ final class AuthOAuthProtectedResourceMetadata {
     this.bearerMethodsSupported = const ['header'],
   });
 
+  /// Absolute URI of the protected resource.
   final Uri resource;
+
+  /// Authorization servers that can issue tokens for [resource].
   final List<Uri> authorizationServers;
+
+  /// Human-readable resource name, when supplied.
   final String? resourceName;
+
+  /// Documentation URI for the protected resource, when supplied.
   final Uri? resourceDocumentation;
+
+  /// OAuth scopes understood by the protected resource.
   final List<String> scopesSupported;
+
+  /// HTTP bearer transport methods accepted by the resource.
   final List<String> bearerMethodsSupported;
 
+  /// Serializes this metadata using RFC 9728 field names.
   Map<String, dynamic> toJson() => <String, dynamic>{
     'resource': resource.toString(),
     'authorization_servers': authorizationServers
@@ -40,6 +54,7 @@ final class AuthOAuthProtectedResourceMetadata {
 
 /// RFC 8414 authorization-server metadata advertised to MCP clients.
 final class AuthOAuthAuthorizationServerMetadata {
+  /// Creates authorization-server metadata for an MCP authorization server.
   const AuthOAuthAuthorizationServerMetadata({
     required this.issuer,
     required this.authorizationEndpoint,
@@ -53,17 +68,37 @@ final class AuthOAuthAuthorizationServerMetadata {
     this.codeChallengeMethodsSupported = const ['S256'],
   });
 
+  /// Issuer URI for the authorization server.
   final Uri issuer;
+
+  /// Endpoint that starts authorization-code flows.
   final Uri authorizationEndpoint;
+
+  /// Endpoint that exchanges grants for tokens.
   final Uri tokenEndpoint;
+
+  /// JWKS endpoint, when the server signs tokens with published keys.
   final Uri? jwksUri;
+
+  /// Token-introspection endpoint, when supported.
   final Uri? introspectionEndpoint;
+
+  /// Dynamic-client-registration endpoint, when supported.
   final Uri? registrationEndpoint;
+
+  /// OAuth scopes supported by the authorization server.
   final List<String> scopesSupported;
+
+  /// OAuth grant types supported by the authorization server.
   final List<String> grantTypesSupported;
+
+  /// OAuth response types supported by the authorization server.
   final List<String> responseTypesSupported;
+
+  /// PKCE code-challenge methods supported by the authorization server.
   final List<String> codeChallengeMethodsSupported;
 
+  /// Serializes this metadata using RFC 8414 field names.
   Map<String, dynamic> toJson() => <String, dynamic>{
     'issuer': issuer.toString(),
     'authorization_endpoint': authorizationEndpoint.toString(),
@@ -89,6 +124,7 @@ final class AuthOAuthAuthorizationServerMetadata {
 /// allocation, and any secret generation. The framework only validates the
 /// protocol shape and redirect URI security boundary.
 final class AuthOAuthClientRegistrationRequest {
+  /// Creates a validated dynamic-client-registration request.
   const AuthOAuthClientRegistrationRequest({
     required this.clientName,
     required this.redirectUris,
@@ -100,18 +136,34 @@ final class AuthOAuthClientRegistrationRequest {
     this.softwareId,
   });
 
+  /// Display name requested for the client.
   final String clientName;
+
+  /// Redirect URIs authorized for the client.
   final List<Uri> redirectUris;
+
+  /// OAuth grant types requested by the client.
   final List<String> grantTypes;
+
+  /// OAuth response types requested by the client.
   final List<String> responseTypes;
+
+  /// Token-endpoint authentication method requested by the client.
   final String tokenEndpointAuthMethod;
+
+  /// Space-delimited scope requested by the client, when supplied.
   final String? scope;
+
+  /// Client information URI, when supplied.
   final Uri? clientUri;
+
+  /// Software identifier supplied by the client, when supplied.
   final String? softwareId;
 }
 
 /// The application-owned result of registering an OAuth client.
 final class AuthOAuthClientRegistration {
+  /// Creates a client-registration result returned by the application.
   const AuthOAuthClientRegistration({
     required this.clientId,
     required this.redirectUris,
@@ -122,14 +174,28 @@ final class AuthOAuthClientRegistration {
     this.clientName,
   });
 
+  /// Identifier assigned to the registered client.
   final String clientId;
+
+  /// Secret assigned to the client, when the registration requires one.
   final String? clientSecret;
+
+  /// Display name recorded for the client, when available.
   final String? clientName;
+
+  /// Redirect URIs authorized for the client.
   final List<Uri> redirectUris;
+
+  /// OAuth grant types enabled for the client.
   final List<String> grantTypes;
+
+  /// OAuth response types enabled for the client.
   final List<String> responseTypes;
+
+  /// Token-endpoint authentication method enabled for the client.
   final String tokenEndpointAuthMethod;
 
+  /// Serializes this registration using OAuth client metadata field names.
   Map<String, dynamic> toJson() => <String, dynamic>{
     'client_id': clientId,
     if (clientSecret != null) 'client_secret': clientSecret,
@@ -157,6 +223,10 @@ final class McpAuthPlugin<TContext>
         AuthEndpointContributor<TContext>,
         AuthClientOperationContributor,
         AuthRateLimitContributor {
+  /// Creates an MCP metadata plugin.
+  ///
+  /// When [registerClient] is supplied, the plugin also exposes the dynamic
+  /// client-registration endpoint.
   McpAuthPlugin({
     required AuthOAuthProtectedResourceMetadata protectedResource,
     required AuthOAuthAuthorizationServerMetadata authorizationServer,
@@ -165,7 +235,10 @@ final class McpAuthPlugin<TContext>
        authorizationServer = _validatedAuthorizationServer(authorizationServer),
        _registerClient = registerClient;
 
+  /// Metadata advertised for the protected MCP resource.
   final AuthOAuthProtectedResourceMetadata protectedResource;
+
+  /// Metadata advertised for the OAuth authorization server.
   final AuthOAuthAuthorizationServerMetadata authorizationServer;
   final AuthOAuthClientRegistrar<TContext>? _registerClient;
 
