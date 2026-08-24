@@ -14,18 +14,27 @@ import 'rate_limit.dart';
 import 'tokens.dart' show base64UrlNoPadding, secureRandomToken;
 import 'users.dart' show authUserIsDisabled;
 
+/// Stable identifier for the phone-number plugin.
 const String authPhoneNumberPluginId = 'phone_number';
+
+/// Authentication-method identifier recorded for verified phone sign-ins.
 const String authPhoneNumberAuthenticationMethod = 'phone_number';
 
+/// Rate-limit operation for sending phone verification codes.
 const AuthRateLimitOperation authPhoneNumberSendRateLimitOperation =
     AuthRateLimitOperation(authPhoneNumberPluginId, 'send_code');
+
+/// Rate-limit operation for verifying phone verification codes.
 const AuthRateLimitOperation authPhoneNumberVerifyRateLimitOperation =
     AuthRateLimitOperation(authPhoneNumberPluginId, 'verify_code');
+
+/// Rate-limit operation for removing a verified phone identity.
 const AuthRateLimitOperation authPhoneNumberRemovalRateLimitOperation =
     AuthRateLimitOperation(authPhoneNumberPluginId, 'remove');
 
 /// Normalizes application input into a canonical phone number or rejects it.
 abstract interface class AuthPhoneNumberPolicy {
+  /// Normalizes [input], or returns `null` when it is not accepted.
   String? normalize(String input);
 }
 
@@ -36,6 +45,7 @@ abstract interface class AuthPhoneNumberPolicy {
 /// national numbers, Unicode digits, extensions, and embedded whitespace are
 /// rejected rather than interpreted ambiguously.
 final class AuthE164PhoneNumberPolicy implements AuthPhoneNumberPolicy {
+  /// Creates a policy that accepts strict E.164 values.
   const AuthE164PhoneNumberPolicy();
 
   static final RegExp _pattern = RegExp(r'^\+[1-9][0-9]{1,14}$');
@@ -47,6 +57,7 @@ final class AuthE164PhoneNumberPolicy implements AuthPhoneNumberPolicy {
   }
 }
 
+/// Delivers a newly generated phone verification code.
 typedef AuthPhoneNumberCodeSender<TContext> =
     FutureOr<void> Function(AuthPhoneNumberCodeDelivery<TContext> delivery);
 
@@ -62,6 +73,7 @@ typedef AuthPhoneNumberUserFactory<TContext> =
       String? name,
     );
 
+/// Notifies the application after a phone identity is committed.
 typedef AuthPhoneNumberVerifiedCallback<TContext> =
     FutureOr<void> Function(
       TContext context,
@@ -75,6 +87,7 @@ typedef AuthPhoneNumberVerifiedCallback<TContext> =
 /// Serverless implementations can schedule durable background work through
 /// [context] and return once that work has been accepted.
 final class AuthPhoneNumberCodeDelivery<TContext> {
+  /// Creates a delivery request containing the raw verification code.
   const AuthPhoneNumberCodeDelivery({
     required this.context,
     required this.phoneNumber,
@@ -82,65 +95,97 @@ final class AuthPhoneNumberCodeDelivery<TContext> {
     required this.expiresAt,
   });
 
+  /// Application context associated with the request.
   final TContext context;
+
+  /// Canonical phone number receiving the code.
   final String phoneNumber;
+
+  /// Raw code to deliver through the trusted channel.
   final String code;
+
+  /// Time at which the code expires.
   final DateTime expiresAt;
 }
 
+/// Result returned after a phone verification code is issued.
 final class AuthPhoneNumberCodeIssued {
+  /// Creates a response for an issued verification code.
   const AuthPhoneNumberCodeIssued({required this.expiresAt});
 
+  /// Time at which the code expires.
   final DateTime expiresAt;
 }
 
+/// Result returned after a phone verification code authenticates a user.
 final class AuthPhoneNumberSignInResult {
+  /// Creates a successful phone-number sign-in result.
   const AuthPhoneNumberSignInResult({
     required this.phoneNumber,
     required this.user,
   });
 
+  /// Canonical phone number that was verified.
   final String phoneNumber;
+
+  /// User authenticated by the verified phone number.
   final AuthUser user;
 }
 
+/// JSON request for sending a phone verification code.
 final class AuthPhoneNumberSendCodeRequest {
+  /// Creates a phone-code request for [phoneNumber].
   const AuthPhoneNumberSendCodeRequest({required this.phoneNumber});
 
+  /// Phone number supplied by the caller.
   final String phoneNumber;
 
+  /// Decodes a phone-code request from JSON.
   factory AuthPhoneNumberSendCodeRequest.fromJson(Map<String, dynamic> json) =>
       AuthPhoneNumberSendCodeRequest(
         phoneNumber: _requiredString(json, 'phoneNumber'),
       );
 
+  /// Encodes this request as JSON.
   Map<String, dynamic> toJson() => <String, dynamic>{
     'phoneNumber': phoneNumber,
   };
 }
 
+/// JSON response returned after sending a phone verification code.
 final class AuthPhoneNumberSendCodeResponse {
+  /// Creates a response with the code expiry time.
   const AuthPhoneNumberSendCodeResponse({required this.expiresAt});
 
+  /// Time at which the sent code expires.
   final DateTime expiresAt;
 
+  /// Encodes this response as JSON.
   Map<String, dynamic> toJson() => <String, dynamic>{
     'status': 'verification_sent',
     'expiresAt': expiresAt.toUtc().toIso8601String(),
   };
 }
 
+/// JSON request for verifying a phone verification code.
 final class AuthPhoneNumberVerifyRequest {
+  /// Creates a phone-code verification request.
   const AuthPhoneNumberVerifyRequest({
     required this.phoneNumber,
     required this.code,
     this.name,
   });
 
+  /// Phone number associated with the code.
   final String phoneNumber;
+
+  /// Raw verification code supplied by the caller.
   final String code;
+
+  /// Optional display name for a newly created user.
   final String? name;
 
+  /// Decodes a verification request from JSON.
   factory AuthPhoneNumberVerifyRequest.fromJson(Map<String, dynamic> json) =>
       AuthPhoneNumberVerifyRequest(
         phoneNumber: _requiredString(json, 'phoneNumber'),
@@ -148,6 +193,7 @@ final class AuthPhoneNumberVerifyRequest {
         name: _optionalString(json, 'name'),
       );
 
+  /// Encodes this request as JSON.
   Map<String, dynamic> toJson() => <String, dynamic>{
     'phoneNumber': phoneNumber,
     'code': code,
@@ -155,15 +201,21 @@ final class AuthPhoneNumberVerifyRequest {
   };
 }
 
+/// JSON response returned after successful phone verification.
 final class AuthPhoneNumberVerifyResponse {
+  /// Creates a successful phone verification response.
   const AuthPhoneNumberVerifyResponse({
     required this.phoneNumber,
     required this.user,
   });
 
+  /// Canonical phone number that was verified.
   final String phoneNumber;
+
+  /// User authenticated by the verified phone number.
   final AuthUser user;
 
+  /// Converts this response into the common authentication intent.
   AuthEndpointAuthenticationIntent toAuthenticationIntent() =>
       AuthEndpointAuthenticationIntent(
         user: user,
@@ -186,6 +238,7 @@ final class PhoneNumberPlugin<TContext>
         AuthAuthenticationMethodInventoryContributor,
         AuthAuthenticationMethodInventoryBinding,
         AuthUserDeletionPlanContributor {
+  /// Creates a phone-number plugin with an application-owned code sender.
   PhoneNumberPlugin({
     required this.sendCode,
     required String codeHashKey,
@@ -220,13 +273,28 @@ final class PhoneNumberPlugin<TContext>
     }
   }
 
+  /// Callback that delivers each generated verification code.
   final AuthPhoneNumberCodeSender<TContext> sendCode;
+
+  /// Policy used to normalize and validate phone input.
   final AuthPhoneNumberPolicy phoneNumberPolicy;
+
+  /// Number of decimal digits in generated verification codes.
   final int codeLength;
+
+  /// Duration for which an issued code remains valid.
   final Duration expiresIn;
+
+  /// Maximum failed attempts allowed for one code.
   final int allowedAttempts;
+
+  /// Whether an unknown phone number may create a user.
   final bool allowSignUp;
+
+  /// Builds a candidate user when sign-up is enabled.
   final AuthPhoneNumberUserFactory<TContext>? createUser;
+
+  /// Callback invoked after the phone identity is committed.
   final AuthPhoneNumberVerifiedCallback<TContext>? onVerified;
   final List<int> _codeHashKey;
   final String Function(int length) _generateCode;
@@ -555,6 +623,7 @@ final class PhoneNumberPlugin<TContext>
     ),
   ];
 
+  /// Issues a verification code and delivers it through [sendCode].
   Future<AuthPhoneNumberCodeIssued> issueCode({
     required TContext context,
     required String phoneNumber,
@@ -592,6 +661,7 @@ final class PhoneNumberPlugin<TContext>
     return AuthPhoneNumberCodeIssued(expiresAt: verification.expiresAt);
   }
 
+  /// Verifies a code and returns the authenticated user.
   Future<AuthPhoneNumberSignInResult> verifyCode({
     required TContext context,
     required String phoneNumber,

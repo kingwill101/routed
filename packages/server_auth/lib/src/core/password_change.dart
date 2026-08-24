@@ -10,14 +10,20 @@ import 'users.dart' show normalizeAuthEmail;
 
 /// Result of successfully changing a user's password.
 class AuthPasswordChangeResult {
+  /// Creates the result of a password change transaction.
   const AuthPasswordChangeResult({
     required this.user,
     required this.credentialsUpdated,
     required this.sessionsRevoked,
   });
 
+  /// The user whose password was changed.
   final AuthUser user;
+
+  /// Number of credential records updated by the store.
   final int credentialsUpdated;
+
+  /// Number of active sessions revoked by the store.
   final int sessionsRevoked;
 }
 

@@ -9,8 +9,10 @@ import 'rate_limit.dart';
 import 'tokens.dart'
     show constantTimeStringEquals, hashOpaqueToken, secureRandomToken;
 
+/// Stable identifier for the API-key plugin.
 const String authApiKeyPluginId = 'api_key';
 
+/// Generates a token component with the requested length.
 typedef AuthApiKeyTokenGenerator = String Function({int length});
 
 /// The persisted representation of an API key.
@@ -19,6 +21,7 @@ typedef AuthApiKeyTokenGenerator = String Function({int length});
 /// persisted and is only returned by [AuthApiKeyIssued] at creation or
 /// rotation time.
 final class AuthApiKeyRecord {
+  /// Creates a persisted API-key record.
   AuthApiKeyRecord({
     required this.id,
     required this.userId,
@@ -33,24 +36,47 @@ final class AuthApiKeyRecord {
     this.revokedAt,
   });
 
+  /// Stable identifier for this key.
   final String id;
+
+  /// Identifier of the owning user.
   final String userId;
+
+  /// Human-readable key name.
   final String name;
+
+  /// Non-secret prefix used to identify the key family.
   final String keyPrefix;
+
+  /// Digest of the raw key used during authentication.
   final String secretHash;
+
+  /// Scopes granted to this key.
   final List<String> scopes;
+
+  /// Time at which the key was created.
   final DateTime createdAt;
+
+  /// Time at which the record was last changed.
   final DateTime updatedAt;
+
+  /// Time after which the key is inactive, if configured.
   final DateTime? expiresAt;
+
+  /// Time at which the key was last used, if known.
   final DateTime? lastUsedAt;
+
+  /// Time at which the key was revoked, if revoked.
   final DateTime? revokedAt;
 
+  /// Returns whether the key is usable at [now].
   bool isActive({DateTime? now}) {
     final current = (now ?? DateTime.now()).toUtc();
     return revokedAt == null &&
         (expiresAt == null || current.isBefore(expiresAt!.toUtc()));
   }
 
+  /// Returns a copy with selected record fields replaced.
   AuthApiKeyRecord copyWith({
     String? id,
     String? userId,
@@ -84,7 +110,7 @@ final class AuthApiKeyRecord {
 
   /// Serializes persistence fields, including the non-reversible secret hash.
   ///
-  /// This method is for storage adapters only. Use [toJson] for public
+  /// This method is for storage adapters only. Use [AuthApiKey.toJson] for public
   /// responses.
   Map<String, dynamic> toStorageJson() => {
     'id': id,
@@ -118,6 +144,7 @@ final class AuthApiKeyRecord {
 
 /// Public API-key metadata. It never contains the secret or its hash.
 final class AuthApiKey {
+  /// Creates a public API-key projection.
   const AuthApiKey({
     required this.id,
     required this.userId,
@@ -132,18 +159,40 @@ final class AuthApiKey {
     this.revokedAt,
   });
 
+  /// Stable identifier for this key.
   final String id;
+
+  /// Identifier of the owning user.
   final String userId;
+
+  /// Human-readable key name.
   final String name;
+
+  /// Non-secret prefix used to identify the key family.
   final String keyPrefix;
+
+  /// Scopes granted to this key.
   final List<String> scopes;
+
+  /// Time at which the key was created.
   final DateTime createdAt;
+
+  /// Time at which the record was last changed.
   final DateTime updatedAt;
+
+  /// Time after which the key is inactive, if configured.
   final DateTime? expiresAt;
+
+  /// Time at which the key was last used, if known.
   final DateTime? lastUsedAt;
+
+  /// Time at which the key was revoked, if revoked.
   final DateTime? revokedAt;
+
+  /// Whether the key is currently usable.
   final bool active;
 
+  /// Serializes this public projection without exposing key material.
   Map<String, dynamic> toJson() => {
     'id': id,
     'userId': userId,
@@ -161,20 +210,28 @@ final class AuthApiKey {
 
 /// The only response that contains a raw API key.
 final class AuthApiKeyIssued {
+  /// Creates the one-time response containing [key].
   const AuthApiKeyIssued({required this.apiKey, required this.key});
 
+  /// Safe metadata for the issued key.
   final AuthApiKey apiKey;
+
+  /// Raw key shown to the caller once at issue or rotation time.
   final String key;
 
+  /// Serializes the metadata and one-time raw key.
   Map<String, dynamic> toJson() => {'apiKey': key, ...apiKey.toJson()};
 }
 
 /// Successful verification result returned to framework adapters.
 final class AuthApiKeyAuthentication {
+  /// Creates an authentication result for [record].
   const AuthApiKeyAuthentication(this.record);
 
+  /// Persisted key record associated with the authenticated request.
   final AuthApiKeyRecord record;
 
+  /// Scopes granted by [record].
   List<String> get scopes => record.scopes;
 
   /// Returns whether this key grants [scope]. A wildcard grants every scope.
@@ -189,8 +246,10 @@ abstract interface class AuthApiKeyStore {
   /// Creates a key. Implementations must enforce unique key IDs atomically.
   FutureOr<AuthApiKeyRecord> create(AuthApiKeyRecord record);
 
+  /// Finds a key by its stable identifier.
   FutureOr<AuthApiKeyRecord?> findById(String id);
 
+  /// Lists all keys owned by [userId].
   FutureOr<List<AuthApiKeyRecord>> listForUser(String userId);
 
   /// Touches an active key and returns the updated record atomically.
@@ -226,11 +285,13 @@ abstract interface class AuthApiKeyStore {
 
 /// Optional atomic capability for revoking all API keys owned by one user.
 abstract interface class AuthApiKeyUserAccessRevocationStore {
+  /// Revokes every active key owned by [userId].
   FutureOr<int> revokeAllForUser(String userId, {DateTime? revokedAt});
 }
 
 /// Complete input to an exact primary API-key revocation transaction.
 final class AuthApiKeyPrimaryRevocationCommand {
+  /// Creates an exact primary-key revocation command.
   AuthApiKeyPrimaryRevocationCommand({
     required this.userId,
     required this.keyId,
@@ -243,8 +304,13 @@ final class AuthApiKeyPrimaryRevocationCommand {
     }
   }
 
+  /// Identifier of the user who owns the key.
   final String userId;
+
+  /// Identifier of the key to revoke.
   final String keyId;
+
+  /// Timestamp to record for revocation.
   final DateTime revokedAt;
 
   /// Loads the bounded composed topology as evidence for the backend command.
@@ -259,6 +325,7 @@ final class AuthApiKeyPrimaryRevocationCommand {
 /// Stores that cannot join the complete authentication-method topology must
 /// return [AuthAuthenticationMethodMutationResult.atomicityUnavailable].
 abstract interface class AuthApiKeyPrimaryMutationStore {
+  /// Revokes a primary key only when another authentication method remains.
   FutureOr<AuthAuthenticationMethodMutationResult> revokePrimaryKeyIfSafe(
     AuthApiKeyPrimaryRevocationCommand command,
   );
@@ -270,6 +337,7 @@ final class InMemoryAuthApiKeyStore
         AuthApiKeyStore,
         AuthApiKeyUserAccessRevocationStore,
         AuthInMemoryUserDeletionStore {
+  /// Creates a bounded in-memory API-key store.
   InMemoryAuthApiKeyStore({this.maxRecords = 10000}) {
     if (maxRecords <= 0) {
       throw ArgumentError.value(
@@ -280,6 +348,7 @@ final class InMemoryAuthApiKeyStore
     }
   }
 
+  /// Maximum number of records retained before creation is rejected.
   final int maxRecords;
   final Map<String, AuthApiKeyRecord> _records = <String, AuthApiKeyRecord>{};
 
@@ -427,6 +496,7 @@ final class AuthApiKeyPlugin<TContext>
         AuthAuthenticationMethodInventoryControl,
         AuthUserDeletionPlanContributor,
         AuthUserAccessRevocationContributor {
+  /// Creates an API-key plugin backed by [store].
   AuthApiKeyPlugin({
     required this.store,
     this.keyPrefix = 'rka',
@@ -463,9 +533,16 @@ final class AuthApiKeyPlugin<TContext>
     }
   }
 
+  /// Persistence backend for issued API keys.
   final AuthApiKeyStore store;
+
+  /// Prefix used in raw key values and public key metadata.
   final String keyPrefix;
+
+  /// Lifetime applied when an issue request omits an expiry.
   final Duration defaultLifetime;
+
+  /// Maximum lifetime accepted for an issued key.
   final Duration maxLifetime;
 
   /// Whether Routed adapters should expose API-key-to-session exchange.
@@ -479,7 +556,11 @@ final class AuthApiKeyPlugin<TContext>
   /// Keep this false for narrowly scoped service credentials. Enable it only
   /// when the application accepts the key as a primary principal.
   final bool countsAsPrimaryAuthenticationMethod;
+
+  /// Generates non-secret key identifiers.
   final AuthApiKeyTokenGenerator keyIdGenerator;
+
+  /// Generates the raw secret component returned at issue time.
   final AuthApiKeyTokenGenerator secretGenerator;
   final DateTime Function() _clock;
   AuthSessionStrategy _sessionStrategy = AuthSessionStrategy.session;
@@ -636,6 +717,7 @@ final class AuthApiKeyPlugin<TContext>
     );
   }
 
+  /// Lists public metadata for keys owned by [userId].
   Future<List<AuthApiKey>> list(String userId) async {
     final current = _clock().toUtc();
     return (await store.listForUser(
@@ -643,6 +725,7 @@ final class AuthApiKeyPlugin<TContext>
     )).map((record) => record.toPublic(now: current)).toList(growable: false);
   }
 
+  /// Revokes the key [id] when it belongs to [userId].
   Future<AuthApiKey?> revoke(String userId, String id, {DateTime? now}) async {
     final current = (now ?? _clock()).toUtc();
     final normalizedUserId = _required(userId, 'userId');
@@ -1252,19 +1335,28 @@ const Map<String, Object?> _authSessionResponseSchema = <String, Object?>{
   },
 };
 
+/// Default rate-limit operation for API-key creation.
 const apiKeyCreateRateLimitOperation = AuthRateLimitOperation(
   'api_key',
   'create',
 );
+
+/// Default rate-limit operation for API-key listing.
 const apiKeyListRateLimitOperation = AuthRateLimitOperation('api_key', 'list');
+
+/// Default rate-limit operation for API-key revocation.
 const apiKeyRevokeRateLimitOperation = AuthRateLimitOperation(
   'api_key',
   'revoke',
 );
+
+/// Default rate-limit operation for API-key rotation.
 const apiKeyRotateRateLimitOperation = AuthRateLimitOperation(
   'api_key',
   'rotate',
 );
+
+/// Default rate-limit operation for API-key session exchange.
 const apiKeyExchangeRateLimitOperation = AuthRateLimitOperation(
   'api_key',
   'exchange',

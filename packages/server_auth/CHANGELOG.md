@@ -6,6 +6,8 @@
   anonymous-user APIs.
 - Complete public Dartdoc for the SAML and SCIM integration APIs.
 - Complete public Dartdoc for WebAuthn, FIDO metadata, and two-factor APIs.
+- Complete public Dartdoc for API-key, captcha, password, phone, and username
+  APIs.
 - Add the `reauthentication` rate-limit action and typed client method for
   refreshing a current session's sensitive-action proof.
 - Mirror only the short-lived OAuth state into the framework session when a

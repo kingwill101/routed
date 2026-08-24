@@ -7,8 +7,10 @@ import 'models.dart';
 /// `CaptchaPlugin`. The normal credentials client remains captcha-agnostic.
 final class AuthCaptchaClientPlugin
     implements AuthClientPlugin<AuthCaptchaClient> {
+  /// Creates the captcha client plugin for [provider].
   const AuthCaptchaClientPlugin({this.provider = 'credentials'});
 
+  /// Provider identifier sent with credential requests.
   final String provider;
 
   @override
@@ -24,11 +26,15 @@ final class AuthCaptchaClientPlugin
 
 /// Typed credential operations protected by one captcha token per request.
 final class AuthCaptchaClient {
+  /// Creates a captcha-aware client.
   AuthCaptchaClient(this._core, {this.provider = 'credentials'});
 
   final AuthClientCore _core;
+
+  /// Provider identifier sent with credential requests.
   final String provider;
 
+  /// Signs in with credentials and submits [captchaToken] for verification.
   Future<AuthSession> signIn({
     String? email,
     String? username,
@@ -44,6 +50,7 @@ final class AuthCaptchaClient {
     captchaToken: captchaToken,
   );
 
+  /// Registers credentials and submits [captchaToken] for verification.
   Future<AuthSession> register({
     String? email,
     String? username,

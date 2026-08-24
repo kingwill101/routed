@@ -7,6 +7,7 @@ import 'models.dart';
 /// Installs only the username-first API on an [AuthClient].
 final class AuthUsernameClientPlugin
     implements AuthClientPlugin<AuthUsernameClient> {
+  /// Creates the username client plugin.
   const AuthUsernameClientPlugin();
 
   @override
@@ -17,34 +18,49 @@ final class AuthUsernameClientPlugin
       AuthUsernameClient(transport: context.transport);
 }
 
+/// Client result returned after username authentication succeeds.
 final class AuthUsernameClientAuthentication {
+  /// Creates a username authentication result.
   const AuthUsernameClientAuthentication({
     required this.username,
     required this.session,
   });
 
+  /// Canonical username authenticated by the server.
   final String username;
+
+  /// Session returned by the server.
   final AuthSession session;
 }
 
+/// Client result returned after a username change.
 final class AuthUsernameClientChange {
+  /// Creates a username-change result.
   const AuthUsernameClientChange({
     required this.username,
     required this.user,
     required this.changed,
   });
 
+  /// Canonical username returned by the server.
   final String username;
+
+  /// User whose username was evaluated.
   final AuthUser user;
+
+  /// Whether the username changed rather than already matching.
   final bool changed;
 }
 
 /// Typed client for an explicitly installed username server plugin.
 final class AuthUsernameClient {
+  /// Creates a username client using [transport].
   const AuthUsernameClient({required this.transport});
 
+  /// Transport used for username requests.
   final AuthClientTransport transport;
 
+  /// Registers a username and password, optionally with an email address.
   Future<AuthUsernameClientAuthentication> register({
     required String username,
     required String password,
@@ -60,6 +76,7 @@ final class AuthUsernameClient {
     },
   );
 
+  /// Authenticates with a username or other supported identifier.
   Future<AuthUsernameClientAuthentication> signIn({
     required String identifier,
     required String password,
@@ -71,6 +88,7 @@ final class AuthUsernameClient {
         'captchaToken': ?captchaToken,
       });
 
+  /// Changes the username for the current authenticated user.
   Future<AuthUsernameClientChange> change({required String username}) async {
     final response = await transport.request(
       'POST',
@@ -94,6 +112,7 @@ final class AuthUsernameClient {
     );
   }
 
+  /// Removes the current user's username credential.
   Future<void> remove() async {
     final response = await transport.request(
       'POST',

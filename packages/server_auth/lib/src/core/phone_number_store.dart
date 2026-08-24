@@ -5,6 +5,7 @@ import 'models.dart';
 
 /// A verified E.164 phone number linked to one auth user.
 final class AuthPhoneNumberIdentity {
+  /// Creates a verified phone identity record.
   const AuthPhoneNumberIdentity({
     required this.phoneNumber,
     required this.userId,
@@ -12,11 +13,19 @@ final class AuthPhoneNumberIdentity {
     required this.verifiedAt,
   });
 
+  /// Canonical E.164 phone number.
   final String phoneNumber;
+
+  /// Identifier of the owning user.
   final String userId;
+
+  /// Time at which the identity was created.
   final DateTime createdAt;
+
+  /// Time at which the phone number was verified.
   final DateTime verifiedAt;
 
+  /// Returns the persistence representation of this identity.
   Map<String, dynamic> toStorageJson() => <String, dynamic>{
     'phone_number': phoneNumber,
     'user_id': userId,
@@ -30,6 +39,7 @@ final class AuthPhoneNumberIdentity {
 /// [codeDigest] is a keyed digest. A raw verification code must never cross
 /// the backend boundary or be persisted in an operation receipt.
 final class AuthPhoneNumberVerification {
+  /// Creates a persisted phone verification challenge.
   const AuthPhoneNumberVerification({
     required this.id,
     required this.phoneNumber,
@@ -42,22 +52,44 @@ final class AuthPhoneNumberVerification {
     this.consumedAt,
   });
 
+  /// Stable identifier for the challenge.
   final String id;
+
+  /// Canonical phone number being verified.
   final String phoneNumber;
+
+  /// Keyed digest of the verification code.
   final String codeDigest;
+
+  /// Time at which the challenge was created.
   final DateTime createdAt;
+
+  /// Time after which the challenge cannot be used.
   final DateTime expiresAt;
+
+  /// Maximum number of failed verification attempts.
   final int maxAttempts;
+
+  /// Number of failed attempts recorded so far.
   final int attempts;
+
+  /// Time at which verification became locked, if locked.
   final DateTime? lockedAt;
+
+  /// Time at which the challenge was consumed, if consumed.
   final DateTime? consumedAt;
 
+  /// Whether this challenge has been consumed.
   bool get isConsumed => consumedAt != null;
+
+  /// Whether this challenge cannot accept another attempt.
   bool get isLocked => lockedAt != null || attempts >= maxAttempts;
 
+  /// Returns whether this challenge is expired at [now].
   bool isExpired({DateTime? now}) =>
       !(now ?? DateTime.now()).toUtc().isBefore(expiresAt.toUtc());
 
+  /// Returns a copy with the supplied mutable state replaced.
   AuthPhoneNumberVerification copyWith({
     int? attempts,
     DateTime? lockedAt,
@@ -74,6 +106,7 @@ final class AuthPhoneNumberVerification {
     consumedAt: consumedAt ?? this.consumedAt,
   );
 
+  /// Returns the persistence representation of this challenge.
   Map<String, dynamic> toStorageJson() => <String, dynamic>{
     'id': id,
     'phone_number': phoneNumber,
@@ -87,14 +120,30 @@ final class AuthPhoneNumberVerification {
   };
 }
 
-enum AuthPhoneNumberIssueStatus { issued, replayed, replayMismatch }
+/// Outcomes of an atomic phone-code issue command.
+enum AuthPhoneNumberIssueStatus {
+  /// A new challenge was committed.
+  issued,
 
+  /// An identical issue command replayed an existing challenge.
+  replayed,
+
+  /// The command ID was reused with different challenge data.
+  replayMismatch,
+}
+
+/// Store result returned by an atomic phone-code issue command.
 final class AuthPhoneNumberIssueResult {
+  /// Creates the outcome of an issue command.
   const AuthPhoneNumberIssueResult(this.status, {this.verification});
 
+  /// Outcome of the issue operation.
   final AuthPhoneNumberIssueStatus status;
+
+  /// Challenge committed by the store, when available.
   final AuthPhoneNumberVerification? verification;
 
+  /// Whether the operation created or replayed a committed challenge.
   bool get committed =>
       status == AuthPhoneNumberIssueStatus.issued ||
       status == AuthPhoneNumberIssueStatus.replayed;
@@ -106,24 +155,42 @@ final class AuthPhoneNumberIssueResult {
 /// the ID for different state must return
 /// [AuthPhoneNumberIssueStatus.replayMismatch].
 final class AuthPhoneNumberIssueCodeCommand {
+  /// Creates a validated phone-code issue command.
   AuthPhoneNumberIssueCodeCommand({required this.verification}) {
     validateAuthPhoneNumberVerification(verification);
   }
 
+  /// Challenge to install atomically.
   final AuthPhoneNumberVerification verification;
 }
 
+/// Outcomes of an atomic phone-code verification command.
 enum AuthPhoneNumberVerifyStatus {
+  /// The code was accepted and the identity was committed.
   verified,
+
+  /// The supplied code did not match.
   invalid,
+
+  /// The challenge has expired.
   expired,
+
+  /// The challenge has exceeded its attempt limit.
   tooManyAttempts,
+
+  /// No user could be resolved for the verified phone number.
   userNotFound,
+
+  /// The resolved user cannot authenticate.
   userUnavailable,
+
+  /// The phone number is already bound to another user.
   conflict,
 }
 
+/// Store result returned by an atomic phone-code verification command.
 final class AuthPhoneNumberVerifyResult {
+  /// Creates the outcome of a phone-code verification command.
   const AuthPhoneNumberVerifyResult(
     this.status, {
     this.verification,
@@ -131,11 +198,19 @@ final class AuthPhoneNumberVerifyResult {
     this.user,
   });
 
+  /// Outcome of the verification operation.
   final AuthPhoneNumberVerifyStatus status;
+
+  /// Updated challenge, when the store can return it.
   final AuthPhoneNumberVerification? verification;
+
+  /// Identity committed by a successful verification.
   final AuthPhoneNumberIdentity? identity;
+
+  /// User resolved or created by a successful verification.
   final AuthUser? user;
 
+  /// Whether the operation committed the phone identity.
   bool get committed => status == AuthPhoneNumberVerifyStatus.verified;
 }
 
@@ -146,6 +221,7 @@ final class AuthPhoneNumberVerifyResult {
 /// creates that user, binds the phone, projects verified phone attributes, and
 /// consumes the challenge in one transaction. A null candidate fails closed.
 final class AuthPhoneNumberVerifyCodeCommand {
+  /// Creates a validated phone-code verification command.
   AuthPhoneNumberVerifyCodeCommand({
     required String phoneNumber,
     required String codeDigest,
@@ -158,9 +234,16 @@ final class AuthPhoneNumberVerifyCodeCommand {
     if (candidate != null) validateAuthPhoneNumberCandidateUser(candidate);
   }
 
+  /// Canonical phone number being verified.
   final String phoneNumber;
+
+  /// Keyed digest of the code supplied by the caller.
   final String codeDigest;
+
+  /// Time used for expiry and lockout decisions.
   final DateTime now;
+
+  /// Candidate user used only when the phone is not yet registered.
   final AuthUser? candidateUser;
 }
 
@@ -177,18 +260,22 @@ final class AuthPhoneNumberVerifyCodeCommand {
 /// intentionally happen after these commands commit and are not rolled back by
 /// this API.
 abstract interface class AuthPhoneNumberBackend {
+  /// Issues a challenge in the store-owned transaction.
   FutureOr<AuthPhoneNumberIssueResult> issuePhoneNumberCode(
     AuthPhoneNumberIssueCodeCommand command,
   );
 
+  /// Verifies and consumes a challenge in the store-owned transaction.
   FutureOr<AuthPhoneNumberVerifyResult> verifyPhoneNumberCode(
     AuthPhoneNumberVerifyCodeCommand command,
   );
 
+  /// Finds the identity bound to [phoneNumber].
   FutureOr<AuthPhoneNumberIdentity?> findPhoneNumberIdentity(
     String phoneNumber,
   );
 
+  /// Finds the phone identity owned by [userId].
   FutureOr<AuthPhoneNumberIdentity?> findPhoneNumberIdentityForUser(
     String userId,
   );
@@ -196,6 +283,7 @@ abstract interface class AuthPhoneNumberBackend {
 
 /// Complete input to an atomic phone-identity removal.
 final class AuthPhoneNumberRemovalCommand {
+  /// Creates a validated phone-identity removal command.
   AuthPhoneNumberRemovalCommand({
     required this.userId,
     required this.phoneNumber,
@@ -211,7 +299,10 @@ final class AuthPhoneNumberRemovalCommand {
     validateAuthCanonicalPhoneNumber(phoneNumber);
   }
 
+  /// Identifier of the user that owns the identity.
   final String userId;
+
+  /// Canonical phone number to remove.
   final String phoneNumber;
 
   /// Loads the composed topology as evidence for the backend command.
@@ -223,6 +314,7 @@ final class AuthPhoneNumberRemovalCommand {
 
 /// Optional exact transaction for removing a verified phone identity safely.
 abstract interface class AuthPhoneNumberMutationStore {
+  /// Removes the identity when the composed auth topology remains usable.
   FutureOr<AuthAuthenticationMethodMutationResult> removePhoneNumberIfSafe(
     AuthPhoneNumberRemovalCommand command,
   );
@@ -230,17 +322,30 @@ abstract interface class AuthPhoneNumberMutationStore {
 
 /// Deterministic fault points exposed by the process-local backend.
 enum AuthPhoneNumberInMemoryFaultPoint {
+  /// Fault after writing a new challenge.
   issueAfterChallengeWrite,
+
+  /// Fault after recording a failed attempt.
   verifyAfterAttemptWrite,
+
+  /// Fault after consuming a challenge.
   verifyAfterChallengeConsumption,
+
+  /// Fault after writing a user.
   verifyAfterUserWrite,
+
+  /// Fault after writing a phone identity.
   verifyAfterIdentityWrite,
+
+  /// Fault after projecting verified-phone attributes.
   verifyAfterUserProjection,
 }
 
+/// Callback used by the in-memory backend to inject deterministic failures.
 typedef AuthPhoneNumberInMemoryFaultInjector =
     FutureOr<void> Function(AuthPhoneNumberInMemoryFaultPoint point);
 
+/// Validates and returns a canonical E.164 phone number.
 String validateAuthCanonicalPhoneNumber(String value) {
   if (!RegExp(r'^\+[1-9][0-9]{1,14}$').hasMatch(value)) {
     throw ArgumentError.value(value, 'phoneNumber', 'must be canonical E.164');
@@ -248,6 +353,7 @@ String validateAuthCanonicalPhoneNumber(String value) {
   return value;
 }
 
+/// Validates a challenge before a backend stores it.
 void validateAuthPhoneNumberVerification(
   AuthPhoneNumberVerification verification,
 ) {
@@ -270,6 +376,7 @@ void validateAuthPhoneNumberVerification(
   validateAuthCanonicalPhoneNumber(verification.phoneNumber);
 }
 
+/// Validates a candidate user before phone sign-up can create it.
 void validateAuthPhoneNumberCandidateUser(AuthUser user) {
   if (user.id.trim().isEmpty ||
       user.id != user.id.trim() ||

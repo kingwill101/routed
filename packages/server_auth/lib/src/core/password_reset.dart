@@ -13,6 +13,7 @@ import 'two_factor.dart';
 /// [token] is the raw one-time secret and must only be used to construct a
 /// delivery message. Senders must not log, persist, or include it in events.
 final class AuthPasswordResetRequest<TContext> {
+  /// Creates a password-reset delivery request.
   const AuthPasswordResetRequest({
     required this.context,
     required this.user,
@@ -20,9 +21,16 @@ final class AuthPasswordResetRequest<TContext> {
     required this.expiresAt,
   });
 
+  /// Application context associated with the delivery.
   final TContext context;
+
+  /// The account receiving the reset message.
   final AuthUser user;
+
+  /// The raw one-time reset token.
   final String token;
+
+  /// Time at which [token] expires.
   final DateTime expiresAt;
 }
 
@@ -64,14 +72,20 @@ Future<String?> issueAuthPasswordResetTokenForUser({
 
 /// Result of successfully replacing a password with a reset token.
 class AuthPasswordResetResult {
+  /// Creates the result of a password reset transaction.
   const AuthPasswordResetResult({
     required this.user,
     required this.credentialsUpdated,
     required this.sessionsRevoked,
   });
 
+  /// The user whose password was reset.
   final AuthUser user;
+
+  /// Number of credential records updated by the store.
   final int credentialsUpdated;
+
+  /// Number of active sessions revoked by the store.
   final int sessionsRevoked;
 }
 

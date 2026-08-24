@@ -14,10 +14,17 @@ const authCaptchaFailedErrorCode = 'captcha_failed';
 
 /// Controls whether the application-owned verifier or this plugin owns token
 /// replay prevention.
-enum AuthCaptchaTokenUsePolicy { providerManaged, oneTime }
+enum AuthCaptchaTokenUsePolicy {
+  /// Lets the configured captcha provider reject replayed tokens.
+  providerManaged,
+
+  /// Rejects a token after this process accepts it once.
+  oneTime,
+}
 
 /// Typed limits for the captcha provider boundary.
 final class AuthCaptchaPluginConfig {
+  /// Creates the limits used by a [CaptchaPlugin].
   const AuthCaptchaPluginConfig({
     this.providerTimeout = const Duration(seconds: 3),
     this.maxTokenLength = 4096,
@@ -53,6 +60,7 @@ final class AuthCaptchaPluginConfig {
 /// [token] is a request secret. It must only be used for the vendor call and
 /// must never be logged, persisted, returned, or included in an exception.
 final class AuthCaptchaVerificationRequest<TContext> {
+  /// Creates the bounded request passed to [AuthCaptchaVerifier.verify].
   const AuthCaptchaVerificationRequest({
     required this.context,
     required this.token,
@@ -61,21 +69,34 @@ final class AuthCaptchaVerificationRequest<TContext> {
     this.identifier,
   });
 
+  /// Application context associated with the protected operation.
   final TContext context;
+
+  /// The provider token supplied by the client.
   final String token;
+
+  /// The credential operation being protected.
   final AuthCredentialPolicyOperation operation;
+
+  /// The auth provider handling the credential operation.
   final AuthProvider provider;
+
+  /// The normalized credential identifier, when one was supplied.
   final String? identifier;
 }
 
 /// Typed result returned by an application-owned captcha verifier.
 final class AuthCaptchaVerificationResult {
+  /// Creates a result with the explicit [accepted] decision.
   const AuthCaptchaVerificationResult({required this.accepted});
 
+  /// Creates an accepted verification result.
   const AuthCaptchaVerificationResult.accepted() : accepted = true;
 
+  /// Creates a rejected verification result.
   const AuthCaptchaVerificationResult.rejected() : accepted = false;
 
+  /// Whether the captcha provider accepted the token.
   final bool accepted;
 }
 
@@ -85,6 +106,7 @@ final class AuthCaptchaVerificationResult {
 /// supplies only bounded input, a timeout, and a stable accepted/rejected
 /// result contract; it does not depend on a captcha SDK or HTTP API.
 abstract interface class AuthCaptchaVerifier<TContext> {
+  /// Verifies a captcha token with the application-selected provider.
   FutureOr<AuthCaptchaVerificationResult> verify(
     AuthCaptchaVerificationRequest<TContext> request,
   );
@@ -95,6 +117,7 @@ final class CaptchaPlugin<TContext>
     implements
         AuthServerPlugin<TContext>,
         AuthCredentialPolicyContributor<TContext> {
+  /// Creates a captcha policy plugin backed by [verifier].
   CaptchaPlugin({
     required this.verifier,
     this.config = const AuthCaptchaPluginConfig(),
@@ -102,7 +125,10 @@ final class CaptchaPlugin<TContext>
     _validateConfig(config);
   }
 
+  /// Application-owned verifier used for vendor calls.
   final AuthCaptchaVerifier<TContext> verifier;
+
+  /// Bounds and replay policy applied before verification.
   final AuthCaptchaPluginConfig config;
   final Map<String, DateTime> _acceptedTokenDigests = <String, DateTime>{};
   final Set<String> _inFlightTokenDigests = <String>{};

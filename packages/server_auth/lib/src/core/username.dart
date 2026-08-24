@@ -13,27 +13,55 @@ import 'store.dart';
 import 'users.dart';
 import 'username_store.dart';
 
+/// Stable identifier for the username plugin.
 const String authUsernamePluginId = 'username';
+
+/// Authentication-method identifier recorded for username sign-ins.
 const String authUsernameAuthenticationMethod = 'username_password';
 
+/// Rate-limit operation for username registration.
 const AuthRateLimitOperation authUsernameRegistrationRateLimitOperation =
     AuthRateLimitOperation(authUsernamePluginId, 'registration');
+
+/// Rate-limit operation for username sign-in.
 const AuthRateLimitOperation authUsernameSignInRateLimitOperation =
     AuthRateLimitOperation(authUsernamePluginId, 'sign_in');
+
+/// Rate-limit operation for username changes.
 const AuthRateLimitOperation authUsernameChangeRateLimitOperation =
     AuthRateLimitOperation(authUsernamePluginId, 'change');
+
+/// Rate-limit operation for username removal.
 const AuthRateLimitOperation authUsernameRemovalRateLimitOperation =
     AuthRateLimitOperation(authUsernamePluginId, 'remove');
 
-enum AuthUsernameCaseCanonicalization { lowercase, preserve }
+/// Username case-handling strategies.
+enum AuthUsernameCaseCanonicalization {
+  /// Converts usernames to lowercase before validation.
+  lowercase,
 
-enum AuthUsernameIdentifierKind { username, email }
+  /// Preserves the input case while validating the username.
+  preserve,
+}
+
+/// Namespaces supported by username identifier resolution.
+enum AuthUsernameIdentifierKind {
+  /// Identifies a username credential.
+  username,
+
+  /// Identifies an email address associated with a username credential.
+  email,
+}
 
 /// One unambiguous, canonical login identifier.
 final class AuthUsernameIdentifier {
+  /// Creates a canonical identifier of [kind] and [value].
   const AuthUsernameIdentifier({required this.kind, required this.value});
 
+  /// Namespace containing [value].
   final AuthUsernameIdentifierKind kind;
+
+  /// Canonical identifier value.
   final String value;
 }
 
@@ -44,6 +72,7 @@ final class AuthUsernameIdentifier {
 /// never contain `@`, even when a custom allowed-character expression would
 /// otherwise accept it.
 final class AuthUsernameIdentifierPolicy {
+  /// Creates username and email validation rules.
   AuthUsernameIdentifierPolicy({
     this.caseCanonicalization = AuthUsernameCaseCanonicalization.lowercase,
     this.minimumLength = 3,
@@ -73,13 +102,23 @@ final class AuthUsernameIdentifierPolicy {
     }
   }
 
+  /// Case transformation applied to usernames.
   final AuthUsernameCaseCanonicalization caseCanonicalization;
+
+  /// Minimum username length in Unicode code points.
   final int minimumLength;
+
+  /// Maximum username length in Unicode code points.
   final int maximumLength;
+
+  /// Regular-expression character class allowed in usernames.
   final String allowedCharactersPattern;
+
+  /// Whether email domains must contain a dot-separated suffix.
   final bool requireDottedEmailDomain;
   final RegExp _allowedCharacters;
 
+  /// Normalizes a username, or returns `null` when it is invalid.
   String? normalizeUsername(String input) {
     var candidate = input.trim();
     if (candidate.contains('@')) return null;
@@ -91,6 +130,7 @@ final class AuthUsernameIdentifierPolicy {
     return _allowedCharacters.hasMatch(candidate) ? candidate : null;
   }
 
+  /// Normalizes an email identifier, or returns `null` when it is invalid.
   String? normalizeEmail(String input) {
     final candidate = normalizeAuthEmail(input);
     if (candidate.length > 254 || candidate.runes.any(_isEmailWhitespace)) {
@@ -111,6 +151,7 @@ final class AuthUsernameIdentifierPolicy {
     return candidate;
   }
 
+  /// Resolves [input] into its unambiguous username or email namespace.
   AuthUsernameIdentifier? resolve(String input) {
     if (input.contains('@')) {
       final email = normalizeEmail(input);
@@ -152,7 +193,9 @@ final class AuthUsernameIdentifierPolicy {
   }
 }
 
+/// JSON request for registering a username credential.
 final class AuthUsernameRegistrationRequest {
+  /// Creates a username registration request.
   const AuthUsernameRegistrationRequest({
     required this.username,
     required this.password,
@@ -160,11 +203,19 @@ final class AuthUsernameRegistrationRequest {
     this.captchaToken,
   });
 
+  /// Requested username.
   final String username;
+
+  /// Optional email address to associate with the account.
   final String? email;
+
+  /// Password for the new account.
   final String password;
+
+  /// Optional captcha token required by a server policy plugin.
   final String? captchaToken;
 
+  /// Decodes a registration request from JSON.
   factory AuthUsernameRegistrationRequest.fromJson(Map<String, dynamic> json) =>
       AuthUsernameRegistrationRequest(
         username: _requiredString(json, 'username'),
@@ -178,17 +229,25 @@ final class AuthUsernameRegistrationRequest {
       );
 }
 
+/// JSON request for signing in with a username credential.
 final class AuthUsernameSignInRequest {
+  /// Creates a username sign-in request.
   const AuthUsernameSignInRequest({
     required this.identifier,
     required this.password,
     this.captchaToken,
   });
 
+  /// Username or email identifier supplied by the caller.
   final String identifier;
+
+  /// Password to verify.
   final String password;
+
+  /// Optional captcha token required by a server policy plugin.
   final String? captchaToken;
 
+  /// Decodes a sign-in request from JSON.
   factory AuthUsernameSignInRequest.fromJson(Map<String, dynamic> json) =>
       AuthUsernameSignInRequest(
         identifier: _requiredString(json, 'identifier'),
@@ -201,26 +260,38 @@ final class AuthUsernameSignInRequest {
       );
 }
 
+/// JSON request for changing a username credential.
 final class AuthUsernameChangeRequest {
+  /// Creates a username-change request.
   const AuthUsernameChangeRequest({required this.username});
 
+  /// New username requested by the caller.
   final String username;
 
+  /// Decodes a username-change request from JSON.
   factory AuthUsernameChangeRequest.fromJson(Map<String, dynamic> json) =>
       AuthUsernameChangeRequest(username: _requiredString(json, 'username'));
 }
 
+/// JSON response describing a username change.
 final class AuthUsernameChangeResult {
+  /// Creates the result of a username-change transaction.
   const AuthUsernameChangeResult({
     required this.username,
     required this.user,
     required this.changed,
   });
 
+  /// Canonical username returned by the store.
   final String username;
+
+  /// User projection returned by the store.
   final AuthUser user;
+
+  /// Whether the stored username changed.
   final bool changed;
 
+  /// Encodes this result as JSON.
   Map<String, dynamic> toJson() => <String, dynamic>{
     'status': changed ? 'username_changed' : 'username_unchanged',
     'username': username,
@@ -228,25 +299,36 @@ final class AuthUsernameChangeResult {
   };
 }
 
+/// Internal result returned after username authentication.
 final class AuthUsernameAuthenticationResult {
+  /// Creates a username authentication result.
   const AuthUsernameAuthenticationResult({
     required this.username,
     required this.user,
   });
 
+  /// Canonical username used for authentication.
   final String username;
+
+  /// User authenticated by the username credential.
   final AuthUser user;
 }
 
+/// Endpoint response returned after username authentication.
 final class AuthUsernameAuthenticationResponse {
+  /// Creates an endpoint authentication response.
   const AuthUsernameAuthenticationResponse({
     required this.username,
     required this.user,
   });
 
+  /// Canonical username used for authentication.
   final String username;
+
+  /// User authenticated by the username credential.
   final AuthUser user;
 
+  /// Converts this response into a framework-neutral authentication intent.
   AuthEndpointAuthenticationIntent toAuthenticationIntent(
     AuthProvider provider, {
     required String authenticationMethod,
@@ -272,12 +354,16 @@ final class UsernamePlugin<TContext>
         AuthAuthenticationMethodInventoryContributor,
         AuthAuthenticationMethodInventoryBinding,
         AuthRateLimitContributor {
+  /// Creates a username-first authentication plugin.
   UsernamePlugin({
     AuthUsernameIdentifierPolicy? identifierPolicy,
     this.authenticationMethod = authUsernameAuthenticationMethod,
   }) : identifierPolicy = identifierPolicy ?? AuthUsernameIdentifierPolicy();
 
+  /// Rules used to canonicalize username and email identifiers.
   final AuthUsernameIdentifierPolicy identifierPolicy;
+
+  /// Authentication-method identifier emitted by this plugin.
   final String authenticationMethod;
   final CredentialsProvider _provider = CredentialsProvider(
     id: authUsernamePluginId,
@@ -594,6 +680,7 @@ final class UsernamePlugin<TContext>
     ),
   ];
 
+  /// Registers a username credential and returns its new user.
   Future<AuthUsernameAuthenticationResult> register({
     required TContext context,
     required AuthUsernameRegistrationRequest request,
@@ -663,6 +750,7 @@ final class UsernamePlugin<TContext>
     return AuthUsernameAuthenticationResult(username: username, user: created);
   }
 
+  /// Authenticates a username or email identifier.
   Future<AuthUsernameAuthenticationResult> signIn({
     required TContext context,
     required AuthUsernameSignInRequest request,
@@ -746,6 +834,7 @@ final class UsernamePlugin<TContext>
     );
   }
 
+  /// Changes the username owned by [userId].
   Future<AuthUsernameChangeResult> changeUsername({
     required String userId,
     required AuthUsernameChangeRequest request,
@@ -787,6 +876,7 @@ final class UsernamePlugin<TContext>
     );
   }
 
+  /// Removes the username credential owned by [userId].
   Future<void> removeUsername({required String userId}) async {
     _ensureConfigured();
     final user = await _availableUser(

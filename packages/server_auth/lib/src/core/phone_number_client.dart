@@ -7,6 +7,7 @@ import 'models.dart';
 /// Installs only the phone-number API on an [AuthClient].
 final class AuthPhoneNumberClientPlugin
     implements AuthClientPlugin<AuthPhoneNumberClient> {
+  /// Creates the phone-number client plugin.
   const AuthPhoneNumberClientPlugin();
 
   @override
@@ -17,28 +18,39 @@ final class AuthPhoneNumberClientPlugin
       AuthPhoneNumberClient(transport: context.transport);
 }
 
+/// Client result returned after a verification code is sent.
 final class AuthPhoneNumberClientCodeIssued {
+  /// Creates the response returned after a verification code is sent.
   const AuthPhoneNumberClientCodeIssued({required this.expiresAt});
 
+  /// Time at which the issued verification code expires.
   final DateTime expiresAt;
 }
 
+/// Client result returned after phone authentication succeeds.
 final class AuthPhoneNumberClientSignIn {
+  /// Creates a phone-number authentication result.
   const AuthPhoneNumberClientSignIn({
     required this.phoneNumber,
     required this.session,
   });
 
+  /// Canonical phone number authenticated by the server.
   final String phoneNumber;
+
+  /// Session returned by the server.
   final AuthSession session;
 }
 
 /// Typed client for an explicitly installed phone-number server plugin.
 final class AuthPhoneNumberClient {
+  /// Creates a phone-number client using [transport].
   const AuthPhoneNumberClient({required this.transport});
 
+  /// Transport used for phone-number requests.
   final AuthClientTransport transport;
 
+  /// Requests that the server send a verification code.
   Future<AuthPhoneNumberClientCodeIssued> sendCode({
     required String phoneNumber,
   }) async {
@@ -55,6 +67,7 @@ final class AuthPhoneNumberClient {
     return AuthPhoneNumberClientCodeIssued(expiresAt: expiresAt.toUtc());
   }
 
+  /// Verifies a code and returns the resulting authenticated session.
   Future<AuthPhoneNumberClientSignIn> verifyCode({
     required String phoneNumber,
     required String code,
