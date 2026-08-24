@@ -4,6 +4,10 @@
 - Prevent portable Fetch responses from emitting each `Set-Cookie` header
   twice. This keeps OAuth state cleanup and newly issued session cookies
   reliable on Worker hosts.
+- Preserve portable client addresses through request adapters and apply trusted
+  proxy rules without requiring `dart:io` address objects. Cloudflare Fetch
+  hosts can now participate in IP-based policies and rate limiting using their
+  forwarded client address.
 
 ## 0.5.0
 

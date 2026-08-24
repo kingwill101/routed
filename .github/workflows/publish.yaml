@@ -11,8 +11,9 @@ on:
     # For mono repos the tag must be prefixed with the package name,
     # e.g. "routed-v1.0.0". Adjust the regular expression as needed.
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-      - '[A-z]+-v[0-9]+.[0-9]+.[0-9]+'
+      # Package names are part of the tag so Firehose can select the package.
+      # The trailing glob also accepts Dart build metadata such as +1.
+      - '[0-9A-z]+-v[0-9]+.[0-9]+.[0-9]+*'
   workflow_dispatch:
 
 jobs:

@@ -1,3 +1,9 @@
+## Unreleased
+
+- Hardened default Routed session cookies with `Secure`, `HttpOnly`, and
+  `SameSite=Lax`; local HTTP deployments must explicitly opt out with
+  `secure: false`.
+
 ## 0.2.0
 
 - **Breaking:** Type `SessionConfig.store` and the optional
@@ -10,8 +16,3 @@
 
 ## 0.1.0
 - Initial adapter (PR G)
-## Unreleased
-
-- Hardened default Routed session cookies with `Secure`, `HttpOnly`, and
-  `SameSite=Lax`; local HTTP deployments must explicitly opt out with
-  `secure: false`.

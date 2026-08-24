@@ -83,7 +83,8 @@ dart test ./...   # run package tests
 ```
 
 Publishing instructions live in `docs/publishing-checklist.md`. Each package has
-its own changelog and versioned tags (e.g. `routed_cli-0.2.2`).
+its own changelog and versioned tags (e.g. `routed_cli-v0.2.2`). The shared
+publish workflow uses the package prefix to select the package for Firehose.
 
 Agent workflows for each routed subsystem live in [`skills/INDEX.md`](skills/INDEX.md).
 They point to the package's public barrels, README, focused tests, and boundary

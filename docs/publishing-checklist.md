@@ -157,3 +157,23 @@ dart pub publish
 - [ ] Tag the repository with the released versions.
 - [ ] Push commits and tags.
 - [ ] Update any release notes or documentation referencing the new versions.
+
+## GitHub Actions publishing
+
+The repository uses one shared Firehose workflow at
+`.github/workflows/publish.yaml`. It validates package changes on pull
+requests and publishes the package selected by a version tag. Each package
+must be enabled separately in its pub.dev **Automated publishing** settings
+with this repository and a tag pattern of `<package>-v{{version}}`.
+
+Push a tag whose package prefix exactly matches the pub.dev package name:
+
+```bash
+git tag routed_auth-v0.2.1
+git push origin routed_auth-v0.2.1
+```
+
+The first release of a package must still be published manually before
+GitHub Actions can publish updates. `server_native` is intentionally handled
+outside this workflow because its prebuilt native assets use the separate
+`server-native-prebuilt-v*` release workflow.
