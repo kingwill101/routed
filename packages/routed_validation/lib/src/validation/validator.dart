@@ -4,11 +4,14 @@ import 'package:routed_core/routed_core.dart'
 import 'package:routed_validation/src/validation/rule.dart';
 import 'package:routed_validation/src/validation/rules/rules.dart';
 
-/// Factory function that creates a validation rule instance.
+/// Factory function that creates a fresh validation rule instance.
 typedef ValidationRuleFactory = ValidationRule Function();
 
-/// Returns the validation registry in [container], creating the defaults when
-/// the container has a configuration store but no registry yet.
+/// Returns the validation registry configured in [container].
+///
+/// When the container has a [ConfigStore] but no registry, this function
+/// installs and returns [ValidationRuleRegistry.defaults]. A container without
+/// a configuration store is considered unconfigured and throws [StateError].
 ValidationRuleRegistry requireValidationRegistry(Container container) {
   if (container.has<ValidationRuleRegistry>()) {
     return container.get<ValidationRuleRegistry>();
@@ -94,7 +97,12 @@ final List<ValidationRuleFactory> _defaultRuleFactories = [
   FileExtensionsRule.new,
 ];
 
-/// Named registry of validation rule factories.
+/// Typed registry of validation rule factories.
+///
+/// Use [ValidationRuleRegistry.defaults] for the built-in catalog, or create
+/// an empty registry when an application wants an allow-list of rules. Calling
+/// [register] for an existing name replaces that factory, which makes it
+/// possible to customize a built-in rule without changing rule strings.
 class ValidationRuleRegistry extends NamedRegistry<ValidationRuleFactory> {
   /// Creates an empty rule registry.
   ValidationRuleRegistry();
@@ -115,6 +123,10 @@ class ValidationRuleRegistry extends NamedRegistry<ValidationRuleFactory> {
   }
 
   /// Registers [factory] under the name returned by its rule instance.
+  ///
+  /// The factory is invoked once to discover its name and again whenever the
+  /// registry resolves it. A factory should therefore be side-effect free and
+  /// return an independent rule instance.
   void register(ValidationRuleFactory factory) {
     final rule = factory();
     registerEntry(rule.name, factory);
@@ -137,15 +149,15 @@ class ValidationRuleRegistry extends NamedRegistry<ValidationRuleFactory> {
 /// A type definition for a validation rule with optional parameters.
 typedef RuleWithOptions = ({ValidationRule rule, List<String>? options});
 
-/// Parses a map of string rules into a structured format.
+/// Parses serialized field rules into structured rule instances.
 ///
-/// The input [rules] map contains field names as keys and rule strings as values.
-/// Each rule string can contain multiple rules separated by '|', and each rule
-/// can have options separated by ':'.
+/// Each [rules] value contains rule names separated by `|`. A rule may have
+/// comma-separated options after `:`; for example, `between:1,10`.
 ///
-/// Uses [registry] to resolve rule factories by name.
-///
-/// Returns a map where each field name is associated with a list of [RuleWithOptions].
+/// Uses [registry] to resolve each rule name. Unknown names throw an
+/// [Exception], so configuration errors are detected before validation starts.
+/// Returns one [RuleWithOptions] record per field and preserves declaration
+/// order within each field.
 Map<String, List<RuleWithOptions>> parseRules(
   Map<String, String> rules,
   ValidationRuleRegistry registry,

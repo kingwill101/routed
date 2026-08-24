@@ -2,6 +2,8 @@
 
 - Completed public Dartdoc coverage and enabled the `public_member_api_docs`
   analyzer lint.
+- Clarified validation contexts, rule contracts, registry usage, file rules,
+  and validator behavior with public API examples.
 
 ## 0.1.0
 

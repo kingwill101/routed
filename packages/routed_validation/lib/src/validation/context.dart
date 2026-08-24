@@ -6,21 +6,11 @@ import 'package:routed_http/routed_http.dart';
 import 'package:routed_validation/src/validation/file.dart';
 import 'package:routed_validation/src/validation/validator.dart';
 
-/// Extension that adds [validate] and [bind] to [EngineContext].
+/// Adds request validation and binding helpers to [EngineContext].
 ///
-/// Historically these helpers lived on `routed`'s `context/binding.dart`
-/// (see git history `packages/routed/lib/src/context/binding.dart` and
-/// `packages/routed/lib/src/binding/*`). After the validator was moved
-/// to `routed_validation`, the extension must live here so that
-/// `ctx.validate` / `ctx.bind` remain available when `routed_validation`
-/// is imported. `routed_openapi`'s `schemaValidationMiddleware` also
-/// relies on `ctx.validate`.
-///
-/// Implementation mirrors the historical `BindingMethods` extension:
-/// - `validate` selects the appropriate data source based on HTTP method
-///   and content type, then runs it through [Validator].
-/// - `bind` extracts the same data source and populates the provided model
-///   (a `Map` or a bindable object).
+/// Import `package:routed_validation/routed_validation.dart` to make these
+/// extension methods available. The request data source is selected from the
+/// method and content type, then passed to [Validator].
 extension ValidationContext on EngineContext {
   /// Validates the current request's data against [rules].
   ///
@@ -30,7 +20,14 @@ extension ValidationContext on EngineContext {
   /// - `application/x-www-form-urlencoded` → form fields
   /// - `multipart/form-data` → multipart fields + files
   ///
-  /// Throws [ValidationError] when validation fails.
+  /// [rules] maps field names to the serialized rule syntax accepted by
+  /// [Validator.make]. [messages] overrides a rule message by `field.rule`
+  /// first, then by rule name. Set [bail] to stop after the first failed rule
+  /// in the request.
+  ///
+  /// Throws [ValidationError] when one or more rules fail. Malformed JSON or
+  /// form data is treated as an empty input map, so a `required` rule can
+  /// report missing fields without exposing a parser exception.
   Future<void> validate(
     Map<String, String> rules, {
     bool bail = false,
@@ -55,8 +52,10 @@ extension ValidationContext on EngineContext {
 
   /// Binds the current request's data into [instance].
   ///
-  /// Supports `Map` and any object with a `bind(Map<String, dynamic>)`
-  /// method (the historical `Bindable` contract from `routed_http`).
+  /// A [Map] receives non-file values directly. Any other object is invoked
+  /// through a `bind(Map<String, dynamic>)` method when it provides one;
+  /// objects without that method are returned unchanged. File values are
+  /// available to validation but are not copied into a map.
   Future<T> bind<T>(T instance) async {
     final data = await _extractValidationData();
     if (instance is Map) {

@@ -1,12 +1,17 @@
 /// Describes the file metadata consumed by file validation rules.
+///
+/// Multipart adapters can implement this small contract without depending on
+/// the HTTP package used by the application. [isValidationFile] also accepts
+/// compatible objects that expose the same three properties.
 abstract class ValidationFile {
-  /// Original client-provided filename.
+  /// The original client-provided filename, including its extension when one
+  /// was supplied.
   String get filename;
 
-  /// File size in bytes.
+  /// The file size in bytes.
   int get size;
 
-  /// MIME type reported for the file.
+  /// The MIME type reported by the multipart adapter.
   String get contentType;
 }
 
@@ -14,8 +19,7 @@ abstract class ValidationFile {
 // without coupling this public contract to one concrete HTTP package.
 // ignore_for_file: avoid_dynamic_calls
 
-/// Returns true if [value] is a [ValidationFile] or a duck-typed file
-/// object such as `MultipartFile` from `routed_http`.
+/// Returns whether [value] can be consumed by a file validation rule.
 ///
 /// The historical `MultipartFile` does not implement [ValidationFile] but
 /// has the same `filename`, `size`, and `contentType` properties. This
@@ -35,8 +39,11 @@ bool isValidationFile(dynamic value) {
   }
 }
 
-/// Extracts file properties from a [ValidationFile] or duck-typed file.
-/// Returns null if not a file.
+/// Adapts [value] to [ValidationFile] when it exposes file metadata.
+///
+/// Returns `null` when [value] is neither a [ValidationFile] nor a compatible
+/// duck-typed object. The returned adapter contains only the three public
+/// metadata fields; it does not retain or read file contents.
 ValidationFile? asValidationFile(dynamic value) {
   if (value is ValidationFile) return value;
   if (!isValidationFile(value)) return null;
