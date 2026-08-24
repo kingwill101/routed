@@ -1,4 +1,5 @@
-// ignore_for_file: implementation_imports, depend_on_referenced_packages
+// XML model interfaces are intentionally abstract public extension points.
+// ignore_for_file: one_member_abstracts
 import 'dart:convert';
 
 import 'package:xml/xml.dart';
@@ -30,12 +31,12 @@ class XmlMapDecoder extends Converter<String, Map<String, dynamic>> {
 
   /// Recursively converts an [XmlElement] into a `Map<String, dynamic>`.
   Map<String, dynamic> _elementToMap(XmlElement element) {
-    final Map<String, dynamic> map = {};
+    final map = <String, dynamic>{};
 
     // Process attributes
     if (element.attributes.isNotEmpty) {
       map['@attributes'] = {
-        for (var attr in element.attributes) attr.name.local: attr.value,
+        for (final attr in element.attributes) attr.name.local: attr.value,
       };
     }
 
@@ -46,7 +47,7 @@ class XmlMapDecoder extends Converter<String, Map<String, dynamic>> {
           (node is XmlText && node.value.trim().isNotEmpty),
     );
 
-    for (var child in children) {
+    for (final child in children) {
       if (child is XmlElement) {
         final childName = child.name.local;
         final childMap = _elementToMap(child);
@@ -88,8 +89,8 @@ class XmlMapEncoder extends Converter<Map<String, dynamic>, String> {
     final rootName = input.keys.first;
     final rootContent = input[rootName];
 
-    final builder = XmlBuilder();
-    builder.processing('xml', 'version="1.0" encoding="UTF-8"');
+    final builder = XmlBuilder()
+      ..processing('xml', 'version="1.0" encoding="UTF-8"');
     _buildElement(builder, rootName, rootContent);
     final document = builder.buildDocument();
     return document.toXmlString(pretty: true);
@@ -111,7 +112,7 @@ class XmlMapEncoder extends Converter<Map<String, dynamic>, String> {
             } else if (key == '#text') {
               builder.text(value.toString());
             } else if (value is List) {
-              for (var item in value) {
+              for (final item in value) {
                 _buildElement(builder, key, item);
               }
             } else {
@@ -121,7 +122,7 @@ class XmlMapEncoder extends Converter<Map<String, dynamic>, String> {
         },
       );
     } else if (content is List) {
-      for (var item in content) {
+      for (final item in content) {
         _buildElement(builder, name, item);
       }
     } else {
@@ -130,22 +131,30 @@ class XmlMapEncoder extends Converter<Map<String, dynamic>, String> {
   }
 }
 
-/// A Codec that encodes and decodes XML strings to and from `Map<String, dynamic>`.
+/// A codec that converts XML strings to and from `Map<String, dynamic>`.
 class XmlMapCodec extends Codec<Map<String, dynamic>, String> {
   /// Creates a constant [XmlMapCodec].
   const XmlMapCodec();
 
-  /// The encoder that converts a `Map<String, dynamic>` to an XML string.
+  /// The encoder that converts a map to an XML string.
   @override
-  final Converter<Map<String, dynamic>, String> encoder = const XmlMapEncoder();
+  Converter<Map<String, dynamic>, String> get encoder => const XmlMapEncoder();
 
-  /// The decoder that converts an XML string to a `Map<String, dynamic>`.
+  /// The decoder that converts an XML string to a map.
   @override
-  final Converter<String, Map<String, dynamic>> decoder = const XmlMapDecoder();
+  Converter<String, Map<String, dynamic>> get decoder => const XmlMapDecoder();
 }
 
 /// Example class implementing [XmlEncodable] and [XmlDecodable].
 class User implements XmlEncodable, XmlDecodable<User> {
+  /// Creates a [User] with [name], [age], [emails], and [isActive] status.
+  User({
+    this.name = '',
+    this.age = -1,
+    this.emails = const [],
+    this.isActive = false,
+  });
+
   /// The name of the user.
   final String name;
 
@@ -158,15 +167,7 @@ class User implements XmlEncodable, XmlDecodable<User> {
   /// Whether the user is active.
   final bool isActive;
 
-  /// Creates a [User] instance with the given [name], [age], [emails], and [isActive] status.
-  User({
-    this.name = '',
-    this.age = -1,
-    this.emails = const [],
-    this.isActive = false,
-  });
-
-  /// Converts the [User] instance into a `Map<String, dynamic>` for XML encoding.
+  /// Converts this [User] into a map for XML encoding.
   @override
   Map<String, dynamic> toXml() {
     return {
@@ -182,13 +183,16 @@ class User implements XmlEncodable, XmlDecodable<User> {
   /// Constructs a [User] instance from a `Map<String, dynamic>`.
   @override
   User fromXml(Map<String, dynamic> xmlMap) {
+    final name = xmlMap['name'] as Map<String, dynamic>;
+    final age = xmlMap['age'] as Map<String, dynamic>;
+    final emails = xmlMap['emails'] as Map<String, dynamic>;
+    final active = xmlMap['active'] as Map<String, dynamic>;
+    final emailValues = (emails['email'] as List).cast<Map<String, dynamic>>();
     return User(
-      name: xmlMap['name']['#text'] as String,
-      age: int.parse(xmlMap['age']['#text'] as String),
-      emails: (xmlMap['emails']['email'] as List)
-          .map((e) => e['#text'] as String)
-          .toList(),
-      isActive: xmlMap['active']['#text'].toLowerCase() == 'true',
+      name: name['#text'] as String,
+      age: int.parse(age['#text'] as String),
+      emails: emailValues.map((email) => email['#text'] as String).toList(),
+      isActive: (active['#text'] as String).toLowerCase() == 'true',
     );
   }
 

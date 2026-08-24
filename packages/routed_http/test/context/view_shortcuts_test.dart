@@ -1,3 +1,5 @@
+// These fixtures inspect dynamic values and keep setup calls explicit.
+// ignore_for_file: avoid_dynamic_calls, cascade_invocations
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';

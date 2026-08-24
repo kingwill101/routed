@@ -1,3 +1,8 @@
+## Unreleased
+
+- Adopted `very_good_analysis` and completed public API Dartdoc coverage.
+- Clarified HTTP binding, multipart, negotiation, compression, and SSE APIs.
+
 ## 0.1.2
 
 - Added default XML request binding for `application/xml` and `text/xml`.

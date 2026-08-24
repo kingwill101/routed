@@ -27,16 +27,25 @@ Iterable<String> _defaultTopicResolver(WebSocketContext context) {
   return topics;
 }
 
-/// Skeleton WebSocket handler that wires routed's built-in support to [TurboStreamHub].
+/// WebSocket handler that connects Routed WebSockets to a [TurboStreamHub].
 class TurboStreamSocketHandler extends WebSocketHandler {
+  /// Creates a handler for [hub].
+  ///
+  /// When [topicResolver] is omitted, topics are read from the `topic` query
+  /// parameter and signed stream names are verified automatically.
   TurboStreamSocketHandler({
     required this.hub,
     TurboTopicResolver? topicResolver,
     this.messageHandler,
   }) : topicResolver = topicResolver ?? _defaultTopicResolver;
 
+  /// The hub that receives connections and broadcasts stream fragments.
   final TurboStreamHub hub;
+
+  /// Resolves topics for newly opened connections.
   final TurboTopicResolver topicResolver;
+
+  /// Handles messages received from connected clients, when supplied.
   final Future<void> Function(WebSocketContext context, dynamic message)?
   messageHandler;
   final _connections = <WebSocketContext, TurboStreamConnection>{};

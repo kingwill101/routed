@@ -213,10 +213,9 @@ Future<Response> _delete(
   ];
 
   if (deleted != null) {
-    responseFragments.add(turboStreamRemove(target: 'todo_${deleted.id}'));
-    responseFragments.add(
-      turboStreamReplace(target: 'todo_detail', html: detailFrame),
-    );
+    responseFragments
+      ..add(turboStreamRemove(target: 'todo_${deleted.id}'))
+      ..add(turboStreamReplace(target: 'todo_detail', html: detailFrame));
   }
 
   return ctx.turboStream(joinTurboStreams(responseFragments));

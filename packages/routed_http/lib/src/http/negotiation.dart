@@ -3,14 +3,22 @@
 import 'package:http_parser/http_parser.dart';
 import 'package:routed_core/routed_core.dart';
 
+/// The media type selected during content negotiation.
 class NegotiatedMediaType {
+  /// Creates a negotiated media type with its quality and parameters.
   NegotiatedMediaType({
     required this.value,
     required this.quality,
     Map<String, String>? parameters,
   }) : parameters = Map.unmodifiable(parameters ?? const {});
+
+  /// The supported media type selected for the response.
   final String value;
+
+  /// The client preference quality assigned to [value].
   final double quality;
+
+  /// Parameters associated with the selected media type.
   final Map<String, String> parameters;
 }
 
@@ -40,12 +48,13 @@ class _AcceptSpec {
     var score = 0;
     if (mediaType.type != '*') score += 10;
     if (mediaType.subtype != '*') score += 5;
-    score += parameterCount;
-    return score;
+    return score + parameterCount;
   }
 }
 
+/// Selects a response representation from an HTTP `Accept` header.
 class ContentNegotiator {
+  /// Negotiates the best supported media type for [acceptHeader].
   static NegotiatedMediaType? negotiate(
     String? acceptHeader,
     Iterable<String> supported, {
@@ -59,16 +68,16 @@ class ContentNegotiator {
       if (fallback == null) return null;
       return NegotiatedMediaType(
         value: fallback.raw,
-        quality: 1.0,
+        quality: 1,
         parameters: const {},
       );
     }
     _MediaOffer? bestOffer;
     _AcceptSpec? bestSpec;
-    double bestQuality = -1;
-    int bestSpecificity = -1;
-    int bestHeaderIndex = specs.length;
-    int bestOfferIndex = offers.length;
+    var bestQuality = -1.0;
+    var bestSpecificity = -1;
+    var bestHeaderIndex = specs.length;
+    var bestOfferIndex = offers.length;
     for (final offer in offers) {
       for (final spec in specs) {
         if (offer.mediaType == null) continue;
@@ -94,16 +103,16 @@ class ContentNegotiator {
       }
     }
     if (bestOffer == null || bestSpec == null) {
-      // Fallback to first supported when no match and no default (historical behavior)
+      // Fall back to the first supported type when no match exists.
       final first = offers.first;
       return NegotiatedMediaType(
         value: first.raw,
-        quality: 1.0,
+        quality: 1,
         parameters: const {},
       );
     }
-    final params = Map<String, String>.from(bestSpec.mediaType.parameters);
-    params.remove('q');
+    final params = Map<String, String>.from(bestSpec.mediaType.parameters)
+      ..remove('q');
     return NegotiatedMediaType(
       value: bestOffer.raw,
       quality: bestQuality,
@@ -118,7 +127,7 @@ class ContentNegotiator {
       MediaType? mt;
       try {
         mt = MediaType.parse(raw);
-      } catch (_) {
+      } on FormatException catch (_) {
         mt = null;
       }
       offers.add(_MediaOffer(raw: raw, mediaType: mt, index: idx++));
@@ -146,7 +155,7 @@ class ContentNegotiator {
             parameterCount: paramCount,
           ),
         );
-      } catch (_) {}
+      } on FormatException catch (_) {}
     }
     specs.sort((a, b) {
       final qCmp = b.quality.compareTo(a.quality);
@@ -181,7 +190,9 @@ class ContentNegotiator {
   }
 }
 
+/// Adds low-level content negotiation helpers to an [EngineContext].
 extension NegotiationEngineContext on EngineContext {
+  /// Negotiates a supported media type using this request's `Accept` header.
   NegotiatedMediaType? negotiatesContentType(
     Iterable<String> supported, {
     String? defaultType,
@@ -194,6 +205,7 @@ extension NegotiationEngineContext on EngineContext {
     );
   }
 
+  /// Returns whether this request accepts [mediaType].
   bool accepts(String mediaType) {
     final header = requestHeader(HttpHeaders.acceptHeader);
     if (header == null) return true;

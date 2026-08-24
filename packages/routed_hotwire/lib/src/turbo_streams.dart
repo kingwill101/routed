@@ -1,16 +1,34 @@
 /// Turbo Stream builders for HTML fragments and payload helpers.
 enum TurboStreamAction {
+  /// Inserts the template at the end of the target.
   append,
+
+  /// Inserts the template at the beginning of the target.
   prepend,
+
+  /// Replaces the target element.
   replace,
+
+  /// Replaces the contents of the target element.
   update,
+
+  /// Removes the target element.
   remove,
+
+  /// Inserts the template immediately before the target.
   before,
+
+  /// Inserts the template immediately after the target.
   after,
+
+  /// Requests a refresh of the current page.
   refresh,
 }
 
-/// Build a `<turbo-stream>` fragment.
+/// Builds a `<turbo-stream>` fragment for [action].
+///
+/// [target] selects one element by its identifier, while [targets] may use a
+/// CSS selector. Actions that render content place [html] inside a template.
 String turboStream({
   required TurboStreamAction action,
   String? target,
@@ -66,6 +84,7 @@ String turboStream({
   return buffer.toString();
 }
 
+/// Builds an append stream that inserts [html] into [target].
 String turboStreamAppend({
   required String target,
   required String html,
@@ -77,6 +96,7 @@ String turboStreamAppend({
   attributes: attributes,
 );
 
+/// Builds a prepend stream that inserts [html] into [target].
 String turboStreamPrepend({
   required String target,
   required String html,
@@ -88,6 +108,7 @@ String turboStreamPrepend({
   attributes: attributes,
 );
 
+/// Builds a replace stream that replaces [target] with [html].
 String turboStreamReplace({
   required String target,
   required String html,
@@ -99,6 +120,7 @@ String turboStreamReplace({
   attributes: attributes,
 );
 
+/// Builds an update stream that replaces the contents of [target] with [html].
 String turboStreamUpdate({
   required String target,
   required String html,
@@ -110,6 +132,7 @@ String turboStreamUpdate({
   attributes: attributes,
 );
 
+/// Builds a remove stream for [target].
 String turboStreamRemove({
   required String target,
   Map<String, String>? attributes,
@@ -119,6 +142,7 @@ String turboStreamRemove({
   attributes: attributes,
 );
 
+/// Builds a stream that inserts [html] immediately before [target].
 String turboStreamBefore({
   required String target,
   required String html,
@@ -130,6 +154,7 @@ String turboStreamBefore({
   attributes: attributes,
 );
 
+/// Builds a stream that inserts [html] immediately after [target].
 String turboStreamAfter({
   required String target,
   required String html,
@@ -141,6 +166,7 @@ String turboStreamAfter({
   attributes: attributes,
 );
 
+/// Builds a refresh stream, optionally carrying a Turbo [requestId].
 String turboStreamRefresh({
   String? requestId,
   Map<String, String>? attributes,
@@ -155,23 +181,22 @@ String turboStreamRefresh({
   );
 }
 
-/// Combine stream fragments into a single payload.
+/// Combines stream fragments into a single payload in iteration order.
 String joinTurboStreams(Iterable<String> fragments) {
   final buffer = StringBuffer();
-  for (final fragment in fragments) {
-    buffer.write(fragment);
-  }
+  fragments.forEach(buffer.write);
   return buffer.toString();
 }
 
-/// Normalise body input for Turbo Stream responses.
+/// Normalizes body input for Turbo Stream responses.
+///
+/// Accepts a complete [String] or an [Iterable] of chunks. Throws an
+/// [ArgumentError] for any other value.
 String normalizeTurboStreamBody(dynamic body) {
   if (body is String) return body;
   if (body is Iterable) {
     final buffer = StringBuffer();
-    for (final chunk in body) {
-      buffer.write(chunk);
-    }
+    body.forEach(buffer.write);
     return buffer.toString();
   }
   throw ArgumentError.value(

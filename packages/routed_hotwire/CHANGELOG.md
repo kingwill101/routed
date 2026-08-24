@@ -1,3 +1,8 @@
+## Unreleased
+
+- Completed public API documentation and adopted the `very_good_analysis`
+  lint baseline.
+
 ## 0.1.6
 
 - Release metadata housekeeping: republish to restore publish-order consistency.

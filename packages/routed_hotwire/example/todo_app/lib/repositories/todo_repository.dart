@@ -29,11 +29,6 @@ class Todo {
 }
 
 class TodoRepository {
-  TodoRepository._(this._todos, this._nextId);
-
-  final List<Todo> _todos;
-  int _nextId;
-
   factory TodoRepository.seed() {
     final now = DateTime.now();
     final seed = <Todo>[
@@ -57,14 +52,19 @@ class TodoRepository {
         completed: true,
       ),
     ];
-    seed.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return TodoRepository._(seed, seed.length + 1);
+    return TodoRepository._(
+      seed..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
+      seed.length + 1,
+    );
   }
+  TodoRepository._(this._todos, this._nextId);
+
+  final List<Todo> _todos;
+  int _nextId;
 
   List<Todo> all() {
-    final copy = List<Todo>.from(_todos);
-    copy.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return copy;
+    return List<Todo>.from(_todos)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   Todo? find(int id) {

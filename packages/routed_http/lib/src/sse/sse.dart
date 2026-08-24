@@ -5,9 +5,11 @@ import 'dart:io';
 
 import 'package:routed_core/routed_core.dart';
 
-import '../binding/convert/sse.dart';
+import 'package:routed_http/src/binding/convert/sse.dart';
 
+/// Adds Server-Sent Events support to an [EngineContext].
 extension RoutedHttpSse on EngineContext {
+  /// Streams [events] until the source or client connection closes.
   Future<void> sse(
     Stream<SseEvent> events, {
     Duration heartbeat = const Duration(seconds: 15),
@@ -17,15 +19,15 @@ extension RoutedHttpSse on EngineContext {
       ..set(HttpHeaders.contentTypeHeader, 'text/event-stream; charset=utf-8')
       ..set(HttpHeaders.cacheControlHeader, 'no-cache, no-transform')
       ..set('X-Accel-Buffering', 'no');
-    response.writeHeaderNow();
-    response.bufferOutput = false;
-    response.write(':ok\n\n');
+    response
+      ..writeHeaderNow()
+      ..bufferOutput = false
+      ..write(':ok\n\n');
     await response.flush();
-    // ignore: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
     response.writeNow();
     final codec = SseCodec();
     Timer? heartbeatTimer;
-    bool closed = false;
+    var closed = false;
     StreamSubscription<SseEvent>? subscription;
     final completion = Completer<void>();
 
@@ -48,7 +50,7 @@ extension RoutedHttpSse on EngineContext {
     Future<void> writeHeartbeat() async {
       try {
         await writeFrame(':$heartbeatComment\n\n');
-      } catch (_) {}
+      } on Object catch (_) {}
     }
 
     Future<void> closeConnection({bool fromSubscription = false}) async {
@@ -58,19 +60,21 @@ extension RoutedHttpSse on EngineContext {
       if (!fromSubscription) {
         try {
           await subscription?.cancel();
-        } catch (_) {}
+        } on Object catch (_) {}
       }
       if (!response.isClosed) {
         try {
           await response.close();
-        } catch (_) {}
+        } on Object catch (_) {}
       }
       if (!completion.isCompleted) completion.complete();
     }
 
-    response.done.catchError((_) {}).whenComplete(() {
-      if (!completion.isCompleted) completion.complete();
-    });
+    unawaited(
+      response.done.catchError((_) {}).whenComplete(() {
+        if (!completion.isCompleted) completion.complete();
+      }),
+    );
 
     subscription = events.listen(
       (event) async {
@@ -81,8 +85,8 @@ extension RoutedHttpSse on EngineContext {
           await closeConnection(fromSubscription: true);
         }
       },
-      onError: (_, _) async => await closeConnection(fromSubscription: true),
-      onDone: () async => await closeConnection(fromSubscription: true),
+      onError: (_, _) async => closeConnection(fromSubscription: true),
+      onDone: () async => closeConnection(fromSubscription: true),
       cancelOnError: false,
     );
 

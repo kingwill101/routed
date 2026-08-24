@@ -1,10 +1,9 @@
-// ignore_for_file: implementation_imports
 import 'dart:convert';
 
 import 'package:routed_core/routed_core.dart';
-import 'binding.dart';
+import 'package:routed_http/src/binding/binding.dart';
 
-/// Handles JSON binding and validation.
+/// Decodes JSON object bodies into maps or [Bindable] models.
 class JsonBinding extends Binding {
   @override
   String get name => 'json';
@@ -21,12 +20,16 @@ class JsonBinding extends Binding {
     try {
       final decoded = jsonDecode(bodyString);
       if (decoded is! Map<String, dynamic>) {
+        // JsonParseError is the framework's public EngineError contract.
+        // ignore: only_throw_errors
         throw JsonParseError(
           details: 'Expected JSON object, got ${decoded.runtimeType}',
         );
       }
       return decoded;
     } on FormatException catch (e) {
+      // JsonParseError is the framework's public EngineError contract.
+      // ignore: only_throw_errors
       throw JsonParseError(details: e.message);
     }
   }
@@ -38,6 +41,7 @@ class JsonBinding extends Binding {
     return instance;
   }
 
+  /// Applies decoded JSON data to [instance].
   Future<void> bindBody(Map<String, dynamic> decoded, dynamic instance) async {
     if (instance is Map) {
       instance.addAll(decoded);

@@ -39,6 +39,8 @@ class TurboRequestInfo {
   }
 
   final Map<String, List<String>> _headers;
+
+  /// The normalized HTTP method for this request.
   final String method;
 
   static const _acceptHeader = 'accept';
@@ -65,7 +67,7 @@ class TurboRequestInfo {
     return value != null && value.toLowerCase() == 'true';
   }
 
-  /// Whether the request represents a Stream update (Accept header negotiation).
+  /// Whether the request represents a Stream update from Accept negotiation.
   bool get isStreamRequest =>
       _acceptValues().any((value) => value.contains(_turboStreamMime));
 
@@ -102,6 +104,7 @@ const _turboInfoKey = '__routed_hotwire.turbo_request';
 
 /// Shortcut for retrieving [TurboRequestInfo] directly from the context.
 extension TurboContextExtensions on EngineContext {
+  /// The parsed Turbo request information for this context.
   TurboRequestInfo get turbo {
     final cached = get<TurboRequestInfo>(_turboInfoKey);
     if (cached != null) return cached;

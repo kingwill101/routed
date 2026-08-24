@@ -2,7 +2,7 @@
 
 [![Pub Version](https://img.shields.io/pub/v/routed_hotwire.svg?label=pub&color=2bb7f6)](https://pub.dev/packages/routed_hotwire)
 [![CI](https://github.com/kingwill101/routed/actions/workflows/publish.yaml/badge.svg)](https://github.com/kingwill101/routed/actions/workflows/publish.yaml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/kingwill101/routed/blob/master/LICENSE)
 [![Sponsor](https://img.shields.io/badge/support-Buy%20Me%20a%20Coffee-ff813f?logo=buymeacoffee)](https://www.buymeacoffee.com/kingwill101)
 
 Turbo/Stimulus helpers for the `routed` framework. The package wires Hotwire

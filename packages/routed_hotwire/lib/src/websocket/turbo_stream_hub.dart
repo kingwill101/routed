@@ -1,13 +1,15 @@
 import 'dart:collection';
 
 import 'package:routed_core/routed_core.dart';
+import 'package:routed_hotwire/src/turbo_streams.dart';
 import 'package:routed_hotwire/src/websocket/stream_connection.dart';
 
-import '../turbo_streams.dart';
-
+/// Adapts a Routed WebSocket context to [TurboStreamConnection].
 class WebSocketTurboConnection implements TurboStreamConnection {
+  /// Creates a connection backed by [context].
   WebSocketTurboConnection(this.context);
 
+  /// The Routed WebSocket context used for sending payloads.
   final WebSocketContext context;
 
   @override
@@ -31,15 +33,17 @@ class TurboStreamHub {
     if (normalized.isEmpty) return;
 
     for (final topic in normalized) {
-      final set = _topics.putIfAbsent(
-        topic,
-        () => LinkedHashSet<TurboStreamConnection>(),
-      );
-      set.add(connection);
+      _topics
+          .putIfAbsent(
+            topic,
+            LinkedHashSet<TurboStreamConnection>.new,
+          )
+          .add(connection);
     }
 
-    final current = _connectionTopics.putIfAbsent(connection, () => <String>{});
-    current.addAll(normalized);
+    _connectionTopics
+        .putIfAbsent(connection, LinkedHashSet<String>.new)
+        .addAll(normalized);
   }
 
   /// Remove [connection] from all topics or the provided subset.
@@ -85,13 +89,11 @@ class TurboStreamHub {
           continue;
         }
         connection.send(payload);
-      } catch (_) {
+      } on Object catch (_) {
         disconnected.add(connection);
       }
     }
 
-    for (final connection in disconnected) {
-      unsubscribe(connection);
-    }
+    disconnected.forEach(unsubscribe);
   }
 }

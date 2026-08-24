@@ -1,3 +1,6 @@
+// These stream fixtures inspect dynamic response payloads and use explicit
+// completion events while exercising connection shutdown.
+// ignore_for_file: avoid_dynamic_calls, cascade_invocations, unawaited_futures
 import 'dart:async';
 
 import 'package:routed_core/routed_core.dart';
@@ -23,7 +26,6 @@ void main() {
     await engine.initialize();
     final client = TestClient(
       RoutedRequestHandler(engine),
-      mode: TransportMode.inMemory,
     );
     addTearDown(() async {
       await client.close();
@@ -66,7 +68,6 @@ void main() {
     await engine.initialize();
     final client = TestClient(
       RoutedRequestHandler(engine),
-      mode: TransportMode.inMemory,
     );
     addTearDown(() async {
       await client.close();
@@ -96,7 +97,6 @@ void main() {
     await engine.initialize();
     final client = TestClient(
       RoutedRequestHandler(engine),
-      mode: TransportMode.inMemory,
     );
     addTearDown(() async {
       await client.close();

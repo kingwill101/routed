@@ -4,21 +4,43 @@ import 'dart:io';
 
 import 'package:routed_core/routed_core.dart';
 
-enum ConditionalOutcome { proceed, notModified, preconditionFailed }
+/// Result of evaluating the conditional request headers.
+enum ConditionalOutcome {
+  /// The request may continue normally.
+  proceed,
 
+  /// The resource has not changed and the response should be `304`.
+  notModified,
+
+  /// A request precondition failed and the response should be `412`.
+  preconditionFailed,
+}
+
+/// A parsed entity tag from an HTTP conditional request header.
 class EtagCandidate {
+  /// Creates an entity-tag candidate.
   const EtagCandidate({this.value, this.weak = false, this.isWildcard = false});
+
+  /// The tag value without surrounding quotes, if present.
   final String? value;
+
+  /// Whether this candidate uses weak comparison semantics.
   final bool weak;
+
+  /// Whether this candidate represents the `*` wildcard.
   final bool isWildcard;
+
+  /// Whether a concrete tag value is available.
   bool get hasValue => value != null;
 }
 
+/// Parses the current entity tag from [value].
 EtagCandidate? parseCurrentEtag(String? value) {
   if (value == null || value.trim().isEmpty) return null;
   return _parseEtag(value);
 }
 
+/// Parses comma-separated entity tags from [values].
 List<EtagCandidate> parseEtagList(List<String> values) {
   final candidates = <EtagCandidate>[];
   for (final entry in values) {
@@ -46,6 +68,7 @@ EtagCandidate? _parseEtag(String raw) {
   return EtagCandidate(value: value, weak: weak);
 }
 
+/// Compares [candidate] with the current entity tag.
 bool etagMatches(
   EtagCandidate candidate,
   EtagCandidate current, {
@@ -57,6 +80,7 @@ bool etagMatches(
   return candidate.value == current.value;
 }
 
+/// Evaluates the conditional headers on [ctx] against the supplied validators.
 ConditionalOutcome evaluateConditional(
   EngineContext ctx, {
   String? etag,
@@ -75,7 +99,7 @@ ConditionalOutcome evaluateConditional(
       final candidates = parseEtagList([ifMatch]);
       var matched = false;
       for (final c in candidates) {
-        if (etagMatches(c, current, weakComparison: false)) {
+        if (etagMatches(c, current)) {
           matched = true;
           break;
         }
@@ -89,7 +113,7 @@ ConditionalOutcome evaluateConditional(
       if (lastModified.isAfter(since)) {
         return ConditionalOutcome.preconditionFailed;
       }
-    } catch (_) {}
+    } on FormatException catch (_) {}
   }
   if (ifNoneMatch != null && etag != null) {
     final current = parseCurrentEtag(etag);
@@ -108,17 +132,19 @@ ConditionalOutcome evaluateConditional(
       if (!lastModified.isAfter(since)) {
         return ConditionalOutcome.notModified;
       }
-    } catch (_) {}
+    } on FormatException catch (_) {}
   }
   return ConditionalOutcome.proceed;
 }
 
+/// Generates a base64 entity tag for [bytes].
 String generateEtag(List<int> bytes, {bool weak = false}) {
   final digest = base64.encode(bytes);
   final value = '"$digest"';
   return weak ? 'W/$value' : value;
 }
 
+/// Creates middleware that handles HTTP conditional requests.
 Middleware conditionalRequests({
   String? Function(EngineContext ctx)? etag,
   DateTime? Function(EngineContext ctx)? lastModified,

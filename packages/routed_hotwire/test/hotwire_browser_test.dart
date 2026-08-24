@@ -2,20 +2,21 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_hotwire/routed_hotwire.dart';
 import 'package:routed_http/routed_http.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
-import 'package:path/path.dart' as p;
 
+// The browser test intentionally imports the local example application.
 // ignore: avoid_relative_lib_imports
 import '../example/todo_app/lib/app.dart' as todo_app show createTodoApp;
 
 Future<void> main() async {
   final chatEngine = await _createChatEngine();
   final chatHandler = RoutedRequestHandler(chatEngine, true);
-  final chatPort = await chatHandler.startServer(port: 0);
+  final chatPort = await chatHandler.startServer();
   final chatBaseUrl = 'http://127.0.0.1:$chatPort';
 
   final exampleRoot = Directory(
@@ -27,13 +28,11 @@ Future<void> main() async {
 
   final todoEngine = await todo_app.createTodoApp(root: exampleRoot);
   final todoHandler = RoutedRequestHandler(todoEngine, true);
-  final todoPort = await todoHandler.startServer(port: 0);
+  final todoPort = await todoHandler.startServer();
   final todoBaseUrl = 'http://127.0.0.1:$todoPort';
 
   await testBootstrap(
     BrowserConfig(
-      browserName: 'chromium',
-      headless: true,
       timeout: const Duration(seconds: 60),
     ),
   );
@@ -43,7 +42,7 @@ Future<void> main() async {
     await todoHandler.close();
   });
 
-  browserTest(
+  await browserTest(
     'Turbo form submission updates message list',
     (browser) async {
       await browser.visit('/chat');
@@ -59,11 +58,10 @@ Future<void> main() async {
     timeout: const Duration(minutes: 2),
   );
 
-  browserTest(
+  await browserTest(
     'Todo demo streams updates across clients',
     (browser) async {
-      final config = (browser as dynamic).config;
-      final baseUri = Uri.parse(config.baseUrl as String);
+      final baseUri = Uri.parse(todoBaseUrl);
       final wsScheme = baseUri.scheme == 'https' ? 'wss' : 'ws';
       final signedTopic = signTurboStreamName(const ['todos']);
       final wsUri = Uri.parse(
@@ -125,7 +123,7 @@ Future<void> main() async {
         });
 
         await browser.click(
-          'turbo-frame#todo_list li.is-selected form[action\$="/toggle"] button',
+          r'turbo-frame#todo_list li.is-selected form[action$="/toggle"] button',
         );
 
         late final ({String message, int nextIndex}) toggleMessage;
@@ -161,58 +159,65 @@ Future<Engine> _createChatEngine() async {
   final hub = TurboStreamHub();
   final messages = <ChatMessage>[];
 
-  final engine = Engine(
-    config: EngineConfig(
-      security: const EngineSecurityFeatures(csrfProtection: false),
-    ),
-  );
+  final engine =
+      Engine(
+          config: EngineConfig(
+            security: const EngineSecurityFeatures(csrfProtection: false),
+          ),
+        )
+        ..get('/chat', (ctx) async {
+          final turbo = ctx.turbo;
+          if (turbo.kind == TurboRequestKind.stream) {
+            return ctx.turboStream(
+              turboStreamReplace(
+                target: 'messages',
+                html: _renderMessages(messages),
+              ),
+            );
+          }
 
-  engine.get('/chat', (ctx) async {
-    final turbo = ctx.turbo;
-    if (turbo.kind == TurboRequestKind.stream) {
-      return ctx.turboStream(
-        turboStreamReplace(target: 'messages', html: _renderMessages(messages)),
-      );
-    }
+          return ctx.turboHtml(_renderPage(messages));
+        })
+        ..post('/chat/messages', (ctx) async {
+          final text = (await ctx.postForm('text')).trim();
+          if (text.isEmpty) {
+            return ctx.turboUnprocessable(
+              '<p data-turbo-temporary>Please enter a message.</p>',
+            );
+          }
 
-    return ctx.turboHtml(_renderPage(messages));
-  });
+          final message = ChatMessage(
+            id: messages.length + 1,
+            body: text,
+            postedAt: DateTime.now(),
+          );
+          messages.add(message);
 
-  engine.post('/chat/messages', (ctx) async {
-    final text = (await ctx.postForm('text')).trim();
-    if (text.isEmpty) {
-      return ctx.turboUnprocessable(
-        '<p data-turbo-temporary>Please enter a message.</p>',
-      );
-    }
+          final fragments = <String>[];
+          if (messages.length == 1) {
+            fragments.add(turboStreamRemove(target: 'empty-state'));
+          }
+          fragments.add(
+            turboStreamAppend(
+              target: 'messages',
+              html: _renderMessage(message),
+            ),
+          );
 
-    final message = ChatMessage(
-      id: messages.length + 1,
-      body: text,
-      postedAt: DateTime.now(),
-    );
-    messages.add(message);
+          if (ctx.turbo.isStreamRequest) {
+            return ctx.turboStream(fragments);
+          }
 
-    final fragments = <String>[];
-    if (messages.length == 1) {
-      fragments.add(turboStreamRemove(target: 'empty-state'));
-    }
-    fragments.add(
-      turboStreamAppend(target: 'messages', html: _renderMessage(message)),
-    );
-
-    if (ctx.turbo.isStreamRequest) {
-      return ctx.turboStream(fragments);
-    }
-
-    hub.broadcast('chat', fragments);
-    return ctx.turboSeeOther('/chat');
-  });
-
-  engine.ws(
-    '/ws',
-    TurboStreamSocketHandler(hub: hub, topicResolver: (_) => const ['chat']),
-  );
+          hub.broadcast('chat', fragments);
+          return ctx.turboSeeOther('/chat');
+        })
+        ..ws(
+          '/ws',
+          TurboStreamSocketHandler(
+            hub: hub,
+            topicResolver: (_) => const ['chat'],
+          ),
+        );
 
   await engine.initialize();
   return engine;
@@ -293,7 +298,7 @@ Future<({String message, int nextIndex})> _waitForMessage(
         return (message: message, nextIndex: index);
       }
     }
-    await Future.delayed(const Duration(milliseconds: 50));
+    await Future<void>.delayed(const Duration(milliseconds: 50));
   }
   throw TimeoutException('Timed out waiting for Turbo Stream message', timeout);
 }

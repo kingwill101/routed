@@ -1,6 +1,6 @@
 import 'package:routed_core/routed_core.dart';
 
-import 'turbo_streams.dart';
+import 'package:routed_hotwire/src/turbo_streams.dart';
 
 /// Helpers for sending Turbo-compatible responses from routed controllers.
 class TurboResponse {
@@ -69,10 +69,11 @@ class TurboResponse {
     Map<String, String>? headers,
   }) async {
     if (ctx.isClosed) return ctx.string('');
-    ctx.status(HttpStatus.seeOther);
-    ctx.setHeader(HttpHeaders.locationHeader, location);
+    ctx
+      ..status(HttpStatus.seeOther)
+      ..setHeader(HttpHeaders.locationHeader, location);
     headers?.forEach(ctx.setHeader);
-    ctx.close();
+    await ctx.close();
     return ctx.string('');
   }
 
@@ -84,17 +85,19 @@ class TurboResponse {
     Map<String, String>? headers,
   ) async {
     if (ctx.isClosed) return ctx.string('');
-    ctx.status(statusCode);
-    ctx.setHeader(HttpHeaders.contentTypeHeader, contentType);
+    ctx
+      ..status(statusCode)
+      ..setHeader(HttpHeaders.contentTypeHeader, contentType);
     headers?.forEach(ctx.setHeader);
     ctx.write(body);
-    ctx.close();
+    await ctx.close();
     return ctx.string('');
   }
 }
 
 /// Mixin helpers onto [EngineContext] for concise usage.
 extension TurboResponseContext on EngineContext {
+  /// Sends a full-page HTML response.
   Future<Response> turboHtml(
     String html, {
     int statusCode = HttpStatus.ok,
@@ -102,6 +105,7 @@ extension TurboResponseContext on EngineContext {
   }) =>
       TurboResponse.html(this, html, statusCode: statusCode, headers: headers);
 
+  /// Sends an HTML response for a Turbo frame.
   Future<Response> turboFrame(
     String html, {
     int statusCode = HttpStatus.ok,
@@ -109,6 +113,7 @@ extension TurboResponseContext on EngineContext {
   }) =>
       TurboResponse.frame(this, html, statusCode: statusCode, headers: headers);
 
+  /// Sends a Turbo Stream response.
   Future<Response> turboStream(
     dynamic body, {
     int statusCode = HttpStatus.ok,
@@ -120,9 +125,15 @@ extension TurboResponseContext on EngineContext {
     headers: headers,
   );
 
-  Future<Response> turboSeeOther(String location, {Map<String, String>? headers}) =>
-      TurboResponse.seeOther(this, location, headers: headers);
+  /// Issues a redirect that Turbo Drive follows automatically.
+  Future<Response> turboSeeOther(
+    String location, {
+    Map<String, String>? headers,
+  }) => TurboResponse.seeOther(this, location, headers: headers);
 
-  Future<Response> turboUnprocessable(String html, {Map<String, String>? headers}) =>
-      TurboResponse.unprocessable(this, html, headers: headers);
+  /// Sends an HTML response with an unprocessable-entity status.
+  Future<Response> turboUnprocessable(
+    String html, {
+    Map<String, String>? headers,
+  }) => TurboResponse.unprocessable(this, html, headers: headers);
 }

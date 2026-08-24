@@ -37,16 +37,14 @@ void _storeKeyValue(Map<String, dynamic> root, String rawKey, String value) {
   _doStore(root, segments, value);
 }
 
-/// Splits a bracketed key like "key[nested]" into segments ["key","nested"].
-/// Also handles "key[]" => ["key",""] for array pushes.
+/// Splits a bracketed key like `key[nested]` into `key` and `nested` segments.
+/// Also handles `key[]` as an array push segment.
 List<String> _splitKeyIntoSegments(String rawKey) {
   // e.g. "user[address][city]" => bracketSplit = ["user","address]","city]"]
   final parts = rawKey.split('[');
-  final segments = <String>[];
+  final segments = <String>[parts[0]];
 
   // The first chunk is always "key" (the part before the first '[')
-  segments.add(parts[0]);
-
   // Subsequent chunks remove the trailing ']' if present
   for (var i = 1; i < parts.length; i++) {
     final p = parts[i];
@@ -158,7 +156,7 @@ extension _FirstOrNull<E> on List<E> {
 /// Creates a new key for array-like insertion in a map by scanning
 /// numeric keys (0,1,2,...) until it finds an available one.
 String _findNextAvailableKey(Map<String, dynamic> map) {
-  int index = 0;
+  var index = 0;
   while (map.containsKey(index.toString())) {
     index++;
   }
@@ -166,8 +164,8 @@ String _findNextAvailableKey(Map<String, dynamic> map) {
 }
 
 /// Flattens any single-element lists in a nested map structure.
-/// If a map entry's value is a list of length == 1, replace it with that element.
-/// If that element is also a map, recurse. If the value is a map, recurse into it.
+/// If a map entry's value is a list of length one, replaces it with that
+/// element. If that element or the value is a map, recurses into it.
 Map<String, dynamic> _flattenSingles(dynamic value) {
   if (value is Map<String, dynamic>) {
     final result = <String, dynamic>{};

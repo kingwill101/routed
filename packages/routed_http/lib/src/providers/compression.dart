@@ -4,6 +4,7 @@ import 'package:routed_core/routed_core.dart';
 
 /// Configuration for the built-in gzip response compression provider.
 class CompressionConfig implements ValidatableConfiguration {
+  /// Creates compression settings with optional MIME and algorithm filters.
   CompressionConfig({
     this.enabled = false,
     this.minLength = 1024,
@@ -37,26 +38,27 @@ class CompressionConfig implements ValidatableConfiguration {
 
   @override
   void validate(ConfigValidationContext context) {
-    context.require(
-      minLength >= 0,
-      'minLength',
-      'minimum response length cannot be negative',
-    );
-    context.require(
-      algorithms.every((algorithm) => algorithm.trim().isNotEmpty),
-      'algorithms',
-      'compression algorithms cannot contain empty names',
-    );
-    context.require(
-      mimeAllow.every((pattern) => pattern.trim().isNotEmpty),
-      'mimeAllow',
-      'allowed MIME patterns cannot be empty',
-    );
-    context.require(
-      mimeDeny.every((pattern) => pattern.trim().isNotEmpty),
-      'mimeDeny',
-      'denied MIME patterns cannot be empty',
-    );
+    context
+      ..require(
+        minLength >= 0,
+        'minLength',
+        'minimum response length cannot be negative',
+      )
+      ..require(
+        algorithms.every((algorithm) => algorithm.trim().isNotEmpty),
+        'algorithms',
+        'compression algorithms cannot contain empty names',
+      )
+      ..require(
+        mimeAllow.every((pattern) => pattern.trim().isNotEmpty),
+        'mimeAllow',
+        'allowed MIME patterns cannot be empty',
+      )
+      ..require(
+        mimeDeny.every((pattern) => pattern.trim().isNotEmpty),
+        'mimeDeny',
+        'denied MIME patterns cannot be empty',
+      );
   }
 }
 
@@ -104,6 +106,7 @@ Middleware compressionMiddleware(CompressionConfig config) {
 /// Provider that installs [compressionMiddleware] from [configuration].
 class RoutedCompressionProvider extends ServiceProvider
     with ProvidesTypedConfiguration<CompressionConfig> {
+  /// Creates a provider for [configuration], or the default configuration.
   RoutedCompressionProvider([CompressionConfig? configuration])
     : configuration = configuration ?? CompressionConfig();
 

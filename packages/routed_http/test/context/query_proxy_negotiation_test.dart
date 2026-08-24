@@ -1,3 +1,6 @@
+// These integration fixtures inspect dynamic response payloads and use explicit
+// setup calls to keep each request scenario easy to read.
+// ignore_for_file: avoid_dynamic_calls, cascade_invocations
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -67,7 +70,7 @@ void main() {
     test('negotiates response based on Accept header', () async {
       final engine = testEngine();
       engine.get('/negotiate', (ctx) async {
-        return await ctx.negotiate({
+        return ctx.negotiate({
           'text/plain': () async => ctx.string('plain'),
           'application/json': () async => ctx.json({'ok': true}),
         });
@@ -76,7 +79,6 @@ void main() {
       await engine.initialize();
       final client = TestClient(
         RoutedRequestHandler(engine),
-        mode: TransportMode.inMemory,
       );
       addTearDown(() async {
         await client.close();
@@ -102,13 +104,12 @@ void main() {
     test('returns 406 when no offers are provided', () async {
       final engine = testEngine();
       engine.get('/negotiate', (ctx) async {
-        return await ctx.negotiate({});
+        return ctx.negotiate({});
       });
 
       await engine.initialize();
       final client = TestClient(
         RoutedRequestHandler(engine),
-        mode: TransportMode.inMemory,
       );
       addTearDown(() async {
         await client.close();
@@ -130,7 +131,7 @@ void main() {
     test('forwards requests and proxies response', () async {
       final completer = Completer<_ForwardedRequest>();
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      addTearDown(() async => await server.close(force: true));
+      addTearDown(() async => server.close(force: true));
 
       server.listen((request) async {
         final body = await utf8.decoder.bind(request).join();
@@ -154,7 +155,7 @@ void main() {
 
       final engine = testEngine();
       engine.post('/proxy', (ctx) async {
-        return await ctx.forward(
+        return ctx.forward(
           'http://127.0.0.1:${server.port}/target',
           options: const ProxyOptions(
             forwardHeaders: false,

@@ -1,3 +1,5 @@
+// Explicit setup calls make the upload guardrail scenarios easier to compare.
+// ignore_for_file: cascade_invocations
 import 'dart:typed_data';
 
 import 'package:file/file.dart' as file;

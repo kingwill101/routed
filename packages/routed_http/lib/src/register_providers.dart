@@ -1,6 +1,6 @@
 import 'package:routed_core/routed_core.dart' show ProviderRegistry;
 
-import 'providers/compression.dart';
+import 'package:routed_http/src/providers/compression.dart';
 
 /// Registers HTTP-related providers for direct `routed_http` users.
 void registerRoutedHttpProviders() {

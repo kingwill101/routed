@@ -1,8 +1,6 @@
-// ignore_for_file: implementation_imports
 import 'package:routed_core/routed_core.dart';
-
-import '../context/form_cache.dart';
-import 'binding.dart';
+import 'package:routed_http/src/binding/binding.dart';
+import 'package:routed_http/src/context/form_cache.dart';
 
 /// Handles binding and validation of query parameters.
 class QueryBinding extends Binding {

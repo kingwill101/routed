@@ -12,12 +12,10 @@ final rooms = <String, List<ChatMessage>>{};
 int _messageId = 0;
 
 Future<void> main() async {
-  final engine = Engine();
-
-  engine.get('/rooms/{id}', showRoom);
-  engine.post('/rooms/{id}/messages', createMessage);
-
-  engine.ws('/ws', TurboStreamSocketHandler(hub: hub));
+  final engine = Engine()
+    ..get('/rooms/{id}', showRoom)
+    ..post('/rooms/{id}/messages', createMessage)
+    ..ws('/ws', TurboStreamSocketHandler(hub: hub));
 
   final port = int.tryParse(Platform.environment['PORT'] ?? '') ?? 3000;
   stdout.writeln(
@@ -103,10 +101,10 @@ String renderPage(
   List<ChatMessage> messages,
 ) {
   final csrfName = ctx.engineConfig.security.csrfCookieName;
-  String csrfToken = '';
+  var csrfToken = '';
   try {
     csrfToken = ctx.getSession<String>(csrfName) ?? '';
-  } catch (_) {
+  } on Object catch (_) {
     csrfToken = '';
   }
   final wsProtocol = ctx.scheme == 'https' ? 'wss' : 'ws';
@@ -240,6 +238,7 @@ String renderMessage(ChatMessage message) {
   final timestamp = message.postedAt.toIso8601String();
   return '''
 <div class="msg" id="message_${message.id}">
+  <span class="room" data-room="${htmlEscape.convert(message.roomId)}"></span>
   ${htmlEscape.convert(message.body)}
   <time datetime="$timestamp">${message.postedAt.toLocal()}</time>
 </div>

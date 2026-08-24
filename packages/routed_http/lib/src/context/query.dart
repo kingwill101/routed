@@ -1,6 +1,7 @@
 import 'package:routed_core/routed_core.dart';
-import 'form_cache.dart';
+import 'package:routed_http/src/context/form_cache.dart';
 
+/// Adds typed query-parameter helpers to an [EngineContext].
 extension QueryMethods on EngineContext {
   /// Retrieve a query parameter by key.
   T? getQuery<T>(String key) {
@@ -8,7 +9,7 @@ extension QueryMethods on EngineContext {
     if (value == null) return null;
 
     // Check if the value is empty, if it has that property
-    bool isEmpty = false;
+    var isEmpty = false;
     if (value is String) {
       isEmpty = value.isEmpty;
     } else if (value is List) {
@@ -21,7 +22,7 @@ extension QueryMethods on EngineContext {
     return value as T;
   }
 
-  /// Retrieve an array of query parameters by key.
+  /// Returns all query values for [key].
   List<String> getQueryArray(String key) {
     final values = getQuery<List<String>>(key);
     if (values == null) return [];

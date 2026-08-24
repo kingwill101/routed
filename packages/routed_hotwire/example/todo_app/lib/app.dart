@@ -30,15 +30,13 @@ Future<Engine> createTodoApp({
   );
 
   final assetsRouter = Router()..static('/assets', assetsPath);
-  engine.use(assetsRouter);
-
   final todoHub = hub ?? TurboStreamHub();
   final todoRepository = repository ?? TodoRepository.seed();
   final controller = TodoController(repository: todoRepository, hub: todoHub);
 
-  engine.ws('/ws/todos', TurboStreamSocketHandler(hub: todoHub));
-
   engine
+    ..use(assetsRouter)
+    ..ws('/ws/todos', TurboStreamSocketHandler(hub: todoHub))
     ..get('/', controller.home)
     ..get('/todos', controller.list)
     ..get('/todos/new', controller.form)

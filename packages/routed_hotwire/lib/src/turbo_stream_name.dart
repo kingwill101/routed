@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 
 /// Contract for types that can provide a stable identifier for Turbo streams.
 abstract class TurboStreamIdentifiable {
+  /// The stable identifier used when building a signed stream name.
   String get turboStreamIdentifier;
 }
 
@@ -20,9 +21,7 @@ String buildTurboStreamName(Iterable<Object?> streamables) {
       return;
     }
     if (value is Iterable && value is! String) {
-      for (final element in value) {
-        visit(element);
-      }
+      value.forEach(visit);
       return;
     }
     final text = value.toString().trim();
@@ -31,9 +30,7 @@ String buildTurboStreamName(Iterable<Object?> streamables) {
     }
   }
 
-  for (final value in streamables) {
-    visit(value);
-  }
+  streamables.forEach(visit);
 
   return segments.join(':');
 }
@@ -47,7 +44,7 @@ String signTurboStreamName(Iterable<Object?> streamables) {
   return '$payloadEncoded--$signature';
 }
 
-/// Verifies a signed stream [name] and returns the original stream name if valid.
+/// Verifies a signed stream [name] and returns its original name if valid.
 String? verifyTurboStreamName(String? name) {
   if (name == null || name.trim().isEmpty) return null;
   final parts = name.split('--');

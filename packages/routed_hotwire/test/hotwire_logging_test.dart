@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:contextual/contextual.dart' as contextual;
 import 'package:routed_core/routed_core.dart';
-import 'package:routed_logging/routed_logging.dart';
 import 'package:routed_hotwire/routed_hotwire.dart';
+import 'package:routed_logging/routed_logging.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 
@@ -23,13 +23,12 @@ void main() {
     });
 
     test('ctx.turbo enriches logging context for frame requests', () async {
-      final engine = Engine();
-
-      engine.get('/frame', (ctx) async {
-        ctx.turbo; // triggers context enrichment
-        ctx.logger.info('marker');
-        return ctx.turboHtml('<turbo-frame id="hello"></turbo-frame>');
-      });
+      final engine = Engine()
+        ..get('/frame', (ctx) async {
+          ctx.turbo; // triggers context enrichment
+          ctx.logger.info('marker');
+          return ctx.turboHtml('<turbo-frame id="hello"></turbo-frame>');
+        });
 
       client = TestClient(RoutedRequestHandler(engine));
       final response = await client!.get(
@@ -41,7 +40,7 @@ void main() {
       );
       response.assertStatus(HttpStatus.ok);
       // Give time for async logger listeners
-      await Future<void>.delayed(Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
 
       final marker = factory.messages.firstWhere(
         (entry) => entry.message.contains('marker'),
@@ -54,13 +53,12 @@ void main() {
     });
 
     test('ctx.turbo marks stream requests', () async {
-      final engine = Engine();
-
-      engine.post('/streams', (ctx) async {
-        ctx.turbo;
-        ctx.logger.info('stream handler');
-        return ctx.turboStream('');
-      });
+      final engine = Engine()
+        ..post('/streams', (ctx) async {
+          ctx.turbo;
+          ctx.logger.info('stream handler');
+          return ctx.turboStream('');
+        });
 
       client = TestClient(RoutedRequestHandler(engine));
       final response = await client!.post(
@@ -72,7 +70,7 @@ void main() {
       );
       response.assertStatus(HttpStatus.ok);
       // Give time for async logger listeners
-      await Future<void>.delayed(Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
 
       final marker = factory.messages.firstWhere(
         (entry) => entry.message.contains('stream handler'),
@@ -92,11 +90,12 @@ class _CapturingLoggerFactory {
     final logger = contextual.Logger()
       ..withContext({
         for (final entry in context.entries) entry.key: entry.value,
+      })
+      ..setListener((entry) {
+        messages.add(
+          _LogEntry(entry.record.message, entry.record.context.all()),
+        );
       });
-
-    logger.setListener((entry) {
-      messages.add(_LogEntry(entry.record.message, entry.record.context.all()));
-    });
 
     return logger;
   }

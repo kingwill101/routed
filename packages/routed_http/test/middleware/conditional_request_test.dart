@@ -1,3 +1,5 @@
+// Explicit setup calls keep the conditional request scenarios readable.
+// ignore_for_file: cascade_invocations
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_http/routed_http.dart';
 import 'package:routed_testing/routed_testing.dart';

@@ -1,6 +1,6 @@
 import 'package:routed_core/routed_core.dart';
 
-import '../binding/binding.dart';
+import 'package:routed_http/src/binding/binding.dart';
 
 /// Extension methods for binding data to models within the EngineContext.
 extension BindingMethods on EngineContext {
@@ -23,7 +23,7 @@ extension BindingMethods on EngineContext {
   Future<T> mustBindWith<T>(T model, Binding binding) async {
     try {
       return await shouldBindWith(model, binding);
-    } catch (_) {
+    } on Object catch (_) {
       abortWithError(HttpStatus.forbidden);
       throw StateError('Binding failed'); // Should be unreachable due to abort
     }
@@ -37,10 +37,9 @@ extension BindingMethods on EngineContext {
     return binding.bind(this, model);
   }
 
-  /// Binds the provided [model] using the default binding for the request method and content type.
+  /// Binds [model] using the default binding for the request method and type.
   ///
-  /// This method will determine the appropriate binding based on the request method and content type,
-  /// and then bind the [model] using that binding. It is an asynchronous operation.
+  /// The binding is selected from the request method and content type.
   Future<T> bind<T>(T model) {
     return defaultBinding(
       request.method,
@@ -56,10 +55,9 @@ extension BindingMethods on EngineContext {
     return shouldBindWith(model, uriBinding);
   }
 
-  /// Attempts to bind the provided [model] using the default binding for the request method and content type.
+  /// Attempts to bind [model] using the default request binding.
   ///
-  /// This method will determine the appropriate binding based on the request method and content type,
-  /// and then bind the [model] using that binding. It is an asynchronous operation.
+  /// The binding is selected from the request method and content type.
   Future<T> shouldBind<T>(T model) {
     final b = defaultBinding(request.method, request.contentType?.value ?? '');
     return b.bind(this, model);

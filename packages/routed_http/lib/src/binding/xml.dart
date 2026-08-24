@@ -1,9 +1,8 @@
 import 'dart:convert';
 
 import 'package:routed_core/routed_core.dart';
-
-import '../binding/convert/xml.dart';
-import 'binding.dart';
+import 'package:routed_http/src/binding/binding.dart';
+import 'package:routed_http/src/binding/convert/xml.dart';
 
 /// Binds an XML object body into a map or [Bindable] instance.
 ///
@@ -26,6 +25,8 @@ class XmlBinding extends Binding {
     try {
       return const XmlMapDecoder().convert(body);
     } on Object catch (error) {
+      // XmlParseError is the framework's public EngineError contract.
+      // ignore: only_throw_errors
       throw XmlParseError(details: error.toString());
     }
   }

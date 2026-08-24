@@ -1,7 +1,6 @@
-// ignore_for_file: implementation_imports
 import 'package:routed_core/routed_core.dart';
 
-import 'binding.dart';
+import 'package:routed_http/src/binding/binding.dart';
 
 /// Binds URI parameters to a given instance and validates them.
 class UriBinding extends Binding {

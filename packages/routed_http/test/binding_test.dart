@@ -1,3 +1,5 @@
+// These tests intentionally keep setup calls explicit for readable fixtures.
+// ignore_for_file: cascade_invocations
 import 'dart:convert';
 import 'dart:core';
 
@@ -35,7 +37,7 @@ void main() {
       response.dump();
       response
         ..assertStatus(200)
-        ..assertHasHeader("Content-type")
+        ..assertHasHeader('Content-type')
         ..assertJsonContains({
           'name': 'test',
           'age': 25,
@@ -82,9 +84,9 @@ void main() {
         final age = await ctx.defaultPostForm('age', '0');
         final hobby = await ctx.postForm('hobby');
         final tags = await ctx.postFormArray('tags');
-        final Map<String, dynamic> prefs = {
-          "pref_theme": await ctx.postForm('pref_theme'),
-          "pref_lang": await ctx.postForm('pref_lang'),
+        final prefs = <String, dynamic>{
+          'pref_theme': await ctx.postForm('pref_theme'),
+          'pref_lang': await ctx.postForm('pref_lang'),
         };
 
         // Test file upload
@@ -139,7 +141,7 @@ void main() {
       final engine = testEngine();
 
       engine.get('/search', (ctx) async {
-        final Map<String, dynamic> data = {};
+        final data = <String, dynamic>{};
         await ctx.shouldBindWith(data, queryBinding);
         ctx.json(data);
       });

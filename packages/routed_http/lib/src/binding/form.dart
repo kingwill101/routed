@@ -1,11 +1,10 @@
-// ignore_for_file: implementation_imports, depend_on_referenced_packages
 import 'dart:convert';
 
 import 'package:routed_core/routed_core.dart';
-import 'binding.dart';
-import 'utils.dart';
+import 'package:routed_http/src/binding/binding.dart';
+import 'package:routed_http/src/binding/utils.dart';
 
-/// Handles form binding and validation.
+/// Decodes URL-encoded form bodies into maps or [Bindable] models.
 class FormBinding extends Binding {
   @override
   String get name => 'form';
@@ -25,6 +24,7 @@ class FormBinding extends Binding {
     return instance;
   }
 
+  /// Applies decoded form data to [instance].
   Future<void> bindBody(Map<String, dynamic> decoded, dynamic instance) async {
     if (instance is Map) {
       instance.addAll(decoded);

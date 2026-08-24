@@ -5,6 +5,12 @@ import 'dart:convert';
 /// This class encapsulates the data structure of an SSE event, which includes
 /// optional fields for `id`, `event`, and `retry`, and a required `data` field.
 class SseEvent {
+  /// Constructs an [SseEvent] with the given parameters.
+  ///
+  /// The [data] parameter is required; [id], [event], and [retry] are
+  /// optional.
+  SseEvent({required this.data, this.id, this.event, this.retry});
+
   /// The ID of the event. This can be used to re-establish a connection and
   /// continue receiving events from where it left off.
   final String? id;
@@ -12,16 +18,11 @@ class SseEvent {
   /// The type of event. This can be used to categorize events.
   final String? event;
 
-  /// The reconnection time to use when attempting to reconnect after a connection is lost.
+  /// The reconnection time to use after a connection is lost.
   final Duration? retry;
 
   /// The actual data of the event. This is the main content of the SSE event.
   final String data;
-
-  /// Constructs an [SseEvent] with the given parameters.
-  ///
-  /// The [data] parameter is required, while [id], [event], and [retry] are optional.
-  SseEvent({this.id, this.event, this.retry, required this.data});
 
   @override
   String toString() {
@@ -31,7 +32,7 @@ class SseEvent {
 
 /// A codec for encoding and decoding SSE events.
 ///
-/// This codec provides a way to convert between raw SSE strings and [SseEvent] objects.
+/// This codec converts between raw SSE strings and [SseEvent] objects.
 class SseCodec extends Codec<SseEvent, String> {
   /// Returns the decoder that converts raw SSE strings into [SseEvent] objects.
   @override
@@ -44,7 +45,8 @@ class SseCodec extends Codec<SseEvent, String> {
 
 /// Decodes a raw SSE stream into [SseEvent] objects.
 ///
-/// This class implements the conversion logic from a raw SSE string to an [SseEvent] object.
+/// This class implements conversion from a raw SSE string to an
+/// [SseEvent].
 class _SseEventDecoder extends Converter<String, SseEvent> {
   /// Converts a raw SSE string into an [SseEvent] object.
   ///
@@ -59,7 +61,7 @@ class _SseEventDecoder extends Converter<String, SseEvent> {
     Duration? retry;
     final dataBuffer = StringBuffer();
 
-    for (var line in lines) {
+    for (final line in lines) {
       if (line.startsWith('id:')) {
         id = line.substring(3).trim();
       } else if (line.startsWith('event:')) {
@@ -85,13 +87,12 @@ class _SseEventDecoder extends Converter<String, SseEvent> {
 
 /// Encodes [SseEvent] objects into SSE-compatible strings.
 ///
-/// This class implements the conversion logic from an [SseEvent] object to a raw SSE string.
+/// This class converts an [SseEvent] object to a raw SSE string.
 class _SseEventEncoder extends Converter<SseEvent, String> {
   /// Converts an [SseEvent] object into a raw SSE string.
   ///
-  /// The method constructs a string following the SSE format, with lines starting
-  /// with `id:`, `event:`, `retry:`, or `data:`. Each field of the [SseEvent] object
-  /// is processed and added to the resulting string.
+  /// The method constructs an SSE string with `id:`, `event:`, `retry:`, and
+  /// `data:` lines from the fields of [SseEvent].
   @override
   String convert(SseEvent event) {
     final buffer = StringBuffer();
@@ -105,7 +106,7 @@ class _SseEventEncoder extends Converter<SseEvent, String> {
     if (event.retry != null) {
       buffer.writeln('retry: ${event.retry!.inMilliseconds}');
     }
-    for (var line in LineSplitter.split(event.data)) {
+    for (final line in LineSplitter.split(event.data)) {
       buffer.writeln('data: $line');
     }
 

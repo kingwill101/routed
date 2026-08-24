@@ -1,4 +1,5 @@
-// ignore_for_file: implementation_imports, depend_on_referenced_packages
+// Uploads use asynchronous filesystem APIs so request handling does not block.
+// ignore_for_file: avoid_slow_async_io
 import 'dart:convert';
 import 'dart:io' show Platform, Process;
 
@@ -6,11 +7,11 @@ import 'package:file/file.dart' as fs;
 import 'package:file/local.dart' as local_fs;
 import 'package:mime/mime.dart';
 import 'package:routed_core/routed_core.dart';
+import 'package:routed_http/src/binding/binding.dart';
+import 'package:routed_http/src/binding/utils.dart';
+import 'package:routed_http/src/context/form_cache.dart';
 
-import '../context/form_cache.dart';
-import 'binding.dart';
-import 'utils.dart';
-
+/// Stores a multipart file while enforcing extension, size, and quota limits.
 Future<String> storeFileWithLimit({
   required Stream<List<int>> part,
   required String safeFilename,
@@ -45,8 +46,7 @@ Future<String> storeFileWithLimit({
       normalizedAllowedExtensions,
     );
   }
-  final fs.Directory baseDir =
-      uploadDirectory == null || uploadDirectory.isEmpty
+  final baseDir = uploadDirectory == null || uploadDirectory.isEmpty
       ? fileSystem.systemTempDirectory
       : fileSystem.directory(uploadDirectory);
   if (!await baseDir.exists()) {
@@ -56,7 +56,7 @@ Future<String> storeFileWithLimit({
     await _applyPermissions(fileSystem, baseDir, filePermissions);
   }
   final uniqueId = DateTime.now().microsecondsSinceEpoch;
-  final fs.File outFile = baseDir.childFile('upload_${uniqueId}_$safeFilename');
+  final outFile = baseDir.childFile('upload_${uniqueId}_$safeFilename');
   final outPath = outFile.path;
   final sink = outFile.openWrite();
   var fileBytesSoFar = 0;
@@ -77,7 +77,7 @@ Future<String> storeFileWithLimit({
       }
       sink.add(chunk);
     }
-  } catch (e) {
+  } on Object catch (_) {
     if (!sinkClosed) {
       await sink.close();
       sinkClosed = true;
@@ -115,50 +115,80 @@ Future<void> _applyPermissions(
     try {
       final result = await Process.run('chmod', [octal, entity.path]);
       if (result.exitCode != 0) {
+        // This diagnostic is retained because the helper has no logger
+        // dependency and this path is only an operational warning.
         // ignore: avoid_print
         print(
-          'Failed to apply permissions $octal to ${entity.path}: ${result.stderr}',
+          'Failed to apply permissions $octal to ${entity.path}: '
+          '${result.stderr}',
         );
       }
-    } catch (_) {}
+    } on Object catch (_) {}
   }
 }
 
+/// Reports that an uploaded file exceeded the configured size limit.
 class FileTooLargeException implements Exception {
-  final String message;
-  final num maxSize;
+  /// Creates an exception with a human-readable [message] and [maxSize].
   FileTooLargeException(this.message, this.maxSize);
+
+  /// The explanation of why the upload was rejected.
+  final String message;
+
+  /// The maximum permitted file size in bytes.
+  final num maxSize;
   @override
   String toString() => 'FileTooLargeException: $message';
 }
 
+/// Reports that an uploaded file has a disallowed extension.
 class FileExtensionNotAllowedException implements Exception {
+  /// Creates an exception for [extension] and the configured allow-list.
   FileExtensionNotAllowedException(this.extension, this.allowedExtensions);
+
+  /// The extension found on the uploaded filename.
   final String extension;
+
+  /// The normalized extensions accepted by the upload policy.
   final Set<String> allowedExtensions;
   @override
   String toString() {
     if (allowedExtensions.isEmpty) {
-      return 'FileExtensionNotAllowedException: No upload extensions are currently allowed.';
+      return 'FileExtensionNotAllowedException: No upload extensions are '
+          'currently allowed.';
     }
-    return 'FileExtensionNotAllowedException: Extension "$extension" is not allowed. Allowed extensions: ${allowedExtensions.join(', ')}';
+    return 'FileExtensionNotAllowedException: Extension "$extension" is not '
+        'allowed. Allowed extensions: '
+        '${allowedExtensions.join(', ')}';
   }
 }
 
+/// Reports that the upload quota would be exceeded.
 class FileQuotaExceededException implements Exception {
+  /// Creates an exception for a quota of [maxDiskUsage] bytes.
   FileQuotaExceededException(this.maxDiskUsage);
+
+  /// The configured maximum number of bytes, or a non-positive value when
+  /// the quota is not bounded.
   final int maxDiskUsage;
   @override
   String toString() => maxDiskUsage <= 0
       ? 'FileQuotaExceededException: Upload quota exceeded.'
-      : 'FileQuotaExceededException: Upload quota exceeded $maxDiskUsage bytes.';
+      : 'FileQuotaExceededException: Upload quota exceeded '
+            '$maxDiskUsage bytes.';
 }
 
+/// Tracks bytes consumed by uploads sharing a quota.
 class UploadQuotaTracker {
+  /// Creates a tracker with a maximum usage of [maxDiskUsage] bytes.
   UploadQuotaTracker(this.maxDiskUsage);
+
+  /// The maximum number of bytes that may be consumed.
   final int maxDiskUsage;
   int _used = 0;
   bool get _enabled => maxDiskUsage > 0;
+
+  /// Attempts to reserve [bytes] and returns whether the reservation fits.
   bool tryConsume(int bytes) {
     if (!_enabled) return true;
     if (_used + bytes > maxDiskUsage) {
@@ -168,6 +198,7 @@ class UploadQuotaTracker {
     return true;
   }
 
+  /// Releases a previous reservation of [bytes].
   void release(int bytes) {
     if (!_enabled) return;
     _used -= bytes;
@@ -176,26 +207,31 @@ class UploadQuotaTracker {
     }
   }
 
+  /// Clears all reservations made by this tracker.
   void reset() {
     _used = 0;
   }
 }
 
+/// Extracts a quoted parameter from a multipart header line.
 String? extractParam(String headerLine, String param) {
   final match = RegExp('$param="([^"]*)"').firstMatch(headerLine);
   return match?.group(1);
 }
 
+/// Replaces filename characters that are unsafe for a local path.
 String sanitizeFilename(String filename) {
   return filename.replaceAll(RegExp(r'[\\/:*?"<>|]+'), '_');
 }
 
+/// Returns the lower-case extension from [filename], or an empty string.
 String getExtension(String filename) {
   final idx = filename.lastIndexOf('.');
   if (idx == -1) return '';
   return filename.substring(idx + 1).toLowerCase();
 }
 
+/// Parses multipart fields and stores uploaded files using engine settings.
 Future<MultipartForm> parseMultipartForm(EngineContext context) async {
   final request = context.request;
   final contentType = request.headers.contentType;
@@ -210,8 +246,8 @@ Future<MultipartForm> parseMultipartForm(EngineContext context) async {
     throw Exception('Missing boundary parameter');
   }
   final fields = <String, dynamic>{};
-  final List<MultipartFile> files = [];
-  int totalBytesRead = 0;
+  final files = <MultipartFile>[];
+  var totalBytesRead = 0;
   final quota = UploadQuotaTracker(context.engineConfig.multipart.maxDiskUsage);
   final createdFiles = <String>[];
   var parsingCompleted = false;
@@ -238,9 +274,8 @@ Future<MultipartForm> parseMultipartForm(EngineContext context) async {
             onBytesRead: (chunkSize) {
               totalBytesRead += chunkSize;
               if (totalBytesRead > context.engineConfig.multipart.maxMemory) {
-                throw Exception(
-                  'Request exceeded ${context.engineConfig.multipart.maxMemory} bytes',
-                );
+                final maxMemory = context.engineConfig.multipart.maxMemory;
+                throw Exception('Request exceeded $maxMemory bytes');
               }
             },
           );
@@ -265,9 +300,8 @@ Future<MultipartForm> parseMultipartForm(EngineContext context) async {
         final bytes = await part.fold<List<int>>([], (prev, chunk) {
           totalBytesRead += chunk.length;
           if (totalBytesRead > context.engineConfig.multipart.maxMemory) {
-            throw Exception(
-              'Request exceeded ${context.engineConfig.multipart.maxMemory} bytes',
-            );
+            final maxMemory = context.engineConfig.multipart.maxMemory;
+            throw Exception('Request exceeded $maxMemory bytes');
           }
           return [...prev, ...chunk];
         });
@@ -294,7 +328,7 @@ Future<MultipartForm> parseMultipartForm(EngineContext context) async {
             quota.release(await file.length());
             await file.delete();
           }
-        } catch (_) {}
+        } on Object catch (_) {}
       }
       quota.reset();
     }
@@ -302,12 +336,9 @@ Future<MultipartForm> parseMultipartForm(EngineContext context) async {
   return MultipartForm(fields: fields, files: files);
 }
 
+/// Describes a multipart file stored during request parsing.
 class MultipartFile {
-  final String filename;
-  final String path;
-  final int size;
-  final String contentType;
-  final String name;
+  /// Creates a stored file description.
   MultipartFile({
     required this.name,
     required this.filename,
@@ -315,26 +346,50 @@ class MultipartFile {
     required this.size,
     required this.contentType,
   });
+
+  /// The original filename supplied by the client.
+  final String filename;
+
+  /// The path where the file was stored.
+  final String path;
+
+  /// The stored file size in bytes.
+  final int size;
+
+  /// The detected or supplied content type.
+  final String contentType;
+
+  /// The multipart field name containing the file.
+  final String name;
 }
 
+/// The fields and files parsed from a multipart request.
 class MultipartForm {
-  final Map<String, dynamic> fields;
-  final List<MultipartFile> files;
+  /// Creates a multipart result with optional [fields] and [files].
   MultipartForm({this.fields = const {}, this.files = const []});
+
+  /// Form fields keyed by their multipart field name.
+  final Map<String, dynamic> fields;
+
+  /// Files stored while parsing the request.
+  final List<MultipartFile> files;
 }
 
+/// Parses a URL-encoded request body into a form map.
 Future<Map<String, dynamic>> parseForm(EngineContext ctx) async {
   final bodyBytes = await ctx.request.bytes;
   final bodyString = utf8.decode(bodyBytes);
   return parseUrlEncoded(bodyString);
 }
 
+/// Binds multipart form fields to maps or [Bindable] models.
 class MultipartBinding extends Binding {
   @override
   String get name => 'multipart';
   @override
   MimeType get mimeType => MimeType.multipartPostForm;
   @override
+  /// Binds multipart fields to [instance].
   Future<T> bind<T>(
     EngineContext context,
     T instance, {

@@ -84,8 +84,9 @@ void main() {
       final active = _TestConnection();
       final closed = _TestConnection(closeCodeValue: 1000);
 
-      hub.subscribe(active, ['room:a']);
-      hub.subscribe(closed, ['room:a']);
+      hub
+        ..subscribe(active, ['room:a'])
+        ..subscribe(closed, ['room:a']);
 
       final fragment = turboStreamRemove(target: 'message_1');
       hub.broadcast('room:a', [fragment]);
@@ -106,8 +107,9 @@ void main() {
       final flaky = _TestConnection(throwOnSend: true);
       final healthy = _TestConnection();
 
-      hub.subscribe(flaky, ['room:b']);
-      hub.subscribe(healthy, ['room:b']);
+      hub
+        ..subscribe(flaky, ['room:b'])
+        ..subscribe(healthy, ['room:b']);
 
       final fragment = turboStreamAppend(target: 'messages', html: '<p>hi</p>');
       hub.broadcast('room:b', [fragment]);

@@ -17,19 +17,19 @@ environment:
   sdk: '>=3.9.0 <4.0.0'
 
 dependencies:
-  intl: ^0.20.2
   crypto: ^3.0.7
+  intl: ^0.20.2
   routed_core: ">=0.4.0 <1.0.0"
   routed_logging: ">=0.2.0 <1.0.0"
   routed_views: ">=0.2.0 <1.0.0"
 
 dev_dependencies:
+  contextual: ^2.2.0
+  path: ^1.9.1
   routed_http: ">=0.1.0 <1.0.0"
   routed_sessions: ">=0.2.0 <1.0.0"
   routed_storage: ">=0.2.0 <1.0.0"
-  contextual: ^2.2.0
-  lints: ^6.0.0
-  path: ^1.9.1
   routed_testing: ">=0.4.0 <1.0.0"
   server_testing: ">=0.4.0 <1.0.0"
   test: ^1.29.0
+  very_good_analysis: ^10.0.0

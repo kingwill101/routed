@@ -1,3 +1,6 @@
+// These tests use framework EngineError values and explicit setup calls to
+// exercise error negotiation without replacing the public error contract.
+// ignore_for_file: cascade_invocations, only_throw_errors
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_http/routed_http.dart';
 import 'package:routed_testing/routed_testing.dart';

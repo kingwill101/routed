@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:routed_core/routed_core.dart';
 
-import '../binding/convert/sse.dart';
+import 'package:routed_http/src/binding/convert/sse.dart';
 
 /// Extension providing Server-Sent Events (SSE) support for [EngineContext].
 ///
@@ -15,10 +15,10 @@ import '../binding/convert/sse.dart';
 ///
 /// ## Features
 ///
-/// - **Automatic Heartbeats**: Keeps connections alive with periodic heartbeat comments
-/// - **Graceful Shutdown**: Closes connections cleanly when the server shuts down
-/// - **Compression Disabled**: Automatically disables compression for streaming
-/// - **Buffering Control**: Disables output buffering for immediate delivery
+/// - **Automatic heartbeats**: Keeps connections alive with periodic comments.
+/// - **Graceful shutdown**: Closes connections when the server shuts down.
+/// - **Compression disabled**: Streaming responses are not compressed.
+/// - **Buffering control**: Disables output buffering for immediate delivery.
 ///
 /// Example:
 /// ```dart
@@ -40,11 +40,11 @@ extension EngineContextSse on EngineContext {
   /// completes, an error occurs, or the client disconnects.
   ///
   /// The [events] stream provides the SSE events to send to the client. Each
-  /// event is encoded according to the SSE specification and flushed immediately.
+  /// event is encoded according to the SSE specification and flushed
+  /// immediately.
   ///
-  /// The [heartbeat] duration controls how often heartbeat comments are sent
-  /// to keep the connection alive and detect disconnections. Set to [Duration.zero]
-  /// to disable heartbeats. Default is 15 seconds.
+  /// The [heartbeat] duration controls how often comments are sent to keep the
+  /// connection alive. Set it to [Duration.zero] to disable heartbeats.
   ///
   /// The [heartbeatComment] is the text included in heartbeat comment lines.
   /// Default is 'heartbeat'.
@@ -89,25 +89,26 @@ extension EngineContextSse on EngineContext {
     String heartbeatComment = 'heartbeat',
   }) async {
     response.headers
-      ..set(HttpHeaders.contentTypeHeader, 'text/event-stream; charset=utf-8')
+      ..set(
+        HttpHeaders.contentTypeHeader,
+        'text/event-stream; charset=utf-8',
+      )
       ..set(HttpHeaders.cacheControlHeader, 'no-cache, no-transform')
       ..set('X-Accel-Buffering', 'no');
 
-    response.writeHeaderNow();
-
-    // Disable output buffering so subsequent writes stream immediately.
-    response.bufferOutput = false;
-
-    // Prime the stream with a comment so intermediaries release the response.
-    response.write(':ok\n\n');
+    // Disable buffering and prime the stream so intermediaries release it.
+    response
+      ..writeHeaderNow()
+      ..bufferOutput = false
+      ..write(':ok\n\n');
     await response.flush();
     response.writeNow(); // mark response as streaming
 
     final codec = SseCodec();
     Timer? heartbeatTimer; // Timer for periodic heartbeat comments
     Timer? shutdownPollTimer; // Timer for polling shutdown state
-    bool closed = false; // Whether the connection has been closed
-    bool shutdownSignaled = false; // Whether shutdown control event was sent
+    var closed = false; // Whether the connection has been closed
+    var shutdownSignaled = false; // Whether shutdown control event was sent
     StreamSubscription<SseEvent>? subscription; // Event stream subscription
     final completion = Completer<void>(); // Tracks connection completion
 
@@ -135,7 +136,7 @@ extension EngineContextSse on EngineContext {
     Future<void> writeHeartbeat() async {
       try {
         await writeFrame(':$heartbeatComment\n\n');
-      } catch (_) {}
+      } on Object catch (_) {}
     }
 
     // Closes the SSE connection and cleans up resources
@@ -149,23 +150,25 @@ extension EngineContextSse on EngineContext {
       if (!fromSubscription) {
         try {
           await subscription?.cancel();
-        } catch (_) {}
+        } on Object catch (_) {}
       }
       if (!response.isClosed) {
         try {
           await response.close();
-        } catch (_) {}
+        } on Object catch (_) {}
       }
       if (!completion.isCompleted) {
         completion.complete();
       }
     }
 
-    response.done.catchError((_) {}).whenComplete(() {
-      if (!completion.isCompleted) {
-        completion.complete();
-      }
-    });
+    unawaited(
+      response.done.catchError((_) {}).whenComplete(() {
+        if (!completion.isCompleted) {
+          completion.complete();
+        }
+      }),
+    );
 
     // Subscribe to the event stream and forward events to the client
     subscription = events.listen(
@@ -197,7 +200,7 @@ extension EngineContextSse on EngineContext {
       });
     }
 
-    // Poll shutdown controller to promptly close SSE connections during graceful shutdown
+    // Poll the shutdown controller to close SSE connections during shutdown.
     final sc = engine?.shutdownController;
     if (sc != null) {
       shutdownPollTimer = Timer.periodic(const Duration(milliseconds: 250), (
@@ -216,7 +219,7 @@ extension EngineContextSse on EngineContext {
             await writeEvent(
               SseEvent(event: 'control', data: 'close', retry: Duration.zero),
             );
-          } catch (_) {}
+          } on Object catch (_) {}
           await closeConnection();
         }
       });

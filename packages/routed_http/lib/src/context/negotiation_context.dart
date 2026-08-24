@@ -3,11 +3,14 @@ import 'dart:io';
 
 import 'package:routed_core/routed_core.dart';
 
-import '../http/negotiation.dart';
+import 'package:routed_http/src/http/negotiation.dart';
 
+/// Builds a response for a selected negotiated media type.
 typedef NegotiatedResponseBuilder = FutureOr<Response> Function();
 
+/// Adds response negotiation helpers to an [EngineContext].
 extension NegotiationContext on EngineContext {
+  /// Selects a supported media type and optionally adds `Vary: Accept`.
   NegotiatedMediaType? negotiateContentType(
     Iterable<String> supported, {
     String? defaultType,
@@ -26,12 +29,12 @@ extension NegotiationContext on EngineContext {
     return negotiated;
   }
 
-  /// Executes the builder corresponding to the negotiated media type from [offers].
+  /// Executes the builder corresponding to the negotiated media type in
+  /// [offers].
   ///
-  /// When negotiation fails, returns a 406 response (status can be customised via
-  /// [notAcceptableStatus]). The selected builder is responsible for writing the
-  /// response body; if it does not set a `Content-Type`, this helper applies the
-  /// negotiated one.
+  /// When negotiation fails, returns a 406 response, or the configured
+  /// [notAcceptableStatus]. The selected builder writes the response body; if
+  /// it does not set a `Content-Type`, this helper applies the negotiated one.
   Future<Response> negotiate(
     Map<String, NegotiatedResponseBuilder> offers, {
     String? defaultType,
@@ -73,8 +76,8 @@ extension NegotiationContext on EngineContext {
     if (response.headers.contentType == null) {
       try {
         response.headers.contentType = ContentType.parse(selection.value);
-      } catch (_) {
-        // Ignore invalid content-type strings, builders can set a custom header.
+      } on FormatException catch (_) {
+        // Invalid content-type strings are left for builders to override.
       }
     }
     return result;

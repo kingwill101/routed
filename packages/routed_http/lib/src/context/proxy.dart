@@ -62,6 +62,13 @@ extension ProxyMethods on EngineContext {
 
 /// Configuration options for proxy requests
 class ProxyOptions {
+  /// Creates proxy options with the given configuration
+  const ProxyOptions({
+    this.forwardHeaders = true,
+    this.headers,
+    this.addProxyHeaders = true,
+  });
+
   /// Whether to forward original request headers
   final bool forwardHeaders;
 
@@ -70,11 +77,4 @@ class ProxyOptions {
 
   /// Whether to add proxy-related headers to the response
   final bool addProxyHeaders;
-
-  /// Creates proxy options with the given configuration
-  const ProxyOptions({
-    this.forwardHeaders = true,
-    this.headers,
-    this.addProxyHeaders = true,
-  });
 }
