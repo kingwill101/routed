@@ -3,11 +3,12 @@ import 'package:file/file.dart' as fs;
 import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 
+/// Reads the package name from [projectRoot]'s `pubspec.yaml`.
 Future<String?> readPackageName(fs.Directory projectRoot) async {
   final pubspecFile = projectRoot.fileSystem.file(
     p.join(projectRoot.path, 'pubspec.yaml'),
   );
-  if (!await pubspecFile.exists()) {
+  if (!pubspecFile.existsSync()) {
     return null;
   }
   try {
@@ -21,7 +22,7 @@ Future<String?> readPackageName(fs.Directory projectRoot) async {
         }
       }
     }
-  } catch (_) {
+  } on Exception {
     // Ignore parse errors; caller will handle fallback behaviour.
   }
   return null;

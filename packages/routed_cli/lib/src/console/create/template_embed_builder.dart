@@ -2,6 +2,7 @@ import 'package:build/build.dart';
 import 'package:glob/glob.dart';
 import 'package:path/path.dart' as p;
 
+/// Creates the build runner builder that embeds scaffold templates.
 Builder scaffoldTemplateEmbedBuilder(BuilderOptions options) =>
     _ScaffoldTemplateEmbedBuilder();
 
@@ -17,6 +18,8 @@ class _ScaffoldTemplateEmbedBuilder implements Builder {
   @override
   Future<void> build(BuildStep buildStep) async {
     final assets = <AssetId>[];
+    // BuildStep exposes template assets as an asynchronous stream.
+    // ignore: prefer_foreach
     await for (final asset in buildStep.findAssets(_templateGlob)) {
       assets.add(asset);
     }
@@ -28,14 +31,19 @@ class _ScaffoldTemplateEmbedBuilder implements Builder {
       ..writeln()
       ..writeln("import 'dart:typed_data';")
       ..writeln()
+      ..writeln(
+        '/// Embedded scaffold files keyed by template-relative paths.',
+      )
       ..writeln('final Map<String, Uint8List> scaffoldTemplateBytes = {');
 
+    // Each asset must be read asynchronously before it can be emitted.
     for (final asset in assets) {
       final bytes = await buildStep.readAsBytes(asset);
       final key = _relativeKey(asset.path);
-      buffer.write("  '${_escape(key)}': Uint8List.fromList(<int>[");
-      buffer.write(bytes.join(','));
-      buffer.writeln(']),');
+      buffer
+        ..write("  '${_escape(key)}': Uint8List.fromList(<int>[")
+        ..write(bytes.join(','))
+        ..writeln(']),');
     }
     buffer.writeln('};');
 
@@ -45,10 +53,10 @@ class _ScaffoldTemplateEmbedBuilder implements Builder {
 
   String _relativeKey(String assetPath) {
     final rel = p.relative(assetPath, from: 'templates/scaffold');
-    return p.posix.normalize(rel.replaceAll('\\', '/'));
+    return p.posix.normalize(rel.replaceAll(r'\', '/'));
   }
 
   String _escape(String value) {
-    return value.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
+    return value.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
   }
 }

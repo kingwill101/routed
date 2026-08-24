@@ -1,5 +1,5 @@
-import 'dart:io' as io;
 import 'dart:convert';
+import 'dart:io' as io;
 
 import 'package:args/command_runner.dart';
 import 'package:file/file.dart' as fs;
@@ -7,8 +7,8 @@ import 'package:file/memory.dart';
 import 'package:routed_cli/routed_cli.dart' show CliLogger;
 import 'package:routed_cli/src/console/args/commands/dev.dart';
 import 'package:routed_cli/src/console/args/runner.dart';
-import 'package:routed_cli/src/console/engine/manifest_loader.dart';
 import 'package:routed_cli/src/console/dev/dev_server_runner.dart' as dev;
+import 'package:routed_cli/src/console/engine/manifest_loader.dart';
 import 'package:test/test.dart';
 
 void main() {

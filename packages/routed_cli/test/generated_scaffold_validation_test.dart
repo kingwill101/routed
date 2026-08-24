@@ -25,6 +25,7 @@ void main() {
   for (final scaffoldCase in cases) {
     final name = scaffoldCase.name;
     final template = scaffoldCase.template;
+    final authPlugins = List<String>.unmodifiable(scaffoldCase.authPlugins);
     test(
       'generated $name project analyzes, compiles, and runs its manifest',
       () async {
@@ -51,7 +52,7 @@ void main() {
           sandbox.path,
           '--template',
           template,
-          for (final plugin in scaffoldCase.authPlugins) ...[
+          for (final plugin in authPlugins) ...[
             '--auth-plugin',
             plugin,
           ],
@@ -69,6 +70,11 @@ void main() {
           project,
           '$template analyzer',
         );
+        await _installPackageConfig(
+          source: sourcePackageConfig,
+          project: project,
+          packageName: packageName,
+        );
         await _expectDartSuccess(
           [
             'compile',
@@ -80,8 +86,13 @@ void main() {
           project,
           '$template server compilation',
         );
+        await _installPackageConfig(
+          source: sourcePackageConfig,
+          project: project,
+          packageName: packageName,
+        );
         final manifest = await _expectDartSuccess(
-          ['run', 'tool/spec_manifest.dart'],
+          ['tool/spec_manifest.dart'],
           project,
           '$template manifest entrypoint',
         );
@@ -103,23 +114,24 @@ Future<void> _installPackageConfig({
 }) async {
   final decoded =
       jsonDecode(await source.readAsString()) as Map<String, Object?>;
-  final packages = (decoded['packages']! as List<Object?>)
-      .cast<Map<String, Object?>>()
-      .map((entry) {
-        final copy = Map<String, Object?>.from(entry);
-        copy['rootUri'] = source.uri
-            .resolve(entry['rootUri']! as String)
-            .toString();
-        return copy;
-      })
-      .where((entry) => entry['name'] != packageName)
-      .toList();
-  packages.add({
-    'name': packageName,
-    'rootUri': project.uri.toString(),
-    'packageUri': 'lib/',
-    'languageVersion': '3.9',
-  });
+  final packages = <Map<String, Object?>>[
+    ...((decoded['packages']! as List<Object?>)
+        .cast<Map<String, Object?>>()
+        .map((entry) {
+          final copy = Map<String, Object?>.from(entry);
+          copy['rootUri'] = source.uri
+              .resolve(entry['rootUri']! as String)
+              .toString();
+          return copy;
+        })
+        .where((entry) => entry['name'] != packageName)),
+    <String, Object?>{
+      'name': packageName,
+      'rootUri': project.uri.toString(),
+      'packageUri': 'lib/',
+      'languageVersion': '3.9',
+    },
+  ];
 
   final output = Map<String, Object?>.from(decoded)..['packages'] = packages;
   final destination = File(

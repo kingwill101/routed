@@ -1,10 +1,16 @@
-library;
-
 import 'dart:async';
 import 'dart:io';
 
 import 'package:routed_cli/src/console/util/dart_exec.dart';
 
+export 'src/console/args/provider_commands.dart'
+    show
+        ProviderArtisanalCommandRegistration,
+        ProviderArtisanalCommandRegistry,
+        ProviderCommandRegistration,
+        ProviderCommandRegistry,
+        registerProviderArtisanalCommands,
+        registerProviderCommands;
 export 'src/console/args/runner.dart' show RoutedCommandRunner;
 export 'src/console/create/templates.dart'
     show FileBuilder, ScaffoldTemplate, TemplateContext, Templates;
@@ -17,14 +23,6 @@ export 'src/console/project/commands_loader.dart'
         ProjectCommandOption,
         ProjectCommandsLoader,
         shouldLoadProjectCommands;
-export 'src/console/args/provider_commands.dart'
-    show
-        ProviderCommandRegistry,
-        ProviderCommandRegistration,
-        ProviderArtisanalCommandRegistry,
-        ProviderArtisanalCommandRegistration,
-        registerProviderCommands,
-        registerProviderArtisanalCommands;
 
 /// Routed CLI core utilities.
 ///
@@ -54,7 +52,6 @@ class CliVersion {
   /// Compile-time injected version when provided by build tooling.
   static const String _embedded = String.fromEnvironment(
     envKey,
-    defaultValue: '',
   );
 
   /// Resolve the CLI version string.
@@ -72,13 +69,13 @@ class CliVersion {
   /// Walks up to 5 directories looking for a pubspec.yaml and extracting
   /// its top-level `version:` field via a regex to avoid extra dependencies.
   static Future<String?> _readPubspecVersion({required Directory start}) async {
-    Directory dir = start;
+    var dir = start;
 
-    for (int i = 0; i < 5; i++) {
+    for (var i = 0; i < 5; i++) {
       final pubspec = File('${dir.path}${Platform.pathSeparator}pubspec.yaml');
-      if (await pubspec.exists()) {
+      if (pubspec.existsSync()) {
         try {
-          final content = await pubspec.readAsString();
+          final content = pubspec.readAsStringSync();
           final match = RegExp(
             r'^\s*version\s*:\s*(.+)\s*$',
             multiLine: true,
@@ -87,7 +84,7 @@ class CliVersion {
           if (match != null) {
             return match.group(1)?.trim();
           }
-        } catch (_) {
+        } on Exception {
           // Ignore and continue walking up.
         }
         break;
@@ -103,16 +100,22 @@ class CliVersion {
 
 /// Minimal logger for CLI output.
 class CliLogger {
+  /// Creates a logger that emits verbose diagnostics when [verbose] is true.
   CliLogger({this.verbose = false});
 
+  /// Whether debug messages should be written.
   bool verbose;
 
+  /// Writes an informational [message] to standard output.
   void info(Object? message) => stdout.writeln(message);
 
+  /// Writes a warning [message] to standard output.
   void warn(Object? message) => stdout.writeln('WARN: $message');
 
+  /// Writes an error [message] to standard error.
   void error(Object? message) => stderr.writeln('ERROR: $message');
 
+  /// Writes [message] when [verbose] logging is enabled.
   void debug(Object? message) {
     if (verbose) stdout.writeln('DEBUG: $message');
   }
@@ -120,12 +123,7 @@ class CliLogger {
 
 /// Options used by the `dev` command to run a development server.
 class DevOptions {
-  final String host;
-  final int port;
-  final String entry;
-  final List<String> watch;
-  final bool verbose;
-
+  /// Creates development-server options with local-server defaults.
   const DevOptions({
     this.host = '127.0.0.1',
     this.port = 8080,
@@ -134,6 +132,22 @@ class DevOptions {
     this.verbose = false,
   });
 
+  /// Host interface on which the development server listens.
+  final String host;
+
+  /// Port on which the development server listens.
+  final int port;
+
+  /// Application entrypoint to execute.
+  final String entry;
+
+  /// Paths that would be watched by a future reload implementation.
+  final List<String> watch;
+
+  /// Whether the development server should emit diagnostic logging.
+  final bool verbose;
+
+  /// Returns a copy with the supplied option values replaced.
   DevOptions copyWith({
     String? host,
     int? port,
@@ -152,7 +166,13 @@ class DevOptions {
 
   @override
   String toString() =>
-      'DevOptions(host: $host, port: $port, entry: $entry, watch: $watch, verbose: $verbose)';
+      'DevOptions(\n'
+      '  host: $host,\n'
+      '  port: $port,\n'
+      '  entry: $entry,\n'
+      '  watch: $watch,\n'
+      '  verbose: $verbose,\n'
+      ')';
 }
 
 /// Spawns a Dart process using the current Dart executable.
@@ -216,8 +236,6 @@ String usageHeader() => 'A fast, minimalistic backend framework for Dart.';
 /// This is intentionally minimal; future improvements can render tables.
 String formatRoutesTable(Iterable<String> routes) {
   final buf = StringBuffer();
-  for (final r in routes) {
-    buf.writeln(r);
-  }
+  routes.forEach(buf.writeln);
   return buf.toString();
 }

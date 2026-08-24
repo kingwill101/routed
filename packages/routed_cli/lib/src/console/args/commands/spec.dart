@@ -7,7 +7,9 @@ import 'package:routed_cli/routed_cli.dart';
 import 'package:routed_cli/src/console/args/base_command.dart';
 import 'package:routed_cli/src/console/engine/manifest_loader.dart';
 
+/// Writes a route manifest for a Routed application.
 class SpecGenerateCommand extends BaseCommand {
+  /// Creates a specification-generation command.
   SpecGenerateCommand({
     super.logger,
     super.fileSystem,
@@ -23,7 +25,8 @@ class SpecGenerateCommand extends BaseCommand {
       ..addOption(
         'output',
         help:
-            'Target path for the generated manifest (relative to project root).',
+            'Target path for the generated manifest (relative to project '
+            'root).',
         valueHelp: 'file',
         defaultsTo: resolvedFileSystem.path.join(
           '.dart_tool',

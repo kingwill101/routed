@@ -9,6 +9,7 @@ import 'package:routed_cli/src/console/dev/dev_server_runner.dart' as dev;
 import 'package:routed_cli/src/console/engine/manifest_loader.dart';
 import 'package:routed_cli/src/console/util/dart_exec.dart';
 
+/// Creates the process runner used by [DevCommand].
 typedef DevServerFactory =
     DevServer Function({
       required CliLogger logger,
@@ -22,9 +23,12 @@ typedef DevServerFactory =
       void Function()? onReload,
     });
 
+/// Minimal process lifecycle contract used by the development command.
 abstract class DevServer {
+  /// Starts the server and forwards [arguments] to the application.
   Future<void> start(List<String> arguments);
 
+  /// Completes with the server's exit status when it stops.
   Future<dev.ExitCode> get exitCode;
 }
 
@@ -63,9 +67,10 @@ class _DefaultDevServer implements DevServer {
 /// Run a local development server with optional hot reload bootstrap.
 ///
 /// Features:
-/// - Launches the target entrypoint with `--enable-vm-service` (required for hot reload).
-/// - Optionally generates a small bootstrap that initializes `hotreloader` and then
-///   calls your entrypoint's `main(List<String> args)`.
+/// - Launches the target entrypoint with `--enable-vm-service` (required for
+///   hot reload).
+/// - Optionally generates a small bootstrap that initializes `hotreloader` and
+///   then calls your entrypoint's `main(List<String> args)`.
 /// - Can auto-install `hotreloader` as a dev dependency when missing.
 ///
 /// Options:
@@ -76,8 +81,10 @@ class _DefaultDevServer implements DevServer {
 /// - --bootstrap: Generate and run the hotreloader bootstrap (default: true)
 /// - --bootstrap-path: Custom bootstrap file path
 /// - --install-missing: Auto-install hotreloader when missing (default: true)
-/// - --no-warn-missing: Suppress warning if hotreloader is missing (default: false)
+/// - --no-warn-missing: Suppress warning if hotreloader is missing
+///   (default: false)
 class DevCommand extends BaseCommand {
+  /// Creates the local development-server command.
   DevCommand({
     super.logger,
     super.fileSystem,
@@ -118,7 +125,6 @@ class DevCommand extends BaseCommand {
         'bootstrap',
         help:
             'Generate and run a hotreloader bootstrap around your entrypoint.',
-        negatable: true,
         defaultsTo: true,
       )
       ..addOption(
@@ -129,15 +135,13 @@ class DevCommand extends BaseCommand {
       ..addFlag(
         'install-missing',
         help: 'Auto-install dev dependency `hotreloader` if missing.',
-        negatable: true,
         defaultsTo: true,
       )
       ..addFlag(
         'no-warn-missing',
         help:
-            'Suppress warning when `hotreloader` is missing and auto-install is disabled.',
-        negatable: true,
-        defaultsTo: false,
+            'Suppress warning when `hotreloader` is missing and auto-install '
+            'is disabled.',
       );
   }
 
@@ -197,7 +201,7 @@ class DevCommand extends BaseCommand {
       final host = results?['host'] as String? ?? '127.0.0.1';
       final port = int.tryParse(results?['port'] as String? ?? '') ?? 8080;
       final entry = results?['entry'] as String? ?? 'bin/server.dart';
-      final watch = (results?['watch'] as List<String>? ?? const <String>[]);
+      final watch = results?['watch'] as List<String>? ?? const <String>[];
       final useBootstrap = results?['bootstrap'] as bool? ?? true;
       final bootstrapOverride = results?['bootstrap-path'] as String?;
       final installMissing = results?['install-missing'] as bool? ?? true;
@@ -205,7 +209,7 @@ class DevCommand extends BaseCommand {
 
       // Validate entry
       final entryFile = fileSystem.file(entry);
-      if (!await entryFile.exists()) {
+      if (!entryFile.existsSync()) {
         logger.error('Entry file not found: $entry');
         io.exitCode = 2;
         return;
@@ -231,13 +235,13 @@ class DevCommand extends BaseCommand {
       }
 
       // Ensure hotreloader is available if we're using bootstrap
-      bool hasHotReloader = false;
+      var hasHotReloader = false;
       if (useBootstrap && projectRoot != null) {
         final pubspec = projectRoot.fileSystem.file(
           joinPath([projectRoot.path, 'pubspec.yaml']),
         );
-        if (await pubspec.exists()) {
-          final content = await pubspec.readAsString();
+        if (pubspec.existsSync()) {
+          final content = pubspec.readAsStringSync();
           hasHotReloader = RegExp(
             r'^\s*(dev_dependencies|dependencies)\s*:[\s\S]*?^\s*hotreloader\s*:',
             multiLine: true,
@@ -255,19 +259,21 @@ class DevCommand extends BaseCommand {
             hasHotReloader = addCode == 0;
             if (!hasHotReloader && !suppressWarnMissing) {
               logger.error(
-                'Failed to add hotreloader (exit code $addCode). Proceeding without bootstrap.',
+                'Failed to add hotreloader (exit code $addCode). '
+                'Proceeding without bootstrap.',
               );
             }
           } else if (!hasHotReloader && !suppressWarnMissing) {
             logger.warn(
-              'hotreloader not found. You can enable automatic installation via --install-missing.',
+              'hotreloader not found. You can enable automatic installation '
+              'via --install-missing.',
             );
           }
         }
       }
 
       // Prepare bootstrap if requested
-      String scriptToRun = entryFile.absolute.path;
+      var scriptToRun = entryFile.absolute.path;
       if (useBootstrap && (projectRoot != null) && hasHotReloader) {
         final root = projectRoot;
         final toolDir = root.fileSystem.directory(
@@ -321,10 +327,11 @@ Future<void> main(List<String> args) async {
         }
       }
 
-      logger.info('Starting development server:');
-      logger.info('  host       : $host');
-      logger.info('  port       : $port');
-      logger.info('  entry      : $entry');
+      logger
+        ..info('Starting development server:')
+        ..info('  host       : $host')
+        ..info('  port       : $port')
+        ..info('  entry      : $entry');
       if (useBootstrap) {
         logger.info('  bootstrap  : enabled');
       } else {
@@ -434,7 +441,7 @@ class _DevManifestPublisher {
       );
       await outputFile.parent.create(recursive: true);
 
-      final encoder = const JsonEncoder.withIndent('  ');
+      const encoder = JsonEncoder.withIndent('  ');
       await outputFile.writeAsString(encoder.convert(result.manifest));
 
       final relativePath = fileSystem.path.relative(
@@ -447,7 +454,7 @@ class _DevManifestPublisher {
       } else {
         logger.debug('Updated route manifest ($reason): $relativePath');
       }
-    } catch (error) {
+    } on Object catch (error) {
       logger.warn('Unable to publish route manifest ($reason): $error');
     }
   }
@@ -456,13 +463,13 @@ class _DevManifestPublisher {
     final appFile = fileSystem.file(
       fileSystem.path.join(projectRoot.path, 'lib', 'app.dart'),
     );
-    if (await appFile.exists()) {
+    if (appFile.existsSync()) {
       return true;
     }
 
     final toolEntry = fileSystem.file(
       fileSystem.path.join(projectRoot.path, 'tool', 'spec_manifest.dart'),
     );
-    return toolEntry.exists();
+    return toolEntry.existsSync();
   }
 }

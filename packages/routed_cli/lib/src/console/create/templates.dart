@@ -2,23 +2,33 @@ import 'dart:convert';
 
 import 'package:routed_cli/src/console/create/templates_embedded.dart';
 
+/// Renders one scaffold file for a [TemplateContext].
 typedef FileBuilder = String Function(TemplateContext context);
 
+/// Values used when rendering a project scaffold.
 class TemplateContext {
+  /// Creates a context for a project named [packageName].
   TemplateContext({
     required this.packageName,
     required this.humanName,
     Iterable<String> authPlugins = const [],
   }) : authPlugins = Set<String>.unmodifiable(authPlugins);
 
+  /// Dart package name used by generated imports and metadata.
   final String packageName;
+
+  /// Human-readable project name used in generated copy.
   final String humanName;
+
+  /// Authentication plugins selected for the scaffold.
   final Set<String> authPlugins;
 
+  /// JSON for the sample todo data used by starter templates.
   String get sampleTodosJson => jsonEncode(<Map<String, dynamic>>[
     {'id': 1, 'title': 'Ship Routed starter', 'completed': false},
   ]);
 
+  /// Template token replacements shared by generated files.
   Map<String, String> get replacements => {
     '{{{routed:packageName}}}': packageName,
     '{{{routed:humanName}}}': humanName,
@@ -26,7 +36,9 @@ class TemplateContext {
   };
 }
 
+/// A named scaffold template and the files it can render.
 class ScaffoldTemplate {
+  /// Creates a scaffold template with the supplied file builders.
   ScaffoldTemplate({
     required this.id,
     required this.description,
@@ -39,16 +51,29 @@ class ScaffoldTemplate {
        extraDependencies = extraDependencies ?? const {},
        extraDevDependencies = extraDevDependencies ?? const {};
 
+  /// Stable template identifier, such as `basic` or `fullstack`.
   final String id;
+
+  /// Human-readable description of the template.
   final String description;
+
+  /// Builders keyed by their destination-relative file paths.
   final Map<String, FileBuilder> fileBuilders;
+
+  /// Builder for the generated README.
   final FileBuilder readmeBuilder;
+
+  /// Additional runtime dependencies required by this template.
   final Map<String, String> extraDependencies;
+
+  /// Additional development dependencies required by this template.
   final Map<String, String> extraDevDependencies;
 
+  /// Renders the template README for [context].
   String renderReadme(TemplateContext context) => readmeBuilder(context);
 }
 
+/// Registry and renderer for the built-in Routed scaffolds.
 class Templates {
   Templates._();
 
@@ -84,6 +109,7 @@ class Templates {
     ),
   };
 
+  /// Resolves a built-in template by case-insensitive [id].
   static ScaffoldTemplate resolve(String id) {
     final key = id.toLowerCase();
     final template = _templates[key];
@@ -93,8 +119,10 @@ class Templates {
     return template;
   }
 
+  /// Returns all built-in scaffold templates.
   static Iterable<ScaffoldTemplate> get all => _templates.values;
 
+  /// Returns a concise description of the available template identifiers.
   static String describe() =>
       all.map((template) => '"${template.id}"').join(', ');
 }
@@ -158,11 +186,9 @@ String _renderConfigTemplate(
   final imports = <String>[
     "import 'package:routed_core/routed_core.dart';",
     if (context.authPlugins.isNotEmpty)
-      "import 'package:routed_auth/routed_auth.dart' "
-          'show RoutedAuthDeploymentBinding;',
+      "import 'package:routed_auth/routed_auth.dart' show RoutedAuthDeploymentBinding;",
     if (context.authPlugins.isNotEmpty)
-      "import 'package:server_auth/server_auth.dart' "
-          'show AuthDeploymentPresets, UsernamePlugin;',
+      "import 'package:server_auth/server_auth.dart' show AuthDeploymentPresets, UsernamePlugin;",
     if (templateId == 'web')
       "import 'package:routed_storage/routed_storage.dart';",
     if (templateId == 'web' || templateId == 'fullstack')
@@ -203,7 +229,8 @@ String _renderConfigTemplate(
       : '';
   final authProvider = hasUsername ? '      auth.serviceProvider(),\n' : '';
   final authArguments = hasUsername
-      ? '''    engineConfig: auth.engineConfig(),
+      ? '''
+    engineConfig: auth.engineConfig(),
     options: [auth.bindTo],
 '''
       : '';
@@ -252,7 +279,8 @@ $authArguments  );
 }
 
 String _wireApplicationConfig(String content, {required String templateId}) {
-  const configuredBlock = '''  final setup = config();
+  const configuredBlock = '''
+  final setup = config();
   final engine = setup.buildEngine();''';
 
   final providerBlock = RegExp(
@@ -348,11 +376,13 @@ String _renderTemplateFile(String sourcePath, TemplateContext context) {
   }
   if (sourcePath == 'fullstack/lib/app.dart') {
     content = content.replaceFirst(
-      '''          () async => todos.firstWhere(
+      '''
+          () async => todos.firstWhere(
             (item) => item['id'].toString() == id,
             orElse: () => null,
           ),''',
-      '''          () async {
+      '''
+          () async {
             for (final item in todos) {
               if (item['id'].toString() == id) return item;
             }

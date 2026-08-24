@@ -13,9 +13,10 @@ import 'package:routed_cli/routed_cli.dart';
 ///
 /// Usage:
 ///   final runner = RoutedCommandRunner();
-///   runner.register([DevCommand(), BuildCommand(), ...]);
+///   runner.register(commands); // e.g. DevCommand, BuildCommand
 ///   await runner.run(args);
 class RoutedCommandRunner extends CommandRunner<void> {
+  /// Creates a command runner with the standard Routed global options.
   RoutedCommandRunner({
     String name = 'routed',
     String description = 'A fast, minimalistic backend framework for Dart.',
@@ -41,9 +42,9 @@ class RoutedCommandRunner extends CommandRunner<void> {
 
   /// Register multiple commands at once.
   RoutedCommandRunner register(Iterable<Command<void>> commands) {
-    for (final cmd in commands) {
-      addCommand(cmd);
-    }
+    commands.forEach(addCommand);
+    // Fluent registration is part of the public runner API.
+    // ignore: avoid_returning_this
     return this;
   }
 
@@ -87,8 +88,9 @@ class RoutedCommandRunner extends CommandRunner<void> {
   void _printTopLevelUsage() {
     // Show description header (if provided) followed by usage.
     if (description.isNotEmpty) {
-      stdout.writeln(description);
-      stdout.writeln();
+      stdout
+        ..writeln(description)
+        ..writeln();
     }
     stdout.writeln(usage);
   }

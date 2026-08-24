@@ -17,7 +17,7 @@ void main() {
     });
 
     tearDown(() async {
-      if (await tempDir.exists()) {
+      if (tempDir.existsSync()) {
         await tempDir.delete(recursive: true);
       }
     });
@@ -80,7 +80,6 @@ void main() {
         dartVmServicePort: '8282',
         workingDirectory: tempDir,
         scriptPath: scriptFile.path,
-        hotReloadExpected: true,
         directoryWatcher: (_) => watcher,
         startProcess: startProcess,
       );
@@ -222,7 +221,6 @@ void main() {
         dartVmServicePort: '8181',
         workingDirectory: tempDir,
         scriptPath: scriptFile.path,
-        hotReloadExpected: true,
         isWindows: false,
         directoryWatcher: (_) => watcher,
         startProcess: startProcess,
@@ -369,10 +367,10 @@ class _FakeProcess implements io.Process {
   StreamSink<List<int>> get stderrSink => _stderrController.sink;
 
   void dispose() {
-    _stdoutController.close();
-    _stderrController.close();
-    _stdinController.close();
-    _stdin.close();
+    unawaited(_stdoutController.close());
+    unawaited(_stderrController.close());
+    unawaited(_stdinController.close());
+    unawaited(_stdin.close());
   }
 
   void completeExit(int code) {

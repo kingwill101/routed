@@ -3,7 +3,9 @@ import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
 import 'package:routed_cli/src/console/args/base_command.dart';
 
+/// Generates a starter implementation for a custom provider driver.
 class ProviderDriverCommand extends BaseCommand {
+  /// Creates the provider-driver command.
   ProviderDriverCommand({super.logger, super.fileSystem}) {
     argParser
       ..addOption(
@@ -27,8 +29,6 @@ class ProviderDriverCommand extends BaseCommand {
         'force',
         abbr: 'f',
         help: 'Overwrite the target file if it already exists.',
-        negatable: true,
-        defaultsTo: false,
       );
   }
 
@@ -69,7 +69,8 @@ class ProviderDriverCommand extends BaseCommand {
           identifier = rest[1];
         } else {
           throw UsageException(
-            'Too many positional arguments. Usage: provider:driver [type] <name>',
+            'Too many positional arguments. '
+            'Usage: provider:driver [type] <name>',
             usage,
           );
         }
@@ -80,7 +81,8 @@ class ProviderDriverCommand extends BaseCommand {
         identifier = rest[0];
         if (rest.length > 1) {
           throw UsageException(
-            'Too many positional arguments. Only supply the driver name when --type is used.',
+            'Too many positional arguments. Only supply the driver name '
+            'when --type is used.',
             usage,
           );
         }
@@ -88,7 +90,8 @@ class ProviderDriverCommand extends BaseCommand {
 
       if (type != 'storage' && type != 'cache' && type != 'session') {
         throw UsageException(
-          'Unsupported driver type "$type". Use "storage", "cache", or "session".',
+          'Unsupported driver type "$type". Use "storage", "cache", or '
+          '"session".',
           usage,
         );
       }
@@ -122,7 +125,7 @@ class ProviderDriverCommand extends BaseCommand {
       );
 
       final force = results?['force'] as bool? ?? false;
-      if (await targetFile.exists() && !force) {
+      if (targetFile.existsSync() && !force) {
         throw UsageException(
           'File "${p.relative(targetFile.path, from: projectRoot.path)}" '
           'already exists. Use --force to overwrite.',
@@ -147,9 +150,9 @@ class ProviderDriverCommand extends BaseCommand {
 
 String _normalizeIdentifier(String input) {
   final lowered = input.toLowerCase();
-  final replaced = lowered.replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+  final replaced = lowered.replaceAll(RegExp('[^a-z0-9]+'), '_');
   final normalized = replaced
-      .replaceAll(RegExp(r'_+'), '_')
+      .replaceAll(RegExp('_+'), '_')
       .replaceAll(RegExp(r'^_|_$'), '');
   return normalized;
 }

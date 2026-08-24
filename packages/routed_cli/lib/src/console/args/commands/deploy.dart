@@ -10,6 +10,7 @@ import 'package:routed_cli/src/console/util/pubspec.dart';
 
 /// Builds and deploys a Routed application without user-authored shell files.
 class DeployCommand extends BaseCommand {
+  /// Creates the deployment command.
   DeployCommand({super.logger, super.fileSystem}) {
     argParser
       ..addOption(
@@ -90,19 +91,18 @@ class DeployCommand extends BaseCommand {
       ..addMultiOption(
         'secrets-store',
         help:
-            'Cloudflare Secrets Store binding. Use BINDING=STORE_ID:SECRET_NAME.',
+            'Cloudflare Secrets Store binding. '
+            'Use BINDING=STORE_ID:SECRET_NAME.',
         valueHelp: 'BINDING=STORE_ID:SECRET_NAME',
       )
       ..addFlag(
         'dry-run',
         help: 'Build and validate without uploading.',
-        defaultsTo: false,
         negatable: false,
       )
       ..addFlag(
         'keep-vars',
         help: 'Keep variables configured in the Cloudflare dashboard.',
-        defaultsTo: false,
         negatable: false,
       );
   }
@@ -333,8 +333,9 @@ class DeployCommand extends BaseCommand {
     final wranglerArgs = <String>['wrangler@latest', 'deploy'];
     if (dryRun) wranglerArgs.add('--dry-run');
     if (keepVars) wranglerArgs.add('--keep-vars');
-    wranglerArgs.add('--config');
-    wranglerArgs.add(configOutput.path);
+    wranglerArgs
+      ..add('--config')
+      ..add(configOutput.path);
     await _runNpx(root, wranglerArgs, label: 'Deploying Cloudflare Worker');
 
     logger.info('Routed Cloudflare deployment complete: $workerName');
@@ -389,7 +390,8 @@ class DeployCommand extends BaseCommand {
     }
     await root.fileSystem
         .file(p.join(functionRoot.path, '.vc-config.json'))
-        .writeAsString('''{
+        .writeAsString('''
+{
   "runtime": "nodejs22.x",
   "handler": "entry.js",
   "launcherType": "Nodejs",
@@ -507,7 +509,8 @@ module.exports = async (request, response) => {
         .writeAsString(_vercelEdgeFunctionEntry());
     await root.fileSystem
         .file(p.join(functionRoot.path, '.vc-config.json'))
-        .writeAsString('''{
+        .writeAsString('''
+{
   "runtime": "edge",
   "entrypoint": "entry.js"
 }
@@ -685,10 +688,12 @@ export const config = { path: "/*" };
     final bundled = functionRoot.fileSystem.file(
       p.join(functionRoot.path, 'entry.bundle.js'),
     );
-    bundled.copySync(
-      functionRoot.fileSystem.file(p.join(functionRoot.path, 'entry.js')).path,
+    final entry = functionRoot.fileSystem.file(
+      p.join(functionRoot.path, 'entry.js'),
     );
-    bundled.deleteSync();
+    bundled
+      ..copySync(entry.path)
+      ..deleteSync();
     final nodeModules = functionRoot.fileSystem.directory(
       p.join(functionRoot.path, 'node_modules'),
     );
@@ -1127,7 +1132,7 @@ export const config = { path: "/*" };
 
   String _defaultDurableObjectBindingName(String className) => className
       .replaceAllMapped(
-        RegExp(r'([a-z0-9])([A-Z])'),
+        RegExp('([a-z0-9])([A-Z])'),
         (match) => '${match.group(1)}_${match.group(2)}',
       )
       .toUpperCase();
@@ -1148,8 +1153,8 @@ export const config = { path: "/*" };
   String _sanitizeWorkerName(String name) {
     final normalized = name
         .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9-]+'), '-')
-        .replaceFirst(RegExp(r'^-+'), '')
+        .replaceAll(RegExp('[^a-z0-9-]+'), '-')
+        .replaceFirst(RegExp('^-+'), '')
         .replaceFirst(RegExp(r'-+$'), '');
     return normalized.isEmpty ? 'routed-worker' : normalized;
   }
@@ -1229,6 +1234,7 @@ final class _CloudflareSecretsStoreBinding {
   final String secretName;
 }
 
+/// Generates the Dart Worker entrypoint used by a Cloudflare deployment.
 String generateCloudflareWorkerEntry({
   required String importPath,
   String factory = 'engine',
@@ -1248,7 +1254,8 @@ String generateCloudflareWorkerEntry({
   final classes = durableObjectClasses.toList(growable: false);
   final registration = classes.isEmpty
       ? ''
-      : '''  defineCloudflareDurableObjects({
+      : '''
+  defineCloudflareDurableObjects({
 ${classes.map((name) => "    '$name': app.$name.new,").join('\n')}
   });
 ''';
@@ -1262,6 +1269,7 @@ $registration  $factorySource
 ''';
 }
 
+/// Generates the JavaScript wrapper that exports Cloudflare bindings.
 String generateCloudflareWorkerWrapper(
   String compiledPath,
   Iterable<String> durableObjectClasses, {
@@ -1270,6 +1278,9 @@ String generateCloudflareWorkerWrapper(
   final relative = p.basename(compiledPath);
   final exports = durableObjectClasses
       .map((className) {
+        // Generated JavaScript is intentionally emitted without a leading
+        // newline so the wrapper remains stable for deployment tooling.
+        // ignore: leading_newlines_in_multiline_strings
         return '''export class $className {
   constructor(state, env) {
     const factory = __routedDurableObjects['$className'];
@@ -1303,6 +1314,9 @@ String generateCloudflareWorkerWrapper(
       .join('\n\n');
   final containerExports = containerPorts.entries
       .map((entry) {
+        // Generated JavaScript is intentionally emitted without a leading
+        // newline so the wrapper remains stable for deployment tooling.
+        // ignore: leading_newlines_in_multiline_strings
         return '''export class ${entry.key} {
   constructor(state, env) {
     if (!state.container) {
@@ -1322,7 +1336,8 @@ String generateCloudflareWorkerWrapper(
     if (exports.isNotEmpty) exports,
     if (containerExports.isNotEmpty) containerExports,
   ].join('\n\n');
-  return '''import './$relative';
+  return '''
+import './$relative';
 
 const __routedDurableObjects =
     globalThis.__routed_durable_objects__ ?? {};

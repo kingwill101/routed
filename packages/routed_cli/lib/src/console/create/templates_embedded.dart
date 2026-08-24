@@ -3,6 +3,7 @@
 
 import 'dart:typed_data';
 
+/// Embedded scaffold files keyed by template-relative paths.
 final Map<String, Uint8List> scaffoldTemplateBytes = {
   'api/README.md': Uint8List.fromList(<int>[
     35,

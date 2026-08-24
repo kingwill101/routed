@@ -1,6 +1,6 @@
 import 'package:artisanal/args.dart';
-import 'package:routed_core/routed_core.dart';
 import 'package:routed_cli/src/console/args/provider_commands.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:test/test.dart';
 
 class _TestCommand extends Command<void> {

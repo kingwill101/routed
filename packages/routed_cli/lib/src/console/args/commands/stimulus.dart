@@ -2,15 +2,18 @@ import 'dart:async';
 import 'package:args/command_runner.dart' show UsageException;
 import 'package:file/file.dart' as fs;
 
-import '../base_command.dart';
+import 'package:routed_cli/src/console/args/base_command.dart';
 
+/// Installs the CDN-based Stimulus starter files into a Routed project.
 class StimulusInstallCommand extends BaseCommand {
+  /// Creates the Stimulus installation command.
   StimulusInstallCommand({super.logger, super.fileSystem}) {
     argParser
       ..addOption(
         'mode',
         help:
-            'Installation mode. The default "cdn" scaffolds ES modules that import Stimulus from a CDN.',
+            'Installation mode. The default "cdn" scaffolds ES modules '
+            'that import Stimulus from a CDN.',
         allowed: const ['cdn'],
         defaultsTo: 'cdn',
       )
@@ -37,7 +40,8 @@ class StimulusInstallCommand extends BaseCommand {
     final root = await findProjectRoot();
     if (root == null) {
       throw UsageException(
-        'Unable to locate pubspec.yaml. Run this command from a routed project root.',
+        'Unable to locate pubspec.yaml. Run this command from a routed '
+        'project root.',
         usage,
       );
     }
@@ -48,7 +52,6 @@ class StimulusInstallCommand extends BaseCommand {
     switch (mode) {
       case 'cdn':
         await _installCdn(root, force: force);
-        break;
       default:
         throw UsageException('Unsupported mode "$mode".', usage);
     }
@@ -70,7 +73,7 @@ class StimulusInstallCommand extends BaseCommand {
 
     for (final entry in relativeFiles.entries) {
       final file = fileSystem.file(joinPath([projectRoot.path, entry.key]));
-      final exists = await file.exists();
+      final exists = file.existsSync();
       if (exists && !force) {
         skipped.add(entry.key);
         continue;
@@ -93,24 +96,28 @@ class StimulusInstallCommand extends BaseCommand {
       }
     }
 
-    logger.info('');
-    logger.info('Next steps:');
-    logger.info(
-      '  1. Include <script type="module" src="/js/stimulus.js"></script> in your base HTML layout.',
-    );
-    logger.info(
-      '  2. Attach controllers via data-controller attributes, e.g. data-controller="hello".',
-    );
-    logger.info(
-      '  3. Edit public/js/controllers/index.js to register additional controllers as needed.',
-    );
+    logger
+      ..info('')
+      ..info('Next steps:')
+      ..info(
+        '  1. Include <script type="module" src="/js/stimulus.js"></script> '
+        'in your base HTML layout.',
+      )
+      ..info(
+        '  2. Attach controllers via data-controller attributes, e.g. '
+        'data-controller="hello".',
+      )
+      ..info(
+        '  3. Edit public/js/controllers/index.js to register additional '
+        'controllers as needed.',
+      );
   }
 }
 
 const String _stimulusCdnUrl =
     'https://cdn.jsdelivr.net/npm/@hotwired/stimulus/+esm';
 
-final String _applicationJsCdn =
+const String _applicationJsCdn =
     '''
 import { Application } from '$_stimulusCdnUrl';
 
@@ -123,7 +130,7 @@ window.Stimulus = application;
 export { application };
 ''';
 
-final String _indexJs = '''
+const String _indexJs = '''
 import { application } from './application.js';
 import HelloController from './hello_controller.js';
 
@@ -133,7 +140,7 @@ application.register('hello', HelloController);
 export { application };
 ''';
 
-final String _helloControllerJs =
+const String _helloControllerJs =
     '''
 import { Controller } from '$_stimulusCdnUrl';
 
@@ -147,7 +154,7 @@ export default class extends Controller {
 }
 ''';
 
-final String _entryJs = '''
+const String _entryJs = '''
 // Boot the Stimulus application and register controllers.
 import './controllers/index.js';
 ''';

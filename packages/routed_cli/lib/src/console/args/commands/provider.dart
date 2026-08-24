@@ -1,13 +1,14 @@
 import 'package:args/command_runner.dart';
-import 'package:routed_core/routed_core.dart';
 import 'package:routed_cli/src/console/args/base_command.dart';
 import 'package:routed_cli/src/console/args/commands/provider_metadata.dart';
+import 'package:routed_core/routed_core.dart';
 
 /// Lists providers that are available to be passed to an [Engine].
 ///
 /// Provider activation is now code-owned: applications compose typed provider
 /// instances in Dart instead of editing a YAML manifest.
 class ProviderListCommand extends BaseCommand {
+  /// Creates the provider-listing command.
   ProviderListCommand({super.logger, super.fileSystem});
 
   @override

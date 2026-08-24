@@ -37,6 +37,7 @@ String resolveDartExecutable({Map<String, String>? environment}) {
   return 'dart';
 }
 
+/// Starts a process with the same arguments accepted by [io.Process.start].
 typedef DartProcessStart =
     Future<io.Process> Function(
       String executable,

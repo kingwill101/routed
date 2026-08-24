@@ -5,23 +5,38 @@ import 'package:file/file.dart' as fs;
 import 'package:path/path.dart' as p;
 import 'package:routed_cli/routed_cli.dart' show CliLogger;
 
-import '../util/dart_exec.dart';
-import '../util/pubspec.dart';
+import 'package:routed_cli/src/console/util/dart_exec.dart';
+import 'package:routed_cli/src/console/util/pubspec.dart';
 
-enum ManifestSource { app, entry }
+/// Source used to produce a route manifest.
+enum ManifestSource {
+  /// The application's `lib/app.dart` engine factory.
+  app,
 
+  /// An explicitly selected or discovered manifest entrypoint.
+  entry,
+}
+
+/// A route manifest together with information about how it was loaded.
 class ManifestLoadResult {
+  /// Creates a manifest-load result.
   ManifestLoadResult({
     required this.manifest,
     required this.source,
     required this.sourceDescription,
   });
 
+  /// Decoded route manifest data.
   final Map<String, Object?> manifest;
+
+  /// Source category that produced [manifest].
   final ManifestSource source;
+
+  /// Human-readable source path or description.
   final String sourceDescription;
 }
 
+/// Creates a manifest loader for a project root.
 typedef ManifestLoaderFactory =
     ManifestLoader Function(
       fs.Directory projectRoot,
@@ -30,7 +45,9 @@ typedef ManifestLoaderFactory =
       fs.FileSystem fileSystem,
     );
 
+/// Loads route manifests from a Routed application or standalone entrypoint.
 class ManifestLoader {
+  /// Creates a loader rooted at [projectRoot].
   ManifestLoader({
     required this.projectRoot,
     required this.logger,
@@ -38,11 +55,19 @@ class ManifestLoader {
     fs.FileSystem? fileSystem,
   }) : fileSystem = fileSystem ?? projectRoot.fileSystem;
 
+  /// Project directory used for entrypoint discovery and process execution.
   final fs.Directory projectRoot;
+
+  /// Logger used for process diagnostics.
   final CliLogger logger;
+
+  /// Usage text attached to loader failures.
   final String usage;
+
+  /// Filesystem abstraction used for project inspection.
   final fs.FileSystem fileSystem;
 
+  /// Loads a manifest, optionally using [entry] as the entrypoint.
   Future<ManifestLoadResult> load({String? entry}) async {
     if (entry != null && entry.isNotEmpty) {
       final manifest = await _runEntry(entry);
@@ -74,7 +99,8 @@ class ManifestLoader {
 
     throw UsageException(
       'Unable to locate lib/app.dart or tool/spec_manifest.dart. '
-      'Provide --entry <path> or ensure your application exposes createEngine().',
+      'Provide --entry <path> or ensure your application exposes '
+      'createEngine().',
       usage,
     );
   }
@@ -83,7 +109,7 @@ class ManifestLoader {
     final appFile = fileSystem.file(
       p.join(projectRoot.path, 'lib', 'app.dart'),
     );
-    if (!await appFile.exists()) {
+    if (!appFile.existsSync()) {
       return null;
     }
 
@@ -133,7 +159,7 @@ Future<void> main(List<String> args) async {
 
   Future<Map<String, Object?>> _runEntry(String entry) async {
     final entryFile = fileSystem.file(p.join(projectRoot.path, entry));
-    if (!await entryFile.exists()) {
+    if (!entryFile.existsSync()) {
       throw UsageException('Manifest entrypoint not found: $entry', usage);
     }
 

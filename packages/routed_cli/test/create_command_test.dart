@@ -109,7 +109,7 @@ void main() {
       expect(configContent, isNot(contains('AuthDeployment')));
       expect(configContent, isNot(contains('CredentialsProvider')));
       expect(configContent, isNot(contains('Plugin')));
-      expect(configContent, isNot(contains("package:routed/src/")));
+      expect(configContent, isNot(contains('package:routed/src/')));
       expect(configContent, isNot(contains('config/')));
       expect(configContent, isNot(contains('storage.yaml')));
       expect(configContent, isNot(contains('static.yaml')));
@@ -156,7 +156,7 @@ void main() {
     });
 
     test('exposes template names in usage', () {
-      final command = runner.commands['create'] as CreateCommand;
+      final command = runner.commands['create']! as CreateCommand;
       expect(command.usage, contains('basic, api, web, fullstack'));
       expect(command.usage, contains('--auth-plugin'));
       expect(command.usage, contains('[username]'));
@@ -485,7 +485,8 @@ void main() {
       test(
         'does not add resolution: workspace without parent workspace',
         () async {
-          // Reset to the original workspace directory which has no workspace root.
+          // Reset to the original workspace directory, which has no workspace
+          // root.
           memoryFs.currentDirectory = workspace;
           runner = RoutedCommandRunner(logger: logger)
             ..register([
@@ -576,6 +577,6 @@ class _RecordingLogger extends CliLogger {
 
   @override
   void debug(Object? message) {
-    infos.add('DEBUG: ${message.toString()}');
+    infos.add('DEBUG: $message');
   }
 }

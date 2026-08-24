@@ -1,3 +1,8 @@
+## Unreleased
+
+- Adopted `very_good_analysis` and completed public API Dartdoc coverage across
+  the CLI, while preserving existing command and fluent-runner contracts.
+
 ## 0.3.0
 
 - Cloudflare deploys now support environment-backed Worker factories with

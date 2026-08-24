@@ -8,8 +8,8 @@ import 'package:file/local.dart';
 import 'package:path/path.dart' as p;
 import 'package:routed_cli/routed_cli.dart' show CliLogger;
 
-import '../util/dart_exec.dart';
-import '../util/pubspec.dart';
+import 'package:routed_cli/src/console/util/dart_exec.dart';
+import 'package:routed_cli/src/console/util/pubspec.dart';
 
 /// Whether [args] select a command that may be provided by the current project.
 ///
@@ -37,6 +37,7 @@ bool shouldLoadProjectCommands(
 
 /// Metadata describing a single option provided by a project command.
 class ProjectCommandOption {
+  /// Creates metadata for one project-command option.
   ProjectCommandOption({
     required this.name,
     required this.type,
@@ -54,6 +55,7 @@ class ProjectCommandOption {
     this.aliases = const <String>[],
   });
 
+  /// Decodes option metadata from the project-command protocol.
   factory ProjectCommandOption.fromJson(Map<String, Object?> json) {
     return ProjectCommandOption(
       name: json['name']! as String,
@@ -75,21 +77,49 @@ class ProjectCommandOption {
     );
   }
 
+  /// Option name passed to the argument parser.
   final String name;
+
+  /// Protocol type: `flag`, `single`, or `multiple`.
   final String type;
+
+  /// Optional short spelling for the option.
   final String? abbr;
+
+  /// Help text displayed by the parser.
   final String? help;
+
+  /// Placeholder text displayed for value-taking options.
   final String? valueHelp;
+
+  /// Default value supplied by the project command.
   final Object? defaultsTo;
+
+  /// Values accepted by the option, when constrained.
   final List<String>? allowed;
+
+  /// Help text associated with each allowed value.
   final Map<String, String>? allowedHelp;
+
+  /// Whether a flag can be negated.
   final bool? negatable;
+
+  /// Whether the negated spelling is hidden from usage output.
   final bool? hideNegatedUsage;
+
+  /// Whether comma-separated values are split.
   final bool? splitCommas;
+
+  /// Whether a value is required by the parser.
   final bool? mandatory;
+
+  /// Whether the option is hidden from usage output.
   final bool? hide;
+
+  /// Alternative names accepted by the parser.
   final List<String> aliases;
 
+  /// Adds this option to [parser].
   void configureParserArg(ArgParser parser) {
     switch (type) {
       case 'flag':
@@ -125,7 +155,7 @@ class ProjectCommandOption {
           allowed: allowed,
           allowedHelp: allowedHelp,
           defaultsTo: defaultsTo is List
-              ? (defaultsTo as List).map((e) => e.toString()).toList()
+              ? (defaultsTo! as List).map((e) => e.toString()).toList()
               : null,
           splitCommas: splitCommas ?? true,
           hide: hide ?? false,
@@ -139,6 +169,7 @@ class ProjectCommandOption {
 
 /// Metadata describing a discovered project command.
 class ProjectCommandInfo {
+  /// Creates metadata for a discovered project command.
   ProjectCommandInfo({
     required this.name,
     required this.description,
@@ -149,6 +180,7 @@ class ProjectCommandInfo {
     required this.options,
   });
 
+  /// Decodes command metadata from the project-command protocol.
   factory ProjectCommandInfo.fromJson(Map<String, Object?> json) {
     final options = (json['options'] as List<dynamic>? ?? const <dynamic>[])
         .map(
@@ -167,18 +199,32 @@ class ProjectCommandInfo {
     );
   }
 
+  /// Command name exposed to the top-level runner.
   final String name;
+
+  /// Full command description.
   final String description;
+
+  /// Short command summary.
   final String summary;
+
+  /// Help category used by the command runner.
   final String category;
+
+  /// Whether the command is hidden from usage output.
   final bool hidden;
+
+  /// Alternative command names.
   final List<String> aliases;
+
+  /// Options accepted by the command.
   final List<ProjectCommandOption> options;
 }
 
 /// Proxies project-defined commands so they can be exposed through the routed
 /// CLI command runner.
 class ProjectCommandProxy extends Command<void> {
+  /// Creates a proxy for a project command described by [info].
   ProjectCommandProxy({
     required ProjectCommandInfo info,
     required ProjectCommandsLoader loader,
@@ -222,11 +268,15 @@ class ProjectCommandProxy extends Command<void> {
 
 /// Handles discovery and execution of project-defined commands.
 class ProjectCommandsLoader {
+  /// Creates a project-command loader.
   ProjectCommandsLoader({CliLogger? logger, fs.FileSystem? fileSystem})
     : logger = logger ?? CliLogger(),
       fileSystem = fileSystem ?? const LocalFileSystem();
 
+  /// Logger used for discovery and execution diagnostics.
   final CliLogger logger;
+
+  /// Filesystem abstraction used for project discovery.
   final fs.FileSystem fileSystem;
 
   String get _scriptRelativePath =>
@@ -234,6 +284,7 @@ class ProjectCommandsLoader {
 
   List<ProjectCommandInfo>? _cached;
 
+  /// Discovers and describes commands from the current project.
   Future<List<ProjectCommandInfo>> loadProjectCommands(String usage) async {
     if (_cached != null) {
       return _cached!;
@@ -248,7 +299,7 @@ class ProjectCommandsLoader {
     final commandsEntry = fileSystem.file(
       p.join(projectRoot.path, 'lib', 'commands.dart'),
     );
-    if (!await commandsEntry.exists()) {
+    if (!commandsEntry.existsSync()) {
       _cached = const [];
       return _cached!;
     }
@@ -286,8 +337,10 @@ class ProjectCommandsLoader {
     return commands;
   }
 
+  /// Whether a non-empty command list has already been loaded.
   bool get hasCachedCommands => _cached != null && _cached!.isNotEmpty;
 
+  /// Runs a project command and returns its process exit code.
   Future<int> runProjectCommand(
     String commandName,
     List<String> commandArgs,
@@ -301,7 +354,7 @@ class ProjectCommandsLoader {
     final scriptFile = fileSystem.file(
       p.join(projectRoot.path, _scriptRelativePath),
     );
-    if (!await scriptFile.exists()) {
+    if (!scriptFile.existsSync()) {
       logger.error(
         'Project command runner not found. Run any routed CLI command once '
         'to regenerate it.',
@@ -322,9 +375,10 @@ class ProjectCommandsLoader {
       io.stderr.addStream(process.stderr),
     ]);
 
-    return await process.exitCode;
+    return process.exitCode;
   }
 
+  /// Registers [commands] with [runner], rejecting name conflicts.
   void registerWithRunner(
     CommandRunner<void> runner,
     List<ProjectCommandInfo> commands,
@@ -341,14 +395,16 @@ class ProjectCommandsLoader {
           command.aliases.any(existingNames.contains);
       if (hasConflict) {
         throw UsageException(
-          'Project command "${command.name}" conflicts with an existing command.',
+          'Project command "${command.name}" conflicts with an existing '
+          'command.',
           usage,
         );
       }
 
       runner.addCommand(ProjectCommandProxy(info: command, loader: this));
-      existingNames.add(command.name);
-      existingNames.addAll(command.aliases);
+      existingNames
+        ..add(command.name)
+        ..addAll(command.aliases);
     }
   }
 
@@ -424,7 +480,7 @@ class ProjectCommandsLoader {
     var current = fileSystem.currentDirectory.absolute;
     for (var i = 0; i < 10; i++) {
       final pubspec = fileSystem.file(p.join(current.path, 'pubspec.yaml'));
-      if (await pubspec.exists()) {
+      if (pubspec.existsSync()) {
         return current;
       }
       final parent = current.parent;

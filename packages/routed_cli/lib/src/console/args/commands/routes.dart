@@ -6,7 +6,9 @@ import 'package:routed_cli/routed_cli.dart' show CliLogger;
 import 'package:routed_cli/src/console/args/base_command.dart';
 import 'package:routed_cli/src/console/engine/manifest_loader.dart';
 
+/// Lists the HTTP and WebSocket routes exposed by a Routed application.
 class RoutesCommand extends BaseCommand {
+  /// Creates a route-listing command.
   RoutesCommand({
     super.logger,
     super.fileSystem,

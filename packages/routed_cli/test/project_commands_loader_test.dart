@@ -26,7 +26,7 @@ void main() {
 
     tearDown(() async {
       io.Directory.current = previousCwd;
-      if (await projectDir.exists()) {
+      if (projectDir.existsSync()) {
         await _deleteDirectory(projectDir);
       }
     });
@@ -168,14 +168,14 @@ Future<void> _deleteDirectory(io.Directory directory) async {
       return;
     } on io.FileSystemException catch (error) {
       lastError = error;
-      if (!await directory.exists()) {
+      if (!directory.existsSync()) {
         return;
       }
       await Future<void>.delayed(Duration(milliseconds: (attempt + 1) * 250));
     }
   }
 
-  if (await directory.exists()) {
+  if (directory.existsSync()) {
     io.stderr.writeln(
       'Warning: unable to delete temp test directory "${directory.path}" '
       'after $maxAttempts attempts: $lastError',
@@ -188,7 +188,7 @@ Future<void> _writeProject({
   required String commandName,
   String? commandsSource,
 }) async {
-  final pubspec = '''
+  const pubspec = '''
 name: project_app
 environment:
   sdk: ">=3.9.2 <4.0.0"

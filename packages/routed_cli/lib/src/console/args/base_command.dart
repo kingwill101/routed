@@ -20,6 +20,7 @@ import 'package:routed_cli/routed_cli.dart' show CliLogger;
 /// - optionally [aliases], [category]
 /// - [run] to implement their behavior
 abstract class BaseCommand extends Command<void> {
+  /// Creates a command with optional logger and filesystem dependencies.
   BaseCommand({CliLogger? logger, fs.FileSystem? fileSystem})
     : logger = logger ?? CliLogger(),
       fileSystem = fileSystem ?? const local.LocalFileSystem() {
@@ -28,8 +29,6 @@ abstract class BaseCommand extends Command<void> {
       'verbose',
       abbr: 'v',
       help: 'Enable verbose logging.',
-      negatable: true,
-      defaultsTo: false,
     );
   }
 
@@ -94,9 +93,9 @@ abstract class BaseCommand extends Command<void> {
     int maxLevels = 10,
   }) async {
     var current = (start ?? cwd).absolute;
-    for (int i = 0; i < maxLevels; i++) {
+    for (var i = 0; i < maxLevels; i++) {
       final file = fileSystem.file(joinPath([current.path, 'pubspec.yaml']));
-      if (await file.exists()) return current;
+      if (file.existsSync()) return current;
 
       final parent = current.parent;
       if (parent.path == current.path) break;
@@ -107,7 +106,7 @@ abstract class BaseCommand extends Command<void> {
 
   /// Ensures [dir] exists, creating it recursively if needed.
   Future<void> ensureDir(fs.Directory dir) async {
-    if (!await dir.exists()) {
+    if (!dir.existsSync()) {
       await dir.create(recursive: true);
     }
   }
@@ -118,7 +117,8 @@ abstract class BaseCommand extends Command<void> {
     await file.writeAsString(content);
   }
 
-  /// Joins [parts] into a platform-appropriate path and normalizes repeated separators.
+  /// Joins [parts] into a platform-appropriate path and normalizes repeated
+  /// separators.
   String joinPath(List<String> parts) {
     final joined = fileSystem.path.joinAll(parts);
     return fileSystem.path.normalize(joined);

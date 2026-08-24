@@ -11,12 +11,13 @@ import 'package:routed_cli/src/console/create/templates.dart';
 import 'package:routed_cli/src/console/util/dart_exec.dart';
 import 'package:yaml/yaml.dart';
 
+/// Runs `dart pub get` for a newly generated project directory.
 typedef PubGetInvoker = Future<int> Function(fs.Directory projectDir);
 
 /// Creates a new Routed app with healthy defaults.
 ///
 /// By default this command scaffolds a project using the "basic" template:
-/// ```
+/// ```dart
 /// routed create --name hello_world
 /// ```
 /// This produces:
@@ -25,12 +26,14 @@ typedef PubGetInvoker = Future<int> Function(fs.Directory projectDir);
 /// - analysis_options.yaml, README.md, .gitignore
 ///
 /// Options:
-/// - --name/-n: Project name (used for pubspec + folder when writing to current dir)
+/// - --name/-n: Project name used for the pubspec and folder when writing to
+///   the current directory.
 /// - --output/-o: Destination directory (defaults to current directory)
 /// - --template/-t: Template to use (`basic`, `api`, `web`, `fullstack`)
 /// - --auth-plugin: Optional typed auth plugin to compose (`username`)
 /// - --force/-f: Overwrite existing files when the target directory exists
 class CreateCommand extends BaseCommand {
+  /// Creates the project-scaffolding command.
   CreateCommand({super.logger, super.fileSystem, PubGetInvoker? pubGet})
     : _pubGet = pubGet ?? _defaultPubGet {
     argParser
@@ -59,14 +62,11 @@ class CreateCommand extends BaseCommand {
         help: 'Opt-in auth plugins to compose in typed Dart configuration.',
         valueHelp: 'username',
         allowed: const ['username'],
-        splitCommas: true,
       )
       ..addFlag(
         'force',
         abbr: 'f',
         help: 'Overwrite generated files when the target directory exists.',
-        negatable: true,
-        defaultsTo: false,
       );
   }
 
@@ -93,9 +93,12 @@ class CreateCommand extends BaseCommand {
       ScaffoldTemplate scaffoldTemplate;
       try {
         scaffoldTemplate = Templates.resolve(template);
+        // ArgumentError is the public validation signal from Templates.resolve.
+        // ignore: avoid_catching_errors
       } on ArgumentError {
         throw UsageException(
-          'Unsupported template "$template". Available templates: ${Templates.describe()}',
+          'Unsupported template "$template". '
+          'Available templates: ${Templates.describe()}',
           usage,
         );
       }
@@ -116,7 +119,8 @@ class CreateCommand extends BaseCommand {
 
       await _prepareTargetDirectory(targetDir, force: force);
       logger.info(
-        'Using template "${scaffoldTemplate.id}" (${scaffoldTemplate.description}).',
+        'Using template "${scaffoldTemplate.id}" '
+        '(${scaffoldTemplate.description}).',
       );
 
       final workspaceRoot = await _findWorkspaceRoot(targetDir);
@@ -180,23 +184,25 @@ class CreateCommand extends BaseCommand {
         logger.info('Added "$packageName" to workspace.');
       }
 
-      logger.info('✔ Created project "$packageName" in ${targetDir.path}');
-
-      logger.info('');
-      logger.info('Running dart pub get...');
+      logger
+        ..info('✔ Created project "$packageName" in ${targetDir.path}')
+        ..info('')
+        ..info('Running dart pub get...');
       final pubExitCode = await _pubGet(targetDir);
       final pubGetSucceeded = pubExitCode == 0;
       if (pubGetSucceeded) {
         logger.info('Dependencies installed successfully.');
       } else {
         logger.warn(
-          'dart pub get exited with code $pubExitCode. Run it manually if problems persist.',
+          'dart pub get exited with code $pubExitCode. '
+          'Run it manually if problems persist.',
         );
       }
 
       if (createdFiles.isNotEmpty || createdDirs.isNotEmpty) {
-        logger.info('');
-        logger.info('Scaffolded:');
+        logger
+          ..info('')
+          ..info('Scaffolded:');
         for (final dir in createdDirs) {
           logger.info('  📁 $dir');
         }
@@ -207,9 +213,10 @@ class CreateCommand extends BaseCommand {
 
       final relativePath = p.relative(targetDir.path, from: cwd.path);
 
-      logger.info('');
-      logger.info('Next steps:');
-      logger.info('  cd $relativePath');
+      logger
+        ..info('')
+        ..info('Next steps:')
+        ..info('  cd $relativePath');
       if (!pubGetSucceeded) {
         logger.info('  dart pub get');
       }
@@ -241,7 +248,7 @@ class CreateCommand extends BaseCommand {
     fs.Directory targetDir, {
     required bool force,
   }) async {
-    if (await targetDir.exists()) {
+    if (targetDir.existsSync()) {
       final isEmpty = await _directoryIsEmpty(targetDir);
       if (!isEmpty && !force) {
         throw UsageException(
@@ -267,7 +274,8 @@ class CreateCommand extends BaseCommand {
     if (!isValid) {
       throw UsageException(
         'Invalid package name "$name". '
-        'Use lowercase letters, digits, and underscores (must start with a letter).',
+        'Use lowercase letters, digits, and underscores '
+        '(must start with a letter).',
         usage,
       );
     }
@@ -285,7 +293,7 @@ class CreateCommand extends BaseCommand {
   Future<bool> _directoryIsEmpty(fs.Directory dir) async {
     try {
       return await dir.list(followLinks: false).isEmpty;
-    } catch (_) {
+    } on Object {
       return false;
     }
   }
@@ -303,13 +311,13 @@ class CreateCommand extends BaseCommand {
       final libDir = libraryFile.parent;
       final packageDir = libDir.parent;
       final pubspec = io.File(p.join(packageDir.path, 'pubspec.yaml'));
-      if (!await pubspec.exists()) return null;
-      final yaml = loadYaml(await pubspec.readAsString());
+      if (!pubspec.existsSync()) return null;
+      final yaml = loadYaml(pubspec.readAsStringSync());
       if (yaml is YamlMap) {
         final version = yaml['version'];
         if (version != null) return version.toString();
       }
-    } catch (_) {
+    } on Exception {
       // Ignore and fall back to default.
     }
     return null;
@@ -355,8 +363,9 @@ class CreateCommand extends BaseCommand {
     dependencies.forEach((name, constraint) {
       buffer.writeln('  $name: ${_formatDependencyConstraint(constraint)}');
     });
-    buffer.writeln();
-    buffer.writeln('dev_dependencies:');
+    buffer
+      ..writeln()
+      ..writeln('dev_dependencies:');
     devDependencies.forEach((name, constraint) {
       buffer.writeln('  $name: ${_formatDependencyConstraint(constraint)}');
     });
@@ -366,7 +375,7 @@ class CreateCommand extends BaseCommand {
 
   String _formatDependencyConstraint(String constraint) {
     if (!constraint.contains(RegExp(r'\s'))) return constraint;
-    final escaped = constraint.replaceAll('"', '\\"');
+    final escaped = constraint.replaceAll('"', r'\"');
     return '"$escaped"';
   }
 
@@ -379,14 +388,14 @@ class CreateCommand extends BaseCommand {
       final pubspecFile = fileSystem.file(
         joinPath([current.path, 'pubspec.yaml']),
       );
-      if (await pubspecFile.exists()) {
+      if (pubspecFile.existsSync()) {
         try {
           final content = await pubspecFile.readAsString();
           final doc = loadYaml(content);
           if (doc is YamlMap && doc.containsKey('workspace')) {
             return current;
           }
-        } catch (_) {
+        } on Exception {
           // Malformed pubspec — skip.
         }
       }
@@ -407,7 +416,7 @@ class CreateCommand extends BaseCommand {
     final pubspecFile = fileSystem.file(
       joinPath([workspaceRoot.path, 'pubspec.yaml']),
     );
-    if (!await pubspecFile.exists()) return;
+    if (!pubspecFile.existsSync()) return;
 
     final relativePath = p.relative(targetDir.path, from: workspaceRoot.path);
     // Normalise to posix separators for YAML consistency.

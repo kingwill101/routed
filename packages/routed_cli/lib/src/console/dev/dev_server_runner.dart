@@ -30,17 +30,33 @@ typedef ProcessRun =
 typedef DirectoryWatcherBuilder = DirectoryWatcher Function(String directory);
 
 /// Minimal ExitCode helper mirroring common Unix exit codes.
+// This class preserves the historical `ExitCode.code` API and private
+// constructor, so converting it to an enum would be a source-breaking change.
+// ignore: use_enums
 class ExitCode {
-  final int code;
-
+  /// Creates an exit-code value. The constructor is private by design.
   const ExitCode._(this.code);
 
+  /// Successful process completion.
   static const success = ExitCode._(0);
+
+  /// Command-line usage error.
   static const usage = ExitCode._(64);
+
+  /// Input data error.
   static const data = ExitCode._(65);
+
+  /// Required input was not provided.
   static const noInput = ExitCode._(66);
+
+  /// Internal software error.
   static const software = ExitCode._(70);
+
+  /// Required service or resource was unavailable.
   static const unavailable = ExitCode._(69);
+
+  /// Numeric process exit code.
+  final int code;
 
   @override
   String toString() => 'ExitCode($code)';
@@ -57,20 +73,24 @@ final _vmServiceInUseRegex = RegExp(
 
 /// Regex for detecting hot reload output from the app (best-effort).
 /// The routed bootstrap prints "Hot-reload result:" on reload.
-final _hotReloadMarkerRegex = RegExp(r'Hot-reload result:', multiLine: true);
+final _hotReloadMarkerRegex = RegExp('Hot-reload result:', multiLine: true);
 
-/// A class that manages a local development server process lifecycle for Routed.
+/// A class that manages a local development server process lifecycle for
+/// Routed.
 ///
 /// Responsibilities:
 /// - Launch the Dart process with `--enable-vm-service`.
 /// - Watch project files for changes.
-/// - If hot-reload is expected (bootstrap mode), let `hotreloader` apply changes.
+/// - If hot-reload is expected (bootstrap mode), let `hotreloader` apply
+///   changes.
 /// - Otherwise, restart the process on file changes.
 /// - Handle shutdown signals and process termination gracefully.
 ///
 /// This class is inspired by the Dart Frog DevServerRunner, but simplified to
 /// fit the routed needs and without code generation.
+/// Manages a local development server process and its file watcher.
 class DevServerRunner {
+  /// Creates a development server process manager.
   DevServerRunner({
     required this.logger,
     required this.port,
@@ -126,7 +146,7 @@ class DevServerRunner {
   /// The script to run (e.g., entrypoint or a generated bootstrap).
   final String scriptPath;
 
-  /// Whether we expect the app to manage hot reload internally (via hotreloader).
+  /// Whether the app manages hot reload internally (via `hotreloader`).
   ///
   /// - If true: file changes will NOT restart the process; they are left to
   ///   be handled by the in-app hot reloader.
@@ -150,6 +170,7 @@ class DevServerRunner {
   final io.ProcessSignal _sigint;
 
   io.Process? _serverProcess;
+  // This subscription is cancelled by [_cancelWatcher] during shutdown.
   // ignore: cancel_subscriptions
   StreamSubscription<WatchEvent>? _watcherSub;
   bool _isReloading = false;
@@ -184,7 +205,7 @@ class DevServerRunner {
 
     // Validate script path exists
     final scriptFile = io.File(_abs(scriptPath));
-    if (!await scriptFile.exists()) {
+    if (!scriptFile.existsSync()) {
       throw DevServerRunnerException('Script not found: ${scriptFile.path}');
     }
 
@@ -221,7 +242,8 @@ class DevServerRunner {
 
     final dartExecutable = resolveDartExecutable();
     logger.debug(
-      '[process] $dartExecutable $enableVmSvcFlag --enable-asserts $script ${forwardedArgs.join(' ')}',
+      '[process] $dartExecutable $enableVmSvcFlag --enable-asserts $script '
+      '${forwardedArgs.join(' ')}',
     );
 
     final proc = _serverProcess = await _startProcess(
@@ -234,8 +256,8 @@ class DevServerRunner {
     // On Windows, handle Ctrl-C to ensure child processes are killed.
     if (_isWindows) {
       _sigint.watch().listen((_) {
-        _killServer().ignore();
-        stop();
+        unawaited(_killServer());
+        unawaited(stop());
       });
     }
 
@@ -333,7 +355,7 @@ class DevServerRunner {
   }
 
   Future<void> _reloadInternal({bool verbose = false}) async {
-    final void Function(Object?) log = verbose ? logger.info : logger.debug;
+    final log = verbose ? logger.info : logger.debug;
 
     if (hotReloadExpected) {
       // Let in-app hotreloader react; we only log here.
@@ -387,8 +409,10 @@ class DevServerRunner {
 
 /// Exception thrown when the dev server runner fails or is misused.
 class DevServerRunnerException implements Exception {
+  /// Creates an exception with a user-facing [message].
   DevServerRunnerException(this.message);
 
+  /// Explanation of the runner failure.
   final String message;
 
   @override

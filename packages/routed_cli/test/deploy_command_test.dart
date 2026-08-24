@@ -78,9 +78,9 @@ void main() {
       'Counter',
       'ChatRoom',
     ]);
-    expect(wrapper, contains("export class Counter"));
-    expect(wrapper, contains("export class ChatRoom"));
-    expect(wrapper, contains("globalThis.__routed_durable_objects__"));
+    expect(wrapper, contains('export class Counter'));
+    expect(wrapper, contains('export class ChatRoom'));
+    expect(wrapper, contains('globalThis.__routed_durable_objects__'));
     expect(wrapper, contains('this.delegate.fetch(request)'));
     expect(wrapper, contains('this.delegate.webSocketMessage'));
     expect(wrapper, contains('this.delegate.webSocketClose'));
