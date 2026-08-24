@@ -1,3 +1,8 @@
+## Unreleased
+
+- Complete public API documentation and adopt the shared
+  `very_good_analysis` lint baseline.
+
 ## 0.1.0
 
 - Add a Dart IO SQLite `AuthStore` adapter with typed stores, append-only

@@ -6,7 +6,7 @@ import 'package:routed_auth_cloudflare/routed_auth_cloudflare.dart';
 import 'package:routed_node/cloudflare.dart';
 import 'package:sqlite3/sqlite3.dart';
 
-/// A Dart IO [AuthStore] backed by a SQLite database.
+/// A Dart IO `AuthStore` backed by a SQLite database.
 ///
 /// The store inherits the typed plugin capabilities of the SQL auth adapter,
 /// while this package supplies the local SQLite binding needed by Dart IO.

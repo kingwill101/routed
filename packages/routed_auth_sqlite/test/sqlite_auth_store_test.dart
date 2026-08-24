@@ -36,9 +36,9 @@ void main() {
         id: 'session-1',
         userId: 'user-1',
         tokenHash: 'token-hash',
-        createdAt: DateTime.utc(2026, 1, 1),
+        createdAt: DateTime.utc(2026),
         expiresAt: DateTime.utc(2026, 1, 2),
-        lastUsedAt: DateTime.utc(2026, 1, 1),
+        lastUsedAt: DateTime.utc(2026),
         authenticationMethod: 'password',
       ),
     );
@@ -67,7 +67,7 @@ void main() {
         'INSERT INTO routed_auth_users (id, email, payload) '
         "VALUES ('rollback-user', 'other@example.com', '{}')",
       );
-    } catch (_) {
+    } on Object {
       store.database.execute('ROLLBACK');
     }
 
