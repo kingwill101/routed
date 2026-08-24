@@ -72,7 +72,7 @@ authoritative; otherwise pass `StorageConfig` as `configuration` to define
 local disks with `LocalStorageDiskConfig`. Configured providers are immutable
 for the lifetime of an engine.
 
-See [`example/storage_example.dart`](example/storage_example.dart).
+The package includes a runnable storage example under its `example` directory.
 
 ## Testing
 

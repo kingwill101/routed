@@ -17,6 +17,7 @@ import '../view/view_extensions.dart';
 /// Configures the view engine from an immutable typed configuration.
 class ViewServiceProvider extends ServiceProvider
     with ProvidesTypedConfiguration<RoutedViewConfig> {
+  /// Creates the view provider with [configuration], or Liquid defaults.
   ViewServiceProvider([RoutedViewConfig? configuration])
     : configuration = configuration ?? RoutedViewConfig();
 

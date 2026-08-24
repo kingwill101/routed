@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/abstract_rule.dart';
 
+/// Validates that a date has a different timezone from the option.
 class DifferentTimezoneRule extends AbstractValidationRule {
   @override
   String get name => 'different_timezone';

@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/rule.dart';
 
+/// Validates that a value does not match the supplied regular expression.
 class NotRegexRule extends ValidationRule {
   @override
   String get name => 'not_regex';

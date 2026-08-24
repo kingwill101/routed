@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/context_aware_rule.dart';
 
+/// Validates that a value is present in another input array or field.
 class InArrayRule extends ContextAwareValidationRule {
   @override
   String get name => 'in_array';

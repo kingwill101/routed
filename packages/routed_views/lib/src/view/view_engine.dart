@@ -5,11 +5,12 @@
 /// methods for loading templates, adding custom functions and filters, and
 /// rendering templates with data.
 ///
-/// Internal reserved key for passing EngineContext into template rendering.
+/// Reserved data key used to pass an `EngineContext` to a view engine.
 const String kViewEngineContextKey = '__routed_context';
 
+/// Contract implemented by every template rendering engine.
 abstract class ViewEngine {
-  /// The file extensions this engine handles (e.g. ['.liquid', '.jinja'])
+  /// The file extensions this engine handles, such as `.liquid` or `.jinja`.
   List<String> get extensions;
 
   /// Renders a template with the given [name] and [data].
@@ -27,9 +28,13 @@ abstract class ViewEngine {
 
 /// Exception thrown when a template cannot be found.
 class TemplateNotFoundException implements Exception {
+  /// Name of the template that could not be found.
   final String templateName;
+
+  /// Human-readable explanation of the missing template.
   final String message;
 
+  /// Creates an exception for a missing [templateName].
   TemplateNotFoundException(this.templateName)
     : message = 'Template not found: $templateName';
 

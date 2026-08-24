@@ -5,6 +5,10 @@ import '../ip_filter.dart';
 
 /// Immutable trusted-proxy settings.
 class TrustedProxyConfig {
+  /// Creates trusted-proxy settings.
+  ///
+  /// [proxies] contains trusted IP addresses or CIDR ranges. [headers]
+  /// contains the forwarded-address headers accepted from those proxies.
   TrustedProxyConfig({
     this.enabled = false,
     this.forwardClientIp = true,
@@ -16,15 +20,28 @@ class TrustedProxyConfig {
          headers ?? const ['X-Forwarded-For', 'X-Real-IP'],
        );
 
+  /// Whether forwarded client information is trusted.
   final bool enabled;
+
+  /// Whether the resolved client address should be used by request helpers.
   final bool forwardClientIp;
+
+  /// Trusted proxy addresses or CIDR ranges.
   final List<String> proxies;
+
+  /// Header names inspected for a forwarded client address.
   final List<String> headers;
+
+  /// Optional platform-specific trusted proxy header.
   final String? platformHeader;
 }
 
 /// Immutable IP allow/deny settings.
 class IpFilterConfig {
+  /// Creates IP allow/deny settings.
+  ///
+  /// [allow] and [deny] contain IP addresses or CIDR ranges. Deny rules take
+  /// precedence over allow rules when both match an address.
   IpFilterConfig({
     this.enabled = false,
     this.defaultAction = IpFilterAction.allow,
@@ -34,15 +51,28 @@ class IpFilterConfig {
   }) : allow = List<String>.unmodifiable(allow ?? const []),
        deny = List<String>.unmodifiable(deny ?? const []);
 
+  /// Whether IP filtering is active.
   final bool enabled;
+
+  /// Action to take when no allow or deny rule matches.
   final IpFilterAction defaultAction;
+
+  /// IP addresses or CIDR ranges that are allowed.
   final List<String> allow;
+
+  /// IP addresses or CIDR ranges that are denied.
   final List<String> deny;
+
+  /// Whether filtering uses the trusted-proxy-aware client address.
   final bool respectTrustedProxies;
 }
 
 /// Immutable configuration for [RoutedSecurityProvider].
 class RoutedSecurityConfig implements ValidatableConfiguration {
+  /// Creates configuration for CORS, proxy resolution, and IP filtering.
+  ///
+  /// [maxRequestSize] is measured in bytes. If omitted, [trustedProxies] and
+  /// [ipFilter] use their disabled defaults.
   RoutedSecurityConfig({
     this.maxRequestSize = 10 * 1024 * 1024,
     TrustedProxyConfig? trustedProxies,
@@ -51,9 +81,16 @@ class RoutedSecurityConfig implements ValidatableConfiguration {
   }) : trustedProxies = trustedProxies ?? TrustedProxyConfig(),
        ipFilter = ipFilter ?? IpFilterConfig();
 
+  /// Maximum request body size in bytes.
   final int maxRequestSize;
+
+  /// Trusted-proxy address resolution settings.
   final TrustedProxyConfig trustedProxies;
+
+  /// IP allow/deny settings.
   final IpFilterConfig ipFilter;
+
+  /// CORS response and preflight settings.
   final CorsConfig cors;
 
   @override
@@ -131,6 +168,7 @@ class RoutedSecurityConfig implements ValidatableConfiguration {
 /// Registers CORS, trusted-proxy resolution, and optional IP filtering.
 class RoutedSecurityProvider extends ServiceProvider
     with ProvidesTypedConfiguration<RoutedSecurityConfig> {
+  /// Creates a provider using [configuration], or safe disabled defaults.
   RoutedSecurityProvider([RoutedSecurityConfig? configuration])
     : configuration = configuration ?? RoutedSecurityConfig();
 

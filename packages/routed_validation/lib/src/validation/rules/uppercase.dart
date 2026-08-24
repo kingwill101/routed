@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/rule.dart';
 
+/// Validates that a value is equal to its uppercase representation.
 class UppercaseRule extends ValidationRule {
   @override
   String get name => 'uppercase';

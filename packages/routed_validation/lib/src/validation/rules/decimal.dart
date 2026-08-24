@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/abstract_rule.dart';
 
+/// Validates decimal-place precision, optionally within a minimum and maximum.
 class DecimalRule extends AbstractValidationRule {
   @override
   String get name => 'decimal';

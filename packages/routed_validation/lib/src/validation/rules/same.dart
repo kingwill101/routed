@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/context_aware_rule.dart';
 
+/// Validates that a value equals the value of another input field.
 class SameRule extends ContextAwareValidationRule {
   @override
   String get name => 'same';

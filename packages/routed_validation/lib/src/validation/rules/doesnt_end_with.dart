@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/abstract_rule.dart';
 
+/// Validates that a value does not end with any supplied option.
 class DoesntEndWithRule extends AbstractValidationRule {
   @override
   String get name => 'doesnt_end_with';

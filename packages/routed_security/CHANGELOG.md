@@ -1,3 +1,8 @@
+## Unreleased
+
+- Completed public Dartdoc coverage and enabled the `public_member_api_docs`
+  analyzer lint.
+
 ## 0.1.0
 
 - **Breaking security change:** `TrustedProxyConfig(enabled: true)` now

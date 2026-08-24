@@ -7,6 +7,9 @@ import 'store_factory.dart';
 
 /// Typed options for [FileStore].
 class FileStoreConfiguration implements StoreConfiguration {
+  /// Creates file-store options rooted at [path].
+  ///
+  /// [lockPath] optionally separates lock files from cache entries.
   const FileStoreConfiguration({
     required this.path,
     this.lockPath,
@@ -14,9 +17,16 @@ class FileStoreConfiguration implements StoreConfiguration {
     this.fileSystem,
   });
 
+  /// Directory used for cache entries.
   final String path;
+
+  /// Optional directory used for lock files.
   final String? lockPath;
+
+  /// Optional permission mode for created files.
   final int? permission;
+
+  /// File system used to access the directories.
   final FileSystem? fileSystem;
 }
 

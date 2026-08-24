@@ -8,6 +8,9 @@ import 'engine_static_file_sink.dart';
 /// Engine/Router static-file helpers. Lives in the adapter package so foundation
 /// `routed` does not depend on or re-export storage APIs.
 extension EngineStaticFiles on Engine {
+  /// Mounts one file at [relativePath].
+  ///
+  /// [filePath] is resolved relative to the directory containing the file.
   void staticFile(String relativePath, String filePath, [file.FileSystem? fs]) {
     staticFileFS(
       relativePath,
@@ -16,10 +19,14 @@ extension EngineStaticFiles on Engine {
     );
   }
 
+  /// Mounts one file using an explicit parent directory [dir].
   void staticFileFS(String relativePath, String filePath, Dir dir) {
     _mountStaticFile(defaultRouter, relativePath, filePath, dir);
   }
 
+  /// Mounts a directory at [relativePath].
+  ///
+  /// Directory listings are enabled when [listDirectory] is true.
   void static(
     String relativePath,
     String rootPath, {
@@ -32,12 +39,15 @@ extension EngineStaticFiles on Engine {
     );
   }
 
+  /// Mounts a directory using an explicit [dir] definition.
   void staticFS(String relativePath, Dir dir) {
     _mountStaticDir(defaultRouter, relativePath, dir);
   }
 }
 
+/// Adds static-file mounting helpers to an individual router.
 extension RouterStaticFiles on Router {
+  /// Mounts one file at [relativePath] on this router.
   void staticFile(String relativePath, String filePath, [file.FileSystem? fs]) {
     staticFileFS(
       relativePath,
@@ -46,10 +56,12 @@ extension RouterStaticFiles on Router {
     );
   }
 
+  /// Mounts one file using an explicit parent directory [dir].
   void staticFileFS(String relativePath, String filePath, Dir dir) {
     _mountStaticFile(this, relativePath, filePath, dir);
   }
 
+  /// Mounts a directory at [relativePath] on this router.
   void static(
     String relativePath,
     String rootPath, {
@@ -62,6 +74,7 @@ extension RouterStaticFiles on Router {
     );
   }
 
+  /// Mounts a directory using an explicit [dir] definition.
   void staticFS(String relativePath, Dir dir) {
     _mountStaticDir(this, relativePath, dir);
   }

@@ -1,3 +1,4 @@
+/// Routed integration for storage disks and declarative static files.
 library;
 
 import 'package:file/file.dart';
@@ -11,7 +12,11 @@ export 'src/engine_static_file_sink.dart';
 export 'src/static_files.dart';
 export 'src/static_provider.dart';
 
+/// Adds storage-manager accessors to a Routed request context.
 extension StorageEngineContext on EngineContext {
+  /// Returns the storage manager registered for this request.
+  ///
+  /// Throws [StateError] when the storage provider has not been configured.
   StorageManager get storageManager {
     if (container.has<StorageManager>()) {
       return container.get<StorageManager>();
@@ -19,10 +24,14 @@ extension StorageEngineContext on EngineContext {
     throw StateError('Storage manager not configured');
   }
 
+  /// Returns the named storage disk, or the manager's default disk.
   StorageDisk storageDisk([String? name]) => storageManager.disk(name);
+
+  /// Whether a [StorageManager] is registered for this request.
   bool get hasStorageManager => container.has<StorageManager>();
 }
 
+/// Creates middleware that makes [manager] available to request handlers.
 Middleware storageMiddleware(StorageManager manager) {
   return (ctx, next) {
     // ensure request-scoped access falls back to container singleton
@@ -35,14 +44,25 @@ Middleware storageMiddleware(StorageManager manager) {
 
 /// A named local storage disk definition.
 final class LocalStorageDiskConfig {
+  /// Creates a local disk definition.
+  ///
+  /// [root] overrides the storage configuration root for this disk. When
+  /// [fileSystem] is omitted, the storage manager's default file system is
+  /// used.
   const LocalStorageDiskConfig({this.root, this.fileSystem});
 
+  /// Optional directory used as the disk root.
   final String? root;
+
+  /// Optional file system used by the disk.
   final FileSystem? fileSystem;
 }
 
 /// Immutable configuration for [RoutedStorageProvider].
 class StorageConfig implements ValidatableConfiguration {
+  /// Creates typed storage configuration.
+  ///
+  /// If [disks] is omitted, a `local` disk rooted at [root] is created.
   StorageConfig({
     this.defaultDisk = 'local',
     this.root = 'storage/app',
@@ -54,8 +74,13 @@ class StorageConfig implements ValidatableConfiguration {
              },
        );
 
+  /// Name of the disk used when no disk is specified.
   final String defaultDisk;
+
+  /// Root used by the default local disk.
   final String root;
+
+  /// Named local disk definitions.
   final Map<String, LocalStorageDiskConfig> disks;
 
   @override
@@ -99,6 +124,7 @@ class StorageConfig implements ValidatableConfiguration {
   }
 }
 
+/// Registers storage disks and their [StorageManager] with a Routed app.
 class RoutedStorageProvider extends ServiceProvider
     with ProvidesTypedConfiguration<StorageConfig> {
   /// Defaults to a [StorageManager] with a local `storage/app` disk.
@@ -107,9 +133,11 @@ class RoutedStorageProvider extends ServiceProvider
       manager = manager ?? StorageManager(),
       _configureManager = manager == null;
 
+  /// Typed storage configuration used when [manager] is not supplied.
   @override
   final StorageConfig configuration;
 
+  /// Storage manager registered with the application container.
   final StorageManager manager;
   final bool _configureManager;
 

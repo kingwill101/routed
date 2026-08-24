@@ -60,6 +60,7 @@ class LiquidRoot implements Root {
     return Source(file.uri, content, this);
   }
 
+  /// Changes the base directory used for relative template paths.
   void setBaseDirectory(String? value) {
     baseDirectory = _resolveBase(fileSystem, value);
   }

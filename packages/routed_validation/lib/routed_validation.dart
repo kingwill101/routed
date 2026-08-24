@@ -1,3 +1,4 @@
+/// Request binding, validation contexts, and extensible validation rules.
 library;
 
 export 'src/validation/rule.dart';

@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/rule.dart';
 
+/// Validates that a numeric value is at least the supplied option.
 class GreaterThanOrEqualRule extends ValidationRule {
   @override
   String get name => 'greater_than_or_equal';

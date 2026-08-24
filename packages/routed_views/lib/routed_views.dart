@@ -1,3 +1,4 @@
+/// Template rendering and request localization integrations for Routed.
 library;
 
 export 'src/engine_ext.dart';

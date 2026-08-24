@@ -7,9 +7,17 @@ import 'view/view_engine.dart';
 
 /// View helpers for [EngineContext] — moved from `routed` to `routed_views`
 /// per refactor.md §16.2.
+///
+/// The extension resolves a template through the configured
+/// [ViewEngineManager] and writes the rendered result as HTML.
 extension RoutedViewContext on EngineContext {
+  /// Whether this context has the view helpers available.
   bool get hasViewSupport => true;
 
+  /// Renders [templateName] through the configured view engine.
+  ///
+  /// [data] is made available to the template and the current context is
+  /// exposed under [kViewEngineContextKey].
   Future<Response> template({
     required String templateName,
     Map<String, dynamic>? data,

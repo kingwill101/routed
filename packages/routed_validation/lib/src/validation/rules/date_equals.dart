@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/abstract_rule.dart';
 
+/// Validates that a date represents the same instant as the option.
 class DateEqualsRule extends AbstractValidationRule {
   @override
   String get name => 'date_equals';

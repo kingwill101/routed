@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/rule.dart';
 
+/// Validates that a value is a list, optionally containing allowed values.
 class ListRule extends ValidationRule {
   @override
   String get name => 'list';

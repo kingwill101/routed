@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/abstract_rule.dart';
 
+/// Validates that a list contains every value supplied in the options.
 class ContainsRule extends AbstractValidationRule {
   @override
   String get name => 'contains';

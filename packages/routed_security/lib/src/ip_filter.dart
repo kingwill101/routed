@@ -4,7 +4,13 @@ import 'package:routed_core/routed_core.dart' show NetworkMatcher;
 ///
 /// If no rules match, the [IpFilterAction.allow] permits the IP, while
 /// [IpFilterAction.deny] blocks it.
-enum IpFilterAction { allow, deny }
+enum IpFilterAction {
+  /// Allows an address when no rule matches it.
+  allow,
+
+  /// Denies an address when no rule matches it.
+  deny,
+}
 
 /// A filter for controlling access based on IP addresses.
 ///

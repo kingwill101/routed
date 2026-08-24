@@ -4,7 +4,9 @@ import 'package:routed_core/src/contracts/translation/translator.dart';
 import 'message_selector.dart';
 import 'package:routed_core/src/utils/dot.dart';
 
+/// Resolves, interpolates, and pluralizes translations from a loader.
 class Translator implements TranslatorContract {
+  /// Creates a translator for [locale] and an optional [fallbackLocale].
   Translator({
     required TranslationLoader loader,
     required String locale,

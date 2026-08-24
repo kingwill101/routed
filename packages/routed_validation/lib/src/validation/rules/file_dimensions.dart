@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/rule.dart';
 
+/// Validates image dimensions using the configured file metadata.
 class FileDimensionsRule extends ValidationRule {
   @override
   String get name => 'file_dimensions';

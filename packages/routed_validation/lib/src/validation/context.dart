@@ -19,8 +19,8 @@ import 'validator.dart';
 /// Implementation mirrors the historical `BindingMethods` extension:
 /// - `validate` selects the appropriate data source based on HTTP method
 ///   and content type, then runs it through [Validator].
-/// - `bind` extracts the same data source and populates the provided
-///   [model] (Map or Bindable).
+/// - `bind` extracts the same data source and populates the provided model
+///   (a `Map` or a bindable object).
 extension ValidationContext on EngineContext {
   /// Validates the current request's data against [rules].
   ///

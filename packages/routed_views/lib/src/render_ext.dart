@@ -8,6 +8,10 @@ import 'view/engine_manager.dart';
 /// `package:routed_core` (see [EngineContextHelpers]); this extension only
 /// carries view-specific rendering.
 extension RoutedViewRender on EngineContext {
+  /// Renders [template] and writes it as an HTML response.
+  ///
+  /// [data] is passed to the selected view engine and [statusCode] is used
+  /// for the response.
   Future<Response> view(
     String template, {
     Map<String, dynamic> data = const {},

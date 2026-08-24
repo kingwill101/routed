@@ -7,7 +7,12 @@ import 'package:server_contracts/server_contracts.dart';
 import 'redis_lock.dart';
 import 'taggable_store.dart';
 
+/// Implements cache storage and locking using a Redis server.
 class RedisStore extends TaggableStore implements Store, LockProvider {
+  /// Creates a Redis store connected to [host] and [port].
+  ///
+  /// [password] and [db] configure authentication and database selection.
+  /// [sendOverride] is intended for adapter tests and custom transports.
   RedisStore(
     this.host,
     this.port, {
@@ -18,9 +23,16 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
   }) : _connection = connection ?? RedisConnection(),
        _sendOverride = sendOverride;
 
+  /// Redis hostname or address.
   final String host;
+
+  /// Redis TCP port.
   final int port;
+
+  /// Optional Redis password.
   final String? password;
+
+  /// Optional Redis database number.
   final int? db;
 
   final RedisConnection _connection;
@@ -209,6 +221,7 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
     return RedisLock(this, name, 0, owner);
   }
 
+  /// Acquires [name] for [owner] with a lifetime of [seconds].
   Future<bool> acquireLock(String name, String owner, int seconds) async {
     final ttl = seconds > 0 ? seconds : 10;
     final result = await _send([
@@ -222,6 +235,7 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
     return result == 'OK';
   }
 
+  /// Releases [name] only when it is owned by [owner].
   Future<bool> releaseLock(String name, String owner) async {
     final script =
         'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) else return 0 end';
@@ -232,12 +246,14 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
     return false;
   }
 
+  /// Returns the current owner of [name], if it is locked.
   Future<String?> lockOwner(String name) async {
     final owner = await _send(['GET', _lockKey(name)]);
     if (owner == null) return null;
     return owner.toString();
   }
 
+  /// Removes [name] without checking its owner.
   void forceReleaseLock(String name) {
     unawaited(_send(['DEL', _lockKey(name)]));
   }

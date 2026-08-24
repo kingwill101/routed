@@ -1,6 +1,12 @@
+/// Describes the file metadata consumed by file validation rules.
 abstract class ValidationFile {
+  /// Original client-provided filename.
   String get filename;
+
+  /// File size in bytes.
   int get size;
+
+  /// MIME type reported for the file.
   String get contentType;
 }
 

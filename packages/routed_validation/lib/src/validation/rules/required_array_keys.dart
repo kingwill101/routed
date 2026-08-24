@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/rule.dart';
 
+/// Validates that a map contains every key supplied in the options.
 class RequiredArrayKeysRule extends ValidationRule {
   @override
   String get name => 'required_array_keys';

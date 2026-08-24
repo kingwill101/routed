@@ -7,7 +7,9 @@ import 'package:yaml/yaml.dart';
 import 'package:routed_core/src/contracts/translation/loader.dart';
 import 'package:routed_core/src/utils/deep_merge.dart';
 
+/// Loads grouped and JSON translations from a [fileSystem].
 class FileTranslationLoader implements TranslationLoader {
+  /// Creates a loader with optional grouped, JSON, and namespace paths.
   FileTranslationLoader({
     required file.FileSystem fileSystem,
     Iterable<String>? paths,

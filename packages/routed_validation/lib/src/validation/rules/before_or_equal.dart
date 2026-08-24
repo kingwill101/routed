@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/abstract_rule.dart';
 
+/// Validates that a date is on or before the date supplied in the options.
 class BeforeOrEqualRule extends AbstractValidationRule {
   @override
   String get name => 'before_or_equal';

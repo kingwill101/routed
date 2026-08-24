@@ -1,9 +1,10 @@
 import 'package:routed_validation/src/validation/rule.dart';
 
+/// Base class for rules that compare a value with other input fields.
 abstract class ContextAwareValidationRule extends ValidationRule {
   Map<String, dynamic> _contextValues = {};
 
-  /// Sets the context values that should be used in the validation
+  /// Sets the context values that should be used during validation.
   void setContextValues(Map<String, dynamic> values) {
     _contextValues = values;
   }

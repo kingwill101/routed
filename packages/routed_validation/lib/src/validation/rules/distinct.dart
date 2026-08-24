@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/abstract_rule.dart';
 
+/// Validates that a list contains no duplicate values.
 class DistinctRule extends AbstractValidationRule {
   @override
   String get name => 'distinct';

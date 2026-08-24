@@ -1,7 +1,9 @@
 import 'lock.dart';
 import 'redis_store.dart';
 
+/// Redis-backed implementation of [CacheLock].
 class RedisLock extends CacheLock {
+  /// Creates a lock backed by a [RedisStore].
   RedisLock(this._store, String name, int seconds, [String? owner])
     : super(name, seconds, owner);
 

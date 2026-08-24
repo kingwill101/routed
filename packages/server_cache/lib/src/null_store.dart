@@ -3,6 +3,7 @@ import 'package:server_contracts/server_contracts.dart';
 import 'null_lock.dart';
 import 'taggable_store.dart';
 
+/// Store implementation that discards writes and returns no values.
 class NullStore extends TaggableStore implements Store, LockProvider {
   @override
   Future<List<String>> getAllKeys() async => const <String>[];

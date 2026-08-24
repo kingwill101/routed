@@ -1,11 +1,14 @@
-import 'package:routed_core/src/container/container.dart' show Container;
-import 'package:routed_core/src/config/typed.dart' show ConfigStore;
-import 'package:routed_core/src/support/named_registry.dart' show NamedRegistry;
-import 'package:routed_validation/src/validation/rule.dart';
-import 'package:routed_validation/src/validation/rules/rules.dart';
+import 'package:routed_core/routed_core.dart'
+    show ConfigStore, Container, NamedRegistry;
 
+import 'rule.dart';
+import 'rules/rules.dart';
+
+/// Factory function that creates a validation rule instance.
 typedef ValidationRuleFactory = ValidationRule Function();
 
+/// Returns the validation registry in [container], creating the defaults when
+/// the container has a configuration store but no registry yet.
 ValidationRuleRegistry requireValidationRegistry(Container container) {
   if (container.has<ValidationRuleRegistry>()) {
     return container.get<ValidationRuleRegistry>();
@@ -90,13 +93,17 @@ final List<ValidationRuleFactory> _defaultRuleFactories = [
   () => FileExtensionsRule(),
 ];
 
+/// Named registry of validation rule factories.
 class ValidationRuleRegistry extends NamedRegistry<ValidationRuleFactory> {
+  /// Creates an empty rule registry.
   ValidationRuleRegistry();
 
+  /// Creates a registry populated with all built-in rules.
   ValidationRuleRegistry.defaults() {
     _registerDefaults();
   }
 
+  /// Copies the entries from [source] into a new registry.
   ValidationRuleRegistry.clone(ValidationRuleRegistry source) {
     for (final name in source.entryNames) {
       final factory = source.getEntry(name);
@@ -106,15 +113,19 @@ class ValidationRuleRegistry extends NamedRegistry<ValidationRuleFactory> {
     }
   }
 
+  /// Registers [factory] under the name returned by its rule instance.
   void register(ValidationRuleFactory factory) {
     final rule = factory();
     registerEntry(rule.name, factory);
   }
 
+  /// Resolves the factory registered under [name].
   ValidationRuleFactory? resolve(String name) => getEntry(name);
 
+  /// Whether a rule factory is registered under [name].
   bool contains(String name) => containsEntry(name);
 
+  /// Names of all registered validation rules.
   Iterable<String> get names => entryNames;
 
   void _registerDefaults() {
@@ -170,6 +181,8 @@ Map<String, List<RuleWithOptions>> parseRules(
 /// A class responsible for validating data against a set of rules.
 class Validator {
   final Map<String, List<RuleWithOptions>> _rules;
+
+  /// Registry used to resolve rules when the validator was created.
   final ValidationRuleRegistry registry;
 
   /// Indicates if the validator should stop on the first rule failure.

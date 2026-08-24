@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/abstract_rule.dart';
 
+/// Validates that a value does not start with any supplied option.
 class DoesntStartWithRule extends AbstractValidationRule {
   @override
   String get name => 'doesnt_start_with';

@@ -1,3 +1,4 @@
+/// Portable contracts shared by server storage, cache, and translation code.
 library;
 
 export 'src/cache/cache.dart';

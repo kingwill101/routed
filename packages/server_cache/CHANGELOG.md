@@ -1,3 +1,8 @@
+## Unreleased
+
+- Completed public Dartdoc coverage and enabled the `public_member_api_docs`
+  analyzer lint.
+
 ## 0.2.0
 
 - Replace map-based store configuration and string-driver resolution with

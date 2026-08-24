@@ -1,3 +1,4 @@
+/// Framework-neutral cache stores, repositories, locks, and typed factories.
 library;
 
 export 'src/cache.dart';

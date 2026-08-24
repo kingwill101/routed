@@ -1,6 +1,8 @@
 import 'lock.dart';
 
+/// No-op lock implementation for disabled or non-persistent caching.
 class NullLock extends CacheLock {
+  /// Creates a lock that always acquires successfully.
   NullLock(super.name, super.seconds, [super.owner]);
 
   bool _acquired = false;

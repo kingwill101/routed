@@ -23,6 +23,7 @@ import '../config.dart';
 /// Registers the localization services and middleware configuration.
 class LocalizationServiceProvider extends ServiceProvider
     with ProvidesTypedConfiguration<LocalizationConfig> {
+  /// Creates the localization provider with [configuration], or defaults.
   LocalizationServiceProvider([LocalizationConfig? configuration])
     : configuration = configuration ?? LocalizationConfig();
 

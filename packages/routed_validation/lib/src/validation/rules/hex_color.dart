@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/rule.dart';
 
+/// Validates a CSS-style hexadecimal color value.
 class HexColorRule extends ValidationRule {
   @override
   String get name => 'hex_color';

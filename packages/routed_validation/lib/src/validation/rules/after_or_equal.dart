@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/rule.dart';
 
+/// Validates that a date is on or after the date supplied in the options.
 class AfterOrEqualRule extends ValidationRule {
   @override
   String get name => 'after_or_equal';

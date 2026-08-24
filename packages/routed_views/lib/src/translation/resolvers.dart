@@ -18,8 +18,10 @@ abstract class LocaleResolver {
 
 /// Resolves locales from a query parameter (e.g. `?lang=fr`).
 class QueryLocaleResolver implements LocaleResolver {
+  /// Creates a resolver for [parameter].
   QueryLocaleResolver({required this.parameter});
 
+  /// Query parameter containing the requested locale.
   final String parameter;
 
   @override
@@ -30,8 +32,10 @@ class QueryLocaleResolver implements LocaleResolver {
 
 /// Resolves locales from a cookie value.
 class CookieLocaleResolver implements LocaleResolver {
+  /// Creates a resolver for [cookieName].
   CookieLocaleResolver({required this.cookieName});
 
+  /// Cookie containing the requested locale.
   final String cookieName;
 
   @override
@@ -42,8 +46,10 @@ class CookieLocaleResolver implements LocaleResolver {
 
 /// Resolves locales from a session key.
 class SessionLocaleResolver implements LocaleResolver {
+  /// Creates a resolver for [sessionKey].
   SessionLocaleResolver({required this.sessionKey});
 
+  /// Session key containing the requested locale.
   final String sessionKey;
 
   @override
@@ -58,8 +64,10 @@ class SessionLocaleResolver implements LocaleResolver {
 
 /// Resolves locales from the `Accept-Language` header.
 class HeaderLocaleResolver implements LocaleResolver {
+  /// Creates a resolver for [headerName].
   HeaderLocaleResolver({this.headerName = HttpHeaders.acceptLanguageHeader});
 
+  /// Header containing weighted locale preferences.
   final String headerName;
 
   @override

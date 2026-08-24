@@ -1,3 +1,4 @@
+/// CORS, trusted-proxy, and IP filtering integrations for Routed.
 library;
 
 export 'src/cors.dart';

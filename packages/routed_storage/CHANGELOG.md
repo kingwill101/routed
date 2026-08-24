@@ -1,3 +1,8 @@
+## Unreleased
+
+- Completed public Dartdoc coverage and enabled the `public_member_api_docs`
+  analyzer lint.
+
 ## 0.2.0
 
 - **Breaking:** Replace the string-based `StorageDiskConfig.driver` field with

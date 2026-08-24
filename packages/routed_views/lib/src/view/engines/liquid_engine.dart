@@ -168,9 +168,13 @@ class LiquidViewEngine implements ViewEngine {
 
 /// Exception thrown when there is an error rendering a template.
 class TemplateRenderException implements Exception {
+  /// Creates an exception for [templateName] and the underlying [error].
   final String templateName;
+
+  /// Underlying rendering error description.
   final String error;
 
+  /// Creates a rendering exception with the template and error details.
   TemplateRenderException(this.templateName, this.error);
 
   @override

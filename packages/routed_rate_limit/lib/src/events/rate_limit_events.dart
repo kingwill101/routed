@@ -29,6 +29,7 @@ sealed class RateLimitEvent extends Event {
 
 /// Event emitted when a request is allowed.
 final class RateLimitAllowedEvent extends RateLimitEvent {
+  /// Creates an event for an allowed request.
   RateLimitAllowedEvent({
     required super.policy,
     required super.strategy,
@@ -40,6 +41,7 @@ final class RateLimitAllowedEvent extends RateLimitEvent {
 
 /// Event emitted when a request is blocked.
 final class RateLimitBlockedEvent extends RateLimitEvent {
+  /// Creates an event for a blocked request.
   RateLimitBlockedEvent({
     required super.policy,
     required super.strategy,

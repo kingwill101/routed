@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/context_aware_rule.dart';
 
+/// Validates that a value has the shape of an HTTP or HTTPS URL.
 class ActiveUrlRule extends ContextAwareValidationRule {
   @override
   String get name => 'active_url';

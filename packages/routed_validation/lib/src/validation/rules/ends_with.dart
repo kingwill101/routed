@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/abstract_rule.dart';
 
+/// Validates that a value ends with at least one supplied option.
 class EndsWithRule extends AbstractValidationRule {
   @override
   String get name => 'ends_with';

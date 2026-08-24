@@ -5,8 +5,10 @@ import 'package:server_storage/server_storage.dart';
 
 /// Adapts [EngineContext] to the portable [StaticFileSink] surface.
 final class EngineContextStaticFileSink implements StaticFileSink {
+  /// Creates a sink that writes static-file output through [ctx].
   EngineContextStaticFileSink(this.ctx);
 
+  /// Request context receiving the static-file response.
   final EngineContext ctx;
 
   @override
@@ -43,6 +45,7 @@ final class EngineContextStaticFileSink implements StaticFileSink {
 
 /// Convenience so Routed code can pass [EngineContext] directly.
 extension FileHandlerEngineContext on FileHandler {
+  /// Serves [file] through a Routed request context.
   Future<void> serveToContext(EngineContext ctx, String file) =>
       serveFile(EngineContextStaticFileSink(ctx), file);
 }

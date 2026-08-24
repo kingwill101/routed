@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/rule.dart';
 
+/// Validates that a numeric value is greater than the supplied option.
 class GreaterThanRule extends ValidationRule {
   @override
   String get name => 'greater_than';

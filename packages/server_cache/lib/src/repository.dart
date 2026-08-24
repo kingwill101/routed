@@ -1,6 +1,8 @@
 import 'package:server_contracts/server_contracts.dart';
 
+/// Optional instrumentation callbacks emitted by a cache repository.
 class RepositoryEventCallbacks {
+  /// Creates callbacks for cache hits, misses, writes, and removals.
   const RepositoryEventCallbacks({
     this.onHit,
     this.onMiss,
@@ -8,20 +10,31 @@ class RepositoryEventCallbacks {
     this.onForget,
   });
 
+  /// Called after `key` is read successfully.
   final void Function(String key)? onHit;
+
+  /// Called when `key` is absent.
   final void Function(String key)? onMiss;
+
+  /// Called after a value is written for `key`.
   final void Function(String key, Duration? ttl)? onWrite;
+
+  /// Called after `key` is removed.
   final void Function(String key)? onForget;
 }
 
 /// Implementation of the [Repository] interface.
 /// This class provides methods to interact with the cache store.
 class RepositoryImpl implements Repository {
+  /// Store used for persistence.
   final Store store;
+
+  /// Logical store name associated with this repository.
   final String storeName;
   RepositoryEventCallbacks? _callbacks;
   String _prefix;
 
+  /// Creates a repository around [store] with [storeName] and [prefix].
   RepositoryImpl(
     this.store,
     this.storeName,
@@ -29,10 +42,12 @@ class RepositoryImpl implements Repository {
     RepositoryEventCallbacks? callbacks,
   ]) : _callbacks = callbacks;
 
+  /// Replaces event [callbacks] for this repository.
   void attachCallbacks(RepositoryEventCallbacks? callbacks) {
     _callbacks = callbacks;
   }
 
+  /// Replaces the key [prefix] used for subsequent operations.
   void updatePrefix(String prefix) {
     _prefix = prefix;
   }
@@ -124,11 +139,7 @@ class RepositoryImpl implements Repository {
     // Use the store's atomic store-only-if-absent operation so concurrent
     // callers for the same missing key cannot all report success and
     // clobber each other's values.
-    final success = await store.add(
-      _prefixed(key),
-      value,
-      ttl?.inSeconds ?? 0,
-    );
+    final success = await store.add(_prefixed(key), value, ttl?.inSeconds ?? 0);
     if (success) {
       _publishWrite(key, ttl);
     }

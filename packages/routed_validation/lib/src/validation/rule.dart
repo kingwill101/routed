@@ -1,5 +1,6 @@
 export 'context_aware_rule.dart';
 
+/// Contract implemented by every named validation rule.
 abstract class ValidationRule {
   /// The name of the validation rule.
   /// This should be a unique identifier for the rule.

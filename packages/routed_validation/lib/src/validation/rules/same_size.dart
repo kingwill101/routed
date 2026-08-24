@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/context_aware_rule.dart';
 
+/// Validates that two values have the same size or numeric value.
 class SameSizeRule extends ContextAwareValidationRule {
   @override
   String get name => 'same_size';

@@ -14,6 +14,7 @@ typedef DataCacheCallbacksBuilder =
 /// [StoreConfiguration] and creates the store during composition. The
 /// manager never parses string-keyed configuration maps.
 class DataCacheManager {
+  /// Creates a cache manager with an optional key [prefix] and callback builder.
   DataCacheManager({
     String prefix = '',
     DataCacheCallbacksBuilder? callbacksBuilder,

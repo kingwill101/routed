@@ -5,6 +5,10 @@ import 'store_factory.dart';
 
 /// Typed options for [RedisStore].
 class RedisStoreConfiguration implements StoreConfiguration {
+  /// Creates Redis connection options.
+  ///
+  /// [url] takes precedence for values it specifies; explicit fields override
+  /// the corresponding URL values.
   const RedisStoreConfiguration({
     this.url,
     this.host,
@@ -13,10 +17,19 @@ class RedisStoreConfiguration implements StoreConfiguration {
     this.database,
   });
 
+  /// Optional Redis URL used as the connection source.
   final Uri? url;
+
+  /// Redis hostname or address.
   final String? host;
+
+  /// Redis TCP port.
   final int? port;
+
+  /// Redis authentication password.
   final String? password;
+
+  /// Redis database number.
   final int? database;
 }
 

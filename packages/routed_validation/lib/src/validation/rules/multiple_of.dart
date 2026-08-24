@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/rule.dart';
 
+/// Validates that a numeric value is an exact multiple of the option.
 class MultipleOfRule extends ValidationRule {
   @override
   String get name => 'multiple_of';

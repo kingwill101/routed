@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/rule.dart';
 
+/// Validates that a value is not among the supplied options.
 class NotInRule extends ValidationRule {
   @override
   String get name => 'not_in';

@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/abstract_rule.dart';
 
+/// Validates that a value contains only ASCII characters.
 class AsciiRule extends AbstractValidationRule {
   @override
   String get name => 'ascii';

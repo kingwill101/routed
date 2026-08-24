@@ -1,6 +1,7 @@
 import 'package:routed_validation/src/validation/abstract_rule.dart';
 import 'package:routed_validation/src/validation/file.dart';
 
+/// Validates that a file size falls within the supplied kilobyte range.
 class FileBetweenRule extends AbstractValidationRule {
   @override
   String get name => 'file_between';

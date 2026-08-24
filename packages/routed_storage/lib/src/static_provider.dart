@@ -6,12 +6,18 @@ import 'engine_static_file_sink.dart';
 
 /// Immutable configuration for [RoutedStaticProvider].
 class StaticConfig implements ValidatableConfiguration {
+  /// Creates declarative static-mount configuration.
+  ///
+  /// Static serving is disabled unless [enabled] is true.
   StaticConfig({this.enabled = false, List<StaticMountConfig>? mounts})
     : mounts = List<StaticMountConfig>.unmodifiable(
         mounts ?? const <StaticMountConfig>[],
       );
 
+  /// Whether the provider should register static routes.
   final bool enabled;
+
+  /// Static mounts to register when the provider boots.
   final List<StaticMountConfig> mounts;
 
   @override
@@ -66,9 +72,11 @@ class StaticConfig implements ValidatableConfiguration {
 /// Installs declarative static mounts from [configuration].
 class RoutedStaticProvider extends ServiceProvider
     with ProvidesTypedConfiguration<StaticConfig> {
+  /// Creates a provider for [configuration], or disabled defaults.
   RoutedStaticProvider([StaticConfig? configuration])
     : configuration = configuration ?? StaticConfig();
 
+  /// Typed static-mount configuration.
   @override
   final StaticConfig configuration;
 
@@ -165,7 +173,13 @@ bool _isSafeStaticRelativePath(String value) {
       !normalized.startsWith('../');
 }
 
+/// Describes a directory mounted by [RoutedStaticProvider].
 final class StaticMountConfig {
+  /// Creates a static directory mount.
+  ///
+  /// Provide either [disk] to resolve the mount from a [StorageManager], or
+  /// [root] to use a direct file-system directory. [path] selects a
+  /// subdirectory and [indexFile] controls directory index resolution.
   const StaticMountConfig({
     required this.route,
     this.disk,
@@ -175,10 +189,21 @@ final class StaticMountConfig {
     this.listDirectories = false,
   });
 
+  /// URL path at which the directory is mounted.
   final String route;
+
+  /// Storage disk containing the mounted directory.
   final String? disk;
+
+  /// Direct file-system root for the mounted directory.
   final String? root;
+
+  /// Relative path within [disk] or [root].
   final String path;
+
+  /// File served for a directory request.
   final String indexFile;
+
+  /// Whether directory listings are enabled.
   final bool listDirectories;
 }

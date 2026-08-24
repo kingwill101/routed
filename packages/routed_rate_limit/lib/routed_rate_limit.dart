@@ -1,3 +1,4 @@
+/// Routed adapters for request and authentication rate limiting.
 library;
 
 import 'package:routed_core/routed_core.dart';
@@ -15,7 +16,12 @@ export 'package:server_auth/server_auth.dart'
         AuthRateLimiter;
 export 'src/events/rate_limit_events.dart';
 
+/// Adds rate-limit service accessors to a Routed request context.
 extension RateLimitEngineContext on EngineContext {
+  /// Returns the configured request rate-limit service.
+  ///
+  /// Throws [StateError] when no [RateLimitService] has been registered in
+  /// the request container.
   RateLimitService get rateLimitService {
     if (container.has<RateLimitService>()) {
       return container.get<RateLimitService>();
@@ -27,7 +33,10 @@ extension RateLimitEngineContext on EngineContext {
     throw StateError('Rate limit service not configured');
   }
 
+  /// Whether a [RateLimitService] is registered in this request container.
   bool get hasRateLimitService => container.has<RateLimitService>();
+
+  /// Evaluates [request] using this context's configured rate-limit service.
   Future<RateLimitOutcome?> checkRateLimit(RateLimitRequest request) =>
       rateLimitService.check(request);
 }
@@ -38,10 +47,12 @@ extension RateLimitEngineContext on EngineContext {
 /// method/path matchers and key resolvers remain the single source of truth.
 /// The adapter does not copy passwords, OAuth codes, or verification tokens
 /// into a rate-limit request. IP-based policies use Routed's trusted-proxy
-/// resolution through [EngineContext.request.clientIP].
+/// resolution through `clientIP`.
 final class RoutedAuthRateLimiter implements AuthRateLimiter<EngineContext> {
+  /// Creates an auth adapter backed by [service].
   const RoutedAuthRateLimiter(this.service);
 
+  /// The request rate-limit service used for auth operations.
   final RateLimitService service;
 
   @override
@@ -64,14 +75,20 @@ final class RoutedAuthRateLimiter implements AuthRateLimiter<EngineContext> {
 /// trusted client address. No password, OTP, captcha token, bearer token, or
 /// other endpoint payload is retained here.
 final class RoutedAuthRateLimitRequest implements RateLimitRequest {
+  /// Creates a request adapter from a `server_auth` auth request.
   RoutedAuthRateLimitRequest._(AuthRateLimitRequest<EngineContext> request)
     : operation = request.operation,
       providerId = request.providerId,
       identifier = request.identifier,
       _context = request.context;
 
+  /// Auth operation being evaluated.
   final AuthRateLimitOperation operation;
+
+  /// Auth provider identifier associated with the operation.
   final String providerId;
+
+  /// Non-secret identifier supplied by the auth operation, when present.
   final String? identifier;
   final EngineContext _context;
 
@@ -91,6 +108,9 @@ final class RoutedAuthRateLimitRequest implements RateLimitRequest {
   String header(String name) => _context.request.header(name);
 }
 
+/// Creates middleware that applies [service] before invoking the next handler.
+///
+/// Blocked requests receive status `429` and a `Retry-After` response header.
 Middleware rateLimitMiddleware(RateLimitService service) {
   return (ctx, next) async {
     if (!ctx.container.has<RateLimitService>()) {
@@ -134,21 +154,28 @@ final class _ContextRateLimitRequest implements RateLimitRequest {
 
 /// Typed configuration for the rate-limit integration.
 class RateLimitConfig implements ValidatableConfiguration {
+  /// Creates typed configuration for Routed rate limiting.
+  ///
+  /// An omitted [service] creates an empty service, leaving rate limiting
+  /// disabled until policies are supplied.
   RateLimitConfig({RateLimitService? service})
     : service = service ?? RateLimitService(const []);
 
+  /// Service used by the provider and request middleware.
   final RateLimitService service;
 
   @override
   void validate(ConfigValidationContext context) {}
 }
 
+/// Registers the configured rate-limit service with a Routed application.
 class RoutedRateLimitProvider extends ServiceProvider
     with ProvidesTypedConfiguration<RateLimitConfig> {
   /// Defaults to an empty policy list (rate limiting disabled until configured).
   RoutedRateLimitProvider([RateLimitConfig? configuration])
     : configuration = configuration ?? RateLimitConfig();
 
+  /// Typed rate-limit configuration used by this provider.
   @override
   final RateLimitConfig configuration;
 

@@ -1,5 +1,6 @@
 import 'package:routed_validation/src/validation/rule.dart';
 
+/// Validates the canonical 26-character ULID representation.
 class UlidRule extends ValidationRule {
   @override
   String get name => 'ulid';
