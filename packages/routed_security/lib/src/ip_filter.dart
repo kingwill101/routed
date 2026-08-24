@@ -1,3 +1,6 @@
+/// IP allow and deny primitives for Routed applications.
+library;
+
 import 'package:routed_core/routed_core.dart' show NetworkMatcher;
 
 /// Defines the default behaviour when no allow/deny rule matches.
@@ -14,17 +17,19 @@ enum IpFilterAction {
 
 /// A filter for controlling access based on IP addresses.
 ///
-/// The [IpFilter] class allows you to define rules for allowing or denying
-/// access to specific IP addresses or ranges. It supports both an "allow" list
-/// and a "deny" list, with a default action when no rules match.
+/// [IpFilter] evaluates an address against an ordered deny list and allow list.
+/// Deny rules take precedence, followed by allow rules, and then
+/// [defaultAction]. The [respectTrustedProxies] value is available to callers
+/// composing the filter with request middleware; [allows] itself evaluates
+/// only the address passed to it.
 ///
 /// Example usage:
 /// ```dart
 /// final filter = IpFilter(
 ///   enabled: true,
 ///   defaultAction: IpFilterAction.deny,
-///   allow: [NetworkMatcher('192.168.1.0/24')],
-///   deny: [NetworkMatcher('192.168.1.100')],
+///   allow: [NetworkMatcher.parse('192.168.1.0/24')],
+///   deny: [NetworkMatcher.parse('192.168.1.100')],
 ///   respectTrustedProxies: true,
 /// );
 ///
@@ -83,15 +88,15 @@ class IpFilter {
   ///
   /// - Returns `true` if the [ip] is allowed based on the rules.
   /// - Returns `false` if the [ip] is denied based on the rules.
-  /// - If the [ip] is invalid or no rules match, the [defaultAction] is used.
+  /// If [ip] is invalid or no rule matches, [defaultAction] is used.
   ///
   /// Example:
   /// ```dart
   /// final filter = IpFilter(
   ///   enabled: true,
   ///   defaultAction: IpFilterAction.deny,
-  ///   allow: [NetworkMatcher('10.0.0.0/8')],
-  ///   deny: [NetworkMatcher('10.0.0.5')],
+  ///   allow: [NetworkMatcher.parse('10.0.0.0/8')],
+  ///   deny: [NetworkMatcher.parse('10.0.0.5')],
   ///   respectTrustedProxies: false,
   /// );
   ///

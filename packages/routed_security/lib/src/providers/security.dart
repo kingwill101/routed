@@ -1,13 +1,21 @@
+/// Typed security configuration and the provider that applies it to an
+/// engine.
+library;
+
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_security/src/cors.dart';
 import 'package:routed_security/src/ip_filter.dart';
 
-/// Immutable trusted-proxy settings.
+/// Immutable settings for resolving client addresses through trusted proxies.
 class TrustedProxyConfig {
   /// Creates trusted-proxy settings.
   ///
   /// [proxies] contains trusted IP addresses or CIDR ranges. [headers]
-  /// contains the forwarded-address headers accepted from those proxies.
+  /// contains the forwarded-address headers accepted from those proxies. The
+  /// default headers are `X-Forwarded-For` and `X-Real-IP`.
+  ///
+  /// When [enabled] is `true`, [RoutedSecurityConfig.validate] requires at
+  /// least one explicit proxy network before the provider can boot.
   TrustedProxyConfig({
     this.enabled = false,
     this.forwardClientIp = true,
@@ -19,28 +27,29 @@ class TrustedProxyConfig {
          headers ?? const ['X-Forwarded-For', 'X-Real-IP'],
        );
 
-  /// Whether forwarded client information is trusted.
+  /// Whether forwarded client information from [proxies] is trusted.
   final bool enabled;
 
-  /// Whether the resolved client address should be used by request helpers.
+  /// Whether request helpers should use the resolved forwarded client address.
   final bool forwardClientIp;
 
-  /// Trusted proxy addresses or CIDR ranges.
+  /// Trusted proxy IP addresses or CIDR ranges.
   final List<String> proxies;
 
   /// Header names inspected for a forwarded client address.
   final List<String> headers;
 
-  /// Optional platform-specific trusted proxy header.
+  /// Optional platform-specific header accepted from a trusted platform.
   final String? platformHeader;
 }
 
-/// Immutable IP allow/deny settings.
+/// Immutable settings for IP-based allow and deny filtering.
 class IpFilterConfig {
   /// Creates IP allow/deny settings.
   ///
   /// [allow] and [deny] contain IP addresses or CIDR ranges. Deny rules take
-  /// precedence over allow rules when both match an address.
+  /// precedence over allow rules when both match an address. Filtering is
+  /// disabled by default and unmatched addresses are allowed by default.
   IpFilterConfig({
     this.enabled = false,
     this.defaultAction = IpFilterAction.allow,
@@ -53,16 +62,17 @@ class IpFilterConfig {
   /// Whether IP filtering is active.
   final bool enabled;
 
-  /// Action to take when no allow or deny rule matches.
+  /// Action to take when no allow or deny rule matches an address.
   final IpFilterAction defaultAction;
 
-  /// IP addresses or CIDR ranges that are allowed.
+  /// IP addresses or CIDR ranges that are allowed when filtering is enabled.
   final List<String> allow;
 
-  /// IP addresses or CIDR ranges that are denied.
+  /// IP addresses or CIDR ranges that are denied when filtering is enabled.
   final List<String> deny;
 
-  /// Whether filtering uses the trusted-proxy-aware client address.
+  /// Whether filtering uses the trusted-proxy-aware client address instead of
+  /// the direct peer address.
   final bool respectTrustedProxies;
 }
 
@@ -70,8 +80,9 @@ class IpFilterConfig {
 class RoutedSecurityConfig implements ValidatableConfiguration {
   /// Creates configuration for CORS, proxy resolution, and IP filtering.
   ///
-  /// [maxRequestSize] is measured in bytes. If omitted, [trustedProxies] and
-  /// [ipFilter] use their disabled defaults.
+  /// [maxRequestSize] is measured in bytes and defaults to 10 MiB. If omitted,
+  /// [trustedProxies] and [ipFilter] use their disabled defaults, while
+  /// [cors] uses [CorsConfig]'s defaults.
   RoutedSecurityConfig({
     this.maxRequestSize = 10 * 1024 * 1024,
     TrustedProxyConfig? trustedProxies,
@@ -89,9 +100,14 @@ class RoutedSecurityConfig implements ValidatableConfiguration {
   /// IP allow/deny settings.
   final IpFilterConfig ipFilter;
 
-  /// CORS response and preflight settings.
+  /// CORS response-header and preflight settings.
   final CorsConfig cors;
 
+  /// Adds configuration issues for invalid request sizes, networks, headers,
+  /// and CORS settings to [context].
+  ///
+  /// Trusted-proxy support must include at least one explicit proxy network;
+  /// this prevents forwarded client addresses from being trusted by accident.
   @override
   void validate(ConfigValidationContext context) {
     context
@@ -167,16 +183,37 @@ class RoutedSecurityConfig implements ValidatableConfiguration {
   }
 }
 
-/// Registers CORS, trusted-proxy resolution, and optional IP filtering.
+/// Applies typed security settings to a Routed engine during its lifecycle.
+///
+/// Register this provider in the engine's provider list. During registration it
+/// exposes a [TrustedProxyResolver]; during boot it applies request-size, CORS,
+/// proxy, and optional IP-filter middleware settings to the available [Engine].
+///
+/// ```dart
+/// final provider = RoutedSecurityProvider(
+///   RoutedSecurityConfig(
+///     ipFilter: IpFilterConfig(
+///       enabled: true,
+///       defaultAction: IpFilterAction.deny,
+///       allow: ['10.0.0.0/8'],
+///     ),
+///   ),
+/// );
+/// ```
 class RoutedSecurityProvider extends ServiceProvider
     with ProvidesTypedConfiguration<RoutedSecurityConfig> {
   /// Creates a provider using [configuration], or safe disabled defaults.
+  ///
+  /// Configuration is validated by Routed's typed provider lifecycle before
+  /// the provider boots.
   RoutedSecurityProvider([RoutedSecurityConfig? configuration])
     : configuration = configuration ?? RoutedSecurityConfig();
 
+  /// The typed settings applied by this provider.
   @override
   final RoutedSecurityConfig configuration;
 
+  /// Registers the trusted-proxy resolver in [container].
   @override
   void register(Container container) {
     container.instance<TrustedProxyResolver>(
@@ -184,6 +221,10 @@ class RoutedSecurityProvider extends ServiceProvider
     );
   }
 
+  /// Applies the configured security settings when an [Engine] is available.
+  ///
+  /// The provider does nothing when the container does not contain an engine,
+  /// which allows the resolver binding to be used in smaller compositions.
   @override
   Future<void> boot(Container container) async {
     if (!container.has<Engine>()) return;

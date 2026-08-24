@@ -1,11 +1,32 @@
+/// CORS middleware for Routed request pipelines.
+library;
+
 import 'package:routed_core/routed_core.dart';
 
-/// Applies CORS headers and handles browser preflight requests.
+/// Creates middleware that applies CORS headers and handles preflight requests.
 ///
 /// An absent `Origin` header is treated as a non-browser request and passes
 /// through unchanged. A configured wildcard origin is echoed for credentialed
 /// requests because browsers reject `Access-Control-Allow-Origin: *` together
 /// with `Access-Control-Allow-Credentials: true`.
+///
+/// Disallowed preflight requests receive a `403` response. A non-preflight
+/// request from a disallowed origin continues through the pipeline without
+/// CORS headers, allowing the application to decide how to handle it.
+///
+/// ```dart
+/// import 'package:routed_core/routed_core.dart';
+/// import 'package:routed_security/routed_security.dart';
+///
+/// final middleware = corsMiddleware(
+///   const CorsConfig(
+///     enabled: true,
+///     allowedOrigins: ['https://app.example'],
+///     allowedMethods: ['GET', 'POST'],
+///     allowedHeaders: ['Authorization', 'Content-Type'],
+///   ),
+/// );
+/// ```
 Middleware corsMiddleware(CorsConfig config) {
   return (ctx, next) async {
     if (!config.enabled) {

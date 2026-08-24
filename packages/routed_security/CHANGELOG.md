@@ -2,6 +2,8 @@
 
 - Completed public Dartdoc coverage and enabled the `public_member_api_docs`
   analyzer lint.
+- Clarified public security APIs with provider lifecycle, validation, CORS,
+  IP filtering, and trusted-proxy usage examples.
 
 ## 0.1.0
 
