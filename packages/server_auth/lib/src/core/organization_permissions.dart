@@ -1,10 +1,12 @@
 import 'organization_models.dart';
 import 'organization_store.dart';
 
+/// Permissions assigned to auth organization permission set.
 typedef AuthOrganizationPermissionSet = Map<String, Iterable<String>>;
 
 /// Static and organization-specific role resolver.
 final class AuthOrganizationAccessControl {
+  /// Creates an instance of AuthOrganizationAccessControl.
   AuthOrganizationAccessControl({
     Map<String, AuthOrganizationPermissionSet>? staticRoles,
     this.dynamicRoles = false,
@@ -15,6 +17,7 @@ final class AuthOrganizationAccessControl {
            ),
        });
 
+  /// The roles assigned to this value.
   static const Map<String, AuthOrganizationPermissionSet> defaultRoles = {
     'owner': {
       'organization': ['create', 'read', 'update', 'delete'],
@@ -42,9 +45,13 @@ final class AuthOrganizationAccessControl {
     },
   };
 
+  /// The roles assigned to this value.
   final Map<String, Map<String, List<String>>> staticRoles;
+
+  /// The roles assigned to this value.
   final bool dynamicRoles;
 
+  /// Checks whether the requested operation is authorized.
   Future<bool> allows({
     required AuthOrganizationStore store,
     required AuthOrganizationMember member,
@@ -57,6 +64,7 @@ final class AuthOrganizationAccessControl {
     action: action,
   )).allowed;
 
+  /// Checks whether the requested operation is authorized.
   Future<AuthOrganizationPermissionDecision> authorize({
     required AuthOrganizationStore store,
     required AuthOrganizationMember member,
@@ -94,17 +102,23 @@ final class AuthOrganizationAccessControl {
     );
   }
 
+  /// Returns whether this value is known static role.
   bool isKnownStaticRole(String role) =>
       staticRoles.containsKey(role.trim().toLowerCase());
 }
 
+/// Authentication data for auth organization permission decision.
 final class AuthOrganizationPermissionDecision {
+  /// Creates an instance of AuthOrganizationPermissionDecision.
   const AuthOrganizationPermissionDecision({
     required this.allowed,
     this.dynamicRoleSnapshots = const <AuthOrganizationRole>[],
   });
 
+  /// The allowed associated with this value.
   final bool allowed;
+
+  /// The roles assigned to this value.
   final List<AuthOrganizationRole> dynamicRoleSnapshots;
 }
 
@@ -125,6 +139,7 @@ bool _allows(
 /// Explicit tenant authorization context. Organization roles stay separate
 /// from global principal roles.
 final class AuthOrganizationAuthorizationContext<TContext> {
+  /// Creates an instance of AuthOrganizationAuthorizationContext.
   const AuthOrganizationAuthorizationContext({
     required this.context,
     required this.userId,
@@ -134,12 +149,24 @@ final class AuthOrganizationAuthorizationContext<TContext> {
     this.authorizationRoleSnapshots = const <AuthOrganizationRole>[],
   });
 
+  /// The host context associated with this operation.
   final TContext context;
+
+  /// The identifier of the user.
   final String userId;
+
+  /// The organization associated with this value.
   final AuthOrganization organization;
+
+  /// The membership associated with this value.
   final AuthOrganizationMember membership;
+
+  /// The team associated with this value.
   final AuthOrganizationTeam? team;
+
+  /// The roles assigned to this value.
   final List<AuthOrganizationRole> authorizationRoleSnapshots;
 
+  /// Performs the owns user operation.
   bool ownsUser(String resourceUserId) => userId == resourceUserId.trim();
 }

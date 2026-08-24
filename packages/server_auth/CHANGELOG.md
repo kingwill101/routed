@@ -2,6 +2,8 @@
 
 - Complete public Dartdoc for authentication-method, JWT, and rate-limit APIs.
 - Complete public Dartdoc for the client, plugin, provider, and store contracts.
+- Complete public Dartdoc for admin, organization, account-lifecycle, and
+  anonymous-user APIs.
 - Add the `reauthentication` rate-limit action and typed client method for
   refreshing a current session's sensitive-action proof.
 - Mirror only the short-lived OAuth state into the framework session when a

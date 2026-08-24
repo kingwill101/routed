@@ -8,13 +8,17 @@ import 'models.dart';
 
 /// Installs the typed administrative API on an [AuthClient].
 final class AuthAdminClientPlugin implements AuthClientPlugin<AuthAdminClient> {
+  /// Creates an instance of AuthAdminClientPlugin.
   const AuthAdminClientPlugin({this.roles});
 
+  /// The roles assigned to this value.
   final Map<String, AuthAdminPermissionSet>? roles;
 
+  /// The identifier exposed by this component.
   @override
   String get id => 'admin';
 
+  /// Installs the requested value.
   @override
   AuthAdminClient install(AuthClientPluginContext context) {
     return AuthAdminClient(transport: context.transport, roles: roles);
@@ -23,20 +27,24 @@ final class AuthAdminClientPlugin implements AuthClientPlugin<AuthAdminClient> {
 
 /// Typed client for the opt-in Admin plugin.
 final class AuthAdminClient {
+  /// Creates an instance of AuthAdminClient.
   AuthAdminClient({
     required this.transport,
     Map<String, AuthAdminPermissionSet>? roles,
   }) : _accessControl = AuthAdminAccessControl(roles: roles);
 
+  /// The transport used to send client requests.
   final AuthClientTransport transport;
   final AuthAdminAccessControl _accessControl;
 
+  /// Performs the local role allows operation.
   bool localRoleAllows(
     Iterable<String> roles,
     String resource,
     String action,
   ) => _accessControl.allows(roles, resource, action);
 
+  /// Lists users.
   Future<AuthAdminUserPage> listUsers({
     String? search,
     String? id,
@@ -63,10 +71,12 @@ final class AuthAdminClient {
     }),
   );
 
+  /// Looks up user.
   Future<AuthAdminUser> getUser(String userId) async => AuthAdminUser.fromJson(
     await _get(const AuthRoutePath('/admin/get-user'), {'userId': userId}),
   );
 
+  /// Creates user.
   Future<AuthAdminMutationResult<AuthAdminUser>> createUser({
     String? id,
     required String email,
@@ -85,6 +95,7 @@ final class AuthAdminClient {
     'attributes': ?attributes,
   });
 
+  /// Updates user.
   Future<AuthAdminMutationResult<AuthAdminUser>> updateUser({
     required String userId,
     String? email,
@@ -100,6 +111,7 @@ final class AuthAdminClient {
     'attributes': ?attributes,
   });
 
+  /// Sets role.
   Future<AuthAdminMutationResult<AuthAdminUser>> setRole({
     required String userId,
     required Iterable<String> roles,
@@ -108,6 +120,7 @@ final class AuthAdminClient {
     'roles': roles.toList(),
   });
 
+  /// Sets user password.
   Future<AuthAdminMutationResult<AuthAdminUser>> setUserPassword({
     required String userId,
     required String newPassword,
@@ -116,6 +129,7 @@ final class AuthAdminClient {
     'newPassword': newPassword,
   });
 
+  /// Performs the ban user operation.
   Future<AuthAdminMutationResult<AuthAdminUser>> banUser({
     required String userId,
     String? reason,
@@ -126,11 +140,13 @@ final class AuthAdminClient {
     'banExpiresAt': expiresAt?.toUtc().toIso8601String(),
   });
 
+  /// Performs the unban user operation.
   Future<AuthAdminMutationResult<AuthAdminUser>> unbanUser(String userId) =>
       _userMutation(const AuthRoutePath('/admin/unban-user'), {
         'userId': userId,
       });
 
+  /// Lists user sessions.
   Future<List<AuthAdminSession>> listUserSessions(String userId) async {
     final values = (await _post(
       const AuthRoutePath('/admin/list-user-sessions'),
@@ -139,6 +155,7 @@ final class AuthAdminClient {
     return _list(values, AuthAdminSession.fromJson);
   }
 
+  /// Revokes user session.
   Future<void> revokeUserSession({
     required String userId,
     required String sessionId,
@@ -149,6 +166,7 @@ final class AuthAdminClient {
     });
   }
 
+  /// Revokes user sessions.
   Future<int> revokeUserSessions(String userId) async {
     final value = (await _post(
       const AuthRoutePath('/admin/revoke-user-sessions'),
@@ -157,11 +175,13 @@ final class AuthAdminClient {
     return value is int ? value : int.tryParse('$value') ?? 0;
   }
 
+  /// Performs the impersonate user operation.
   Future<AuthAdminMutationResult<AuthSession>> impersonateUser(String userId) =>
       _sessionMutation(const AuthRoutePath('/admin/impersonate-user'), {
         'userId': userId,
       });
 
+  /// Performs the stop impersonating operation.
   Future<AuthAdminMutationResult<AuthAdminStopImpersonatingResult>>
   stopImpersonating() async {
     final json = await _post(
@@ -179,6 +199,7 @@ final class AuthAdminClient {
     );
   }
 
+  /// Deletes user.
   Future<AuthAdminMutationResult<bool>> removeUser(String userId) async {
     final json = await _post(const AuthRoutePath('/admin/remove-user'), {
       'userId': userId,
@@ -189,6 +210,7 @@ final class AuthAdminClient {
     );
   }
 
+  /// Returns whether this value has permission.
   Future<bool> hasPermission({
     required String resource,
     required String action,

@@ -8,14 +8,19 @@ import 'models.dart';
 import 'rate_limit.dart';
 import 'tokens.dart' show hashOpaqueToken, secureRandomToken;
 
+/// The stable plugin identifier for auth anonymous plugin.
 const String authAnonymousPluginId = 'anonymous';
 
+/// Callback that generates auth anonymous name generator.
 typedef AuthAnonymousNameGenerator<TContext> =
     FutureOr<String?> Function(TContext context);
 
+/// Result returned by auth anonymous sign in result.
 final class AuthAnonymousSignInResult {
+  /// Creates an instance of AuthAnonymousSignInResult.
   const AuthAnonymousSignInResult({required this.user});
 
+  /// The user associated with this value.
   final AuthUser user;
 }
 
@@ -29,24 +34,31 @@ final class AnonymousPlugin<TContext>
         AuthClientOperationContributor,
         AuthRateLimitContributor,
         AuthUserDeletionPlanContributor {
+  /// Creates an instance of AnonymousPlugin.
   AnonymousPlugin({this.generateName, this.disableDeleteAnonymousUser = false});
 
+  /// The generate name associated with this value.
   final AuthAnonymousNameGenerator<TContext>? generateName;
+
+  /// The disable delete anonymous user associated with this value.
   final bool disableDeleteAnonymousUser;
 
   late AuthAnonymousAccountMutationStore _mutationStore;
   late AuthUserDeletionCoordinator _deletionCoordinator;
   bool _configured = false;
 
+  /// The identifier exposed by this component.
   @override
   String get id => authAnonymousPluginId;
 
+  /// The persistence and data contract exposed by this plugin.
   @override
   AuthServerPluginDataContract get dataContract =>
       const AuthServerPluginDataContract(
         userDataNamespace: authAnonymousPluginId,
       );
 
+  /// Configures the requested value.
   @override
   void configure(AuthServerPluginContext<TContext> context) {
     final host = context.store;
@@ -66,9 +78,11 @@ final class AnonymousPlugin<TContext>
     _configured = true;
   }
 
+  /// The namespace used for plugin-owned user data.
   @override
   String get userDataNamespace => authAnonymousPluginId;
 
+  /// Creates user deletion plan.
   @override
   AuthUserDeletionPlan createUserDeletionPlan(AuthUser user) =>
       AuthNoopUserDeletionPlan(
@@ -77,6 +91,7 @@ final class AnonymousPlugin<TContext>
         namespace: userDataNamespace,
       );
 
+  /// The endpoint descriptors exposed by this plugin.
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints => [
     TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
@@ -125,6 +140,7 @@ final class AnonymousPlugin<TContext>
     ),
   ];
 
+  /// The client operations exposed by this plugin.
   @override
   Iterable<AuthClientOperationDescriptor> get clientOperations => endpoints.map(
     (endpoint) => AuthClientOperationDescriptor(
@@ -136,11 +152,13 @@ final class AnonymousPlugin<TContext>
     ),
   );
 
+  /// The rate-limit operations exposed by this plugin.
   @override
   Iterable<AuthRateLimitOperation> get rateLimitOperations => endpoints
       .map((endpoint) => endpoint.rateLimitOperation)
       .whereType<AuthRateLimitOperation>();
 
+  /// The persistence schemas exposed by this plugin.
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
     AuthPersistenceSchema(
@@ -173,6 +191,7 @@ final class AnonymousPlugin<TContext>
     ),
   ];
 
+  /// Performs the sign in anonymous operation.
   Future<AuthAnonymousSignInResult> signInAnonymous({
     required TContext context,
   }) async {
@@ -196,6 +215,7 @@ final class AnonymousPlugin<TContext>
     return AuthAnonymousSignInResult(user: result.user!);
   }
 
+  /// Deletes anonymous user.
   Future<void> deleteAnonymousUser({required AuthUser user}) async {
     _ensureConfigured();
     if (!user.isAnonymous) throw AuthFlowException('anonymous_required');

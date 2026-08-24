@@ -9,6 +9,7 @@ import 'tokens.dart' show secureRandomToken;
 
 /// Request for initiating account deletion.
 class AuthAccountDeletionRequest {
+  /// Creates an instance of AuthAccountDeletionRequest.
   const AuthAccountDeletionRequest({
     required this.userId,
     required this.password,
@@ -23,6 +24,7 @@ class AuthAccountDeletionRequest {
 
 /// Result of initiating account deletion.
 class AuthAccountDeletionInitiated {
+  /// Creates an instance of AuthAccountDeletionInitiated.
   const AuthAccountDeletionInitiated({
     required this.userId,
     required this.email,
@@ -45,6 +47,7 @@ class AuthAccountDeletionInitiated {
 
 /// Result of confirming account deletion.
 class AuthAccountDeletionConfirmed {
+  /// Creates an instance of AuthAccountDeletionConfirmed.
   const AuthAccountDeletionConfirmed({
     required this.userId,
     required this.deleted,
@@ -59,6 +62,7 @@ class AuthAccountDeletionConfirmed {
 
 /// Application delivery payload for account-deletion confirmation.
 final class AuthAccountDeletionDelivery<TContext> {
+  /// Creates an instance of AuthAccountDeletionDelivery.
   const AuthAccountDeletionDelivery({
     required this.context,
     required this.user,
@@ -66,12 +70,20 @@ final class AuthAccountDeletionDelivery<TContext> {
     required this.expiresAt,
   });
 
+  /// The host context associated with this operation.
   final TContext context;
+
+  /// The user associated with this value.
   final AuthUser user;
+
+  /// The token used for token.
   final String token;
+
+  /// The time at which expires occurred.
   final DateTime expiresAt;
 }
 
+/// Callback that sends auth account deletion sender.
 typedef AuthAccountDeletionSender<TContext> =
     FutureOr<void> Function(AuthAccountDeletionDelivery<TContext> delivery);
 

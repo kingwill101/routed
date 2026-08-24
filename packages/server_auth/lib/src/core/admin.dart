@@ -14,15 +14,23 @@ import 'store.dart';
 import 'tokens.dart' show secureRandomToken;
 import 'users.dart' show normalizeAuthEmail;
 
+/// The stable plugin identifier for auth admin plugin.
 const String authAdminPluginId = 'admin';
 
+/// Callback that reports auth admin failure reporter.
 typedef AuthAdminFailureReporter =
     FutureOr<void> Function(AuthAdminInternalFailure failure);
+
+/// Callback that receives auth admin event sink.
 typedef AuthAdminEventSink =
     FutureOr<void> Function(AuthAdminLifecycleEvent event);
+
+/// Callback that guards auth admin deletion guard.
 typedef AuthAdminDeletionGuard = FutureOr<void> Function(String userId);
 
+/// Configuration for administrative operations.
 final class AuthAdminOptions<TContext> {
+  /// Creates an instance of AuthAdminOptions.
   const AuthAdminOptions({
     this.adminRoles = const {'admin'},
     this.adminUserIds = const {},
@@ -37,26 +45,50 @@ final class AuthAdminOptions<TContext> {
     this.emitEvent,
   });
 
+  /// The roles assigned to this value.
   final Set<String> adminRoles;
+
+  /// The admin user ids associated with this value.
   final Set<String> adminUserIds;
+
+  /// The roles assigned to this value.
   final Map<String, AuthAdminPermissionSet>? roles;
+
+  /// The roles assigned to this value.
   final String defaultRole;
+
+  /// The reason associated with this value.
   final String defaultBanReason;
+
+  /// The duration used by this value.
   final Duration impersonationDuration;
+
+  /// The maximum page size associated with this value.
   final int maximumPageSize;
+
+  /// Lifecycle hooks invoked by this component.
   final AuthAdminHooks<TContext> hooks;
+
+  /// The validate deletion associated with this value.
   final AuthAdminDeletionGuard? validateDeletion;
+
+  /// The report failure associated with this value.
   final AuthAdminFailureReporter? reportFailure;
+
+  /// The emit event associated with this value.
   final AuthAdminEventSink? emitEvent;
 }
 
+/// Role-based access control for administrative operations.
 final class AuthAdminAccessControl {
+  /// Creates an instance of AuthAdminAccessControl.
   AuthAdminAccessControl({Map<String, AuthAdminPermissionSet>? roles})
     : roles = Map<String, Map<String, List<String>>>.unmodifiable({
         for (final entry in {...defaultRoles, ...?roles}.entries)
           entry.key.trim().toLowerCase(): _normalizePermissions(entry.value),
       });
 
+  /// The roles assigned to this value.
   static const Map<String, AuthAdminPermissionSet> defaultRoles = {
     'admin': {
       'user': [
@@ -76,8 +108,10 @@ final class AuthAdminAccessControl {
     'user': <String, Iterable<String>>{},
   };
 
+  /// The roles assigned to this value.
   final Map<String, Map<String, List<String>>> roles;
 
+  /// Checks whether the requested operation is authorized.
   bool allows(Iterable<String> userRoles, String resource, String action) {
     final normalizedResource = resource.trim().toLowerCase();
     final normalizedAction = action.trim().toLowerCase();
@@ -94,6 +128,7 @@ final class AuthAdminAccessControl {
   }
 }
 
+/// Server plugin that exposes administrative user and session operations.
 final class AdminPlugin<TContext>
     implements
         AuthServerPlugin<TContext>,
@@ -104,6 +139,7 @@ final class AdminPlugin<TContext>
         AuthAuthenticationPolicyContributor<TContext>,
         AuthUserDeletionPlanContributor,
         AuthServerPluginTopologyAware<TContext> {
+  /// Creates an instance of AdminPlugin.
   AdminPlugin({required this.store, AuthAdminOptions<TContext>? options})
     : options = options ?? AuthAdminOptions<TContext>(),
       accessControl = AuthAdminAccessControl(roles: options?.roles) {
@@ -121,15 +157,22 @@ final class AdminPlugin<TContext>
     }
   }
 
+  /// The identifier exposed by this component.
   @override
   String get id => authAdminPluginId;
 
+  /// The persistence and data contract exposed by this plugin.
   @override
   AuthServerPluginDataContract get dataContract =>
       const AuthServerPluginDataContract(userDataNamespace: 'admin');
 
+  /// The persistence store used by this component.
   final AuthAdminStore store;
+
+  /// The options associated with this value.
   final AuthAdminOptions<TContext> options;
+
+  /// The access control associated with this value.
   final AuthAdminAccessControl accessControl;
   late AuthStore _coreStore;
   late PasswordHasher _passwordHasher;
@@ -146,6 +189,7 @@ final class AdminPlugin<TContext>
       .where((id) => id.isNotEmpty)
       .toSet();
 
+  /// Configures the requested value.
   @override
   void configure(AuthServerPluginContext<TContext> context) {
     _coreStore = context.store;
@@ -161,9 +205,11 @@ final class AdminPlugin<TContext>
     _sessionStrategy = context.sessionStrategy;
   }
 
+  /// The namespace used for plugin-owned user data.
   @override
   String get userDataNamespace => 'admin';
 
+  /// Creates user deletion plan.
   @override
   Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) async {
     final target = store;
@@ -182,6 +228,7 @@ final class AdminPlugin<TContext>
     );
   }
 
+  /// Performs the compose plugin topology operation.
   @override
   void composePluginTopology(Iterable<AuthServerPlugin<TContext>> plugins) {
     final target = store;
@@ -300,6 +347,7 @@ final class AdminPlugin<TContext>
     );
   }
 
+  /// The endpoint descriptors exposed by this plugin.
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints => _paths.keys
       .map((operation) {
@@ -334,6 +382,7 @@ final class AdminPlugin<TContext>
       })
       .toList(growable: false);
 
+  /// The client operations exposed by this plugin.
   @override
   Iterable<AuthClientOperationDescriptor> get clientOperations => endpoints.map(
     (endpoint) => AuthClientOperationDescriptor(
@@ -345,11 +394,13 @@ final class AdminPlugin<TContext>
     ),
   );
 
+  /// The rate-limit operations exposed by this plugin.
   @override
   Iterable<AuthRateLimitOperation> get rateLimitOperations => endpoints
       .map((endpoint) => endpoint.rateLimitOperation)
       .whereType<AuthRateLimitOperation>();
 
+  /// The persistence schemas exposed by this plugin.
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
     AuthPersistenceSchema(
@@ -444,16 +495,19 @@ final class AdminPlugin<TContext>
     ),
   ];
 
+  /// Returns whether this value is administrator.
   bool isAdministrator(AuthUser user) =>
       _adminUserIds.contains(user.id) ||
       normalizeAuthAdminRoles(user.roles).any(_adminRoles.contains);
 
+  /// Performs the local role allows operation.
   bool localRoleAllows(
     Iterable<String> roles,
     String resource,
     String action,
   ) => accessControl.allows(roles, resource, action);
 
+  /// Returns whether this value has permission.
   Future<bool> hasPermission(
     String actorId,
     String resource,
@@ -464,6 +518,7 @@ final class AdminPlugin<TContext>
         accessControl.allows(_effectiveRoles(actor), resource, action);
   }
 
+  /// Performs the enforce authentication policy operation.
   @override
   Future<void> enforceAuthenticationPolicy(
     AuthAuthenticationPolicyRequest<TContext> request,

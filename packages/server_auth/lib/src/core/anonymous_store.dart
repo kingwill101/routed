@@ -4,20 +4,34 @@ import 'models.dart';
 
 /// Outcome of one backend-owned anonymous-account mutation.
 enum AuthAnonymousMutationStatus {
+  /// A value representing applied.
   applied,
+
+  /// A value representing replayed.
   replayed,
+
+  /// A value representing not found.
   notFound,
+
+  /// A value representing not anonymous.
   notAnonymous,
+
+  /// A value representing replay mismatch.
   replayMismatch,
 }
 
 /// Result returned by an anonymous-account mutation backend.
 final class AuthAnonymousMutationResult {
+  /// Creates an instance of AuthAnonymousMutationResult.
   const AuthAnonymousMutationResult(this.status, {this.user});
 
+  /// The status associated with this value.
   final AuthAnonymousMutationStatus status;
+
+  /// The user associated with this value.
   final AuthUser? user;
 
+  /// The committed exposed by this component.
   bool get committed =>
       status == AuthAnonymousMutationStatus.applied ||
       status == AuthAnonymousMutationStatus.replayed;
@@ -31,6 +45,7 @@ final class AuthAnonymousMutationResult {
 /// unavailable. Reusing [operationId] for another payload must fail with
 /// [AuthAnonymousMutationStatus.replayMismatch].
 final class AuthAnonymousCreateAccountCommand {
+  /// Creates an instance of AuthAnonymousCreateAccountCommand.
   AuthAnonymousCreateAccountCommand({
     required String operationId,
     required this.user,
@@ -38,19 +53,26 @@ final class AuthAnonymousCreateAccountCommand {
     validateAuthAnonymousUser(user);
   }
 
+  /// The identifier of operation.
   final String operationId;
+
+  /// The user associated with this value.
   final AuthUser user;
 }
 
 /// Deletes an authenticated anonymous identity and all user-owned auth data.
 final class AuthAnonymousDeleteAccountCommand {
+  /// Creates an instance of AuthAnonymousDeleteAccountCommand.
   AuthAnonymousDeleteAccountCommand({
     required String operationId,
     required String userId,
   }) : operationId = validateAuthAnonymousOperationId(operationId),
        userId = validateAuthAnonymousUserId(userId);
 
+  /// The identifier of operation.
   final String operationId;
+
+  /// The identifier of the user.
   final String userId;
 }
 
@@ -62,6 +84,7 @@ final class AuthAnonymousDeleteAccountCommand {
 /// and its user-owned auth data while binding replay success to the host-
 /// authenticated target ID. The target need not be stored by JWT-only hosts.
 final class AuthAnonymousCompleteUpgradeCommand {
+  /// Creates an instance of AuthAnonymousCompleteUpgradeCommand.
   AuthAnonymousCompleteUpgradeCommand({
     required String operationId,
     required String anonymousUserId,
@@ -78,8 +101,13 @@ final class AuthAnonymousCompleteUpgradeCommand {
     }
   }
 
+  /// The identifier of operation.
   final String operationId;
+
+  /// The identifier of anonymous user.
   final String anonymousUserId;
+
+  /// The identifier of target user.
   final String targetUserId;
 }
 
@@ -92,28 +120,37 @@ final class AuthAnonymousCompleteUpgradeCommand {
 /// operation bindings. Implementations must never fall back to process-local
 /// state when the root auth topology is durable.
 abstract interface class AuthAnonymousAccountMutationStore {
+  /// Creates anonymous account.
   FutureOr<AuthAnonymousMutationResult> createAnonymousAccount(
     AuthAnonymousCreateAccountCommand command,
   );
 
+  /// Deletes anonymous account.
   FutureOr<AuthAnonymousMutationResult> deleteAnonymousAccount(
     AuthAnonymousDeleteAccountCommand command,
   );
 
+  /// Completes anonymous account upgrade.
   FutureOr<AuthAnonymousMutationResult> completeAnonymousAccountUpgrade(
     AuthAnonymousCompleteUpgradeCommand command,
   );
 }
 
 /// Fault points exposed by the process-local implementation for rollback tests.
-enum AuthAnonymousInMemoryFaultPoint { afterCreateWrite }
+enum AuthAnonymousInMemoryFaultPoint {
+  /// A value representing after create write.
+  afterCreateWrite,
+}
 
+/// Callback that injects auth anonymous in memory fault injector.
 typedef AuthAnonymousInMemoryFaultInjector =
     FutureOr<void> Function(AuthAnonymousInMemoryFaultPoint point);
 
+/// Validates auth anonymous operation id.
 String validateAuthAnonymousOperationId(String value) =>
     _validateBoundedIdentifier(value, 'operationId');
 
+/// Validates auth anonymous user id.
 String validateAuthAnonymousUserId(String value) =>
     _validateBoundedIdentifier(value, 'userId');
 
@@ -132,6 +169,7 @@ String? normalizeAuthAnonymousDisplayName(String? value) {
   return normalized;
 }
 
+/// Validates auth anonymous user.
 void validateAuthAnonymousUser(AuthUser user) {
   validateAuthAnonymousUserId(user.id);
   if (!user.isAnonymous) {

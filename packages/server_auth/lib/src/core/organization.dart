@@ -15,20 +15,32 @@ import 'store.dart' show AuthUserStore;
 import 'tokens.dart' show secureRandomToken;
 import 'users.dart' show normalizeAuthEmail;
 
+/// The stable plugin identifier for auth organization plugin.
 const String authOrganizationPluginId = 'organization';
 
+/// Policy describing auth organization creation policy.
 typedef AuthOrganizationCreationPolicy = FutureOr<bool> Function(AuthUser user);
+
+/// Callback that generates auth organization invitation id generator.
 typedef AuthOrganizationInvitationIdGenerator = String Function();
+
+/// Callback that sends auth organization invitation sender.
 typedef AuthOrganizationInvitationSender<TContext> =
     FutureOr<void> Function(
       AuthOrganizationInvitationDelivery<TContext> delivery,
     );
+
+/// Callback that reports auth organization failure reporter.
 typedef AuthOrganizationFailureReporter =
     FutureOr<void> Function(AuthOrganizationInternalFailure failure);
+
+/// Callback that receives auth organization event sink.
 typedef AuthOrganizationEventSink =
     FutureOr<void> Function(AuthOrganizationLifecycleEvent event);
 
+/// Configuration for organization team behavior.
 final class AuthOrganizationTeamsOptions {
+  /// Creates an instance of AuthOrganizationTeamsOptions.
   const AuthOrganizationTeamsOptions({
     this.enabled = false,
     this.createDefaultTeam = true,
@@ -38,15 +50,28 @@ final class AuthOrganizationTeamsOptions {
     this.teamMemberLimit,
   });
 
+  /// The enabled associated with this value.
   final bool enabled;
+
+  /// The create default team associated with this value.
   final bool createDefaultTeam;
+
+  /// The default team name associated with this value.
   final String defaultTeamName;
+
+  /// The allow removing last team associated with this value.
   final bool allowRemovingLastTeam;
+
+  /// The team limit associated with this value.
   final int? teamLimit;
+
+  /// The team member limit associated with this value.
   final int? teamMemberLimit;
 }
 
+/// Configuration for organization, membership, invitation, and team operations.
 final class AuthOrganizationOptions<TContext> {
+  /// Creates an instance of AuthOrganizationOptions.
   const AuthOrganizationOptions({
     this.allowUserToCreateOrganization = true,
     this.creationPolicy,
@@ -70,29 +95,70 @@ final class AuthOrganizationOptions<TContext> {
     this.emitEvent,
   });
 
+  /// The allow user to create organization associated with this value.
   final bool allowUserToCreateOrganization;
+
+  /// The creation policy associated with this value.
   final AuthOrganizationCreationPolicy? creationPolicy;
+
+  /// The organization limit associated with this value.
   final int? organizationLimit;
+
+  /// The roles assigned to this value.
   final String creatorRole;
+
+  /// The membership limit associated with this value.
   final int? membershipLimit;
+
+  /// The invitation limit associated with this value.
   final int? invitationLimit;
+
+  /// The invitation expires in associated with this value.
   final Duration invitationExpiresIn;
+
+  /// The replace pending invitations associated with this value.
   final bool replacePendingInvitations;
+
+  /// The require verified email for invitations associated with this value.
   final bool requireVerifiedEmailForInvitations;
+
+  /// The invitation id generator associated with this value.
   final AuthOrganizationInvitationIdGenerator? invitationIdGenerator;
+
+  /// The invitation id generator is opaque associated with this value.
   final bool invitationIdGeneratorIsOpaque;
+
+  /// The disable organization deletion associated with this value.
   final bool disableOrganizationDeletion;
+
+  /// The roles assigned to this value.
   final bool dynamicRoles;
+
+  /// The roles assigned to this value.
   final int? dynamicRoleLimit;
+
+  /// The roles assigned to this value.
   final Map<String, AuthOrganizationPermissionSet>? staticRoles;
+
+  /// The teams associated with this value.
   final AuthOrganizationTeamsOptions teams;
+
+  /// Lifecycle hooks invoked by this component.
   final AuthOrganizationHooks<TContext> hooks;
+
+  /// The send invitation associated with this value.
   final AuthOrganizationInvitationSender<TContext>? sendInvitation;
+
+  /// The report failure associated with this value.
   final AuthOrganizationFailureReporter? reportFailure;
+
+  /// The emit event associated with this value.
   final AuthOrganizationEventSink? emitEvent;
 }
 
+/// Context supplied to auth organization hook context.
 final class AuthOrganizationHookContext<TContext, T> {
+  /// Creates an instance of AuthOrganizationHookContext.
   const AuthOrganizationHookContext({
     required this.context,
     required this.action,
@@ -101,19 +167,33 @@ final class AuthOrganizationHookContext<TContext, T> {
     this.organization,
   });
 
+  /// The host context associated with this operation.
   final TContext context;
+
+  /// The action associated with this value.
   final String action;
+
+  /// The user associated with this value.
   final AuthUser user;
+
+  /// The data associated with this value.
   final T data;
+
+  /// The organization associated with this value.
   final AuthOrganization? organization;
 }
 
+/// Callback that handles auth organization before hook.
 typedef AuthOrganizationBeforeHook<TContext, T> =
     FutureOr<T> Function(AuthOrganizationHookContext<TContext, T> event);
+
+/// Callback that handles auth organization after hook.
 typedef AuthOrganizationAfterHook<TContext, T> =
     FutureOr<void> Function(AuthOrganizationHookContext<TContext, T> event);
 
+/// Authentication data for auth organization hooks.
 final class AuthOrganizationHooks<TContext> {
+  /// Creates an instance of AuthOrganizationHooks.
   const AuthOrganizationHooks({
     this.beforeOrganization,
     this.afterOrganization,
@@ -129,29 +209,54 @@ final class AuthOrganizationHooks<TContext> {
     this.afterTeamMember,
   });
 
+  /// The before organization associated with this value.
   final AuthOrganizationBeforeHook<TContext, AuthOrganization>?
   beforeOrganization;
+
+  /// The after organization associated with this value.
   final AuthOrganizationAfterHook<TContext, AuthOrganization>?
   afterOrganization;
+
+  /// The before member associated with this value.
   final AuthOrganizationBeforeHook<TContext, AuthOrganizationMember>?
   beforeMember;
+
+  /// The after member associated with this value.
   final AuthOrganizationAfterHook<TContext, AuthOrganizationMember>?
   afterMember;
+
+  /// The before invitation associated with this value.
   final AuthOrganizationBeforeHook<TContext, AuthOrganizationInvitation>?
   beforeInvitation;
+
+  /// The after invitation associated with this value.
   final AuthOrganizationAfterHook<TContext, AuthOrganizationInvitation>?
   afterInvitation;
+
+  /// The roles assigned to this value.
   final AuthOrganizationBeforeHook<TContext, AuthOrganizationRole>? beforeRole;
+
+  /// The roles assigned to this value.
   final AuthOrganizationAfterHook<TContext, AuthOrganizationRole>? afterRole;
+
+  /// The before team associated with this value.
   final AuthOrganizationBeforeHook<TContext, AuthOrganizationTeam>? beforeTeam;
+
+  /// The after team associated with this value.
   final AuthOrganizationAfterHook<TContext, AuthOrganizationTeam>? afterTeam;
+
+  /// The before team member associated with this value.
   final AuthOrganizationBeforeHook<TContext, AuthOrganizationTeamMember>?
   beforeTeamMember;
+
+  /// The after team member associated with this value.
   final AuthOrganizationAfterHook<TContext, AuthOrganizationTeamMember>?
   afterTeamMember;
 }
 
+/// Authentication data for auth organization invitation delivery.
 final class AuthOrganizationInvitationDelivery<TContext> {
+  /// Creates an instance of AuthOrganizationInvitationDelivery.
   const AuthOrganizationInvitationDelivery({
     required this.context,
     required this.invitation,
@@ -159,13 +264,22 @@ final class AuthOrganizationInvitationDelivery<TContext> {
     required this.inviter,
   });
 
+  /// The host context associated with this operation.
   final TContext context;
+
+  /// The invitation associated with this value.
   final AuthOrganizationInvitation invitation;
+
+  /// The organization associated with this value.
   final AuthOrganization organization;
+
+  /// The inviter associated with this value.
   final AuthUser inviter;
 }
 
+/// Failure details for auth organization internal failure.
 final class AuthOrganizationInternalFailure {
+  /// Creates an instance of AuthOrganizationInternalFailure.
   const AuthOrganizationInternalFailure({
     required this.operation,
     required this.error,
@@ -173,13 +287,22 @@ final class AuthOrganizationInternalFailure {
     this.organizationId,
   });
 
+  /// The operation associated with this value.
   final String operation;
+
+  /// The error associated with this value.
   final Object error;
+
+  /// The stack trace captured for the failure.
   final StackTrace stackTrace;
+
+  /// The identifier of the organization.
   final String? organizationId;
 }
 
+/// Lifecycle event for auth organization lifecycle event.
 final class AuthOrganizationLifecycleEvent {
+  /// Creates an instance of AuthOrganizationLifecycleEvent.
   AuthOrganizationLifecycleEvent({
     required this.type,
     required this.actorUserId,
@@ -191,10 +314,19 @@ final class AuthOrganizationLifecycleEvent {
          sanitizeAuthPublicAttributes(payload ?? const {}),
        );
 
+  /// The type associated with this value.
   final String type;
+
+  /// The identifier of actor user.
   final String actorUserId;
+
+  /// The identifier of the organization.
   final String? organizationId;
+
+  /// The time at which occurred occurred.
   final DateTime occurredAt;
+
+  /// The payload associated with this value.
   final Map<String, dynamic> payload;
 }
 
@@ -207,6 +339,7 @@ final class OrganizationPlugin<TContext>
         AuthClientOperationContributor,
         AuthRateLimitContributor,
         AuthUserDeletionPlanContributor {
+  /// Creates an instance of OrganizationPlugin.
   OrganizationPlugin({
     required this.store,
     this.options = const AuthOrganizationOptions(),
@@ -217,19 +350,27 @@ final class OrganizationPlugin<TContext>
        ),
        _userStore = userStore;
 
+  /// The persistence store used by this component.
   final AuthOrganizationStore store;
+
+  /// The options associated with this value.
   final AuthOrganizationOptions<TContext> options;
+
+  /// The access control associated with this value.
   final AuthOrganizationAccessControl accessControl;
   AuthUserStore? _userStore;
   late AuthUserDeletionDomain _deletionDomain;
 
+  /// The identifier exposed by this component.
   @override
   String get id => authOrganizationPluginId;
 
+  /// The persistence and data contract exposed by this plugin.
   @override
   AuthServerPluginDataContract get dataContract =>
       const AuthServerPluginDataContract(userDataNamespace: 'organization');
 
+  /// Configures the requested value.
   @override
   void configure(AuthServerPluginContext<TContext> context) {
     _userStore ??= context.store.users;
@@ -244,9 +385,11 @@ final class OrganizationPlugin<TContext>
         .domain;
   }
 
+  /// The namespace used for plugin-owned user data.
   @override
   String get userDataNamespace => 'organization';
 
+  /// Creates user deletion plan.
   @override
   Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) async {
     final target = store;
@@ -274,6 +417,7 @@ final class OrganizationPlugin<TContext>
     );
   }
 
+  /// The public operation ids associated with this value.
   static const List<String> publicOperationIds = [
     'organization.create',
     'organization.checkSlug',
@@ -397,6 +541,7 @@ final class OrganizationPlugin<TContext>
     'organization.hasPermission',
   };
 
+  /// The endpoint descriptors exposed by this plugin.
   @override
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints =>
       publicOperationIds.map(_endpoint).toList(growable: false);
@@ -496,6 +641,7 @@ final class OrganizationPlugin<TContext>
     );
   }
 
+  /// The client operations exposed by this plugin.
   @override
   Iterable<AuthClientOperationDescriptor> get clientOperations => endpoints.map(
     (endpoint) => AuthClientOperationDescriptor(
@@ -507,11 +653,13 @@ final class OrganizationPlugin<TContext>
     ),
   );
 
+  /// The rate-limit operations exposed by this plugin.
   @override
   Iterable<AuthRateLimitOperation> get rateLimitOperations => endpoints
       .map((endpoint) => endpoint.rateLimitOperation)
       .whereType<AuthRateLimitOperation>();
 
+  /// The persistence schemas exposed by this plugin.
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => const [
     AuthPersistenceSchema(
@@ -730,6 +878,7 @@ final class OrganizationPlugin<TContext>
     ),
   ];
 
+  /// Creates organization.
   Future<AuthOrganizationMutationResult<AuthOrganization>> createOrganization({
     required TContext context,
     required AuthUser user,
@@ -892,12 +1041,15 @@ final class OrganizationPlugin<TContext>
     );
   }
 
+  /// Performs the check slug operation.
   Future<bool> checkSlug(String slug) async =>
       await store.findOrganizationBySlug(_slug(slug)) == null;
 
+  /// Lists organizations.
   Future<List<AuthOrganization>> listOrganizations(String userId) =>
       Future.sync(() => store.listOrganizationsForUser(userId));
 
+  /// Performs the authorize context operation.
   Future<AuthOrganizationAuthorizationContext<TContext>> authorizeContext({
     required TContext context,
     required String userId,
@@ -930,6 +1082,7 @@ final class OrganizationPlugin<TContext>
     );
   }
 
+  /// Returns whether this value has permission.
   Future<bool> hasPermission({
     required TContext context,
     required String userId,
@@ -2340,6 +2493,7 @@ final class OrganizationPlugin<TContext>
     };
   }
 
+  /// Performs the trusted add team member operation.
   Future<AuthOrganizationMutationResult<AuthOrganizationTeamMember>>
   trustedAddTeamMember({
     required TContext context,
@@ -2885,20 +3039,28 @@ Object? _canonicalOrganizationValue(Object? value, Set<String> volatileKeys) {
 
 final class _InMemoryOrganizationDeletionOperation
     implements AuthInMemoryUserDeletionOperation {
+  /// Creates an instance of _InMemoryOrganizationDeletionOperation.
   const _InMemoryOrganizationDeletionOperation({
     required this.store,
     required this.user,
     required this.creatorRole,
   });
 
+  /// The persistence store used by this component.
   final AuthOrganizationUserDeletionStore store;
+
+  /// The user associated with this value.
   final AuthUser user;
+
+  /// The roles assigned to this value.
   final String creatorRole;
 
+  /// Captures state.
   @override
   Object captureState() =>
       (store as AuthInMemoryDeletionState).captureDeletionState();
 
+  /// Applies the requested value.
   @override
   Future<void> apply() async {
     await store.deleteUserData(
@@ -2908,6 +3070,7 @@ final class _InMemoryOrganizationDeletionOperation
     );
   }
 
+  /// Restores state.
   @override
   Future<void> restoreState(Object state) async {
     await (store as AuthInMemoryDeletionState).restoreDeletionState(state);

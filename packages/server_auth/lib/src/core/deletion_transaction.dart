@@ -15,6 +15,7 @@ abstract interface class AuthUserDeletionDomain {}
 /// This type is public so in-memory plugin stores can construct typed plans,
 /// but identity rather than type is what authorizes a plan for execution.
 final class AuthInMemoryUserDeletionDomain implements AuthUserDeletionDomain {
+  /// Creates an instance of AuthInMemoryUserDeletionDomain.
   AuthInMemoryUserDeletionDomain();
 }
 
@@ -24,16 +25,20 @@ final class AuthInMemoryUserDeletionDomain implements AuthUserDeletionDomain {
 /// Storage coordinators validate the complete set of plans before executing
 /// any operation.
 abstract interface class AuthUserDeletionPlan {
+  /// The user id exposed by this component.
   String get userId;
 
+  /// The namespace exposed by this component.
   String get namespace;
 
+  /// The deletion domain owned by this coordinator.
   AuthUserDeletionDomain get domain;
 }
 
 /// Domain-bound namespace marker for plugins whose user state is stored wholly
 /// inside core persistence and therefore needs no additional mutation.
 final class AuthNoopUserDeletionPlan implements AuthUserDeletionPlan {
+  /// Creates an instance of AuthNoopUserDeletionPlan.
   AuthNoopUserDeletionPlan({
     required this.domain,
     required String userId,
@@ -41,12 +46,15 @@ final class AuthNoopUserDeletionPlan implements AuthUserDeletionPlan {
   }) : userId = _normalizeUserId(userId),
        namespace = _normalizeNamespace(namespace);
 
+  /// The domain associated with this value.
   @override
   final AuthUserDeletionDomain domain;
 
+  /// The identifier of the user.
   @override
   final String userId;
 
+  /// The namespace associated with this value.
   @override
   final String namespace;
 }
@@ -57,23 +65,29 @@ final class AuthNoopUserDeletionPlan implements AuthUserDeletionPlan {
 /// They are intentionally carried by [AuthInMemoryUserDeletionPlan] rather
 /// than exposed as store-level delete/checkpoint compatibility methods.
 abstract interface class AuthInMemoryUserDeletionOperation {
+  /// Captures state.
   Object captureState();
 
+  /// Applies the requested value.
   FutureOr<void> apply();
 
+  /// Restores state.
   FutureOr<void> restoreState(Object state);
 }
 
 /// Reversible state owned by an in-memory persistence store.
 abstract interface class AuthInMemoryDeletionState {
+  /// Captures deletion state.
   Object captureDeletionState();
 
+  /// Restores deletion state.
   FutureOr<void> restoreDeletionState(Object state);
 }
 
 /// A user-scoped in-memory store operation used to build a deletion plan.
 abstract interface class AuthInMemoryUserDeletionStore
     implements AuthInMemoryDeletionState {
+  /// Deletes user data for deletion.
   FutureOr<void> deleteUserDataForDeletion(String userId);
 }
 
@@ -84,18 +98,23 @@ abstract interface class AuthInMemoryUserDeletionStore
 /// core user-owned records in [captureDeletionState].
 abstract interface class AuthInMemoryUserDeletionBackend
     implements AuthInMemoryDeletionState {
+  /// Looks up user for deletion.
   FutureOr<AuthUser?> findUserForDeletion(String userId);
 
+  /// Validates user deletion.
   FutureOr<void> validateUserDeletion(String userId);
 
+  /// Consumes user deletion token.
   FutureOr<bool> consumeUserDeletionToken(String userId, String token);
 
+  /// Deletes core user data.
   FutureOr<bool> deleteCoreUserData(String userId);
 }
 
 /// Adapts one typed in-memory store into an immutable plan operation.
 final class AuthInMemoryStoreDeletionOperation
     implements AuthInMemoryUserDeletionOperation {
+  /// Creates an instance of AuthInMemoryStoreDeletionOperation.
   AuthInMemoryStoreDeletionOperation({
     required AuthInMemoryUserDeletionStore store,
     required String userId,
@@ -105,12 +124,15 @@ final class AuthInMemoryStoreDeletionOperation
   final AuthInMemoryUserDeletionStore _store;
   final String _userId;
 
+  /// Captures state.
   @override
   Object captureState() => _store.captureDeletionState();
 
+  /// Applies the requested value.
   @override
   FutureOr<void> apply() => _store.deleteUserDataForDeletion(_userId);
 
+  /// Restores state.
   @override
   FutureOr<void> restoreState(Object state) =>
       _store.restoreDeletionState(state);
@@ -119,6 +141,7 @@ final class AuthInMemoryStoreDeletionOperation
 /// Composes multiple typed in-memory operations owned by one plugin.
 final class AuthInMemoryCompositeDeletionOperation
     implements AuthInMemoryUserDeletionOperation {
+  /// Creates an instance of AuthInMemoryCompositeDeletionOperation.
   AuthInMemoryCompositeDeletionOperation(
     Iterable<AuthInMemoryUserDeletionOperation> operations,
   ) : _operations = List<AuthInMemoryUserDeletionOperation>.unmodifiable(
@@ -135,11 +158,13 @@ final class AuthInMemoryCompositeDeletionOperation
 
   final List<AuthInMemoryUserDeletionOperation> _operations;
 
+  /// Captures state.
   @override
   List<Object> captureState() => List<Object>.unmodifiable([
     for (final operation in _operations) operation.captureState(),
   ]);
 
+  /// Applies the requested value.
   @override
   Future<void> apply() async {
     for (final operation in _operations) {
@@ -147,6 +172,7 @@ final class AuthInMemoryCompositeDeletionOperation
     }
   }
 
+  /// Restores state.
   @override
   Future<void> restoreState(Object state) async {
     final values = state as List<Object>;
@@ -158,6 +184,7 @@ final class AuthInMemoryCompositeDeletionOperation
 
 /// Immutable, in-memory deletion plan.
 final class AuthInMemoryUserDeletionPlan implements AuthUserDeletionPlan {
+  /// Creates an instance of AuthInMemoryUserDeletionPlan.
   AuthInMemoryUserDeletionPlan({
     required AuthInMemoryUserDeletionDomain domain,
     required String userId,
@@ -173,20 +200,25 @@ final class AuthInMemoryUserDeletionPlan implements AuthUserDeletionPlan {
   final String _namespace;
   final AuthInMemoryUserDeletionOperation _operation;
 
+  /// The deletion domain owned by this coordinator.
   @override
   AuthInMemoryUserDeletionDomain get domain => _domain;
 
+  /// The user id exposed by this component.
   @override
   String get userId => _userId;
 
+  /// The namespace exposed by this component.
   @override
   String get namespace => _namespace;
 }
 
 /// A contributor that creates exactly one immutable plan for its namespace.
 abstract interface class AuthUserDeletionPlanContributor {
+  /// The namespace used for plugin-owned user data.
   String get userDataNamespace;
 
+  /// Creates user deletion plan.
   FutureOr<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user);
 }
 
@@ -195,6 +227,7 @@ abstract interface class AuthUserDeletionPlanContributor {
 /// This keeps SQL and other durable transaction primitives in their adapter
 /// package while allowing a framework-agnostic plugin to request a plan.
 abstract interface class AuthUserDeletionPlanFactory {
+  /// Creates deletion plan.
   FutureOr<AuthUserDeletionPlan> createDeletionPlan({
     required AuthUserDeletionDomain domain,
     required AuthUser user,
@@ -212,6 +245,7 @@ abstract interface class AuthUserDeletionPlanFactory {
 /// omitted external credential from becoming active through user-ID reuse.
 /// `server_auth` cannot discover a removed third-party store on its own.
 abstract interface class AuthUserDeletionCoordinatorHost {
+  /// The user deletion coordinator exposed by this component.
   AuthUserDeletionCoordinator get userDeletionCoordinator;
 
   /// Freezes the complete plugin-owned deletion topology.
@@ -229,22 +263,28 @@ abstract interface class AuthUserDeletionCoordinatorHost {
 /// deployment. Hosts that support this capability reject hard deletion until
 /// every configured historical user-data namespace is active again.
 abstract interface class AuthHistoricalUserDeletionNamespaceCoordinator {
+  /// Binds historical user deletion namespaces.
   void bindHistoricalUserDeletionNamespaces(Iterable<String> namespaces);
 }
 
 /// Backend-owned coordinator for hard user deletion.
 abstract interface class AuthUserDeletionCoordinator {
+  /// The deletion domain owned by this coordinator.
   AuthUserDeletionDomain get domain;
 
+  /// The user-data namespaces required for deletion.
   Set<String> get requiredUserDeletionNamespaces;
 
+  /// Performs the plans for user operation.
   Future<List<AuthUserDeletionPlan>> plansForUser(AuthUser user);
 
+  /// Deletes user.
   Future<bool> deleteUser(
     String userId, {
     Iterable<AuthUserDeletionPlan>? plans,
   });
 
+  /// Confirms and delete user.
   Future<bool> confirmAndDeleteUser({
     required String userId,
     required String token,
@@ -254,17 +294,33 @@ abstract interface class AuthUserDeletionCoordinator {
 }
 
 /// A conformance-friendly fault point for coordinator implementations.
-enum AuthUserDeletionFaultPoint { beforeMutation, plugin, core, restore }
+enum AuthUserDeletionFaultPoint {
+  /// A value representing before mutation.
+  beforeMutation,
 
+  /// A value representing plugin.
+  plugin,
+
+  /// A value representing core.
+  core,
+
+  /// A value representing restore.
+  restore,
+}
+
+/// Callback that injects auth user deletion fault injector.
 typedef AuthUserDeletionFaultInjector =
     FutureOr<void> Function(AuthUserDeletionFaultPoint point);
 
 /// Thrown when a deletion plan set cannot describe one complete transaction.
 final class AuthUserDeletionPreflightException implements Exception {
+  /// Creates an instance of AuthUserDeletionPreflightException.
   const AuthUserDeletionPreflightException(this.message);
 
+  /// The message associated with this value.
   final String message;
 
+  /// Returns a diagnostic string representation.
   @override
   String toString() => 'AuthUserDeletionPreflightException: $message';
 }
@@ -274,8 +330,10 @@ final class AuthUserDeletionPreflightException implements Exception {
 /// The backend-specific coordinator supplies the supported plan type and exact
 /// domain check. This helper deliberately performs no storage mutation.
 final class AuthUserDeletionPreflight {
+  /// Creates an instance of AuthUserDeletionPreflight.
   const AuthUserDeletionPreflight._();
 
+  /// Validates the requested value.
   static List<AuthUserDeletionPlan> validate({
     required String userId,
     required Iterable<AuthUserDeletionPlan> plans,
@@ -331,10 +389,12 @@ final class AuthUserDeletionPreflight {
 typedef AuthInMemoryUserDeletionMutationSerializer =
     Future<T> Function<T>(Future<T> Function() operation);
 
+/// In-memory coordinator for atomic hard deletion of user data.
 final class AuthInMemoryUserDeletionCoordinator
     implements
         AuthUserDeletionCoordinator,
         AuthHistoricalUserDeletionNamespaceCoordinator {
+  /// Creates an instance of AuthInMemoryUserDeletionCoordinator.
   AuthInMemoryUserDeletionCoordinator({
     required this.domain,
     required AuthInMemoryUserDeletionBackend backend,
@@ -344,6 +404,7 @@ final class AuthInMemoryUserDeletionCoordinator
        _faultInjector = faultInjector,
        _mutationSerializer = mutationSerializer;
 
+  /// The domain associated with this value.
   @override
   final AuthInMemoryUserDeletionDomain domain;
 
@@ -357,12 +418,14 @@ final class AuthInMemoryUserDeletionCoordinator
   bool _bound = false;
   Future<void> _tail = Future<void>.value();
 
+  /// The user-data namespaces required for deletion.
   @override
   Set<String> get requiredUserDeletionNamespaces => {
     for (final contributor in _contributors)
       _normalizeNamespace(contributor.userDataNamespace),
   };
 
+  /// Binds the requested value.
   void bind(Iterable<AuthUserDeletionPlanContributor> contributors) {
     if (_bound) {
       throw StateError('Auth deletion contributors are already bound.');
@@ -382,6 +445,7 @@ final class AuthInMemoryUserDeletionCoordinator
     _bound = true;
   }
 
+  /// Binds historical user deletion namespaces.
   @override
   void bindHistoricalUserDeletionNamespaces(Iterable<String> namespaces) {
     if (!_bound) {
@@ -398,6 +462,7 @@ final class AuthInMemoryUserDeletionCoordinator
     _historicalUserDataNamespacesBound = true;
   }
 
+  /// Performs the plans for user operation.
   @override
   Future<List<AuthUserDeletionPlan>> plansForUser(AuthUser user) async {
     _ensureBound();
@@ -408,6 +473,7 @@ final class AuthInMemoryUserDeletionCoordinator
     return List<AuthUserDeletionPlan>.unmodifiable(plans);
   }
 
+  /// Deletes user.
   @override
   Future<bool> deleteUser(
     String userId, {
@@ -420,6 +486,7 @@ final class AuthInMemoryUserDeletionCoordinator
     ),
   );
 
+  /// Confirms and delete user.
   @override
   Future<bool> confirmAndDeleteUser({
     required String userId,

@@ -13,6 +13,7 @@ import 'users.dart' show resolveAuthAccountId;
 
 /// Information about a linked provider account.
 class AuthLinkedAccountInfo {
+  /// Creates an instance of AuthLinkedAccountInfo.
   const AuthLinkedAccountInfo({
     required this.providerId,
     required this.providerAccountId,
@@ -61,6 +62,7 @@ class AuthLinkedAccountInfo {
 
 /// Result of linking a provider account.
 class AuthAccountLinked {
+  /// Creates an instance of AuthAccountLinked.
   const AuthAccountLinked({
     required this.providerId,
     required this.providerAccountId,
@@ -80,6 +82,7 @@ class AuthAccountLinked {
   /// Whether this was a new link (not already linked).
   final bool isNewLink;
 
+  /// Converts this value to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
     'providerId': providerId,
     'providerAccountId': providerAccountId,
@@ -90,6 +93,7 @@ class AuthAccountLinked {
 
 /// Result of unlinking a provider account.
 class AuthAccountUnlinked {
+  /// Creates an instance of AuthAccountUnlinked.
   const AuthAccountUnlinked({
     required this.providerId,
     required this.providerAccountId,
@@ -105,6 +109,7 @@ class AuthAccountUnlinked {
   /// When the account was unlinked.
   final DateTime unlinkedAt;
 
+  /// Converts this value to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
     'providerId': providerId,
     'providerAccountId': providerAccountId,
@@ -186,7 +191,7 @@ Future<AuthAccount> _verifyOAuthProviderAccount<TProfile extends Object>({
 
 /// Lists all linked provider accounts for a user.
 ///
-/// Uses [store.accounts.listForUser] to find linked accounts, and
+/// Uses the account store exposed by [AuthStore] to find linked accounts, and
 /// cross-references them with the configured [providers] to attach
 /// metadata like display names. No provider IDs are hardcoded.
 Future<List<AuthLinkedAccountInfo>> listLinkedAccounts({

@@ -5,7 +5,9 @@ import 'exceptions.dart';
 import 'organization_models.dart';
 import 'users.dart' show normalizeAuthEmail;
 
+/// Authentication data for auth organization create transaction.
 final class AuthOrganizationCreateTransaction {
+  /// Creates an instance of AuthOrganizationCreateTransaction.
   const AuthOrganizationCreateTransaction({
     required this.organization,
     required this.creatorMembership,
@@ -15,11 +17,22 @@ final class AuthOrganizationCreateTransaction {
     this.idempotency,
   });
 
+  /// The organization associated with this value.
   final AuthOrganization organization;
+
+  /// The creator membership associated with this value.
   final AuthOrganizationMember creatorMembership;
+
+  /// The organization limit associated with this value.
   final int? organizationLimit;
+
+  /// The default team associated with this value.
   final AuthOrganizationTeam? defaultTeam;
+
+  /// The creator team membership associated with this value.
   final AuthOrganizationTeamMember? creatorTeamMembership;
+
+  /// The idempotency associated with this value.
   final AuthOrganizationIdempotency? idempotency;
 }
 
@@ -28,6 +41,7 @@ final class AuthOrganizationCreateTransaction {
 /// Stores must reject reuse when any binding or [fingerprint] differs. The
 /// key is an opaque correlation value, not an authentication credential.
 final class AuthOrganizationIdempotency {
+  /// Creates an instance of AuthOrganizationIdempotency.
   const AuthOrganizationIdempotency({
     required this.key,
     required this.organizationId,
@@ -36,14 +50,25 @@ final class AuthOrganizationIdempotency {
     required this.fingerprint,
   });
 
+  /// The key associated with this value.
   final String key;
+
+  /// The identifier of the organization.
   final String organizationId;
+
+  /// The identifier of actor.
   final String actorId;
+
+  /// The identifier of operation.
   final String operationId;
+
+  /// The fingerprint associated with this value.
   final String fingerprint;
 }
 
+/// Result returned by auth organization create stored result.
 final class AuthOrganizationCreateStoredResult {
+  /// Creates an instance of AuthOrganizationCreateStoredResult.
   const AuthOrganizationCreateStoredResult({
     required this.organization,
     required this.creatorMembership,
@@ -51,23 +76,37 @@ final class AuthOrganizationCreateStoredResult {
     this.replayed = false,
   });
 
+  /// The organization associated with this value.
   final AuthOrganization organization;
+
+  /// The creator membership associated with this value.
   final AuthOrganizationMember creatorMembership;
+
+  /// The default team associated with this value.
   final AuthOrganizationTeam? defaultTeam;
+
+  /// The replayed associated with this value.
   final bool replayed;
 }
 
+/// Result returned by auth organization store mutation result.
 final class AuthOrganizationStoreMutationResult<T> {
+  /// Creates an instance of AuthOrganizationStoreMutationResult.
   const AuthOrganizationStoreMutationResult({
     required this.value,
     this.replayed = false,
   });
 
+  /// The value associated with this value.
   final T value;
+
+  /// The replayed associated with this value.
   final bool replayed;
 }
 
+/// Authentication data for auth organization invitation acceptance.
 final class AuthOrganizationInvitationAcceptance {
+  /// Creates an instance of AuthOrganizationInvitationAcceptance.
   const AuthOrganizationInvitationAcceptance({
     required this.invitationId,
     required this.email,
@@ -78,24 +117,44 @@ final class AuthOrganizationInvitationAcceptance {
     required this.now,
   });
 
+  /// The identifier of invitation.
   final String invitationId;
+
+  /// The email associated with this value.
   final String email;
+
+  /// The membership associated with this value.
   final AuthOrganizationMember membership;
+
+  /// The membership limit associated with this value.
   final int? membershipLimit;
+
+  /// The team membership associated with this value.
   final AuthOrganizationTeamMember? teamMembership;
+
+  /// The team member limit associated with this value.
   final int? teamMemberLimit;
+
+  /// The now associated with this value.
   final DateTime now;
 }
 
+/// Result returned by auth organization invitation acceptance result.
 final class AuthOrganizationInvitationAcceptanceResult {
+  /// Creates an instance of AuthOrganizationInvitationAcceptanceResult.
   const AuthOrganizationInvitationAcceptanceResult({
     required this.invitation,
     required this.membership,
     this.teamMembership,
   });
 
+  /// The invitation associated with this value.
   final AuthOrganizationInvitation invitation;
+
+  /// The membership associated with this value.
   final AuthOrganizationMember membership;
+
+  /// The team membership associated with this value.
   final AuthOrganizationTeamMember? teamMembership;
 }
 
@@ -115,6 +174,7 @@ enum AuthOrganizationMembershipMutationKind {
 /// single transaction. A mismatch must fail closed; callers must not retry the
 /// write with a newly read snapshot without repeating authorization.
 final class AuthOrganizationMembershipMutation {
+  /// Creates an instance of AuthOrganizationMembershipMutation.
   AuthOrganizationMembershipMutation({
     required this.kind,
     required this.actorMembership,
@@ -130,24 +190,38 @@ final class AuthOrganizationMembershipMutation {
          actorRoleSnapshots,
        );
 
+  /// The kind associated with this value.
   final AuthOrganizationMembershipMutationKind kind;
+
+  /// The actor membership associated with this value.
   final AuthOrganizationMember actorMembership;
+
+  /// The target membership associated with this value.
   final AuthOrganizationMember targetMembership;
+
+  /// The roles assigned to this value.
   final String creatorRole;
+
+  /// The roles assigned to this value.
   final List<String>? replacementRoles;
+
+  /// The roles assigned to this value.
   final List<AuthOrganizationRole> actorRoleSnapshots;
 }
 
 /// A typed organization-store transaction command.
 sealed class AuthOrganizationStoreCommand<TResult> {
+  /// Creates an instance of AuthOrganizationStoreCommand.
   const AuthOrganizationStoreCommand();
 }
 
+/// Command describing auth organization create invitation command.
 final class AuthOrganizationCreateInvitationCommand
     extends
         AuthOrganizationStoreCommand<
           AuthOrganizationStoreMutationResult<AuthOrganizationInvitation>
         > {
+  /// Creates an instance of AuthOrganizationCreateInvitationCommand.
   AuthOrganizationCreateInvitationCommand({
     required this.actorMembership,
     required this.invitation,
@@ -160,19 +234,32 @@ final class AuthOrganizationCreateInvitationCommand
          actorRoleSnapshots,
        );
 
+  /// The actor membership associated with this value.
   final AuthOrganizationMember actorMembership;
+
+  /// The invitation associated with this value.
   final AuthOrganizationInvitation invitation;
+
+  /// The invitation limit associated with this value.
   final int? invitationLimit;
+
+  /// The replace pending associated with this value.
   final bool replacePending;
+
+  /// The idempotency associated with this value.
   final AuthOrganizationIdempotency idempotency;
+
+  /// The roles assigned to this value.
   final List<AuthOrganizationRole> actorRoleSnapshots;
 }
 
+/// Command describing auth organization transition invitation command.
 final class AuthOrganizationTransitionInvitationCommand
     extends
         AuthOrganizationStoreCommand<
           AuthOrganizationStoreMutationResult<AuthOrganizationInvitation>
         > {
+  /// Creates an instance of AuthOrganizationTransitionInvitationCommand.
   AuthOrganizationTransitionInvitationCommand({
     required this.expectedInvitation,
     required this.status,
@@ -186,22 +273,47 @@ final class AuthOrganizationTransitionInvitationCommand
          actorRoleSnapshots,
        );
 
+  /// The expected invitation associated with this value.
   final AuthOrganizationInvitation expectedInvitation;
+
+  /// The status associated with this value.
   final AuthOrganizationInvitationStatus status;
+
+  /// The now associated with this value.
   final DateTime now;
+
+  /// The identifier of actor.
   final String actorId;
+
+  /// The actor membership associated with this value.
   final AuthOrganizationMember? actorMembership;
+
+  /// The actor email associated with this value.
   final String? actorEmail;
+
+  /// The roles assigned to this value.
   final List<AuthOrganizationRole> actorRoleSnapshots;
 }
 
-enum AuthOrganizationRoleMutationKind { create, update, delete }
+/// Authentication data for auth organization role mutation kind.
+enum AuthOrganizationRoleMutationKind {
+  /// A value representing create.
+  create,
 
+  /// A value representing update.
+  update,
+
+  /// A value representing delete.
+  delete,
+}
+
+/// Command describing auth organization role mutation command.
 final class AuthOrganizationRoleMutationCommand
     extends
         AuthOrganizationStoreCommand<
           AuthOrganizationStoreMutationResult<AuthOrganizationRole>
         > {
+  /// Creates an instance of AuthOrganizationRoleMutationCommand.
   AuthOrganizationRoleMutationCommand({
     required this.kind,
     required this.actorMembership,
@@ -217,24 +329,53 @@ final class AuthOrganizationRoleMutationCommand
          actorRoleSnapshots,
        );
 
+  /// The kind associated with this value.
   final AuthOrganizationRoleMutationKind kind;
+
+  /// The actor membership associated with this value.
   final AuthOrganizationMember actorMembership;
+
+  /// The roles assigned to this value.
   final AuthOrganizationRole role;
+
+  /// The roles assigned to this value.
   final AuthOrganizationRole? expectedRole;
+
+  /// The roles assigned to this value.
   final String creatorRole;
+
+  /// The previous name associated with this value.
   final String? previousName;
+
+  /// The roles assigned to this value.
   final int? roleLimit;
+
+  /// The idempotency associated with this value.
   final AuthOrganizationIdempotency? idempotency;
+
+  /// The roles assigned to this value.
   final List<AuthOrganizationRole> actorRoleSnapshots;
 }
 
-enum AuthOrganizationTeamMutationKind { create, update, delete }
+/// Authentication data for auth organization team mutation kind.
+enum AuthOrganizationTeamMutationKind {
+  /// A value representing create.
+  create,
 
+  /// A value representing update.
+  update,
+
+  /// A value representing delete.
+  delete,
+}
+
+/// Command describing auth organization team mutation command.
 final class AuthOrganizationTeamMutationCommand
     extends
         AuthOrganizationStoreCommand<
           AuthOrganizationStoreMutationResult<AuthOrganizationTeam>
         > {
+  /// Creates an instance of AuthOrganizationTeamMutationCommand.
   AuthOrganizationTeamMutationCommand({
     required this.kind,
     required this.actorMembership,
@@ -249,23 +390,47 @@ final class AuthOrganizationTeamMutationCommand
          actorRoleSnapshots,
        );
 
+  /// The kind associated with this value.
   final AuthOrganizationTeamMutationKind kind;
+
+  /// The actor membership associated with this value.
   final AuthOrganizationMember actorMembership;
+
+  /// The team associated with this value.
   final AuthOrganizationTeam team;
+
+  /// The expected team associated with this value.
   final AuthOrganizationTeam? expectedTeam;
+
+  /// The team limit associated with this value.
   final int? teamLimit;
+
+  /// The allow last team associated with this value.
   final bool allowLastTeam;
+
+  /// The idempotency associated with this value.
   final AuthOrganizationIdempotency? idempotency;
+
+  /// The roles assigned to this value.
   final List<AuthOrganizationRole> actorRoleSnapshots;
 }
 
-enum AuthOrganizationTeamMemberMutationKind { add, remove }
+/// Authentication data for auth organization team member mutation kind.
+enum AuthOrganizationTeamMemberMutationKind {
+  /// A value representing add.
+  add,
 
+  /// A value representing remove.
+  remove,
+}
+
+/// Command describing auth organization team member mutation command.
 final class AuthOrganizationTeamMemberMutationCommand
     extends
         AuthOrganizationStoreCommand<
           AuthOrganizationStoreMutationResult<AuthOrganizationTeamMember>
         > {
+  /// Creates an instance of AuthOrganizationTeamMemberMutationCommand.
   AuthOrganizationTeamMemberMutationCommand({
     required this.kind,
     required this.actorMembership,
@@ -279,59 +444,105 @@ final class AuthOrganizationTeamMemberMutationCommand
          actorRoleSnapshots,
        );
 
+  /// The kind associated with this value.
   final AuthOrganizationTeamMemberMutationKind kind;
+
+  /// The actor membership associated with this value.
   final AuthOrganizationMember actorMembership;
+
+  /// The team associated with this value.
   final AuthOrganizationTeam team;
+
+  /// The team member associated with this value.
   final AuthOrganizationTeamMember teamMember;
+
+  /// The member limit associated with this value.
   final int? memberLimit;
+
+  /// The idempotency associated with this value.
   final AuthOrganizationIdempotency? idempotency;
+
+  /// The roles assigned to this value.
   final List<AuthOrganizationRole> actorRoleSnapshots;
 }
 
 /// Plugin-owned persistence contract. Implementations must preserve the
 /// documented atomicity of every mutating method.
 abstract interface class AuthOrganizationStore {
+  /// Creates organization.
   FutureOr<AuthOrganizationCreateStoredResult> createOrganization(
     AuthOrganizationCreateTransaction transaction,
   );
+
+  /// Looks up organization.
   FutureOr<AuthOrganization?> findOrganization(String organizationId);
+
+  /// Looks up organization by slug.
   FutureOr<AuthOrganization?> findOrganizationBySlug(String slug);
+
+  /// Lists organizations for user.
   FutureOr<List<AuthOrganization>> listOrganizationsForUser(String userId);
+
+  /// Updates organization.
   FutureOr<AuthOrganization> updateOrganization(AuthOrganization value);
+
+  /// Deletes organization.
   FutureOr<AuthOrganization> deleteOrganization(String organizationId);
 
+  /// Looks up member.
   FutureOr<AuthOrganizationMember?> findMember(
     String organizationId,
     String userId,
   );
+
+  /// Lists members.
   FutureOr<List<AuthOrganizationMember>> listMembers(String organizationId);
+
+  /// Adds member.
   FutureOr<AuthOrganizationMember> addMember(
     AuthOrganizationMember member, {
     int? membershipLimit,
   });
+
+  /// Looks up invitation.
   FutureOr<AuthOrganizationInvitation?> findInvitation(String invitationId);
+
+  /// Lists invitations.
   FutureOr<List<AuthOrganizationInvitation>> listInvitations(
     String organizationId,
   );
+
+  /// Lists invitations for email.
   FutureOr<List<AuthOrganizationInvitation>> listInvitationsForEmail(
     String email,
   );
+
+  /// Creates invitation.
   FutureOr<AuthOrganizationInvitation> createInvitation(
     AuthOrganizationInvitation invitation, {
     int? invitationLimit,
     bool replacePending = false,
   });
+
+  /// Performs the transition invitation operation.
   FutureOr<AuthOrganizationInvitation> transitionInvitation(
     String invitationId,
     AuthOrganizationInvitationStatus status, {
     required DateTime now,
   });
+
+  /// Performs the accept invitation operation.
   FutureOr<AuthOrganizationInvitationAcceptanceResult> acceptInvitation(
     AuthOrganizationInvitationAcceptance acceptance,
   );
 
+  /// Looks up role.
   FutureOr<AuthOrganizationRole?> findRole(String organizationId, String name);
+
+  /// Lists roles.
   FutureOr<List<AuthOrganizationRole>> listRoles(String organizationId);
+
+  /// Creates role.
   FutureOr<AuthOrganizationRole> createRole(
     AuthOrganizationRole role, {
     int? roleLimit,
@@ -353,30 +564,49 @@ abstract interface class AuthOrganizationStore {
     required String creatorRole,
   });
 
+  /// Looks up team.
   FutureOr<AuthOrganizationTeam?> findTeam(String teamId);
+
+  /// Lists teams.
   FutureOr<List<AuthOrganizationTeam>> listTeams(String organizationId);
+
+  /// Lists teams for user.
   FutureOr<List<AuthOrganizationTeam>> listTeamsForUser(
     String organizationId,
     String userId,
   );
+
+  /// Creates team.
   FutureOr<AuthOrganizationTeam> createTeam(
     AuthOrganizationTeam team, {
     int? teamLimit,
   });
+
+  /// Updates team.
   FutureOr<AuthOrganizationTeam> updateTeam(AuthOrganizationTeam team);
+
+  /// Deletes team.
   FutureOr<AuthOrganizationTeam> deleteTeam(
     String teamId, {
     bool allowLastTeam = false,
   });
+
+  /// Looks up team member.
   FutureOr<AuthOrganizationTeamMember?> findTeamMember(
     String teamId,
     String userId,
   );
+
+  /// Lists team members.
   FutureOr<List<AuthOrganizationTeamMember>> listTeamMembers(String teamId);
+
+  /// Adds team member.
   FutureOr<AuthOrganizationTeamMember> addTeamMember(
     AuthOrganizationTeamMember member, {
     int? memberLimit,
   });
+
+  /// Deletes team member.
   FutureOr<AuthOrganizationTeamMember> removeTeamMember(
     String teamId,
     String userId,
@@ -390,6 +620,7 @@ abstract interface class AuthOrganizationStore {
 /// snapshots, preserve at least one [AuthOrganizationMembershipMutation.creatorRole]
 /// member, and apply the write atomically.
 abstract interface class AuthOrganizationMembershipMutationStore {
+  /// Performs the mutate organization membership operation.
   FutureOr<AuthOrganizationMember> mutateOrganizationMembership(
     AuthOrganizationMembershipMutation mutation,
   );
@@ -398,6 +629,7 @@ abstract interface class AuthOrganizationMembershipMutationStore {
 /// Required capability for organization mutations whose authorization and
 /// invariants must be checked in the same durable transaction as the write.
 abstract interface class AuthOrganizationAtomicMutationStore {
+  /// Executes organization mutation.
   FutureOr<TResult> executeOrganizationMutation<TResult>(
     AuthOrganizationStoreCommand<TResult> command,
   );
@@ -405,10 +637,13 @@ abstract interface class AuthOrganizationAtomicMutationStore {
 
 /// Optional organization namespace support for atomic administrative deletion.
 abstract interface class AuthOrganizationUserDeletionStore {
+  /// Validates user deletion.
   FutureOr<void> validateUserDeletion(
     String userId, {
     required String creatorRole,
   });
+
+  /// Deletes user data.
   FutureOr<void> deleteUserData(
     String userId, {
     String? email,
@@ -424,6 +659,7 @@ final class InMemoryAuthOrganizationStore
         AuthOrganizationMembershipMutationStore,
         AuthOrganizationUserDeletionStore,
         AuthInMemoryDeletionState {
+  /// Creates an instance of InMemoryAuthOrganizationStore.
   InMemoryAuthOrganizationStore({void Function(String stage)? failureInjector})
     : _failureInjector = failureInjector;
 
@@ -437,6 +673,7 @@ final class InMemoryAuthOrganizationStore
   final void Function(String stage)? _failureInjector;
   Future<void> _tail = Future<void>.value();
 
+  /// Captures deletion state.
   @override
   Object captureDeletionState() => (
     organizations: Map<String, AuthOrganization>.of(_organizations),
@@ -450,6 +687,7 @@ final class InMemoryAuthOrganizationStore
     ),
   );
 
+  /// Restores deletion state.
   @override
   void restoreDeletionState(Object checkpoint) {
     final value = checkpoint as _AuthOrganizationStoreCheckpoint;
@@ -490,6 +728,7 @@ final class InMemoryAuthOrganizationStore
     return completer.future;
   }
 
+  /// Creates organization.
   @override
   Future<AuthOrganizationCreateStoredResult> createOrganization(
     AuthOrganizationCreateTransaction transaction,
@@ -556,10 +795,12 @@ final class InMemoryAuthOrganizationStore
     return result;
   });
 
+  /// Looks up organization.
   @override
   Future<AuthOrganization?> findOrganization(String organizationId) =>
       _atomic(() => _organizations[organizationId.trim()]);
 
+  /// Looks up organization by slug.
   @override
   Future<AuthOrganization?> findOrganizationBySlug(String slug) => _atomic(() {
     final normalized = slug.trim().toLowerCase();
@@ -568,6 +809,7 @@ final class InMemoryAuthOrganizationStore
         .firstOrNull;
   });
 
+  /// Lists organizations for user.
   @override
   Future<List<AuthOrganization>> listOrganizationsForUser(String userId) =>
       _atomic(() {
@@ -583,6 +825,7 @@ final class InMemoryAuthOrganizationStore
         return List<AuthOrganization>.unmodifiable(values);
       });
 
+  /// Updates organization.
   @override
   Future<AuthOrganization> updateOrganization(AuthOrganization value) =>
       _atomic(() {
@@ -601,6 +844,7 @@ final class InMemoryAuthOrganizationStore
         return value;
       });
 
+  /// Deletes organization.
   @override
   Future<AuthOrganization> deleteOrganization(String organizationId) => _atomic(
     () {
@@ -620,12 +864,14 @@ final class InMemoryAuthOrganizationStore
     },
   );
 
+  /// Looks up member.
   @override
   Future<AuthOrganizationMember?> findMember(
     String organizationId,
     String userId,
   ) => _atomic(() => _members[_memberKey(organizationId, userId)]);
 
+  /// Lists members.
   @override
   Future<List<AuthOrganizationMember>> listMembers(String organizationId) =>
       _atomic(
@@ -636,6 +882,7 @@ final class InMemoryAuthOrganizationStore
         ),
       );
 
+  /// Adds member.
   @override
   Future<AuthOrganizationMember> addMember(
     AuthOrganizationMember member, {
@@ -655,6 +902,7 @@ final class InMemoryAuthOrganizationStore
     return member;
   });
 
+  /// Performs the mutate organization membership operation.
   @override
   Future<AuthOrganizationMember> mutateOrganizationMembership(
     AuthOrganizationMembershipMutation mutation,
@@ -728,10 +976,12 @@ final class InMemoryAuthOrganizationStore
     }
   });
 
+  /// Looks up invitation.
   @override
   Future<AuthOrganizationInvitation?> findInvitation(String invitationId) =>
       _atomic(() => _invitations[invitationId.trim()]);
 
+  /// Lists invitations.
   @override
   Future<List<AuthOrganizationInvitation>> listInvitations(
     String organizationId,
@@ -743,6 +993,7 @@ final class InMemoryAuthOrganizationStore
     ),
   );
 
+  /// Lists invitations for email.
   @override
   Future<List<AuthOrganizationInvitation>> listInvitationsForEmail(
     String email,
@@ -753,6 +1004,7 @@ final class InMemoryAuthOrganizationStore
     );
   });
 
+  /// Creates invitation.
   @override
   Future<AuthOrganizationInvitation> createInvitation(
     AuthOrganizationInvitation invitation, {
@@ -791,6 +1043,7 @@ final class InMemoryAuthOrganizationStore
     return invitation;
   });
 
+  /// Performs the transition invitation operation.
   @override
   Future<AuthOrganizationInvitation> transitionInvitation(
     String invitationId,
@@ -805,6 +1058,7 @@ final class InMemoryAuthOrganizationStore
     return updated;
   });
 
+  /// Performs the accept invitation operation.
   @override
   Future<AuthOrganizationInvitationAcceptanceResult> acceptInvitation(
     AuthOrganizationInvitationAcceptance acceptance,
@@ -866,10 +1120,12 @@ final class InMemoryAuthOrganizationStore
     );
   });
 
+  /// Looks up role.
   @override
   Future<AuthOrganizationRole?> findRole(String organizationId, String name) =>
       _atomic(() => _roles[_roleKey(organizationId, name)]);
 
+  /// Lists roles.
   @override
   Future<List<AuthOrganizationRole>> listRoles(String organizationId) =>
       _atomic(
@@ -880,6 +1136,7 @@ final class InMemoryAuthOrganizationStore
         ),
       );
 
+  /// Creates role.
   @override
   Future<AuthOrganizationRole> createRole(
     AuthOrganizationRole role, {
@@ -895,6 +1152,7 @@ final class InMemoryAuthOrganizationStore
     return role;
   });
 
+  /// Updates role.
   @override
   Future<AuthOrganizationRole> updateRole(
     AuthOrganizationRole role, {
@@ -950,6 +1208,7 @@ final class InMemoryAuthOrganizationStore
     return role;
   });
 
+  /// Deletes role.
   @override
   Future<AuthOrganizationRole> deleteRole(
     String organizationId,
@@ -982,10 +1241,12 @@ final class InMemoryAuthOrganizationStore
     return role;
   });
 
+  /// Looks up team.
   @override
   Future<AuthOrganizationTeam?> findTeam(String teamId) =>
       _atomic(() => _teams[teamId.trim()]);
 
+  /// Lists teams.
   @override
   Future<List<AuthOrganizationTeam>> listTeams(String organizationId) =>
       _atomic(
@@ -996,6 +1257,7 @@ final class InMemoryAuthOrganizationStore
         ),
       );
 
+  /// Lists teams for user.
   @override
   Future<List<AuthOrganizationTeam>> listTeamsForUser(
     String organizationId,
@@ -1014,6 +1276,7 @@ final class InMemoryAuthOrganizationStore
     );
   });
 
+  /// Creates team.
   @override
   Future<AuthOrganizationTeam> createTeam(
     AuthOrganizationTeam team, {
@@ -1040,6 +1303,7 @@ final class InMemoryAuthOrganizationStore
     return team;
   });
 
+  /// Updates team.
   @override
   Future<AuthOrganizationTeam> updateTeam(AuthOrganizationTeam team) =>
       _atomic(() {
@@ -1057,6 +1321,7 @@ final class InMemoryAuthOrganizationStore
         return team;
       });
 
+  /// Deletes team.
   @override
   Future<AuthOrganizationTeam> deleteTeam(
     String teamId, {
@@ -1089,12 +1354,14 @@ final class InMemoryAuthOrganizationStore
     return team;
   });
 
+  /// Looks up team member.
   @override
   Future<AuthOrganizationTeamMember?> findTeamMember(
     String teamId,
     String userId,
   ) => _atomic(() => _teamMembers[_teamMemberKey(teamId, userId)]);
 
+  /// Lists team members.
   @override
   Future<List<AuthOrganizationTeamMember>> listTeamMembers(String teamId) =>
       _atomic(
@@ -1103,6 +1370,7 @@ final class InMemoryAuthOrganizationStore
         ),
       );
 
+  /// Adds team member.
   @override
   Future<AuthOrganizationTeamMember> addTeamMember(
     AuthOrganizationTeamMember member, {
@@ -1124,6 +1392,7 @@ final class InMemoryAuthOrganizationStore
     return member;
   });
 
+  /// Deletes team member.
   @override
   Future<AuthOrganizationTeamMember> removeTeamMember(
     String teamId,
@@ -1134,6 +1403,7 @@ final class InMemoryAuthOrganizationStore
     return removed!;
   });
 
+  /// Executes organization mutation.
   @override
   Future<TResult> executeOrganizationMutation<TResult>(
     AuthOrganizationStoreCommand<TResult> command,
@@ -1570,6 +1840,7 @@ final class InMemoryAuthOrganizationStore
 
   void _stage(String stage) => _failureInjector?.call(stage);
 
+  /// Validates user deletion.
   @override
   Future<void> validateUserDeletion(
     String userId, {
@@ -1586,6 +1857,7 @@ final class InMemoryAuthOrganizationStore
     }
   });
 
+  /// Deletes user data.
   @override
   Future<void> deleteUserData(
     String userId, {
@@ -1633,12 +1905,16 @@ typedef _AuthOrganizationStoreCheckpoint = ({
 });
 
 final class _AuthOrganizationIdempotencyRecord {
+  /// Creates an instance of _AuthOrganizationIdempotencyRecord.
   const _AuthOrganizationIdempotencyRecord({
     required this.binding,
     required this.result,
   });
 
+  /// The binding associated with this value.
   final String binding;
+
+  /// The result associated with this value.
   final Object result;
 }
 

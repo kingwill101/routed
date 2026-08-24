@@ -1,6 +1,7 @@
 import 'models.dart' show sanitizeAuthPublicAttributes;
 import 'users.dart' show normalizeAuthEmail;
 
+/// Normalizes auth organization roles.
 List<String> normalizeAuthOrganizationRoles(Iterable<String> roles) {
   final normalized =
       roles
@@ -19,7 +20,9 @@ Map<String, dynamic> _attributes(Map<String, dynamic>? value) =>
 
 DateTime _utc(DateTime value) => value.toUtc();
 
+/// Authentication data for auth organization.
 final class AuthOrganization {
+  /// Creates an instance of AuthOrganization.
   AuthOrganization({
     required this.id,
     required this.name,
@@ -32,14 +35,28 @@ final class AuthOrganization {
        createdAt = _utc(createdAt),
        updatedAt = _utc(updatedAt);
 
+  /// The unique identifier.
   final String id;
+
+  /// The name associated with this value.
   final String name;
+
+  /// The slug associated with this value.
   final String slug;
+
+  /// The logo associated with this value.
   final String? logo;
+
+  /// The metadata associated with this value.
   final Map<String, dynamic> metadata;
+
+  /// The time at which created occurred.
   final DateTime createdAt;
+
+  /// The time at which updated occurred.
   final DateTime updatedAt;
 
+  /// Creates a copy with selected fields replaced.
   AuthOrganization copyWith({
     String? name,
     String? slug,
@@ -58,6 +75,7 @@ final class AuthOrganization {
     updatedAt: updatedAt ?? this.updatedAt,
   );
 
+  /// Converts this value to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
@@ -68,6 +86,7 @@ final class AuthOrganization {
     'updatedAt': updatedAt.toIso8601String(),
   };
 
+  /// Creates an instance from a JSON map.
   factory AuthOrganization.fromJson(Map<String, dynamic> json) =>
       AuthOrganization(
         id: _requiredString(json, 'id'),
@@ -80,7 +99,9 @@ final class AuthOrganization {
       );
 }
 
+/// Authentication data for auth organization member.
 final class AuthOrganizationMember {
+  /// Creates an instance of AuthOrganizationMember.
   AuthOrganizationMember({
     required this.id,
     required this.organizationId,
@@ -92,13 +113,25 @@ final class AuthOrganizationMember {
        attributes = _attributes(attributes),
        createdAt = _utc(createdAt);
 
+  /// The unique identifier.
   final String id;
+
+  /// The identifier of the organization.
   final String organizationId;
+
+  /// The identifier of the user.
   final String userId;
+
+  /// The roles assigned to this value.
   final List<String> roles;
+
+  /// Additional attributes associated with this value.
   final Map<String, dynamic> attributes;
+
+  /// The time at which created occurred.
   final DateTime createdAt;
 
+  /// Creates a copy with selected fields replaced.
   AuthOrganizationMember copyWith({
     Iterable<String>? roles,
     Map<String, dynamic>? attributes,
@@ -111,6 +144,7 @@ final class AuthOrganizationMember {
     createdAt: createdAt,
   );
 
+  /// Converts this value to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
     'id': id,
     'organizationId': organizationId,
@@ -120,6 +154,7 @@ final class AuthOrganizationMember {
     'createdAt': createdAt.toIso8601String(),
   };
 
+  /// Creates an instance from a JSON map.
   factory AuthOrganizationMember.fromJson(Map<String, dynamic> json) =>
       AuthOrganizationMember(
         id: _requiredString(json, 'id'),
@@ -131,15 +166,27 @@ final class AuthOrganizationMember {
       );
 }
 
+/// Authentication data for auth organization invitation status.
 enum AuthOrganizationInvitationStatus {
+  /// A value representing pending.
   pending,
+
+  /// A value representing accepted.
   accepted,
+
+  /// A value representing rejected.
   rejected,
+
+  /// A value representing canceled.
   canceled,
+
+  /// A value representing expired.
   expired,
 }
 
+/// Authentication data for auth organization invitation.
 final class AuthOrganizationInvitation {
+  /// Creates an instance of AuthOrganizationInvitation.
   AuthOrganizationInvitation({
     required this.id,
     required this.organizationId,
@@ -157,21 +204,42 @@ final class AuthOrganizationInvitation {
        expiresAt = _utc(expiresAt),
        createdAt = _utc(createdAt);
 
+  /// The unique identifier.
   final String id;
+
+  /// The identifier of the organization.
   final String organizationId;
+
+  /// The email associated with this value.
   final String email;
+
+  /// The roles assigned to this value.
   final List<String> roles;
+
+  /// The identifier of inviter.
   final String inviterId;
+
+  /// The status associated with this value.
   final AuthOrganizationInvitationStatus status;
+
+  /// The time at which expires occurred.
   final DateTime expiresAt;
+
+  /// The time at which created occurred.
   final DateTime createdAt;
+
+  /// The identifier of the team.
   final String? teamId;
+
+  /// Additional attributes associated with this value.
   final Map<String, dynamic> attributes;
 
+  /// Returns whether this value is pending.
   bool isPending([DateTime? now]) =>
       status == AuthOrganizationInvitationStatus.pending &&
       expiresAt.isAfter((now ?? DateTime.now()).toUtc());
 
+  /// Creates a copy with selected fields replaced.
   AuthOrganizationInvitation copyWith({
     Iterable<String>? roles,
     AuthOrganizationInvitationStatus? status,
@@ -190,6 +258,7 @@ final class AuthOrganizationInvitation {
     attributes: attributes,
   );
 
+  /// Converts this value to a JSON-compatible map.
   Map<String, dynamic> toJson({bool includeActionId = true}) => {
     if (includeActionId) 'id': id,
     'organizationId': organizationId,
@@ -203,6 +272,7 @@ final class AuthOrganizationInvitation {
     'attributes': attributes,
   };
 
+  /// Creates an instance from a JSON map.
   factory AuthOrganizationInvitation.fromJson(Map<String, dynamic> json) =>
       AuthOrganizationInvitation(
         id: _requiredString(json, 'id'),
@@ -220,19 +290,26 @@ final class AuthOrganizationInvitation {
       );
 }
 
+/// Permission data for auth organization permission.
 final class AuthOrganizationPermission {
+  /// Creates an instance of AuthOrganizationPermission.
   AuthOrganizationPermission({
     required String resource,
     required Iterable<String> actions,
   }) : resource = resource.trim().toLowerCase(),
        actions = normalizeAuthOrganizationRoles(actions);
 
+  /// The resource associated with this value.
   final String resource;
+
+  /// The actions associated with this value.
   final List<String> actions;
 
+  /// Converts this value to a JSON-compatible map.
   Map<String, dynamic> toJson() => {'resource': resource, 'actions': actions};
 }
 
+/// Normalizes auth organization permissions.
 Map<String, List<String>> normalizeAuthOrganizationPermissions(
   Map<String, Iterable<String>> permissions,
 ) => Map<String, List<String>>.unmodifiable({
@@ -240,7 +317,9 @@ Map<String, List<String>> normalizeAuthOrganizationPermissions(
     entry.key.trim().toLowerCase(): normalizeAuthOrganizationRoles(entry.value),
 });
 
+/// Authentication data for auth organization role.
 final class AuthOrganizationRole {
+  /// Creates an instance of AuthOrganizationRole.
   AuthOrganizationRole({
     required this.id,
     required this.organizationId,
@@ -254,14 +333,28 @@ final class AuthOrganizationRole {
        createdAt = _utc(createdAt),
        updatedAt = _utc(updatedAt);
 
+  /// The unique identifier.
   final String id;
+
+  /// The identifier of the organization.
   final String organizationId;
+
+  /// The name associated with this value.
   final String name;
+
+  /// The permissions assigned to this value.
   final Map<String, List<String>> permissions;
+
+  /// The time at which created occurred.
   final DateTime createdAt;
+
+  /// The time at which updated occurred.
   final DateTime updatedAt;
+
+  /// The predefined associated with this value.
   final bool predefined;
 
+  /// Creates a copy with selected fields replaced.
   AuthOrganizationRole copyWith({
     String? name,
     Map<String, Iterable<String>>? permissions,
@@ -276,6 +369,7 @@ final class AuthOrganizationRole {
     predefined: predefined,
   );
 
+  /// Converts this value to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
     'id': id,
     'organizationId': organizationId,
@@ -286,6 +380,7 @@ final class AuthOrganizationRole {
     'updatedAt': updatedAt.toIso8601String(),
   };
 
+  /// Creates an instance from a JSON map.
   factory AuthOrganizationRole.fromJson(Map<String, dynamic> json) =>
       AuthOrganizationRole(
         id: _requiredString(json, 'id'),
@@ -298,7 +393,9 @@ final class AuthOrganizationRole {
       );
 }
 
+/// Authentication data for auth organization team.
 final class AuthOrganizationTeam {
+  /// Creates an instance of AuthOrganizationTeam.
   AuthOrganizationTeam({
     required this.id,
     required this.organizationId,
@@ -310,13 +407,25 @@ final class AuthOrganizationTeam {
        createdAt = _utc(createdAt),
        updatedAt = _utc(updatedAt);
 
+  /// The unique identifier.
   final String id;
+
+  /// The identifier of the organization.
   final String organizationId;
+
+  /// The name associated with this value.
   final String name;
+
+  /// Additional attributes associated with this value.
   final Map<String, dynamic> attributes;
+
+  /// The time at which created occurred.
   final DateTime createdAt;
+
+  /// The time at which updated occurred.
   final DateTime updatedAt;
 
+  /// Creates a copy with selected fields replaced.
   AuthOrganizationTeam copyWith({String? name, DateTime? updatedAt}) =>
       AuthOrganizationTeam(
         id: id,
@@ -327,6 +436,7 @@ final class AuthOrganizationTeam {
         updatedAt: updatedAt ?? this.updatedAt,
       );
 
+  /// Converts this value to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
     'id': id,
     'organizationId': organizationId,
@@ -336,6 +446,7 @@ final class AuthOrganizationTeam {
     'updatedAt': updatedAt.toIso8601String(),
   };
 
+  /// Creates an instance from a JSON map.
   factory AuthOrganizationTeam.fromJson(Map<String, dynamic> json) =>
       AuthOrganizationTeam(
         id: _requiredString(json, 'id'),
@@ -347,7 +458,9 @@ final class AuthOrganizationTeam {
       );
 }
 
+/// Authentication data for auth organization team member.
 final class AuthOrganizationTeamMember {
+  /// Creates an instance of AuthOrganizationTeamMember.
   AuthOrganizationTeamMember({
     required this.id,
     required this.teamId,
@@ -355,11 +468,19 @@ final class AuthOrganizationTeamMember {
     required DateTime createdAt,
   }) : createdAt = _utc(createdAt);
 
+  /// The unique identifier.
   final String id;
+
+  /// The identifier of the team.
   final String teamId;
+
+  /// The identifier of the user.
   final String userId;
+
+  /// The time at which created occurred.
   final DateTime createdAt;
 
+  /// Converts this value to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
     'id': id,
     'teamId': teamId,
@@ -367,6 +488,7 @@ final class AuthOrganizationTeamMember {
     'createdAt': createdAt.toIso8601String(),
   };
 
+  /// Creates an instance from a JSON map.
   factory AuthOrganizationTeamMember.fromJson(Map<String, dynamic> json) =>
       AuthOrganizationTeamMember(
         id: _requiredString(json, 'id'),
@@ -376,7 +498,9 @@ final class AuthOrganizationTeamMember {
       );
 }
 
+/// A page of auth organization page.
 final class AuthOrganizationPage<T> {
+  /// Creates an instance of AuthOrganizationPage.
   const AuthOrganizationPage({
     required this.items,
     required this.total,
@@ -384,11 +508,19 @@ final class AuthOrganizationPage<T> {
     required this.offset,
   });
 
+  /// The items associated with this value.
   final List<T> items;
+
+  /// The total associated with this value.
   final int total;
+
+  /// The limit associated with this value.
   final int limit;
+
+  /// The offset associated with this value.
   final int offset;
 
+  /// Converts this value to a JSON-compatible map.
   Map<String, dynamic> toJson(Object? Function(T value) encode) => {
     'items': items.map(encode).toList(growable: false),
     'total': total,
@@ -397,7 +529,9 @@ final class AuthOrganizationPage<T> {
   };
 }
 
+/// Authentication data for auth organization details.
 final class AuthOrganizationDetails {
+  /// Creates an instance of AuthOrganizationDetails.
   const AuthOrganizationDetails({
     required this.organization,
     required this.members,
@@ -405,11 +539,19 @@ final class AuthOrganizationDetails {
     required this.teams,
   });
 
+  /// The organization associated with this value.
   final AuthOrganization organization;
+
+  /// The members associated with this value.
   final AuthOrganizationPage<AuthOrganizationMember> members;
+
+  /// The invitations associated with this value.
   final List<AuthOrganizationInvitation> invitations;
+
+  /// The teams associated with this value.
   final List<AuthOrganizationTeam> teams;
 
+  /// Converts this value to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
     'organization': organization.toJson(),
     'members': members.toJson((member) => member.toJson()),
@@ -418,39 +560,57 @@ final class AuthOrganizationDetails {
   };
 }
 
+/// Authentication data for auth organization warning.
 final class AuthOrganizationWarning {
+  /// Creates an instance of AuthOrganizationWarning.
   const AuthOrganizationWarning({required this.code, this.message});
 
+  /// The code associated with this value.
   final String code;
+
+  /// The message associated with this value.
   final String? message;
 
+  /// Converts this value to a JSON-compatible map.
   Map<String, dynamic> toJson() => {'code': code, 'message': message};
 }
 
+/// Result returned by auth organization mutation result.
 final class AuthOrganizationMutationResult<T> {
+  /// Creates an instance of AuthOrganizationMutationResult.
   const AuthOrganizationMutationResult({
     required this.data,
     this.warnings = const <AuthOrganizationWarning>[],
   });
 
+  /// The data associated with this value.
   final T data;
+
+  /// Non-fatal warnings produced by this operation.
   final List<AuthOrganizationWarning> warnings;
 
+  /// Converts this value to a JSON-compatible map.
   Map<String, dynamic> toJson(Object? Function(T value) encode) => {
     'data': encode(data),
     'warnings': warnings.map((warning) => warning.toJson()).toList(),
   };
 }
 
+/// Result returned by auth organization permission result.
 final class AuthOrganizationPermissionResult {
+  /// Creates an instance of AuthOrganizationPermissionResult.
   const AuthOrganizationPermissionResult({
     required this.allowed,
     required this.organizationId,
   });
 
+  /// The allowed associated with this value.
   final bool allowed;
+
+  /// The identifier of the organization.
   final String organizationId;
 
+  /// Converts this value to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
     'allowed': allowed,
     'organizationId': organizationId,

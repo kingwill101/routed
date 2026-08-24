@@ -9,25 +9,34 @@ import 'store.dart';
 
 /// A typed mutation executed entirely by an [AuthAdminStore].
 sealed class AuthAdminMutation<T> {
+  /// Creates an instance of AuthAdminMutation.
   const AuthAdminMutation({this.authorization});
 
+  /// The authorization associated with this value.
   final AuthAdminMutationAuthorization? authorization;
 }
 
+/// Mutation describing auth admin create user mutation.
 final class AuthAdminCreateUserMutation
     extends AuthAdminMutation<AuthAdminUser> {
+  /// Creates an instance of AuthAdminCreateUserMutation.
   const AuthAdminCreateUserMutation({
     required super.authorization,
     required this.user,
     required this.credential,
   });
 
+  /// The user associated with this value.
   final AuthUser user;
+
+  /// The credential associated with this mutation.
   final AuthPasswordCredential credential;
 }
 
+/// Mutation describing auth admin update user mutation.
 final class AuthAdminUpdateUserMutation
     extends AuthAdminMutation<AuthAdminUser> {
+  /// Creates an instance of AuthAdminUpdateUserMutation.
   const AuthAdminUpdateUserMutation({
     required super.authorization,
     required this.expectedUser,
@@ -35,26 +44,37 @@ final class AuthAdminUpdateUserMutation
     required this.revokeAccess,
   });
 
+  /// The expected user associated with this value.
   final AuthUser expectedUser;
+
+  /// The user associated with this value.
   final AuthUser user;
+
+  /// The revoke access associated with this value.
   final bool revokeAccess;
 }
 
+/// Mutation describing auth admin replace roles mutation.
 final class AuthAdminReplaceRolesMutation
     extends AuthAdminMutation<AuthAdminUser> {
+  /// Creates an instance of AuthAdminReplaceRolesMutation.
   const AuthAdminReplaceRolesMutation({
     required super.authorization,
     required this.userId,
     required this.roles,
   });
 
+  /// The identifier of the user.
   final String userId;
+
+  /// The roles assigned to this value.
   final List<String> roles;
 }
 
 /// Trusted bootstrap-only role grant. This command is never route-contributed.
 final class AuthAdminTrustedReplaceRolesMutation
     extends AuthAdminMutation<AuthAdminUser> {
+  /// Creates an instance of AuthAdminTrustedReplaceRolesMutation.
   const AuthAdminTrustedReplaceRolesMutation({
     required this.userId,
     required this.roles,
@@ -62,25 +82,39 @@ final class AuthAdminTrustedReplaceRolesMutation
     required this.administratorUserIds,
   });
 
+  /// The identifier of the user.
   final String userId;
+
+  /// The roles assigned to this value.
   final List<String> roles;
+
+  /// The roles assigned to this value.
   final Set<String> administratorRoles;
+
+  /// The administrator user ids associated with this value.
   final Set<String> administratorUserIds;
 }
 
+/// Mutation describing auth admin set password mutation.
 final class AuthAdminSetPasswordMutation
     extends AuthAdminMutation<AuthAdminUser> {
+  /// Creates an instance of AuthAdminSetPasswordMutation.
   const AuthAdminSetPasswordMutation({
     required super.authorization,
     required this.userId,
     required this.credential,
   });
 
+  /// The identifier of the user.
   final String userId;
+
+  /// The credential associated with this mutation.
   final AuthPasswordCredential credential;
 }
 
+/// Mutation describing auth admin set ban mutation.
 final class AuthAdminSetBanMutation extends AuthAdminMutation<AuthAdminUser> {
+  /// Creates an instance of AuthAdminSetBanMutation.
   const AuthAdminSetBanMutation({
     required super.authorization,
     required this.userId,
@@ -89,16 +123,38 @@ final class AuthAdminSetBanMutation extends AuthAdminMutation<AuthAdminUser> {
     this.expiresAt,
   });
 
+  /// The identifier of the user.
   final String userId;
+
+  /// The banned associated with this value.
   final bool banned;
+
+  /// The reason associated with this value.
   final String? reason;
+
+  /// The time at which expires occurred.
   final DateTime? expiresAt;
 }
 
-enum AuthAdminAccountStateAction { disable, enable, verifyEmail, unlock }
+/// Authentication data for auth admin account state action.
+enum AuthAdminAccountStateAction {
+  /// A value representing disable.
+  disable,
 
+  /// A value representing enable.
+  enable,
+
+  /// A value representing verify email.
+  verifyEmail,
+
+  /// A value representing unlock.
+  unlock,
+}
+
+/// Mutation describing auth admin set account state mutation.
 final class AuthAdminSetAccountStateMutation
     extends AuthAdminMutation<AuthAdminUser> {
+  /// Creates an instance of AuthAdminSetAccountStateMutation.
   const AuthAdminSetAccountStateMutation({
     required super.authorization,
     required this.userId,
@@ -106,82 +162,120 @@ final class AuthAdminSetAccountStateMutation
     this.reason,
   });
 
+  /// The identifier of the user.
   final String userId;
+
+  /// The action associated with this value.
   final AuthAdminAccountStateAction action;
+
+  /// The reason associated with this value.
   final String? reason;
 }
 
+/// Mutation describing auth admin delete user mutation.
 final class AuthAdminDeleteUserMutation extends AuthAdminMutation<bool> {
+  /// Creates an instance of AuthAdminDeleteUserMutation.
   const AuthAdminDeleteUserMutation({
     required super.authorization,
     required this.userId,
   });
 
+  /// The identifier of the user.
   final String userId;
 }
 
+/// Mutation describing auth admin revoke session mutation.
 final class AuthAdminRevokeSessionMutation extends AuthAdminMutation<bool> {
+  /// Creates an instance of AuthAdminRevokeSessionMutation.
   const AuthAdminRevokeSessionMutation({
     required super.authorization,
     required this.userId,
     required this.sessionId,
   });
 
+  /// The identifier of the user.
   final String userId;
+
+  /// The identifier of the session.
   final String sessionId;
 }
 
+/// Mutation describing auth admin revoke sessions mutation.
 final class AuthAdminRevokeSessionsMutation extends AuthAdminMutation<int> {
+  /// Creates an instance of AuthAdminRevokeSessionsMutation.
   const AuthAdminRevokeSessionsMutation({
     required super.authorization,
     required this.userId,
   });
 
+  /// The identifier of the user.
   final String userId;
 }
 
+/// Authentication data for auth admin impersonation start decision.
 final class AuthAdminImpersonationStartDecision {
+  /// Creates an instance of AuthAdminImpersonationStartDecision.
   const AuthAdminImpersonationStartDecision({
     required this.actor,
     required this.target,
   });
 
+  /// The user performing this operation.
   final AuthUser actor;
+
+  /// The user or resource targeted by this operation.
   final AuthAdminUser target;
 }
 
+/// Mutation describing auth admin prepare impersonation mutation.
 final class AuthAdminPrepareImpersonationMutation
     extends AuthAdminMutation<AuthAdminImpersonationStartDecision> {
+  /// Creates an instance of AuthAdminPrepareImpersonationMutation.
   const AuthAdminPrepareImpersonationMutation({
     required super.authorization,
     required this.userId,
     required this.currentSessionId,
   });
 
+  /// The identifier of the user.
   final String userId;
+
+  /// The identifier of current session.
   final String currentSessionId;
 }
 
+/// Authentication data for auth admin impersonation stop decision.
 final class AuthAdminImpersonationStopDecision {
+  /// Creates an instance of AuthAdminImpersonationStopDecision.
   const AuthAdminImpersonationStopDecision({required this.actor});
 
+  /// The user performing this operation.
   final AuthAdminUser? actor;
 }
 
+/// Mutation describing auth admin prepare stop impersonating mutation.
 final class AuthAdminPrepareStopImpersonatingMutation
     extends AuthAdminMutation<AuthAdminImpersonationStopDecision> {
+  /// Creates an instance of AuthAdminPrepareStopImpersonatingMutation.
   const AuthAdminPrepareStopImpersonatingMutation({
     required this.currentUserId,
     required this.currentSessionId,
   });
 
+  /// The identifier of current user.
   final String currentUserId;
+
+  /// The identifier of current session.
   final String currentSessionId;
 }
 
 /// Stable fault points exposed only by the in-memory test adapter.
-enum AuthAdminInMemoryFaultPoint { afterMutation }
+enum AuthAdminInMemoryFaultPoint {
+  /// A value representing after mutation.
+  afterMutation,
+}
 
+/// Callback that injects auth admin in memory fault injector.
 typedef AuthAdminInMemoryFaultInjector =
     FutureOr<void> Function(
       AuthAdminInMemoryFaultPoint point,
@@ -196,9 +290,16 @@ abstract interface class AuthAdminStore {
   /// User-owned namespaces covered by the hard-delete transaction.
   Set<String> get atomicUserDataNamespaces;
 
+  /// Looks up user.
   FutureOr<AuthAdminUser?> findUser(String userId);
+
+  /// Looks up user by email.
   FutureOr<AuthAdminUser?> findUserByEmail(String email);
+
+  /// Lists users.
   FutureOr<List<AuthAdminUser>> listUsers();
+
+  /// Lists audit records.
   FutureOr<List<AuthAdminAuditRecord>> listAuditRecords({String? targetUserId});
 
   /// Re-authorizes and commits one typed operation in the adapter transaction.
@@ -212,6 +313,7 @@ abstract interface class AuthAdminStore {
 /// records used by sign-in and session resolution.
 final class InMemoryAuthAdminStore
     implements AuthAdminStore, AuthInMemoryUserDeletionStore {
+  /// Creates an instance of InMemoryAuthAdminStore.
   InMemoryAuthAdminStore(
     AuthStore coreStore, {
     AuthAdminInMemoryFaultInjector? faultInjector,
@@ -230,6 +332,7 @@ final class InMemoryAuthAdminStore
   int _auditSequence = 0;
   Future<void> _tail = Future<void>.value();
 
+  /// The atomic user data namespaces exposed by this component.
   @override
   Set<String> get atomicUserDataNamespaces => Set.unmodifiable({
     'core',
@@ -268,9 +371,11 @@ final class InMemoryAuthAdminStore
     return completer.future;
   }
 
+  /// Captures deletion state.
   @override
   Object captureDeletionState() => Map<String, AuthAdminUserState>.of(_states);
 
+  /// Restores deletion state.
   @override
   void restoreDeletionState(Object state) {
     _states
@@ -278,6 +383,7 @@ final class InMemoryAuthAdminStore
       ..addAll(state as Map<String, AuthAdminUserState>);
   }
 
+  /// Deletes user data for deletion.
   @override
   Future<void> deleteUserDataForDeletion(String userId) async {
     _states.remove(userId.trim());
@@ -286,6 +392,7 @@ final class InMemoryAuthAdminStore
   AuthAdminUserState _state(String userId) =>
       _states.putIfAbsent(userId, () => AuthAdminUserState(userId: userId));
 
+  /// Looks up user.
   @override
   Future<AuthAdminUser?> findUser(String userId) => _atomic(() async {
     final user = await _core.users.findById(userId.trim());
@@ -294,6 +401,7 @@ final class InMemoryAuthAdminStore
         : AuthAdminUser(user: user, state: _state(user.id));
   });
 
+  /// Looks up user by email.
   @override
   Future<AuthAdminUser?> findUserByEmail(String email) => _atomic(() async {
     final user = await _core.users.findByEmail(email.trim().toLowerCase());
@@ -302,6 +410,7 @@ final class InMemoryAuthAdminStore
         : AuthAdminUser(user: user, state: _state(user.id));
   });
 
+  /// Lists users.
   @override
   Future<List<AuthAdminUser>> listUsers() => _atomic(() async {
     final users = await _capabilities.listUsersForAdministration();
@@ -310,6 +419,7 @@ final class InMemoryAuthAdminStore
     );
   });
 
+  /// Lists audit records.
   @override
   Future<List<AuthAdminAuditRecord>> listAuditRecords({String? targetUserId}) =>
       _atomic(() async {
@@ -321,6 +431,7 @@ final class InMemoryAuthAdminStore
         );
       });
 
+  /// Executes the requested value.
   @override
   Future<T> execute<T>(AuthAdminMutation<T> mutation) => _transaction(() async {
     final authorization = mutation.authorization;

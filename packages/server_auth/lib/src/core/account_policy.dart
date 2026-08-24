@@ -5,6 +5,7 @@ import 'exceptions.dart';
 
 /// Policy configuration for account states and authentication rules.
 class AuthAccountPolicy {
+  /// Creates an instance of AuthAccountPolicy.
   const AuthAccountPolicy({
     this.requireEmailVerification = false,
     this.allowUnverifiedSignIn = true,
@@ -88,6 +89,7 @@ class AuthAccountPolicy {
 
 /// Account state information for policy enforcement.
 class AuthAccountState {
+  /// Creates an instance of AuthAccountState.
   const AuthAccountState({
     required this.userId,
     this.emailVerified = false,
@@ -280,9 +282,11 @@ class InMemoryAuthAccountStateStore
     implements AuthAccountStateStore, AuthInMemoryDeletionState {
   final Map<String, AuthAccountState> _states = {};
 
+  /// Captures deletion state.
   @override
   Object captureDeletionState() => Map<String, AuthAccountState>.of(_states);
 
+  /// Restores deletion state.
   @override
   void restoreDeletionState(Object state) {
     _states
@@ -290,16 +294,19 @@ class InMemoryAuthAccountStateStore
       ..addAll(state as Map<String, AuthAccountState>);
   }
 
+  /// Looks up the requested value.
   @override
   Future<AuthAccountState?> find(String userId) async {
     return _states[userId.trim()];
   }
 
+  /// Deletes the requested value.
   @override
   Future<void> delete(String userId) async {
     _states.remove(userId.trim());
   }
 
+  /// Creates or updates the stored value.
   @override
   Future<AuthAccountState> upsert(AuthAccountState state) async {
     final userId = state.userId.trim();
@@ -307,6 +314,7 @@ class InMemoryAuthAccountStateStore
     return state;
   }
 
+  /// Records login.
   @override
   Future<AuthAccountState> recordLogin(String userId, {DateTime? now}) async {
     final current = now ?? DateTime.now().toUtc();
@@ -321,6 +329,7 @@ class InMemoryAuthAccountStateStore
     return updated;
   }
 
+  /// Records failed login.
   @override
   Future<AuthAccountState> recordFailedLogin(
     String userId, {
@@ -344,6 +353,7 @@ class InMemoryAuthAccountStateStore
     return updated;
   }
 
+  /// Resets failed attempts.
   @override
   Future<AuthAccountState> resetFailedAttempts(
     String userId, {
@@ -359,6 +369,7 @@ class InMemoryAuthAccountStateStore
     return updated;
   }
 
+  /// Records email verified.
   @override
   Future<AuthAccountState> markEmailVerified(
     String userId, {
@@ -371,6 +382,7 @@ class InMemoryAuthAccountStateStore
     return updated;
   }
 
+  /// Disables the account.
   @override
   Future<AuthAccountState> disable(
     String userId, {
@@ -389,6 +401,7 @@ class InMemoryAuthAccountStateStore
     return updated;
   }
 
+  /// Enables the account.
   @override
   Future<AuthAccountState> enable(String userId, {DateTime? now}) async {
     final existing =
@@ -398,6 +411,7 @@ class InMemoryAuthAccountStateStore
     return updated;
   }
 
+  /// Unlocks the account.
   @override
   Future<AuthAccountState> unlock(String userId, {DateTime? now}) async {
     final existing =
@@ -407,6 +421,7 @@ class InMemoryAuthAccountStateStore
     return updated;
   }
 
+  /// Records email verification sent.
   @override
   Future<AuthAccountState> recordEmailVerificationSent(
     String userId, {
@@ -420,6 +435,7 @@ class InMemoryAuthAccountStateStore
     return updated;
   }
 
+  /// Looks up inactive accounts.
   @override
   Future<List<AuthAccountState>> findInactiveAccounts({
     required int inactiveDays,

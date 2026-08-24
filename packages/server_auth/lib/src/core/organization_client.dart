@@ -8,13 +8,17 @@ import 'organization_permissions.dart';
 /// Installs the typed organization API on an [AuthClient].
 final class AuthOrganizationClientPlugin
     implements AuthClientPlugin<AuthOrganizationClient> {
+  /// Creates an instance of AuthOrganizationClientPlugin.
   const AuthOrganizationClientPlugin({this.staticRoles});
 
+  /// The roles assigned to this value.
   final Map<String, AuthOrganizationPermissionSet>? staticRoles;
 
+  /// The identifier exposed by this component.
   @override
   String get id => 'organization';
 
+  /// Installs the requested value.
   @override
   AuthOrganizationClient install(AuthClientPluginContext context) {
     return AuthOrganizationClient(
@@ -26,6 +30,7 @@ final class AuthOrganizationClientPlugin
 
 /// Typed client for the opt-in organization plugin.
 final class AuthOrganizationClient {
+  /// Creates an instance of AuthOrganizationClient.
   AuthOrganizationClient({
     required this.transport,
     Map<String, AuthOrganizationPermissionSet>? staticRoles,
@@ -33,12 +38,17 @@ final class AuthOrganizationClient {
          staticRoles: staticRoles,
        ).staticRoles;
 
+  /// The transport used to send client requests.
   final AuthClientTransport transport;
   final Map<String, Map<String, List<String>>> _staticRoles;
 
+  /// The identifier of active organization.
   String? activeOrganizationId;
+
+  /// The identifier of active team.
   String? activeTeamId;
 
+  /// Performs the local role allows operation.
   bool localRoleAllows(Iterable<String> roles, String resource, String action) {
     final normalizedResource = resource.trim().toLowerCase();
     final normalizedAction = action.trim().toLowerCase();
@@ -53,6 +63,7 @@ final class AuthOrganizationClient {
     return false;
   }
 
+  /// Creates the requested value.
   Future<AuthOrganizationMutationResult<AuthOrganization>> create({
     required String name,
     required String slug,
@@ -78,17 +89,20 @@ final class AuthOrganizationClient {
     return result;
   }
 
+  /// Performs the check slug operation.
   Future<bool> checkSlug(String slug) async =>
       (await _get(const AuthRoutePath('/organization/check-slug'), {
         'slug': slug,
       }))['available'] ==
       true;
 
+  /// Lists the requested value.
   Future<List<AuthOrganization>> list() async => _list(
     (await _get(const AuthRoutePath('/organization/list')))['organizations'],
     AuthOrganization.fromJson,
   );
 
+  /// Looks up the requested value.
   Future<AuthOrganization> get({String? organizationId}) async =>
       AuthOrganization.fromJson(
         await _get(const AuthRoutePath('/organization/get'), {
@@ -96,6 +110,7 @@ final class AuthOrganizationClient {
         }),
       );
 
+  /// Looks up full.
   Future<AuthOrganizationDetails> getFull({
     String? organizationId,
     int membersLimit = 100,
@@ -121,6 +136,7 @@ final class AuthOrganizationClient {
     );
   }
 
+  /// Updates the requested value.
   Future<AuthOrganizationMutationResult<AuthOrganization>> update({
     String? organizationId,
     String? name,
@@ -140,6 +156,7 @@ final class AuthOrganizationClient {
     AuthOrganization.fromJson,
   );
 
+  /// Deletes the requested value.
   Future<AuthOrganizationMutationResult<AuthOrganization>> delete({
     String? organizationId,
   }) async {
@@ -157,6 +174,7 @@ final class AuthOrganizationClient {
     return result;
   }
 
+  /// Sets active.
   Future<void> setActive(String? organizationId) async {
     await _post(const AuthRoutePath('/organization/set-active'), {
       'organizationId': organizationId,
@@ -165,6 +183,7 @@ final class AuthOrganizationClient {
     activeTeamId = null;
   }
 
+  /// Lists members.
   Future<AuthOrganizationPage<AuthOrganizationMember>> listMembers({
     String? organizationId,
     int limit = 100,
@@ -183,6 +202,7 @@ final class AuthOrganizationClient {
     );
   }
 
+  /// Deletes member.
   Future<AuthOrganizationMutationResult<AuthOrganizationMember>> removeMember({
     required String userId,
     String? organizationId,
@@ -192,6 +212,7 @@ final class AuthOrganizationClient {
     organizationId,
   );
 
+  /// Updates member role.
   Future<AuthOrganizationMutationResult<AuthOrganizationMember>>
   updateMemberRole({
     required String userId,
@@ -206,6 +227,7 @@ final class AuthOrganizationClient {
     AuthOrganizationMember.fromJson,
   );
 
+  /// Looks up active member.
   Future<AuthOrganizationMember> getActiveMember({
     String? organizationId,
   }) async => AuthOrganizationMember.fromJson(
@@ -214,6 +236,7 @@ final class AuthOrganizationClient {
     }),
   );
 
+  /// Looks up active member role.
   Future<List<String>> getActiveMemberRole({String? organizationId}) async {
     final roles = (await _get(
       const AuthRoutePath('/organization/get-active-member-role'),
@@ -224,6 +247,7 @@ final class AuthOrganizationClient {
         : const [];
   }
 
+  /// Performs the leave operation.
   Future<AuthOrganizationMutationResult<AuthOrganizationMember>> leave({
     String? organizationId,
   }) async {
@@ -241,6 +265,7 @@ final class AuthOrganizationClient {
     return result;
   }
 
+  /// Performs the invite member operation.
   Future<AuthOrganizationMutationResult<AuthOrganizationInvitation>>
   inviteMember({
     required String email,
@@ -259,6 +284,7 @@ final class AuthOrganizationClient {
     AuthOrganizationInvitation.fromJson,
   );
 
+  /// Performs the accept invitation operation.
   Future<AuthOrganizationMutationResult<AuthOrganizationMember>>
   acceptInvitation(String invitationId) async => _mutation(
     await _post(const AuthRoutePath('/organization/accept-invitation'), {
@@ -267,18 +293,21 @@ final class AuthOrganizationClient {
     AuthOrganizationMember.fromJson,
   );
 
+  /// Performs the reject invitation operation.
   Future<AuthOrganizationMutationResult<AuthOrganizationInvitation>>
   rejectInvitation(String invitationId) => _invitationMutation(
     const AuthRoutePath('/organization/reject-invitation'),
     invitationId,
   );
 
+  /// Returns whether this value can cel invitation.
   Future<AuthOrganizationMutationResult<AuthOrganizationInvitation>>
   cancelInvitation(String invitationId) => _invitationMutation(
     const AuthRoutePath('/organization/cancel-invitation'),
     invitationId,
   );
 
+  /// Looks up invitation.
   Future<AuthOrganizationInvitation> getInvitation(String invitationId) async =>
       AuthOrganizationInvitation.fromJson(
         await _get(const AuthRoutePath('/organization/get-invitation'), {
@@ -286,6 +315,7 @@ final class AuthOrganizationClient {
         }),
       );
 
+  /// Lists invitations.
   Future<List<AuthOrganizationInvitation>> listInvitations({
     String? organizationId,
   }) async => _list(
@@ -295,6 +325,7 @@ final class AuthOrganizationClient {
     AuthOrganizationInvitation.fromJson,
   );
 
+  /// Lists user invitations.
   Future<List<AuthOrganizationInvitation>> listUserInvitations() async => _list(
     (await _get(
       const AuthRoutePath('/organization/list-user-invitations'),
@@ -302,6 +333,7 @@ final class AuthOrganizationClient {
     AuthOrganizationInvitation.fromJson,
   );
 
+  /// Returns whether this value has permission.
   Future<bool> hasPermission({
     required String resource,
     required String action,
@@ -314,6 +346,7 @@ final class AuthOrganizationClient {
       }))['allowed'] ==
       true;
 
+  /// Creates role.
   Future<AuthOrganizationMutationResult<AuthOrganizationRole>> createRole({
     required String name,
     required Map<String, Iterable<String>> permissions,
@@ -326,6 +359,7 @@ final class AuthOrganizationClient {
     'permissions': _permissionJson(permissions),
   });
 
+  /// Lists roles.
   Future<List<AuthOrganizationRole>> listRoles({
     String? organizationId,
   }) async => _list(
@@ -335,6 +369,7 @@ final class AuthOrganizationClient {
     AuthOrganizationRole.fromJson,
   );
 
+  /// Looks up role.
   Future<AuthOrganizationRole> getRole(
     String name, {
     String? organizationId,
@@ -345,6 +380,7 @@ final class AuthOrganizationClient {
     }),
   );
 
+  /// Updates role.
   Future<AuthOrganizationMutationResult<AuthOrganizationRole>> updateRole({
     required String name,
     String? newName,
@@ -357,6 +393,7 @@ final class AuthOrganizationClient {
     if (permissions != null) 'permissions': _permissionJson(permissions),
   });
 
+  /// Deletes role.
   Future<AuthOrganizationMutationResult<AuthOrganizationRole>> deleteRole(
     String name, {
     String? organizationId,
@@ -365,6 +402,7 @@ final class AuthOrganizationClient {
     'name': name,
   });
 
+  /// Creates team.
   Future<AuthOrganizationMutationResult<AuthOrganizationTeam>> createTeam({
     required String name,
     required String idempotencyKey,
@@ -377,6 +415,7 @@ final class AuthOrganizationClient {
     'attributes': attributes,
   });
 
+  /// Lists teams.
   Future<List<AuthOrganizationTeam>> listTeams({
     String? organizationId,
   }) async => _list(
@@ -386,6 +425,7 @@ final class AuthOrganizationClient {
     AuthOrganizationTeam.fromJson,
   );
 
+  /// Updates team.
   Future<AuthOrganizationMutationResult<AuthOrganizationTeam>> updateTeam({
     required String teamId,
     required String name,
@@ -394,6 +434,7 @@ final class AuthOrganizationClient {
     'name': name,
   });
 
+  /// Deletes team.
   Future<AuthOrganizationMutationResult<AuthOrganizationTeam>> removeTeam(
     String teamId,
   ) async {
@@ -408,6 +449,7 @@ final class AuthOrganizationClient {
     return result;
   }
 
+  /// Sets active team.
   Future<void> setActiveTeam(String? teamId) async {
     await _post(const AuthRoutePath('/organization/set-active-team'), {
       'organizationId': _organizationId(null),
@@ -416,6 +458,7 @@ final class AuthOrganizationClient {
     activeTeamId = teamId;
   }
 
+  /// Lists user teams.
   Future<List<AuthOrganizationTeam>> listUserTeams({
     String? organizationId,
   }) async => _list(
@@ -425,6 +468,7 @@ final class AuthOrganizationClient {
     AuthOrganizationTeam.fromJson,
   );
 
+  /// Lists team members.
   Future<List<AuthOrganizationTeamMember>> listTeamMembers(
     String teamId,
   ) async => _list(
@@ -434,6 +478,7 @@ final class AuthOrganizationClient {
     AuthOrganizationTeamMember.fromJson,
   );
 
+  /// Adds team member.
   Future<AuthOrganizationMutationResult<AuthOrganizationTeamMember>>
   addTeamMember({
     required String teamId,
@@ -448,6 +493,7 @@ final class AuthOrganizationClient {
     AuthOrganizationTeamMember.fromJson,
   );
 
+  /// Deletes team member.
   Future<AuthOrganizationMutationResult<AuthOrganizationTeamMember>>
   removeTeamMember({required String teamId, required String userId}) =>
       _teamMemberMutation(
