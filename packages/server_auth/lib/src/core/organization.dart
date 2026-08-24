@@ -2,18 +2,17 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart' show sha256;
-
-import 'deletion_transaction.dart';
-import 'exceptions.dart';
-import 'plugin.dart';
-import 'models.dart';
-import 'organization_models.dart';
-import 'organization_permissions.dart';
-import 'organization_store.dart';
-import 'rate_limit.dart';
-import 'store.dart' show AuthUserStore;
-import 'tokens.dart' show secureRandomToken;
-import 'users.dart' show normalizeAuthEmail;
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/organization_models.dart';
+import 'package:server_auth/src/core/organization_permissions.dart';
+import 'package:server_auth/src/core/organization_store.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/store.dart' show AuthUserStore;
+import 'package:server_auth/src/core/tokens.dart' show secureRandomToken;
+import 'package:server_auth/src/core/users.dart' show normalizeAuthEmail;
 
 /// The stable plugin identifier for auth organization plugin.
 const String authOrganizationPluginId = 'organization';
@@ -995,7 +994,6 @@ final class OrganizationPlugin<TContext>
     if (stored.replayed) {
       return AuthOrganizationMutationResult(
         data: stored.organization,
-        warnings: const <AuthOrganizationWarning>[],
       );
     }
     final warnings = <AuthOrganizationWarning>[];
@@ -1550,7 +1548,9 @@ final class OrganizationPlugin<TContext>
     final offset = _int(input, 'offset').clamp(0, 1 << 31);
     final values = await store.listMembers(auth.organization.id);
     return AuthOrganizationPage(
-      items: List.unmodifiable(values.skip(offset).take(limit)),
+      items: List<AuthOrganizationMember>.unmodifiable(
+        values.skip(offset).take(limit),
+      ),
       total: values.length,
       limit: limit,
       offset: offset,
@@ -1805,7 +1805,6 @@ final class OrganizationPlugin<TContext>
     if (storedInvitation.replayed) {
       return AuthOrganizationMutationResult(
         data: invitation,
-        warnings: const <AuthOrganizationWarning>[],
       );
     }
     final warnings = await _afterInvitation(
@@ -2134,7 +2133,6 @@ final class OrganizationPlugin<TContext>
     if (storedRole.replayed) {
       return AuthOrganizationMutationResult(
         data: role,
-        warnings: const <AuthOrganizationWarning>[],
       );
     }
     final warnings = await _afterRole(
@@ -2306,7 +2304,6 @@ final class OrganizationPlugin<TContext>
     if (storedTeam.replayed) {
       return AuthOrganizationMutationResult(
         data: team,
-        warnings: const <AuthOrganizationWarning>[],
       );
     }
     final warnings = await _afterTeam(
@@ -2550,7 +2547,6 @@ final class OrganizationPlugin<TContext>
     if (storedMember.replayed) {
       return AuthOrganizationMutationResult(
         data: member,
-        warnings: const <AuthOrganizationWarning>[],
       );
     }
     final warnings = await _afterTeamMember(

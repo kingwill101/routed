@@ -1,59 +1,88 @@
 import 'dart:async';
 
-import '../core/api_key.dart';
-import '../core/tokens.dart';
+import 'package:server_auth/src/core/api_key.dart';
+import 'package:server_auth/src/core/tokens.dart';
 
+/// Creates an isolated API-key fixture with the requested record limit.
 typedef AuthApiKeyStoreConformanceFactory =
     FutureOr<AuthApiKeyStoreConformanceFixture> Function({int maxRecords});
 
-enum AuthApiKeyStoreConformanceFaultPoint { afterRotationInsert }
+/// Identifies the transaction point at which an API-key fault is injected.
+enum AuthApiKeyStoreConformanceFaultPoint {
+  /// Fails after a replacement key has been inserted.
+  afterRotationInsert,
+}
 
+/// Controls deterministic fault injection for an API-key store adapter.
 abstract interface class AuthApiKeyStoreConformanceFaultController {
+  /// Fails the next operation at [point].
   void failNext(AuthApiKeyStoreConformanceFaultPoint point);
 }
 
+/// Supplies the API-key store and lifecycle hooks used by a conformance case.
 final class AuthApiKeyStoreConformanceFixture {
+  /// Creates a fixture from the supplied store and fault controller.
   const AuthApiKeyStoreConformanceFixture({
     required this.store,
     required this.faults,
     this.dispose,
   });
 
+  /// API-key persistence capability under test.
   final AuthApiKeyStore store;
+
+  /// Fault controller for transaction rollback cases.
   final AuthApiKeyStoreConformanceFaultController faults;
+
+  /// Releases resources owned by the fixture.
   final FutureOr<void> Function()? dispose;
 }
 
+/// Describes a failed API-key store conformance case.
 final class AuthApiKeyStoreConformanceFailure implements Exception {
+  /// Creates a failure for [caseId] caused by [cause].
   const AuthApiKeyStoreConformanceFailure(this.caseId, this.cause);
 
+  /// Stable identifier of the failed case.
   final String caseId;
+
+  /// Error raised by the adapter or the failed expectation.
   final Object cause;
 
   @override
   String toString() => 'AuthApiKeyStoreConformanceFailure($caseId): $cause';
 }
 
+/// One independently runnable API-key store conformance case.
 final class AuthApiKeyStoreConformanceCase {
+  /// Creates a runnable conformance case.
   const AuthApiKeyStoreConformanceCase({
     required this.id,
     required this.description,
     required Future<void> Function() run,
   }) : _run = run;
 
+  /// Stable machine-readable case identifier.
   final String id;
+
+  /// Human-readable behavior covered by this case.
   final String description;
   final Future<void> Function() _run;
 
+  /// Runs this conformance case.
   Future<void> run() => _run();
 }
 
 /// Reusable lifecycle, bound, contention, and rollback contract for API keys.
 final class AuthApiKeyStoreConformanceSuite {
+  /// Creates a suite backed by [createFixture].
   AuthApiKeyStoreConformanceSuite(this.createFixture);
 
+  /// Creates an isolated fixture with the requested record limit.
+  /// Creates an isolated fixture with the requested record limit.
   final AuthApiKeyStoreConformanceFactory createFixture;
 
+  /// The isolated cases exposed by this suite.
   List<AuthApiKeyStoreConformanceCase> get cases => [
     _case(
       'create_and_list',
@@ -376,7 +405,7 @@ final class AuthApiKeyStoreConformanceSuite {
   }
 }
 
-final DateTime _now = DateTime.utc(2030, 1, 1);
+final DateTime _now = DateTime.utc(2030);
 
 AuthApiKeyRecord _record(
   String suffix, {

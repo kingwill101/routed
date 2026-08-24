@@ -1,53 +1,73 @@
 import 'dart:async';
 
-import '../core/providers.dart';
-import '../core/tokens.dart' show hashOpaqueToken;
-import '../core/webauthn_store.dart';
+import 'package:server_auth/src/core/providers.dart';
+import 'package:server_auth/src/core/tokens.dart' show hashOpaqueToken;
+import 'package:server_auth/src/core/webauthn_store.dart';
 
+/// Creates an isolated fixture for a WebAuthn-store conformance case.
 typedef AuthWebAuthnStoreConformanceFactory =
     FutureOr<AuthWebAuthnStoreConformanceFixture> Function();
 
+/// Supplies WebAuthn capabilities and lifecycle hooks used by a case.
 final class AuthWebAuthnStoreConformanceFixture {
+  /// Creates a fixture from WebAuthn capabilities and an optional disposer.
   const AuthWebAuthnStoreConformanceFixture({
     required this.capabilities,
     this.dispose,
   });
 
+  /// WebAuthn persistence capabilities under test.
   final AuthWebAuthnStoreCapabilities capabilities;
+
+  /// Releases resources owned by the fixture.
   final FutureOr<void> Function()? dispose;
 }
 
+/// Describes a failed WebAuthn-store conformance case.
 final class AuthWebAuthnStoreConformanceFailure implements Exception {
+  /// Creates a failure for [caseId] caused by [cause].
   const AuthWebAuthnStoreConformanceFailure(this.caseId, this.cause);
 
+  /// Stable identifier of the failed case.
   final String caseId;
+
+  /// Error raised by the adapter or the failed expectation.
   final Object cause;
 
   @override
   String toString() => 'AuthWebAuthnStoreConformanceFailure($caseId): $cause';
 }
 
+/// One independently runnable WebAuthn-store conformance case.
 final class AuthWebAuthnStoreConformanceCase {
+  /// Creates a runnable conformance case.
   const AuthWebAuthnStoreConformanceCase({
     required this.id,
     required this.description,
     required Future<void> Function() run,
   }) : _run = run;
 
+  /// Stable machine-readable case identifier.
   final String id;
+
+  /// Human-readable behavior covered by this case.
   final String description;
   final Future<void> Function() _run;
 
+  /// Runs this conformance case.
   Future<void> run() => _run();
 }
 
 /// Reusable one-time, uniqueness, compare-and-set, and stateful WebAuthn
 /// persistence contract.
 final class AuthWebAuthnStoreConformanceSuite {
+  /// Creates a suite backed by [createFixture].
   AuthWebAuthnStoreConformanceSuite(this.createFixture);
 
+  /// Creates the isolated fixture used by each case.
   final AuthWebAuthnStoreConformanceFactory createFixture;
 
+  /// The isolated cases exposed by this suite.
   List<AuthWebAuthnStoreConformanceCase> get cases => [
     _case(
       'challenge_one_time_binding',
@@ -358,7 +378,7 @@ final class AuthWebAuthnStoreConformanceSuite {
   }
 }
 
-final DateTime _now = DateTime.utc(2099, 1, 1);
+final DateTime _now = DateTime.utc(2099);
 
 AuthWebAuthnChallenge _challenge(String suffix) => AuthWebAuthnChallenge(
   id: 'challenge-$suffix',

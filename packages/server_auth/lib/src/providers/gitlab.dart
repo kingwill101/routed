@@ -1,4 +1,4 @@
-import '../core/core.dart';
+import 'package:server_auth/src/core/core.dart';
 
 /// GitLab user profile.
 ///
@@ -23,6 +23,28 @@ class GitLabProfile {
     this.isAdmin,
     this.createdAt,
   });
+
+  /// Creates a [GitLabProfile] from a JSON map returned by the GitLab API.
+  factory GitLabProfile.fromJson(Map<String, dynamic> json) {
+    return GitLabProfile(
+      id: json['id'] as int? ?? 0,
+      username: json['username']?.toString() ?? '',
+      email: json['email']?.toString(),
+      name: json['name']?.toString(),
+      avatarUrl: json['avatar_url']?.toString(),
+      webUrl: json['web_url']?.toString(),
+      state: json['state']?.toString(),
+      bio: json['bio']?.toString(),
+      location: json['location']?.toString(),
+      publicEmail: json['public_email']?.toString(),
+      websiteUrl: json['website_url']?.toString(),
+      organization: json['organization']?.toString(),
+      jobTitle: json['job_title']?.toString(),
+      twoFactorEnabled: json['two_factor_enabled'] as bool?,
+      isAdmin: json['is_admin'] as bool?,
+      createdAt: json['created_at']?.toString(),
+    );
+  }
 
   /// User ID.
   final int id;
@@ -71,28 +93,6 @@ class GitLabProfile {
 
   /// When the account was created.
   final String? createdAt;
-
-  /// Creates a [GitLabProfile] from a JSON map returned by the GitLab API.
-  factory GitLabProfile.fromJson(Map<String, dynamic> json) {
-    return GitLabProfile(
-      id: json['id'] as int? ?? 0,
-      username: json['username']?.toString() ?? '',
-      email: json['email']?.toString(),
-      name: json['name']?.toString(),
-      avatarUrl: json['avatar_url']?.toString(),
-      webUrl: json['web_url']?.toString(),
-      state: json['state']?.toString(),
-      bio: json['bio']?.toString(),
-      location: json['location']?.toString(),
-      publicEmail: json['public_email']?.toString(),
-      websiteUrl: json['website_url']?.toString(),
-      organization: json['organization']?.toString(),
-      jobTitle: json['job_title']?.toString(),
-      twoFactorEnabled: json['two_factor_enabled'] as bool?,
-      isAdmin: json['is_admin'] as bool?,
-      createdAt: json['created_at']?.toString(),
-    );
-  }
 
   /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {

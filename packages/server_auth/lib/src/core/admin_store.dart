@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'account_policy.dart';
-import 'admin_models.dart';
-import 'deletion_transaction.dart';
-import 'exceptions.dart';
-import 'models.dart';
-import 'store.dart';
+import 'package:server_auth/src/core/account_policy.dart';
+import 'package:server_auth/src/core/admin_models.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/store.dart';
 
 /// A typed mutation executed entirely by an [AuthAdminStore].
 sealed class AuthAdminMutation<T> {
@@ -336,7 +336,7 @@ final class InMemoryAuthAdminStore
   @override
   Set<String> get atomicUserDataNamespaces => Set.unmodifiable({
     'core',
-    if (_core case AuthUserDeletionCoordinatorHost host)
+    if (_core case final AuthUserDeletionCoordinatorHost host)
       ...host.userDeletionCoordinator.requiredUserDeletionNamespaces,
   });
 
@@ -680,7 +680,6 @@ final class InMemoryAuthAdminStore
             passwordHash: credential.passwordHash,
             createdAt: credential.createdAt,
             updatedAt: credential.updatedAt,
-            enabled: true,
           )
         : AuthPasswordCredential(
             id: existing.id,
@@ -689,7 +688,6 @@ final class InMemoryAuthAdminStore
             passwordHash: credential.passwordHash,
             createdAt: existing.createdAt,
             updatedAt: credential.updatedAt,
-            enabled: true,
           );
     await _capabilities.upsertCredentialForAdministration(value);
     await _revoke(user.id);

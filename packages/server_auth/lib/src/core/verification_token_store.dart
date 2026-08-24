@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'deletion_transaction.dart';
-import 'models.dart' show AuthVerificationToken;
-import 'tokens.dart' show hashOpaqueToken;
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/models.dart' show AuthVerificationToken;
+import 'package:server_auth/src/core/tokens.dart' show hashOpaqueToken;
 
 /// Storage interface used by email magic-link verification flows.
 ///
@@ -26,11 +26,11 @@ abstract class AuthVerificationTokenStore {
 
 /// Optional compare-and-delete capability for failed token delivery cleanup.
 ///
-/// Implementations must delete only the record matching both [identifier] and
-/// [token]. This prevents one failed delivery from invalidating a newer token
+/// Implementations must delete only the record matching both `identifier` and
+/// `token`. This prevents one failed delivery from invalidating a newer token
 /// issued concurrently for the same identifier.
 abstract interface class AuthVerificationTokenConditionalDeleteStore {
-  /// Deletes only the record matching [identifier] and [token].
+  /// Deletes only the record matching `identifier` and `token`.
   ///
   /// Returns whether a matching record was removed. Implementations compare
   /// the token digest so a failed delivery cannot remove a newer token.

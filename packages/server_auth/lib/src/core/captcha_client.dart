@@ -1,5 +1,5 @@
-import 'client.dart';
-import 'models.dart';
+import 'package:server_auth/src/core/client.dart';
+import 'package:server_auth/src/core/models.dart';
 
 /// Installs captcha-aware credential operations on an [AuthClient].
 ///
@@ -36,10 +36,10 @@ final class AuthCaptchaClient {
 
   /// Signs in with credentials and submits [captchaToken] for verification.
   Future<AuthSession> signIn({
-    String? email,
-    String? username,
     required String password,
     required String captchaToken,
+    String? email,
+    String? username,
     Map<String, dynamic>? attributes,
   }) => _core.signInWithCredentials(
     provider: provider,
@@ -52,10 +52,10 @@ final class AuthCaptchaClient {
 
   /// Registers credentials and submits [captchaToken] for verification.
   Future<AuthSession> register({
-    String? email,
-    String? username,
     required String password,
     required String captchaToken,
+    String? email,
+    String? username,
     Map<String, dynamic>? attributes,
   }) => _core.registerWithCredentials(
     provider: provider,

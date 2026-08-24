@@ -1,4 +1,4 @@
-import '../core/core.dart';
+import 'package:server_auth/src/core/core.dart';
 
 /// Facebook user profile returned by the Graph API.
 ///
@@ -13,24 +13,6 @@ class FacebookProfile {
     this.lastName,
     this.picture,
   });
-
-  /// Unique identifier for the user.
-  final String id;
-
-  /// User's email address.
-  final String? email;
-
-  /// User's full name.
-  final String? name;
-
-  /// User's first name.
-  final String? firstName;
-
-  /// User's last name.
-  final String? lastName;
-
-  /// User's profile picture data.
-  final FacebookPicture? picture;
 
   /// Creates a [FacebookProfile] from a JSON map returned by the Facebook Graph API.
   factory FacebookProfile.fromJson(Map<String, dynamic> json) {
@@ -51,6 +33,24 @@ class FacebookProfile {
     );
   }
 
+  /// Unique identifier for the user.
+  final String id;
+
+  /// User's email address.
+  final String? email;
+
+  /// User's full name.
+  final String? name;
+
+  /// User's first name.
+  final String? firstName;
+
+  /// User's last name.
+  final String? lastName;
+
+  /// User's profile picture data.
+  final FacebookPicture? picture;
+
   /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -67,6 +67,16 @@ class FacebookPicture {
   /// Creates a new [FacebookPicture].
   const FacebookPicture({this.url, this.width, this.height, this.isSilhouette});
 
+  /// Creates a [FacebookPicture] from a JSON map.
+  factory FacebookPicture.fromJson(Map<String, dynamic> json) {
+    return FacebookPicture(
+      url: json['url']?.toString(),
+      width: json['width'] as int?,
+      height: json['height'] as int?,
+      isSilhouette: json['is_silhouette'] as bool?,
+    );
+  }
+
   /// URL of the profile picture.
   final String? url;
 
@@ -78,16 +88,6 @@ class FacebookPicture {
 
   /// Whether this is a default silhouette image.
   final bool? isSilhouette;
-
-  /// Creates a [FacebookPicture] from a JSON map.
-  factory FacebookPicture.fromJson(Map<String, dynamic> json) {
-    return FacebookPicture(
-      url: json['url']?.toString(),
-      width: json['width'] as int?,
-      height: json['height'] as int?,
-      isSilhouette: json['is_silhouette'] as bool?,
-    );
-  }
 
   /// Converts this picture data to a JSON-serializable map.
   Map<String, dynamic> toJson() => {

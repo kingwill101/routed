@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'exceptions.dart';
+import 'package:server_auth/src/core/exceptions.dart';
 
 /// Maximum UTF-16 code-unit length accepted for a limiter identifier.
 ///
@@ -81,8 +81,8 @@ enum AuthRateLimitAction {
 final class AuthRateLimitOperation {
   /// Creates a namespaced operation from [namespace] and [name].
   const AuthRateLimitOperation(this.namespace, this.name)
-    : assert(namespace != ''),
-      assert(name != '');
+    : assert(namespace != '', 'namespace must not be empty'),
+      assert(name != '', 'name must not be empty');
 
   /// Creates the core operation corresponding to [action].
   factory AuthRateLimitOperation.core(AuthRateLimitAction action) =>

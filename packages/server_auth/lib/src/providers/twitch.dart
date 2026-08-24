@@ -1,4 +1,4 @@
-import '../core/core.dart';
+import 'package:server_auth/src/core/core.dart';
 
 /// Twitch user profile (OIDC).
 ///
@@ -13,6 +13,18 @@ class TwitchProfile {
     this.picture,
     this.updatedAt,
   });
+
+  /// Creates a [TwitchProfile] from a JSON map returned by the Twitch OIDC userinfo endpoint.
+  factory TwitchProfile.fromJson(Map<String, dynamic> json) {
+    return TwitchProfile(
+      sub: json['sub']?.toString() ?? '',
+      email: json['email']?.toString(),
+      emailVerified: json['email_verified'] == true,
+      preferredUsername: json['preferred_username']?.toString(),
+      picture: json['picture']?.toString(),
+      updatedAt: json['updated_at']?.toString(),
+    );
+  }
 
   /// Subject identifier (user ID).
   final String sub;
@@ -31,18 +43,6 @@ class TwitchProfile {
 
   /// When the profile was last updated.
   final String? updatedAt;
-
-  /// Creates a [TwitchProfile] from a JSON map returned by the Twitch OIDC userinfo endpoint.
-  factory TwitchProfile.fromJson(Map<String, dynamic> json) {
-    return TwitchProfile(
-      sub: json['sub']?.toString() ?? '',
-      email: json['email']?.toString(),
-      emailVerified: json['email_verified'] == true,
-      preferredUsername: json['preferred_username']?.toString(),
-      picture: json['picture']?.toString(),
-      updatedAt: json['updated_at']?.toString(),
-    );
-  }
 
   /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {

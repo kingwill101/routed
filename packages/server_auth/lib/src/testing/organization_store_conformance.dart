@@ -1,14 +1,18 @@
 import 'dart:async';
 
-import '../core/exceptions.dart';
-import '../core/organization_models.dart';
-import '../core/organization_store.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/organization_models.dart';
+import 'package:server_auth/src/core/organization_store.dart';
 
 /// A failed organization persistence-adapter conformance case.
 final class AuthOrganizationStoreConformanceFailure implements Exception {
+  /// Creates a failure for [caseId] caused by [cause].
   const AuthOrganizationStoreConformanceFailure(this.caseId, this.cause);
 
+  /// Stable identifier of the failed case.
   final String caseId;
+
+  /// Error raised by the adapter or the failed expectation.
   final Object cause;
 
   @override
@@ -80,7 +84,7 @@ Future<void> verifyAuthOrganizationStoreOwnershipConformance(
       fixture.organization.id,
       fixture.second.userId,
     );
-    _check(remaining?.roles.contains('owner') == true, 'remaining owner');
+    _check(remaining?.roles.contains('owner') ?? false, 'remaining owner');
   });
 
   await _case('membership.failure-atomicity', () async {
@@ -100,7 +104,7 @@ Future<void> verifyAuthOrganizationStoreOwnershipConformance(
       fixture.organization.id,
       fixture.owner.userId,
     );
-    _check(member?.roles.contains('owner') == true, 'owner rollback');
+    _check(member?.roles.contains('owner') ?? false, 'owner rollback');
   });
 
   await _case('invitation.idempotent-retry-and-binding', () async {

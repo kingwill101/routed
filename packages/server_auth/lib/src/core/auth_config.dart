@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'gates.dart';
-import 'guards.dart';
-import 'models.dart';
+import 'package:server_auth/src/core/gates.dart';
+import 'package:server_auth/src/core/guards.dart';
+import 'package:server_auth/src/core/models.dart';
 
 /// Normalized, typed authentication configuration consumed by framework adapters.
 class AuthConfig {
@@ -21,8 +21,8 @@ class AuthConfig {
   /// are unset; required JWT claims contain `exp`; and remember-me defaults to
   /// a `remember_token` cookie lasting 30 days. No file, environment, or
   /// string-path lookup is performed here.
-  factory AuthConfig.defaults() => AuthConfig(
-    jwt: const AuthJwtConfig(
+  factory AuthConfig.defaults() => const AuthConfig(
+    jwt: AuthJwtConfig(
       enabled: false,
       issuer: null,
       audience: <String>[],
@@ -35,7 +35,7 @@ class AuthConfig {
       header: 'Authorization',
       bearerPrefix: 'Bearer ',
     ),
-    oauth2Introspection: const OAuthIntrospectionConfig(
+    oauth2Introspection: OAuthIntrospectionConfig(
       enabled: false,
       endpoint: null,
       clientId: null,
@@ -49,17 +49,17 @@ class AuthConfig {
       strategy: null,
       maxAge: null,
       updateAge: null,
-      rememberMe: const SessionRememberMeConfig(
+      rememberMe: SessionRememberMeConfig(
         cookieName: 'remember_token',
         duration: Duration(days: 30),
       ),
     ),
-    haigate: const HaigateConfig(
+    haigate: HaigateConfig(
       enabled: false,
       defaults: GateDefaults(statusCode: HttpStatus.forbidden),
       abilities: <String, GateDefinition>{},
     ),
-    guards: const <String, GuardDefinition>{},
+    guards: <String, GuardDefinition>{},
   );
 
   /// Returns a copy with selected typed configuration sections replaced.

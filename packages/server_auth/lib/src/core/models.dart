@@ -39,7 +39,7 @@ const Set<String> _sensitiveAttributeFragments = <String>{
 const _maxAuthPublicAttributeDepth = 32;
 
 String _normalizeAttributeName(Object? name) =>
-    name.toString().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    name.toString().toLowerCase().replaceAll(RegExp('[^a-z0-9]'), '');
 
 bool _isCredentialSecretAttribute(Object? name) {
   final normalized = _normalizeAttributeName(name);
@@ -121,6 +121,24 @@ class AuthPrincipal {
            ? const <String, dynamic>{}
            : Map<String, dynamic>.from(attributes);
 
+  /// Creates a principal from a JSON payload.
+  factory AuthPrincipal.fromJson(Map<String, dynamic> json) {
+    final rolesValue = json['roles'];
+    final attributesValue = json['attributes'];
+    return AuthPrincipal(
+      id: json['id']?.toString() ?? '',
+      roles: rolesValue is List
+          ? rolesValue.whereType<String>().toList(growable: false)
+          : const <String>[],
+      attributes: attributesValue is Map
+          ? sanitizeAuthPublicAttributes(<String, dynamic>{
+              for (final entry in attributesValue.entries)
+                if (entry.key is String) entry.key as String: entry.value,
+            })
+          : const <String, dynamic>{},
+    );
+  }
+
   /// Stable identifier for the authenticated principal.
   final String id;
 
@@ -139,24 +157,6 @@ class AuthPrincipal {
     'roles': roles,
     'attributes': sanitizeAuthPublicAttributes(attributes),
   };
-
-  /// Creates a principal from a JSON payload.
-  factory AuthPrincipal.fromJson(Map<String, dynamic> json) {
-    final rolesValue = json['roles'];
-    final attributesValue = json['attributes'];
-    return AuthPrincipal(
-      id: json['id']?.toString() ?? '',
-      roles: rolesValue is List
-          ? rolesValue.whereType<String>().toList(growable: false)
-          : const <String>[],
-      attributes: attributesValue is Map
-          ? sanitizeAuthPublicAttributes(<String, dynamic>{
-              for (final entry in attributesValue.entries)
-                if (entry.key is String) entry.key as String: entry.value,
-            })
-          : const <String, dynamic>{},
-    );
-  }
 }
 
 /// Authenticated user profile used by auth flows and sessions.
@@ -173,6 +173,42 @@ class AuthUser {
   }) : attributes = attributes == null
            ? <String, dynamic>{}
            : Map<String, dynamic>.from(attributes);
+
+  /// Creates a user from a session principal.
+  factory AuthUser.fromPrincipal(AuthPrincipal principal) {
+    final attributes = Map<String, dynamic>.from(principal.attributes);
+    return AuthUser(
+      id: principal.id,
+      roles: principal.roles,
+      email: attributes.remove('email')?.toString(),
+      name: attributes.remove('name')?.toString(),
+      image: attributes.remove('image')?.toString(),
+      isAnonymous: attributes.remove('isAnonymous') == true,
+      attributes: attributes,
+    );
+  }
+
+  /// Creates a user from a JSON payload.
+  factory AuthUser.fromJson(Map<String, dynamic> json) {
+    final rolesValue = json['roles'];
+    final attributesValue = json['attributes'];
+    return AuthUser(
+      id: json['id']?.toString() ?? '',
+      email: json['email']?.toString(),
+      name: json['name']?.toString(),
+      image: json['image']?.toString(),
+      isAnonymous: json['isAnonymous'] == true,
+      roles: rolesValue is List
+          ? rolesValue.whereType<String>().toList(growable: false)
+          : const <String>[],
+      attributes: attributesValue is Map
+          ? sanitizeAuthPublicAttributes(<String, dynamic>{
+              for (final entry in attributesValue.entries)
+                if (entry.key is String) entry.key as String: entry.value,
+            })
+          : const <String, dynamic>{},
+    );
+  }
 
   /// Provider-stable user identifier.
   final String id;
@@ -236,11 +272,11 @@ class AuthUser {
     final compactName = _compactValue(name, maxBytes: 256);
     final compactImage = _compactValue(image, maxBytes: 2048);
     return {
-      if (compactEmail != null) 'email': compactEmail,
+      'email': ?compactEmail,
       if (compactEmail == null && email == null && fallbackEmail != null)
         'email': fallbackEmail,
-      if (compactName != null) 'name': compactName,
-      if (compactImage != null) 'image': compactImage,
+      'name': ?compactName,
+      'image': ?compactImage,
       if (isAnonymous) 'isAnonymous': true,
     };
   }
@@ -291,42 +327,6 @@ class AuthUser {
       'attributes': sanitizeAuthPublicAttributes(attributes),
     };
   }
-
-  /// Creates a user from a session principal.
-  factory AuthUser.fromPrincipal(AuthPrincipal principal) {
-    final attributes = Map<String, dynamic>.from(principal.attributes);
-    return AuthUser(
-      id: principal.id,
-      roles: principal.roles,
-      email: attributes.remove('email')?.toString(),
-      name: attributes.remove('name')?.toString(),
-      image: attributes.remove('image')?.toString(),
-      isAnonymous: attributes.remove('isAnonymous') == true,
-      attributes: attributes,
-    );
-  }
-
-  /// Creates a user from a JSON payload.
-  factory AuthUser.fromJson(Map<String, dynamic> json) {
-    final rolesValue = json['roles'];
-    final attributesValue = json['attributes'];
-    return AuthUser(
-      id: json['id']?.toString() ?? '',
-      email: json['email']?.toString(),
-      name: json['name']?.toString(),
-      image: json['image']?.toString(),
-      isAnonymous: json['isAnonymous'] == true,
-      roles: rolesValue is List
-          ? rolesValue.whereType<String>().toList(growable: false)
-          : const <String>[],
-      attributes: attributesValue is Map
-          ? sanitizeAuthPublicAttributes(<String, dynamic>{
-              for (final entry in attributesValue.entries)
-                if (entry.key is String) entry.key as String: entry.value,
-            })
-          : const <String, dynamic>{},
-    );
-  }
 }
 
 /// Provider account metadata linked to an `AuthUser`.
@@ -343,6 +343,25 @@ class AuthAccount {
   }) : metadata = metadata == null
            ? <String, dynamic>{}
            : Map<String, dynamic>.from(metadata);
+
+  /// Creates a public linked-account projection from JSON.
+  factory AuthAccount.fromJson(Map<String, dynamic> json) => AuthAccount(
+    providerId:
+        json['provider_id']?.toString() ?? json['providerId']?.toString() ?? '',
+    providerAccountId:
+        json['provider_account_id']?.toString() ??
+        json['providerAccountId']?.toString() ??
+        '',
+    userId: json['user_id']?.toString() ?? json['userId']?.toString(),
+    expiresAt: DateTime.tryParse(
+      json['expires_at']?.toString() ?? json['expiresAt']?.toString() ?? '',
+    ),
+    metadata: json['metadata'] is Map
+        ? sanitizeAuthPublicAttributes(
+            Map<String, dynamic>.from(json['metadata'] as Map),
+          )
+        : const <String, dynamic>{},
+  );
 
   /// Provider identifier (e.g. `github`).
   final String providerId;
@@ -402,25 +421,6 @@ class AuthAccount {
     'expires_at': expiresAt?.toIso8601String(),
     'metadata': metadata,
   };
-
-  /// Creates a public linked-account projection from JSON.
-  factory AuthAccount.fromJson(Map<String, dynamic> json) => AuthAccount(
-    providerId:
-        json['provider_id']?.toString() ?? json['providerId']?.toString() ?? '',
-    providerAccountId:
-        json['provider_account_id']?.toString() ??
-        json['providerAccountId']?.toString() ??
-        '',
-    userId: json['user_id']?.toString() ?? json['userId']?.toString(),
-    expiresAt: DateTime.tryParse(
-      json['expires_at']?.toString() ?? json['expiresAt']?.toString() ?? '',
-    ),
-    metadata: json['metadata'] is Map
-        ? sanitizeAuthPublicAttributes(
-            Map<String, dynamic>.from(json['metadata'] as Map),
-          )
-        : const <String, dynamic>{},
-  );
 }
 
 /// Persisted password credential record.
@@ -501,6 +501,19 @@ class AuthCredentials {
            ? <String, dynamic>{}
            : Map<String, dynamic>.from(attributes);
 
+  /// Builds credentials from a request payload.
+  factory AuthCredentials.fromMap(Map<String, dynamic> data) {
+    return AuthCredentials(
+      email: data['email']?.toString(),
+      username: data['username']?.toString(),
+      password: data['password']?.toString(),
+      attributes: <String, dynamic>{
+        for (final entry in data.entries)
+          if (!_isCredentialSecretAttribute(entry.key)) entry.key: entry.value,
+      },
+    );
+  }
+
   /// Email address supplied by the client.
   final String? email;
 
@@ -522,19 +535,6 @@ class AuthCredentials {
         for (final entry in attributes.entries)
           if (!_isCredentialSecretAttribute(entry.key)) entry.key: entry.value,
       }),
-    );
-  }
-
-  /// Builds credentials from a request payload.
-  factory AuthCredentials.fromMap(Map<String, dynamic> data) {
-    return AuthCredentials(
-      email: data['email']?.toString(),
-      username: data['username']?.toString(),
-      password: data['password']?.toString(),
-      attributes: <String, dynamic>{
-        for (final entry in data.entries)
-          if (!_isCredentialSecretAttribute(entry.key)) entry.key: entry.value,
-      },
     );
   }
 }

@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'browser.dart';
+import 'package:server_auth/src/core/browser.dart';
 
 /// Comprehensive browser-request validation result.
 class BrowserValidationResult {
@@ -77,14 +77,10 @@ class AuthCookiePolicy {
   }
 
   /// Safe production defaults.
-  static const AuthCookiePolicy production = AuthCookiePolicy(
-    httpOnly: true,
-    secure: true,
-  );
+  static const AuthCookiePolicy production = AuthCookiePolicy();
 
   /// Development defaults (allows HTTP).
   static const AuthCookiePolicy development = AuthCookiePolicy(
-    httpOnly: true,
     secure: false,
   );
 }

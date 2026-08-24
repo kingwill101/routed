@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import '../core/oauth_client_store.dart';
-import '../core/oauth_provider_models.dart';
-import '../core/tokens.dart' show hashOpaqueToken;
+import 'package:server_auth/src/core/oauth_client_store.dart';
+import 'package:server_auth/src/core/oauth_provider_models.dart';
+import 'package:server_auth/src/core/tokens.dart' show hashOpaqueToken;
 
 /// Creates a fresh, isolated exchange store for each conformance case.
 typedef OAuthAuthorizationCodeExchangeStoreFactory =
@@ -11,12 +11,16 @@ typedef OAuthAuthorizationCodeExchangeStoreFactory =
 /// Failure reported by authorization-code exchange adapter conformance.
 final class OAuthAuthorizationCodeExchangeConformanceFailure
     implements Exception {
+  /// Creates a failure for [caseId] caused by [cause].
   const OAuthAuthorizationCodeExchangeConformanceFailure(
     this.caseId,
     this.cause,
   );
 
+  /// Stable identifier of the failed case.
   final String caseId;
+
+  /// Error raised by the adapter or the failed expectation.
   final Object cause;
 
   @override
@@ -145,7 +149,7 @@ _fixture(OAuthAuthorizationCodeExchangeStore store, String namespace) async {
     clientId: code.clientId,
     redirectUri: code.redirectUri,
     codeVerifier: verifier,
-    now: DateTime.utc(2030, 1, 1),
+    now: DateTime.utc(2030),
   );
   final rawToken = '$namespace-access-token';
   final token = OAuthAccessToken(
@@ -154,7 +158,7 @@ _fixture(OAuthAuthorizationCodeExchangeStore store, String namespace) async {
     userId: code.userId,
     scope: code.scope,
     expiresAt: DateTime.utc(2030, 1, 1, 1),
-    issuedAt: DateTime.utc(2030, 1, 1),
+    issuedAt: DateTime.utc(2030),
     authorizationId: code.authorizationId,
   );
   await store.authorizationCodeStore.create(code);
@@ -181,7 +185,7 @@ OAuthAuthorizationCode _code({
   expiresAt: DateTime.utc(2030, 1, 1, 0, 10),
   codeChallenge: 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
   codeChallengeMethod: 'S256',
-  createdAt: DateTime.utc(2030, 1, 1),
+  createdAt: DateTime.utc(2030),
 );
 
 Future<void> _case(String id, Future<void> Function() body) async {

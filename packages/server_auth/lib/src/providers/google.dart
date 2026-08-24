@@ -1,4 +1,4 @@
-import '../core/core.dart';
+import 'package:server_auth/src/core/core.dart';
 
 /// Google user profile returned by the userinfo endpoint.
 ///
@@ -16,6 +16,21 @@ class GoogleProfile {
     this.locale,
     this.hd,
   });
+
+  /// Creates a [GoogleProfile] from a JSON map returned by the Google userinfo endpoint.
+  factory GoogleProfile.fromJson(Map<String, dynamic> json) {
+    return GoogleProfile(
+      sub: json['sub']?.toString() ?? '',
+      email: json['email']?.toString(),
+      emailVerified: json['email_verified'] == true,
+      name: json['name']?.toString(),
+      picture: json['picture']?.toString(),
+      givenName: json['given_name']?.toString(),
+      familyName: json['family_name']?.toString(),
+      locale: json['locale']?.toString(),
+      hd: json['hd']?.toString(),
+    );
+  }
 
   /// Unique identifier for the user (subject).
   final String sub;
@@ -43,21 +58,6 @@ class GoogleProfile {
 
   /// Hosted domain (for Google Workspace accounts).
   final String? hd;
-
-  /// Creates a [GoogleProfile] from a JSON map returned by the Google userinfo endpoint.
-  factory GoogleProfile.fromJson(Map<String, dynamic> json) {
-    return GoogleProfile(
-      sub: json['sub']?.toString() ?? '',
-      email: json['email']?.toString(),
-      emailVerified: json['email_verified'] == true,
-      name: json['name']?.toString(),
-      picture: json['picture']?.toString(),
-      givenName: json['given_name']?.toString(),
-      familyName: json['family_name']?.toString(),
-      locale: json['locale']?.toString(),
-      hd: json['hd']?.toString(),
-    );
-  }
 
   /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {

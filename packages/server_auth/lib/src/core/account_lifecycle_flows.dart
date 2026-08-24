@@ -1,23 +1,23 @@
 import 'dart:async';
 
-import 'account_deletion.dart';
-import 'account_linking.dart';
-import 'authentication_methods.dart';
-import 'email_change.dart';
-import 'password_hasher.dart';
-import 'providers.dart';
-import 'store.dart';
+import 'package:server_auth/src/core/account_deletion.dart';
+import 'package:server_auth/src/core/account_linking.dart';
+import 'package:server_auth/src/core/authentication_methods.dart';
+import 'package:server_auth/src/core/email_change.dart';
+import 'package:server_auth/src/core/password_hasher.dart';
+import 'package:server_auth/src/core/providers.dart';
+import 'package:server_auth/src/core/store.dart';
 
 // Re-export types for convenience
 export 'account_deletion.dart'
     show
-        AuthAccountDeletionInitiated,
         AuthAccountDeletionConfirmed,
+        AuthAccountDeletionInitiated,
         AuthAccountDeletionRequest;
 export 'account_linking.dart'
     show AuthAccountLinked, AuthAccountUnlinked, AuthLinkedAccountInfo;
 export 'email_change.dart'
-    show AuthEmailChangeInitiated, AuthEmailChangeConfirmed;
+    show AuthEmailChangeConfirmed, AuthEmailChangeInitiated;
 
 /// Initiates an email change flow.
 Future<AuthEmailChangeInitiated> initiateEmailChangeFlow({

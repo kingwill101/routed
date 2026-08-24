@@ -1,21 +1,30 @@
 import 'dart:async';
 
-import '../core/admin_models.dart';
-import '../core/admin_store.dart';
-import '../core/exceptions.dart';
-import '../core/models.dart';
-import '../core/store.dart';
+import 'package:server_auth/src/core/admin_models.dart';
+import 'package:server_auth/src/core/admin_store.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/store.dart';
 
+/// Creates an isolated fixture for an admin-store conformance case.
 typedef AuthAdminStoreConformanceFixtureFactory =
     FutureOr<AuthAdminStoreConformanceFixture> Function();
 
-enum AuthAdminStoreConformanceFaultPoint { afterMutation }
+/// Identifies the transaction point at which an admin-store fault is injected.
+enum AuthAdminStoreConformanceFaultPoint {
+  /// Injects a failure after the mutation has changed durable state.
+  afterMutation,
+}
 
+/// Controls deterministic fault injection for an admin-store adapter fixture.
 abstract interface class AuthAdminStoreConformanceFaultControl {
+  /// Fails the next operation at [point].
   FutureOr<void> failNext(AuthAdminStoreConformanceFaultPoint point);
 }
 
+/// Supplies the stores and lifecycle hooks used by an admin conformance case.
 final class AuthAdminStoreConformanceFixture {
+  /// Creates a fixture from the supplied stores and optional hooks.
   const AuthAdminStoreConformanceFixture({
     required this.coreStore,
     required this.adminStore,
@@ -23,33 +32,53 @@ final class AuthAdminStoreConformanceFixture {
     this.dispose,
   });
 
+  /// Core authentication store shared with [adminStore].
   final AuthStore coreStore;
+
+  /// Administrative mutation store under test.
   final AuthAdminStore adminStore;
+
+  /// Optional transaction fault controller.
   final AuthAdminStoreConformanceFaultControl? faultControl;
+
+  /// Releases resources owned by the fixture.
   final FutureOr<void> Function()? dispose;
 }
 
+/// Reports whether an admin-store conformance case passed or was skipped.
 final class AuthAdminStoreConformanceResult {
+  /// Creates a successful result.
   const AuthAdminStoreConformanceResult.passed() : skippedReason = null;
+
+  /// Creates a skipped result with [skippedReason].
   const AuthAdminStoreConformanceResult.skipped(this.skippedReason);
 
+  /// Explanation for a skipped case, or `null` when the case passed.
   final String? skippedReason;
+
+  /// Whether this result represents a skipped case.
   bool get isSkipped => skippedReason != null;
 }
 
+/// Describes a failed admin-store conformance case.
 final class AuthAdminStoreConformanceFailure implements Exception {
+  /// Creates a failure for [caseId] caused by [cause].
   const AuthAdminStoreConformanceFailure({
     required this.caseId,
     required this.cause,
   });
 
+  /// Stable identifier of the failed case.
   final String caseId;
+
+  /// Error raised by the adapter or the failed expectation.
   final Object cause;
 
   @override
   String toString() => 'AuthAdminStoreConformanceFailure($caseId): $cause';
 }
 
+/// One independently runnable admin-store conformance case.
 final class AuthAdminStoreConformanceCase {
   const AuthAdminStoreConformanceCase._({
     required this.id,
@@ -57,10 +86,14 @@ final class AuthAdminStoreConformanceCase {
     required Future<AuthAdminStoreConformanceResult> Function() run,
   }) : _run = run;
 
+  /// Stable machine-readable case identifier.
   final String id;
+
+  /// Human-readable behavior covered by this case.
   final String description;
   final Future<AuthAdminStoreConformanceResult> Function() _run;
 
+  /// Runs this conformance case.
   Future<AuthAdminStoreConformanceResult> run() => _run();
 }
 
@@ -70,41 +103,43 @@ final class AuthAdminStoreConformanceCase {
 /// test-only [AuthAdminStoreConformanceFaultControl] so rollback is verified at
 /// a real transaction fault point; that case is skipped when unavailable.
 final class AuthAdminStoreConformanceSuite {
+  /// Creates a suite backed by [createFixture].
   AuthAdminStoreConformanceSuite({
     required AuthAdminStoreConformanceFixtureFactory createFixture,
   }) : _createFixture = createFixture;
 
   final AuthAdminStoreConformanceFixtureFactory _createFixture;
 
-  late final List<AuthAdminStoreConformanceCase> cases =
-      List<AuthAdminStoreConformanceCase>.unmodifiable(<
-        AuthAdminStoreConformanceCase
-      >[
-        _case(
-          id: 'admin.authorization.stale-role',
-          description:
-              'revalidates administrator permissions inside the mutation',
-          verify: _verifyStaleRoleAuthorization,
-        ),
-        _case(
-          id: 'admin.credentials.rollback',
-          description:
-              'rolls credentials, sessions, and JWT versions back together',
-          requiresFaultControl: true,
-          verify: _verifyCredentialRollback,
-        ),
-        _case(
-          id: 'admin.access.global-revocation',
-          description:
-              'revokes all server sessions and rotates JWT versions atomically',
-          verify: _verifyGlobalRevocation,
-        ),
-        _case(
-          id: 'admin.user-update.contention',
-          description: 'rejects a stale concurrent user replacement',
-          verify: _verifyUserUpdateContention,
-        ),
-      ]);
+  /// The isolated cases exposed by this suite.
+  late final List<AuthAdminStoreConformanceCase>
+  cases = List<AuthAdminStoreConformanceCase>.unmodifiable(
+    <AuthAdminStoreConformanceCase>[
+      _case(
+        id: 'admin.authorization.stale-role',
+        description:
+            'revalidates administrator permissions inside the mutation',
+        verify: _verifyStaleRoleAuthorization,
+      ),
+      _case(
+        id: 'admin.credentials.rollback',
+        description:
+            'rolls credentials, sessions, and JWT versions back together',
+        requiresFaultControl: true,
+        verify: _verifyCredentialRollback,
+      ),
+      _case(
+        id: 'admin.access.global-revocation',
+        description:
+            'revokes all server sessions and rotates JWT versions atomically',
+        verify: _verifyGlobalRevocation,
+      ),
+      _case(
+        id: 'admin.user-update.contention',
+        description: 'rejects a stale concurrent user replacement',
+        verify: _verifyUserUpdateContention,
+      ),
+    ],
+  );
 
   AuthAdminStoreConformanceCase _case({
     required String id,

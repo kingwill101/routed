@@ -3,9 +3,10 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 
-import 'deletion_transaction.dart';
-import 'oauth_provider_models.dart';
-import 'tokens.dart' show constantTimeStringEquals, hashOpaqueToken;
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/oauth_provider_models.dart';
+import 'package:server_auth/src/core/tokens.dart'
+    show constantTimeStringEquals, hashOpaqueToken;
 
 /// Persistence contract for OAuth clients.
 abstract interface class OAuthClientStore {
@@ -194,7 +195,7 @@ final class OAuthAuthorizationCodeExchangeResult {
 /// 1. revalidate the code digest, authorization ID, client, redirect URI,
 ///    S256 verifier, and expiry;
 /// 2. consume the code; and
-/// 3. persist [preparedToken], which contains digests only.
+/// 3. persist `preparedToken`, which contains digests only.
 ///
 /// Durable implementations must use a backend transaction implemented by the
 /// adapter. Callback-style transactions are intentionally not part of this
@@ -310,7 +311,7 @@ class InMemoryOAuthAuthorizationCodeStore
   /// Expired records are pruned on creation and the oldest insertion is
   /// evicted when capacity is reached.
   InMemoryOAuthAuthorizationCodeStore({this.maxEntries = 1024})
-    : assert(maxEntries > 0);
+    : assert(maxEntries > 0, 'maxEntries must be positive');
 
   /// Maximum number of unconsumed authorization codes retained.
   final int maxEntries;
@@ -749,7 +750,7 @@ void _validatePreparedToken(
       token.userId != code.userId ||
       token.scope != code.scope ||
       !token.expiresAt.toUtc().isAfter(now.toUtc()) ||
-      token.refreshTokenHash?.trim().isEmpty == true) {
+      (token.refreshTokenHash?.trim().isEmpty ?? false)) {
     throw ArgumentError('Prepared OAuth token does not match authorization.');
   }
 }

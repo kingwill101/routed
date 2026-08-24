@@ -1,6 +1,9 @@
-import '../core/saml_models.dart';
+import 'package:server_auth/src/core/saml_models.dart';
 
+/// Valid and hostile signed documents used by a SAML verifier suite.
 final class AuthSamlVerifierConformanceVector {
+  /// Creates a valid vector and hostile documents for an
+  /// [AuthSamlAssertionVerifier].
   const AuthSamlVerifierConformanceVector({
     required this.valid,
     required this.hostile,
@@ -14,9 +17,15 @@ final class AuthSamlVerifierConformanceVector {
   final Map<String, AuthSamlVerificationInput> hostile;
 }
 
+/// Describes a failed SAML verifier conformance case.
 final class AuthSamlVerifierConformanceFailure implements Exception {
+  /// Creates a failure for [caseId] caused by [cause].
   const AuthSamlVerifierConformanceFailure(this.caseId, this.cause);
+
+  /// Stable identifier of the failed case.
   final String caseId;
+
+  /// Error raised by the verifier or the failed expectation.
   final Object cause;
 
   @override
@@ -29,14 +38,19 @@ final class AuthSamlVerifierConformanceFailure implements Exception {
 /// or a standards-compliant signing implementation. Synthetic proof-only test
 /// doubles do not establish production SAML interoperability.
 final class AuthSamlVerifierConformanceSuite {
+  /// Creates a suite for [verifier] and its signed test [vector].
   const AuthSamlVerifierConformanceSuite({
     required this.verifier,
     required this.vector,
   });
 
+  /// SAML assertion verifier under test.
   final AuthSamlAssertionVerifier verifier;
+
+  /// Valid and hostile documents used by [run].
   final AuthSamlVerifierConformanceVector vector;
 
+  /// Verifies the valid binding and rejection of every hostile document.
   Future<void> run() async {
     final valid = vector.valid;
     final proof = await verifier.verify(valid);

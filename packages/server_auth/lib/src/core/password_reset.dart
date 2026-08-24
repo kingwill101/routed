@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'exceptions.dart';
-import 'models.dart';
-import 'password_hasher.dart';
-import 'password_policy.dart';
-import 'password_reset_token_store.dart';
-import 'store.dart';
-import 'two_factor.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/password_hasher.dart';
+import 'package:server_auth/src/core/password_policy.dart';
+import 'package:server_auth/src/core/password_reset_token_store.dart';
+import 'package:server_auth/src/core/store.dart';
+import 'package:server_auth/src/core/two_factor.dart';
 
 /// Request passed to an application-owned password-reset delivery callback.
 ///

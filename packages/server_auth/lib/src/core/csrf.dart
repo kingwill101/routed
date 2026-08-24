@@ -1,4 +1,4 @@
-import 'tokens.dart' show constantTimeStringEquals;
+import 'package:server_auth/src/core/tokens.dart' show constantTimeStringEquals;
 
 /// Returns an existing CSRF token or generates one when missing.
 ///

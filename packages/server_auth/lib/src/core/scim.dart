@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'plugin.dart';
-import 'scim_models.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/scim_models.dart';
 
 /// Route parameter used by SCIM User and Group resource endpoints.
 const AuthRouteParameterKey authScimResourceIdRouteParameter =
@@ -190,6 +190,7 @@ final class AuthScimInternalFailure {
   final String? subjectId;
 }
 
+/// Reports sanitized internal failures raised while handling SCIM operations.
 typedef AuthScimFailureReporter =
     FutureOr<void> Function(AuthScimInternalFailure failure);
 
@@ -673,7 +674,6 @@ final class ScimPlugin<TContext>
     required AuthRoutePath path,
     required AuthOperationSemantics semantics,
     required AuthScimScope scope,
-    Set<AuthScimScope> alternateScopes = const <AuthScimScope>{},
     required AuthOperationCodec<Map<String, dynamic>> requestCodec,
     required AuthOperationCodec<Object?> responseCodec,
     required FutureOr<AuthEndpointHttpResponse> Function(
@@ -681,6 +681,7 @@ final class ScimPlugin<TContext>
       Map<String, dynamic> request,
     )
     handler,
+    Set<AuthScimScope> alternateScopes = const <AuthScimScope>{},
     int successStatusCode = 200,
     bool responseHasBody = true,
   }) => TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
@@ -720,7 +721,6 @@ final class ScimPlugin<TContext>
     },
     authentication: AuthOperationAuthentication.bearer,
     originPolicy: AuthOperationOriginPolicy.none,
-    csrfPolicy: AuthOperationCsrfPolicy.none,
     handler: (invocation, request) => _authorized(
       id,
       invocation,
@@ -1140,6 +1140,7 @@ final class ScimPlugin<TContext>
 
 /// Secret-safe marker reported when application bearer resolution throws.
 final class AuthScimBearerResolutionException implements Exception {
+  /// Creates a secret-safe bearer-resolution failure marker.
   const AuthScimBearerResolutionException();
 
   @override
@@ -1639,6 +1640,5 @@ const AuthOperationCodec<Object?> _emptyResponseCodec =
     AuthOperationCodec<Object?>(
       decode: _identityMap,
       encode: _identityObject,
-      schema: <String, Object?>{},
       contentType: authScimMediaType,
     );

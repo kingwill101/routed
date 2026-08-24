@@ -1,10 +1,10 @@
 import 'dart:convert';
 
-import 'admin.dart' show AuthAdminAccessControl;
-import 'admin_models.dart';
-import 'client.dart';
-import 'plugin.dart';
-import 'models.dart';
+import 'package:server_auth/src/core/admin.dart' show AuthAdminAccessControl;
+import 'package:server_auth/src/core/admin_models.dart';
+import 'package:server_auth/src/core/client.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/plugin.dart';
 
 /// Installs the typed administrative API on an [AuthClient].
 final class AuthAdminClientPlugin implements AuthClientPlugin<AuthAdminClient> {
@@ -78,10 +78,10 @@ final class AuthAdminClient {
 
   /// Creates user.
   Future<AuthAdminMutationResult<AuthAdminUser>> createUser({
-    String? id,
     required String email,
     required String name,
     required String password,
+    String? id,
     String? image,
     Iterable<String>? roles,
     Map<String, dynamic>? attributes,

@@ -1,4 +1,4 @@
-import '../core/core.dart';
+import 'package:server_auth/src/core/core.dart';
 
 /// Slack user profile (OIDC).
 ///
@@ -19,6 +19,24 @@ class SlackProfile {
     this.slackTeamDomain,
     this.slackTeamImage,
   });
+
+  /// Creates a [SlackProfile] from a JSON map returned by the Slack OIDC userinfo endpoint.
+  factory SlackProfile.fromJson(Map<String, dynamic> json) {
+    return SlackProfile(
+      sub: json['sub']?.toString() ?? '',
+      email: json['email']?.toString(),
+      emailVerified: json['email_verified'] == true,
+      name: json['name']?.toString(),
+      picture: json['picture']?.toString(),
+      givenName: json['given_name']?.toString(),
+      familyName: json['family_name']?.toString(),
+      locale: json['locale']?.toString(),
+      slackTeamId: json['https://slack.com/team_id']?.toString(),
+      slackTeamName: json['https://slack.com/team_name']?.toString(),
+      slackTeamDomain: json['https://slack.com/team_domain']?.toString(),
+      slackTeamImage: json['https://slack.com/team_image_230']?.toString(),
+    );
+  }
 
   /// Subject identifier (user ID).
   final String sub;
@@ -55,24 +73,6 @@ class SlackProfile {
 
   /// Slack team/workspace image.
   final String? slackTeamImage;
-
-  /// Creates a [SlackProfile] from a JSON map returned by the Slack OIDC userinfo endpoint.
-  factory SlackProfile.fromJson(Map<String, dynamic> json) {
-    return SlackProfile(
-      sub: json['sub']?.toString() ?? '',
-      email: json['email']?.toString(),
-      emailVerified: json['email_verified'] == true,
-      name: json['name']?.toString(),
-      picture: json['picture']?.toString(),
-      givenName: json['given_name']?.toString(),
-      familyName: json['family_name']?.toString(),
-      locale: json['locale']?.toString(),
-      slackTeamId: json['https://slack.com/team_id']?.toString(),
-      slackTeamName: json['https://slack.com/team_name']?.toString(),
-      slackTeamDomain: json['https://slack.com/team_domain']?.toString(),
-      slackTeamImage: json['https://slack.com/team_image_230']?.toString(),
-    );
-  }
 
   /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {

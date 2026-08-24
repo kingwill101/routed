@@ -1,4 +1,4 @@
-import '../core/core.dart';
+import 'package:server_auth/src/core/core.dart';
 
 /// Apple user profile returned by the ID token.
 ///
@@ -12,21 +12,6 @@ class AppleProfile {
     this.isPrivateEmail,
     this.name,
   });
-
-  /// Unique identifier for the user.
-  final String sub;
-
-  /// User's email address (may be private relay email).
-  final String? email;
-
-  /// Whether the email has been verified.
-  final bool? emailVerified;
-
-  /// Whether the email is a private relay address.
-  final bool? isPrivateEmail;
-
-  /// User's name (only provided on first sign-in).
-  final AppleName? name;
 
   /// Creates an [AppleProfile] from a JSON map decoded from the Apple ID token.
   factory AppleProfile.fromJson(Map<String, dynamic> json) {
@@ -45,6 +30,21 @@ class AppleProfile {
       name: name,
     );
   }
+
+  /// Unique identifier for the user.
+  final String sub;
+
+  /// User's email address (may be private relay email).
+  final String? email;
+
+  /// Whether the email has been verified.
+  final bool? emailVerified;
+
+  /// Whether the email is a private relay address.
+  final bool? isPrivateEmail;
+
+  /// User's name (only provided on first sign-in).
+  final AppleName? name;
 
   /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
@@ -70,12 +70,6 @@ class AppleName {
   /// Creates a new [AppleName].
   const AppleName({this.firstName, this.lastName});
 
-  /// User's first name.
-  final String? firstName;
-
-  /// User's last name.
-  final String? lastName;
-
   /// Creates an [AppleName] from a JSON map.
   factory AppleName.fromJson(Map<String, dynamic> json) {
     return AppleName(
@@ -83,6 +77,12 @@ class AppleName {
       lastName: json['lastName']?.toString(),
     );
   }
+
+  /// User's first name.
+  final String? firstName;
+
+  /// User's last name.
+  final String? lastName;
 
   /// Converts this name to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
@@ -191,7 +191,6 @@ OAuthProvider<AppleProfile> appleProvider(AppleProviderOptions options) {
         id: profile.sub,
         name: profile.fullName,
         email: profile.email,
-        image: null, // Apple doesn't provide profile pictures
         attributes: profile.toJson(),
       );
     },

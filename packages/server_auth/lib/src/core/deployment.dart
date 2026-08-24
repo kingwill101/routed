@@ -1,10 +1,10 @@
-import 'account_deletion.dart';
-import 'api_key.dart';
-import 'auth_config.dart';
-import 'email_change.dart';
-import 'options.dart';
-import 'password_reset.dart';
-import 'runtime_posture.dart';
+import 'package:server_auth/src/core/account_deletion.dart';
+import 'package:server_auth/src/core/api_key.dart';
+import 'package:server_auth/src/core/auth_config.dart';
+import 'package:server_auth/src/core/email_change.dart';
+import 'package:server_auth/src/core/options.dart';
+import 'package:server_auth/src/core/password_reset.dart';
+import 'package:server_auth/src/core/runtime_posture.dart';
 
 /// Application-owned delivery behavior for account lifecycle operations.
 ///

@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'plugin.dart';
-import 'scim_models.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/scim_models.dart';
 
 /// Lifecycle of one managed SCIM directory connection.
 enum AuthScimConnectionState {
@@ -67,9 +67,31 @@ final class AuthScimManagedConnection {
     if (this.updatedAt.isBefore(this.createdAt)) {
       throw ArgumentError('updatedAt must not precede createdAt');
     }
-    if (this.disabledAt?.isBefore(this.createdAt) == true) {
+    if (this.disabledAt?.isBefore(this.createdAt) ?? false) {
       throw ArgumentError('disabledAt must not precede createdAt');
     }
+  }
+
+  /// Decodes and validates a public connection representation.
+  factory AuthScimManagedConnection.fromJson(Map<String, dynamic> json) {
+    final state = _requiredString(json, 'state');
+    final disabledAt = _optionalDate(json, 'disabledAt');
+    if ((state == AuthScimConnectionState.disabled.name) !=
+        (disabledAt != null)) {
+      throw const FormatException('Invalid SCIM connection state.');
+    }
+    return AuthScimManagedConnection(
+      id: _requiredString(json, 'id'),
+      tenantId: _requiredString(json, 'tenantId'),
+      organizationId: _requiredString(json, 'organizationId'),
+      provisioningDomainId: _requiredString(json, 'provisioningDomainId'),
+      subjectId: _requiredString(json, 'subjectId'),
+      name: _requiredString(json, 'name'),
+      scopes: _scopeValues(json['scopes']),
+      createdAt: _requiredDate(json, 'createdAt'),
+      updatedAt: _requiredDate(json, 'updatedAt'),
+      disabledAt: disabledAt,
+    );
   }
 
   /// Stable connection identifier.
@@ -150,28 +172,6 @@ final class AuthScimManagedConnection {
     'updatedAt': updatedAt.toIso8601String(),
     if (disabledAt != null) 'disabledAt': disabledAt!.toIso8601String(),
   };
-
-  /// Decodes and validates a public connection representation.
-  factory AuthScimManagedConnection.fromJson(Map<String, dynamic> json) {
-    final state = _requiredString(json, 'state');
-    final disabledAt = _optionalDate(json, 'disabledAt');
-    if ((state == AuthScimConnectionState.disabled.name) !=
-        (disabledAt != null)) {
-      throw const FormatException('Invalid SCIM connection state.');
-    }
-    return AuthScimManagedConnection(
-      id: _requiredString(json, 'id'),
-      tenantId: _requiredString(json, 'tenantId'),
-      organizationId: _requiredString(json, 'organizationId'),
-      provisioningDomainId: _requiredString(json, 'provisioningDomainId'),
-      subjectId: _requiredString(json, 'subjectId'),
-      name: _requiredString(json, 'name'),
-      scopes: _scopeValues(json['scopes']),
-      createdAt: _requiredDate(json, 'createdAt'),
-      updatedAt: _requiredDate(json, 'updatedAt'),
-      disabledAt: disabledAt,
-    );
-  }
 }
 
 /// Persisted credential record. The raw bearer secret is never represented.
@@ -209,7 +209,7 @@ final class AuthScimCredentialRecord {
     }
     if (this.updatedAt.isBefore(this.createdAt) ||
         this.expiresAt?.isAfter(this.createdAt) == false ||
-        this.revokedAt?.isBefore(this.createdAt) == true) {
+        (this.revokedAt?.isBefore(this.createdAt) ?? false)) {
       throw ArgumentError('Invalid SCIM credential timestamps.');
     }
   }
@@ -329,6 +329,22 @@ final class AuthScimCredential {
     this.revokedAt,
   });
 
+  /// Decodes and validates public credential metadata.
+  factory AuthScimCredential.fromJson(Map<String, dynamic> json) =>
+      AuthScimCredential(
+        id: _requiredString(json, 'id'),
+        connectionId: _requiredString(json, 'connectionId'),
+        name: _requiredString(json, 'name'),
+        keyPrefix: _requiredString(json, 'keyPrefix'),
+        scopes: _scopes(_scopeValues(json['scopes'])),
+        active: json['active'] == true,
+        createdAt: _requiredDate(json, 'createdAt'),
+        updatedAt: _requiredDate(json, 'updatedAt'),
+        expiresAt: _optionalDate(json, 'expiresAt'),
+        lastUsedAt: _optionalDate(json, 'lastUsedAt'),
+        revokedAt: _optionalDate(json, 'revokedAt'),
+      );
+
   /// Stable credential identifier.
   final String id;
 
@@ -376,22 +392,6 @@ final class AuthScimCredential {
     if (lastUsedAt != null) 'lastUsedAt': lastUsedAt!.toUtc().toIso8601String(),
     if (revokedAt != null) 'revokedAt': revokedAt!.toUtc().toIso8601String(),
   };
-
-  /// Decodes and validates public credential metadata.
-  factory AuthScimCredential.fromJson(Map<String, dynamic> json) =>
-      AuthScimCredential(
-        id: _requiredString(json, 'id'),
-        connectionId: _requiredString(json, 'connectionId'),
-        name: _requiredString(json, 'name'),
-        keyPrefix: _requiredString(json, 'keyPrefix'),
-        scopes: _scopes(_scopeValues(json['scopes'])),
-        active: json['active'] == true,
-        createdAt: _requiredDate(json, 'createdAt'),
-        updatedAt: _requiredDate(json, 'updatedAt'),
-        expiresAt: _optionalDate(json, 'expiresAt'),
-        lastUsedAt: _optionalDate(json, 'lastUsedAt'),
-        revokedAt: _optionalDate(json, 'revokedAt'),
-      );
 }
 
 /// Result of one digest-only credential issuance transaction.
@@ -401,23 +401,10 @@ final class AuthScimCredentialIssuance {
     required this.credential,
     required this.replayed,
     this.secret,
-  }) : assert((secret == null) == replayed);
-
-  /// Public metadata for the issued credential.
-  final AuthScimCredential credential;
-
-  /// Raw opaque bearer token. Present only for the first committed response.
-  final String? secret;
-
-  /// Whether this response replays an earlier idempotent issuance.
-  final bool replayed;
-
-  /// Serializes the issuance result.
-  Map<String, Object?> toJson() => <String, Object?>{
-    'credential': credential.toJson(),
-    'replayed': replayed,
-    if (secret != null) 'secret': secret,
-  };
+  }) : assert(
+         (secret == null) == replayed,
+         'secret must be present exactly when the credential is replayed',
+       );
 
   /// Decodes and validates an issuance response.
   factory AuthScimCredentialIssuance.fromJson(Map<String, dynamic> json) {
@@ -438,6 +425,22 @@ final class AuthScimCredentialIssuance {
       secret: secret as String?,
     );
   }
+
+  /// Public metadata for the issued credential.
+  final AuthScimCredential credential;
+
+  /// Raw opaque bearer token. Present only for the first committed response.
+  final String? secret;
+
+  /// Whether this response replays an earlier idempotent issuance.
+  final bool replayed;
+
+  /// Serializes the issuance result.
+  Map<String, Object?> toJson() => <String, Object?>{
+    'credential': credential.toJson(),
+    'replayed': replayed,
+    if (secret != null) 'secret': secret,
+  };
 }
 
 /// Result of creating a connection and its initial credential atomically.
@@ -447,18 +450,6 @@ final class AuthScimConnectionCreation {
     required this.connection,
     required this.issuance,
   });
-
-  /// The newly created connection.
-  final AuthScimManagedConnection connection;
-
-  /// The initial credential issuance, including its one-time secret.
-  final AuthScimCredentialIssuance issuance;
-
-  /// Serializes the creation result.
-  Map<String, Object?> toJson() => <String, Object?>{
-    'connection': connection.toJson(),
-    'issuance': issuance.toJson(),
-  };
 
   /// Decodes and validates a creation result.
   factory AuthScimConnectionCreation.fromJson(Map<String, dynamic> json) {
@@ -476,6 +467,18 @@ final class AuthScimConnectionCreation {
       ),
     );
   }
+
+  /// The newly created connection.
+  final AuthScimManagedConnection connection;
+
+  /// The initial credential issuance, including its one-time secret.
+  final AuthScimCredentialIssuance issuance;
+
+  /// Serializes the creation result.
+  Map<String, Object?> toJson() => <String, Object?>{
+    'connection': connection.toJson(),
+    'issuance': issuance.toJson(),
+  };
 }
 
 /// Bounded connection catalog page.

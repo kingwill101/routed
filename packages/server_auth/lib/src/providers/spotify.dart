@@ -1,4 +1,4 @@
-import '../core/core.dart';
+import 'package:server_auth/src/core/core.dart';
 
 /// Spotify user profile.
 ///
@@ -17,6 +17,35 @@ class SpotifyProfile {
     this.explicitContent,
     this.followers,
   });
+
+  /// Creates a [SpotifyProfile] from a JSON map returned by the Spotify Web API.
+  factory SpotifyProfile.fromJson(Map<String, dynamic> json) {
+    List<SpotifyImage>? images;
+    if (json['images'] is List) {
+      images = (json['images'] as List)
+          .whereType<Map<String, dynamic>>()
+          .map(SpotifyImage.fromJson)
+          .toList();
+    }
+    SpotifyFollowers? followers;
+    if (json['followers'] is Map<String, dynamic>) {
+      followers = SpotifyFollowers.fromJson(
+        json['followers'] as Map<String, dynamic>,
+      );
+    }
+    return SpotifyProfile(
+      id: json['id']?.toString() ?? '',
+      displayName: json['display_name']?.toString(),
+      email: json['email']?.toString(),
+      images: images,
+      country: json['country']?.toString(),
+      href: json['href']?.toString(),
+      uri: json['uri']?.toString(),
+      product: json['product']?.toString(),
+      explicitContent: json['explicit_content'] as Map<String, dynamic>?,
+      followers: followers,
+    );
+  }
 
   /// User's Spotify user ID.
   final String id;
@@ -48,35 +77,6 @@ class SpotifyProfile {
   /// Follower information.
   final SpotifyFollowers? followers;
 
-  /// Creates a [SpotifyProfile] from a JSON map returned by the Spotify Web API.
-  factory SpotifyProfile.fromJson(Map<String, dynamic> json) {
-    List<SpotifyImage>? images;
-    if (json['images'] is List) {
-      images = (json['images'] as List)
-          .whereType<Map<String, dynamic>>()
-          .map(SpotifyImage.fromJson)
-          .toList();
-    }
-    SpotifyFollowers? followers;
-    if (json['followers'] is Map<String, dynamic>) {
-      followers = SpotifyFollowers.fromJson(
-        json['followers'] as Map<String, dynamic>,
-      );
-    }
-    return SpotifyProfile(
-      id: json['id']?.toString() ?? '',
-      displayName: json['display_name']?.toString(),
-      email: json['email']?.toString(),
-      images: images,
-      country: json['country']?.toString(),
-      href: json['href']?.toString(),
-      uri: json['uri']?.toString(),
-      product: json['product']?.toString(),
-      explicitContent: json['explicit_content'] as Map<String, dynamic>?,
-      followers: followers,
-    );
-  }
-
   /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -92,22 +92,14 @@ class SpotifyProfile {
   };
 
   /// Returns the URL of the first profile image.
-  String? get imageUrl => images?.isNotEmpty == true ? images!.first.url : null;
+  String? get imageUrl =>
+      images?.isNotEmpty ?? false ? images!.first.url : null;
 }
 
 /// Spotify image object.
 class SpotifyImage {
   /// Creates a new [SpotifyImage].
   const SpotifyImage({this.url, this.width, this.height});
-
-  /// URL of the image.
-  final String? url;
-
-  /// Width of the image in pixels.
-  final int? width;
-
-  /// Height of the image in pixels.
-  final int? height;
 
   /// Creates a [SpotifyImage] from a JSON map.
   factory SpotifyImage.fromJson(Map<String, dynamic> json) {
@@ -117,6 +109,15 @@ class SpotifyImage {
       height: json['height'] as int?,
     );
   }
+
+  /// URL of the image.
+  final String? url;
+
+  /// Width of the image in pixels.
+  final int? width;
+
+  /// Height of the image in pixels.
+  final int? height;
 
   /// Converts this image to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
@@ -131,12 +132,6 @@ class SpotifyFollowers {
   /// Creates a new [SpotifyFollowers].
   const SpotifyFollowers({this.href, this.total});
 
-  /// Link to the followers endpoint (always `null` per Spotify docs).
-  final String? href;
-
-  /// Total number of followers.
-  final int? total;
-
   /// Creates a [SpotifyFollowers] from a JSON map.
   factory SpotifyFollowers.fromJson(Map<String, dynamic> json) {
     return SpotifyFollowers(
@@ -144,6 +139,12 @@ class SpotifyFollowers {
       total: json['total'] as int?,
     );
   }
+
+  /// Link to the followers endpoint (always `null` per Spotify docs).
+  final String? href;
+
+  /// Total number of followers.
+  final int? total;
 
   /// Converts this follower data to a JSON-serializable map.
   Map<String, dynamic> toJson() => {'href': href, 'total': total};

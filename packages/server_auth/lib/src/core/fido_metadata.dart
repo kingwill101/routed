@@ -9,7 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:pointycastle/asn1.dart';
 import 'package:pointycastle/export.dart' as pc;
 
-import 'webauthn.dart';
+import 'package:server_auth/src/core/webauthn.dart';
 
 part 'fido_metadata_model.dart';
 part 'fido_metadata_source.dart';

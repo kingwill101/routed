@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import '../core/core.dart';
+import 'package:server_auth/src/core/core.dart';
 
 /// Telegram user profile returned by the Login Widget.
 ///
@@ -17,6 +17,19 @@ class TelegramProfile {
     this.photoUrl,
     this.hash,
   });
+
+  /// Creates a [TelegramProfile] from a JSON map received via the Telegram Login Widget callback.
+  factory TelegramProfile.fromJson(Map<String, dynamic> json) {
+    return TelegramProfile(
+      id: _parseInt(json['id']) ?? 0,
+      authDate: _parseInt(json['auth_date']) ?? 0,
+      firstName: json['first_name']?.toString(),
+      lastName: json['last_name']?.toString(),
+      username: json['username']?.toString(),
+      photoUrl: json['photo_url']?.toString(),
+      hash: json['hash']?.toString(),
+    );
+  }
 
   /// Unique identifier for the user.
   final int id;
@@ -43,19 +56,6 @@ class TelegramProfile {
   String? get fullName {
     if (firstName == null && lastName == null) return null;
     return [firstName, lastName].whereType<String>().join(' ').trim();
-  }
-
-  /// Creates a [TelegramProfile] from a JSON map received via the Telegram Login Widget callback.
-  factory TelegramProfile.fromJson(Map<String, dynamic> json) {
-    return TelegramProfile(
-      id: _parseInt(json['id']) ?? 0,
-      authDate: _parseInt(json['auth_date']) ?? 0,
-      firstName: json['first_name']?.toString(),
-      lastName: json['last_name']?.toString(),
-      username: json['username']?.toString(),
-      photoUrl: json['photo_url']?.toString(),
-      hash: json['hash']?.toString(),
-    );
   }
 
   /// Converts this profile to a JSON-serializable map.
@@ -286,7 +286,7 @@ class TelegramProvider extends AuthProvider with CallbackProvider {
       throw TelegramAuthException('Invalid Telegram user id');
     }
 
-    return TelegramProfile.fromJson(params.map((k, v) => MapEntry(k, v)));
+    return TelegramProfile.fromJson(params.map(MapEntry.new));
   }
 
   /// Maps the verified profile to an AuthUser.
@@ -323,7 +323,6 @@ TelegramProvider telegramProvider(TelegramProviderOptions options) {
       return AuthUser(
         id: profile.id.toString(),
         name: profile.fullName,
-        email: null, // Telegram doesn't provide email
         image: profile.photoUrl,
         attributes: profile.toJson(),
       );

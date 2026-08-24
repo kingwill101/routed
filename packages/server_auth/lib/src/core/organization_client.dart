@@ -1,9 +1,9 @@
 import 'dart:convert';
 
-import 'client.dart';
-import 'plugin.dart';
-import 'organization_models.dart';
-import 'organization_permissions.dart';
+import 'package:server_auth/src/core/client.dart';
+import 'package:server_auth/src/core/organization_models.dart';
+import 'package:server_auth/src/core/organization_permissions.dart';
+import 'package:server_auth/src/core/plugin.dart';
 
 /// Installs the typed organization API on an [AuthClient].
 final class AuthOrganizationClientPlugin
@@ -55,8 +55,8 @@ final class AuthOrganizationClient {
     for (final role in normalizeAuthOrganizationRoles(roles)) {
       final permissions = _staticRoles[role];
       final actions = permissions?[normalizedResource] ?? permissions?['*'];
-      if (actions?.any((value) => value == normalizedAction || value == '*') ==
-          true) {
+      if (actions?.any((value) => value == normalizedAction || value == '*') ??
+          false) {
         return true;
       }
     }
@@ -503,7 +503,7 @@ final class AuthOrganizationClient {
       );
 
   String _organizationId(String? explicit) {
-    final value = explicit?.trim().isNotEmpty == true
+    final value = explicit?.trim().isNotEmpty ?? false
         ? explicit!.trim()
         : activeOrganizationId?.trim() ?? '';
     if (value.isEmpty) throw StateError('No active organization is selected.');

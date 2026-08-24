@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'deletion_transaction.dart';
-import 'tokens.dart' show constantTimeStringEquals;
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/tokens.dart' show constantTimeStringEquals;
 
 /// Supported one-time-password purposes.
 enum AuthEmailOtpType {
@@ -150,7 +150,8 @@ final class InMemoryAuthEmailOtpStore
   ///
   /// Expired entries are pruned on save and the oldest entry is evicted when
   /// [maxEntries] is reached.
-  InMemoryAuthEmailOtpStore({this.maxEntries = 2048}) : assert(maxEntries > 0);
+  InMemoryAuthEmailOtpStore({this.maxEntries = 2048})
+    : assert(maxEntries > 0, 'maxEntries must be positive');
 
   /// Maximum number of active records retained by this store.
   final int maxEntries;

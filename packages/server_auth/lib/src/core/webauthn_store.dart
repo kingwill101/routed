@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'authentication_methods.dart';
-import 'deletion_transaction.dart';
-import 'models.dart';
-import 'providers.dart';
+import 'package:server_auth/src/core/authentication_methods.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/providers.dart';
 
 /// The WebAuthn ceremony for which a challenge was issued.
 enum AuthWebAuthnCeremony {
@@ -216,7 +216,7 @@ final class InMemoryAuthWebAuthnChallengeStore
     implements AuthWebAuthnChallengeStore, AuthInMemoryUserDeletionStore {
   /// Creates a bounded challenge store for tests and local development.
   InMemoryAuthWebAuthnChallengeStore({this.maxEntries = 1024})
-    : assert(maxEntries > 0);
+    : assert(maxEntries > 0, 'maxEntries must be positive');
 
   /// Maximum number of active challenges retained by this store.
   final int maxEntries;
@@ -428,7 +428,7 @@ void _validateChallenge(AuthWebAuthnChallenge challenge) {
       challenge.origin.trim().isEmpty) {
     throw ArgumentError('WebAuthn challenge fields must not be empty');
   }
-  if (challenge.userId?.trim().isEmpty == true) {
+  if (challenge.userId?.trim().isEmpty ?? false) {
     throw ArgumentError('WebAuthn challenge userId must not be empty');
   }
   if (!challenge.expiresAt.toUtc().isAfter(challenge.createdAt.toUtc())) {
@@ -439,7 +439,7 @@ void _validateChallenge(AuthWebAuthnChallenge challenge) {
 void _validateAuthenticator(WebAuthnAuthenticator authenticator) {
   if (authenticator.credentialId.trim().isEmpty ||
       authenticator.publicKey.trim().isEmpty ||
-      authenticator.userId?.trim().isEmpty == true ||
+      (authenticator.userId?.trim().isEmpty ?? false) ||
       authenticator.userId == null ||
       authenticator.createdAt == null ||
       authenticator.counter < 0) {

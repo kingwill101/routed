@@ -2,14 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart' show sha256;
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/saml_models.dart';
+import 'package:server_auth/src/core/saml_store.dart';
+import 'package:server_auth/src/core/tokens.dart' show secureRandomToken;
 import 'package:xml/xml.dart';
-
-import 'exceptions.dart';
-import 'plugin.dart';
-import 'rate_limit.dart';
-import 'saml_models.dart';
-import 'saml_store.dart';
-import 'tokens.dart' show secureRandomToken;
 
 /// Route parameter used by SAML metadata and assertion-consumer endpoints.
 const AuthRouteParameterKey authSamlProviderIdRouteParameter =
@@ -304,7 +303,7 @@ final class AuthSamlPlugin<TContext>
         fallback: Uri(path: '/'),
       );
       final now = _clock().toUtc();
-      final requestId = '_${secureRandomToken(length: 32)}';
+      final requestId = '_${secureRandomToken()}';
       final relayState = secureRandomToken(length: 43);
       await replayStore.createAttempt(
         AuthSamlAuthenticationAttempt(
@@ -767,7 +766,7 @@ String _metadataDocument(AuthSamlConnection connection) {
       );
     },
   );
-  return builder.buildDocument().toXmlString(pretty: false);
+  return builder.buildDocument().toXmlString();
 }
 
 String _authnRequest(AuthSamlConnection connection, String id, DateTime now) {
@@ -797,7 +796,7 @@ String _authnRequest(AuthSamlConnection connection, String id, DateTime now) {
       );
     },
   );
-  return builder.buildDocument().toXmlString(pretty: false);
+  return builder.buildDocument().toXmlString();
 }
 
 void _enforceXmlBounds(XmlDocument document, AuthSamlLimits limits) {

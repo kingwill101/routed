@@ -1,24 +1,25 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'account_policy.dart';
-import 'anonymous_store.dart';
-import 'authentication_methods.dart';
-import 'deletion_transaction.dart';
-import 'email_auth_backend.dart';
-import 'email_change_token_store.dart';
-import 'models.dart';
-import 'oauth_challenge_store.dart';
-import 'password_reset_token_store.dart';
-import 'phone_number_store.dart';
-import 'tokens.dart' show constantTimeStringEquals, hashOpaqueToken;
-import 'verification_token_store.dart';
-import 'jwt_version_store.dart';
-import 'webauthn_store.dart';
-import 'users.dart';
-import 'username_store.dart';
-import 'device_authorization_store.dart';
-import 'email_otp_store.dart';
+import 'package:server_auth/src/core/account_policy.dart';
+import 'package:server_auth/src/core/anonymous_store.dart';
+import 'package:server_auth/src/core/authentication_methods.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/device_authorization_store.dart';
+import 'package:server_auth/src/core/email_auth_backend.dart';
+import 'package:server_auth/src/core/email_change_token_store.dart';
+import 'package:server_auth/src/core/email_otp_store.dart';
+import 'package:server_auth/src/core/jwt_version_store.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/oauth_challenge_store.dart';
+import 'package:server_auth/src/core/password_reset_token_store.dart';
+import 'package:server_auth/src/core/phone_number_store.dart';
+import 'package:server_auth/src/core/tokens.dart'
+    show constantTimeStringEquals, hashOpaqueToken;
+import 'package:server_auth/src/core/username_store.dart';
+import 'package:server_auth/src/core/users.dart';
+import 'package:server_auth/src/core/verification_token_store.dart';
+import 'package:server_auth/src/core/webauthn_store.dart';
 
 /// Result of an atomic user create-or-find operation.
 class AuthUserCreateResult {
@@ -655,7 +656,7 @@ class InMemoryAuthStore
       );
     }
     final state = await _accountStates.find(user.id);
-    if (state?.disabled == true || state?.isLocked() == true) {
+    if ((state?.disabled ?? false) || (state?.isLocked() ?? false)) {
       return const AuthUsernameMutationResult(
         status: AuthUsernameMutationStatus.userUnavailable,
       );
@@ -1313,7 +1314,7 @@ class InMemoryAuthStore
     }
 
     final currentIdentity = _phoneIdentitiesByPhone[command.phoneNumber];
-    AuthPhoneNumberIdentity? identity = currentIdentity;
+    var identity = currentIdentity;
     AuthUser? previousUser;
     AuthUser? committedUser;
     var createdUser = false;
@@ -1687,7 +1688,7 @@ class InMemoryAuthStore
   @override
   Future<List<AuthUser>> listUsersForAdministration() async =>
       List<AuthUser>.unmodifiable(
-        (_users).values.toList()..sort((a, b) => a.id.compareTo(b.id)),
+        _users.values.toList()..sort((a, b) => a.id.compareTo(b.id)),
       );
 
   _InMemoryUserStore get _users => users as _InMemoryUserStore;
@@ -2850,9 +2851,9 @@ class _CallbackUserStore implements AuthUserStore {
   Future<AuthUserCreateResult> createOrFindByEmail(AuthUser user) async {
     final callback = onCreateOrFindByEmail;
     if (callback != null) {
-      return await Future.sync(() => callback(user));
+      return Future.sync(() => callback(user));
     }
-    final AuthUser? existing = await Future.sync(
+    final existing = await Future<AuthUser?>.sync(
       () => onFindByEmail?.call(user.email ?? ''),
     );
     if (existing != null) {

@@ -1,9 +1,9 @@
 import 'dart:convert';
 
-import 'client.dart';
-import 'plugin.dart';
-import 'saml.dart';
-import 'saml_models.dart';
+import 'package:server_auth/src/core/client.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/saml.dart';
+import 'package:server_auth/src/core/saml_models.dart';
 
 /// Adds the opt-in SAML client operations to an [AuthClient].
 final class AuthSamlClientPlugin implements AuthClientPlugin<AuthSamlClient> {
@@ -60,15 +60,6 @@ final class AuthSamlSignInForm {
     required this.fields,
   });
 
-  /// The provider that created the form.
-  final String providerId;
-
-  /// The IdP endpoint to which the browser form is submitted.
-  final Uri destination;
-
-  /// The form fields, including `SAMLRequest` and `RelayState`.
-  final Map<String, String> fields;
-
   /// Decodes and validates a server response into a sign-in form.
   ///
   /// Throws a [FormatException] when the response is not an HTTPS HTTP-POST
@@ -102,6 +93,15 @@ final class AuthSamlSignInForm {
       fields: Map<String, String>.unmodifiable(fields),
     );
   }
+
+  /// The provider that created the form.
+  final String providerId;
+
+  /// The IdP endpoint to which the browser form is submitted.
+  final Uri destination;
+
+  /// The form fields, including `SAMLRequest` and `RelayState`.
+  final Map<String, String> fields;
 }
 
 /// Client operations exposed by the SAML server plugin.

@@ -1,4 +1,5 @@
-import 'models.dart' show AuthUser, sanitizeAuthPublicAttributes;
+import 'package:server_auth/src/core/models.dart'
+    show AuthUser, sanitizeAuthPublicAttributes;
 
 /// Normalizes an email identifier used by built-in auth flows.
 ///

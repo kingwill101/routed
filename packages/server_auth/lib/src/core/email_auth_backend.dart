@@ -2,9 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart' show Hmac, sha256;
-
-import 'email_otp_store.dart';
-import 'models.dart';
+import 'package:server_auth/src/core/email_otp_store.dart';
+import 'package:server_auth/src/core/models.dart';
 
 /// Maximum accepted length for an email authentication identifier.
 const int authEmailIdentifierMaximumLength = 320;
@@ -478,7 +477,7 @@ final class AuthEmailBackendInjectedFault implements Exception {
   String toString() => 'AuthEmailBackendInjectedFault(${point.name})';
 }
 
-/// One-shot fault injector for [InMemoryAuthStore] email transactions.
+/// One-shot fault injector for `InMemoryAuthStore` email transactions.
 /// Schedules one-shot failures for in-memory email transaction tests.
 final class AuthEmailBackendFaultInjector {
   final Set<AuthEmailBackendFaultPoint> _pending =

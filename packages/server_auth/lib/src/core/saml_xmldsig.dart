@@ -4,11 +4,10 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:crypto_keys/crypto_keys.dart' as keys;
 import 'package:einvoicesign/einvoicesign.dart' show canonicalizeSubtree;
+import 'package:server_auth/src/core/saml.dart' show AuthSamlLimits;
+import 'package:server_auth/src/core/saml_models.dart';
 import 'package:x509/x509.dart' as x509;
 import 'package:xml/xml.dart';
-
-import 'saml.dart' show AuthSamlLimits;
-import 'saml_models.dart';
 
 const String _xmlDsigNamespace = 'http://www.w3.org/2000/09/xmldsig#';
 const String _samlProtocolNamespace = 'urn:oasis:names:tc:SAML:2.0:protocol';
@@ -602,7 +601,7 @@ void _requireTextOnly(XmlElement element) {
 }
 
 bool _isDescendantOf(XmlElement child, XmlElement ancestor) {
-  XmlNode? current = child.parent;
+  var current = child.parent;
   while (current != null) {
     if (identical(current, ancestor)) return true;
     current = current.parent;

@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'authentication_methods.dart';
-import 'deletion_transaction.dart';
-import 'exceptions.dart';
-import 'plugin.dart';
-import 'models.dart';
-import 'rate_limit.dart';
-import 'tokens.dart'
+import 'package:server_auth/src/core/authentication_methods.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/tokens.dart'
     show constantTimeStringEquals, hashOpaqueToken, secureRandomToken;
 
 /// Stable identifier for the API-key plugin.
@@ -745,7 +745,7 @@ final class AuthApiKeyPlugin<TContext>
             return revoked != null;
           },
         ),
-        AuthApiKeyPrimaryMutationStore primaryStore =>
+        final AuthApiKeyPrimaryMutationStore primaryStore =>
           await primaryStore.revokePrimaryKeyIfSafe(
             AuthApiKeyPrimaryRevocationCommand(
               userId: normalizedUserId,
@@ -833,7 +833,7 @@ final class AuthApiKeyPlugin<TContext>
     TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
       id: 'apiKey.create',
       method: AuthOperationMethod.post,
-      path: AuthRoutePath('/api-keys/create'),
+      path: const AuthRoutePath('/api-keys/create'),
       semantics: const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
           atomicity: AuthMutationAtomicity.nonAtomic,
@@ -845,7 +845,6 @@ final class AuthApiKeyPlugin<TContext>
       ),
       requestCodec: _apiKeyCreateRequestCodec,
       responseCodec: _apiKeyIssuedResponseCodec,
-      originPolicy: AuthOperationOriginPolicy.browser,
       csrfPolicy: AuthOperationCsrfPolicy.required,
       rateLimitOperation: apiKeyCreateRateLimitOperation,
       handler: (invocation, input) async {
@@ -861,12 +860,11 @@ final class AuthApiKeyPlugin<TContext>
     TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
       id: 'apiKey.list',
       method: AuthOperationMethod.get,
-      path: AuthRoutePath('/api-keys/list'),
+      path: const AuthRoutePath('/api-keys/list'),
       semantics: const AuthOperationSemantics.readOnly(),
       requestCodec: _emptyRequestCodec,
       responseCodec: _apiKeyListResponseCodec,
       originPolicy: AuthOperationOriginPolicy.none,
-      csrfPolicy: AuthOperationCsrfPolicy.none,
       rateLimitOperation: apiKeyListRateLimitOperation,
       handler: (invocation, _) async {
         final user = _requireUser(invocation.user);
@@ -880,7 +878,7 @@ final class AuthApiKeyPlugin<TContext>
     TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
       id: 'apiKey.revoke',
       method: AuthOperationMethod.post,
-      path: AuthRoutePath('/api-keys/revoke'),
+      path: const AuthRoutePath('/api-keys/revoke'),
       semantics: const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
           atomicity: AuthMutationAtomicity.atomic,
@@ -893,7 +891,6 @@ final class AuthApiKeyPlugin<TContext>
       ),
       requestCodec: _apiKeyIdRequestCodec,
       responseCodec: _apiKeyMetadataResponseCodec,
-      originPolicy: AuthOperationOriginPolicy.browser,
       csrfPolicy: AuthOperationCsrfPolicy.required,
       requiresRecentAuthentication: true,
       rateLimitOperation: apiKeyRevokeRateLimitOperation,
@@ -907,7 +904,7 @@ final class AuthApiKeyPlugin<TContext>
     TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
       id: 'apiKey.rotate',
       method: AuthOperationMethod.post,
-      path: AuthRoutePath('/api-keys/rotate'),
+      path: const AuthRoutePath('/api-keys/rotate'),
       semantics: const AuthOperationSemantics.mutation(
         persistence: AuthMutationPersistence.durable(
           atomicity: AuthMutationAtomicity.atomic,
@@ -920,7 +917,6 @@ final class AuthApiKeyPlugin<TContext>
       ),
       requestCodec: _apiKeyRotateRequestCodec,
       responseCodec: _apiKeyIssuedResponseCodec,
-      originPolicy: AuthOperationOriginPolicy.browser,
       csrfPolicy: AuthOperationCsrfPolicy.required,
       requiresRecentAuthentication: true,
       rateLimitOperation: apiKeyRotateRateLimitOperation,
@@ -957,7 +953,6 @@ final class AuthApiKeyPlugin<TContext>
             responseCodec: _sessionResponseCodec,
             authentication: AuthOperationAuthentication.apiKey,
             originPolicy: AuthOperationOriginPolicy.none,
-            csrfPolicy: AuthOperationCsrfPolicy.none,
             rateLimitOperation: apiKeyExchangeRateLimitOperation,
             handler: (invocation, request) => throw UnsupportedError(
               'This endpoint is implemented by the auth host.',
@@ -968,7 +963,7 @@ final class AuthApiKeyPlugin<TContext>
 
   @override
   Iterable<AuthPersistenceSchema> get persistenceSchemas => [
-    AuthPersistenceSchema(
+    const AuthPersistenceSchema(
       id: authApiKeyPluginId,
       entities: [
         AuthEntityDescriptor(
@@ -993,10 +988,10 @@ final class AuthApiKeyPlugin<TContext>
               cascadeDelete: true,
             ),
           ],
-          uniqueConstraints: const [
+          uniqueConstraints: [
             ['id'],
           ],
-          indexes: const [
+          indexes: [
             ['user_id'],
             ['secret_hash'],
           ],

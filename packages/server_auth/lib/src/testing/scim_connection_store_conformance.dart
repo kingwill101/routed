@@ -1,26 +1,37 @@
 import 'dart:async';
 
-import '../core/scim_connection_models.dart';
-import '../core/scim_connection_store.dart';
-import '../core/scim_models.dart';
+import 'package:server_auth/src/core/scim_connection_models.dart';
+import 'package:server_auth/src/core/scim_connection_store.dart';
+import 'package:server_auth/src/core/scim_models.dart';
 
+/// Creates an isolated fixture for a managed-SCIM conformance case.
 typedef AuthScimConnectionStoreConformanceFactory =
     FutureOr<AuthScimConnectionStoreConformanceFixture> Function();
 
+/// Supplies the connection store and lifecycle hooks used by a case.
 final class AuthScimConnectionStoreConformanceFixture {
+  /// Creates a fixture from the connection store and optional disposer.
   const AuthScimConnectionStoreConformanceFixture({
     required this.store,
     this.dispose,
   });
 
+  /// Managed-SCIM connection store under test.
   final AuthScimConnectionStore store;
+
+  /// Releases resources owned by the fixture.
   final FutureOr<void> Function()? dispose;
 }
 
+/// Describes a failed managed-SCIM conformance case.
 final class AuthScimConnectionStoreConformanceFailure implements Exception {
+  /// Creates a failure for [caseId] caused by [cause].
   const AuthScimConnectionStoreConformanceFailure(this.caseId, this.cause);
 
+  /// Stable identifier of the failed case.
   final String caseId;
+
+  /// Error raised by the adapter or the failed expectation.
   final Object cause;
 
   @override
@@ -28,26 +39,35 @@ final class AuthScimConnectionStoreConformanceFailure implements Exception {
       'AuthScimConnectionStoreConformanceFailure($caseId): $cause';
 }
 
+/// One independently runnable managed-SCIM conformance case.
 final class AuthScimConnectionStoreConformanceCase {
+  /// Creates a runnable conformance case.
   const AuthScimConnectionStoreConformanceCase({
     required this.id,
     required this.description,
     required Future<void> Function() run,
   }) : _run = run;
 
+  /// Stable machine-readable case identifier.
   final String id;
+
+  /// Human-readable behavior covered by this case.
   final String description;
   final Future<void> Function() _run;
 
+  /// Runs this conformance case.
   Future<void> run() => _run();
 }
 
 /// Reusable contract for durable managed-SCIM connection adapters.
 final class AuthScimConnectionStoreConformanceSuite {
+  /// Creates a suite backed by [createFixture].
   AuthScimConnectionStoreConformanceSuite(this.createFixture);
 
+  /// Creates the isolated fixture used by each case.
   final AuthScimConnectionStoreConformanceFactory createFixture;
 
+  /// The isolated cases exposed by this suite.
   List<AuthScimConnectionStoreConformanceCase> get cases => [
     _case('create_replay', 'Create is atomic and replay-safe.', _createReplay),
     _case(

@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import '../core/core.dart';
+import 'package:server_auth/src/core/core.dart';
 
 /// Dropbox user profile returned by the `/2/users/get_current_account` endpoint.
 ///
@@ -19,6 +19,27 @@ class DropboxProfile {
     this.isPaired,
     this.accountType,
   });
+
+  /// Creates a [DropboxProfile] from a JSON map returned by the Dropbox API.
+  factory DropboxProfile.fromJson(Map<String, dynamic> json) {
+    // Extract nested name object
+    final nameObj = json['name'] as Map<String, dynamic>?;
+    final displayName = nameObj?['display_name']?.toString();
+
+    return DropboxProfile(
+      accountId: json['account_id']?.toString() ?? '',
+      email: json['email']?.toString(),
+      emailVerified: json['email_verified'] == true,
+      name: displayName,
+      profilePhotoUrl: json['profile_photo_url']?.toString(),
+      disabled: json['disabled'] == true,
+      country: json['country']?.toString(),
+      locale: json['locale']?.toString(),
+      isPaired: json['is_paired'] == true,
+      accountType: (json['account_type'] as Map<String, dynamic>?)?['.tag']
+          ?.toString(),
+    );
+  }
 
   /// Unique identifier for the Dropbox account.
   final String accountId;
@@ -49,27 +70,6 @@ class DropboxProfile {
 
   /// Account type (basic, pro, business).
   final String? accountType;
-
-  /// Creates a [DropboxProfile] from a JSON map returned by the Dropbox API.
-  factory DropboxProfile.fromJson(Map<String, dynamic> json) {
-    // Extract nested name object
-    final nameObj = json['name'] as Map<String, dynamic>?;
-    final displayName = nameObj?['display_name']?.toString();
-
-    return DropboxProfile(
-      accountId: json['account_id']?.toString() ?? '',
-      email: json['email']?.toString(),
-      emailVerified: json['email_verified'] == true,
-      name: displayName,
-      profilePhotoUrl: json['profile_photo_url']?.toString(),
-      disabled: json['disabled'] == true,
-      country: json['country']?.toString(),
-      locale: json['locale']?.toString(),
-      isPaired: json['is_paired'] == true,
-      accountType: (json['account_type'] as Map<String, dynamic>?)?['.tag']
-          ?.toString(),
-    );
-  }
 
   /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
@@ -176,7 +176,6 @@ OAuthProvider<DropboxProfile> dropboxProvider(DropboxProviderOptions options) {
   return OAuthProvider<DropboxProfile>(
     id: 'dropbox',
     name: 'Dropbox',
-    type: AuthProviderType.oauth,
     clientId: options.clientId,
     clientSecret: options.clientSecret,
     authorizationEndpoint: Uri.parse(

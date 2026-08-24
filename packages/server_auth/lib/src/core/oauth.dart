@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:http/http.dart' as http;
 
-import 'bearer.dart' show extractBearerToken;
+import 'package:server_auth/src/core/bearer.dart' show extractBearerToken;
 
 /// Maximum response size accepted from OAuth token and user-info endpoints.
 ///
@@ -70,9 +70,9 @@ class OAuthTokenResponse {
     required this.accessToken,
     required this.tokenType,
     required this.expiresIn,
+    required this.raw,
     this.refreshToken,
     this.scope,
-    required this.raw,
   });
 
   /// Creates a token response from an OAuth token-endpoint payload.
@@ -294,7 +294,7 @@ OAuthIntrospectionOptions? materializeOAuthIntrospectionOptions({
     maxCacheEntries: maxCacheEntries,
     clockSkew: clockSkew,
     requestTimeout: requestTimeout,
-    requiredAudience: requiredAudience?.trim().isEmpty == true
+    requiredAudience: requiredAudience?.trim().isEmpty ?? false
         ? null
         : requiredAudience?.trim(),
     additionalParameters: additionalParameters,
@@ -551,7 +551,7 @@ class OAuth2Client {
         );
       } else {
         final parsed = Uri.splitQueryString(responseBody);
-        jsonResponse = parsed.map((key, value) => MapEntry(key, value));
+        jsonResponse = parsed.map(MapEntry.new);
       }
     } catch (error) {
       if (error is OAuth2Exception) rethrow;

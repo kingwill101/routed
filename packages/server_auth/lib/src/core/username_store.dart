@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'authentication_methods.dart';
-import 'models.dart';
+import 'package:server_auth/src/core/authentication_methods.dart';
+import 'package:server_auth/src/core/models.dart';
 
 /// Outcome of a store-owned username registration or change transaction.
 enum AuthUsernameMutationStatus {

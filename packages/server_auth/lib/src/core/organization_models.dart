@@ -1,5 +1,6 @@
-import 'models.dart' show sanitizeAuthPublicAttributes;
-import 'users.dart' show normalizeAuthEmail;
+import 'package:server_auth/src/core/models.dart'
+    show sanitizeAuthPublicAttributes;
+import 'package:server_auth/src/core/users.dart' show normalizeAuthEmail;
 
 /// Normalizes auth organization roles.
 List<String> normalizeAuthOrganizationRoles(Iterable<String> roles) {
@@ -34,6 +35,18 @@ final class AuthOrganization {
   }) : metadata = _attributes(metadata),
        createdAt = _utc(createdAt),
        updatedAt = _utc(updatedAt);
+
+  /// Creates an instance from a JSON map.
+  factory AuthOrganization.fromJson(Map<String, dynamic> json) =>
+      AuthOrganization(
+        id: _requiredString(json, 'id'),
+        name: _requiredString(json, 'name'),
+        slug: _requiredString(json, 'slug'),
+        logo: json['logo']?.toString(),
+        metadata: _map(json['metadata']),
+        createdAt: _requiredDate(json, 'createdAt'),
+        updatedAt: _requiredDate(json, 'updatedAt'),
+      );
 
   /// The unique identifier.
   final String id;
@@ -85,18 +98,6 @@ final class AuthOrganization {
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
   };
-
-  /// Creates an instance from a JSON map.
-  factory AuthOrganization.fromJson(Map<String, dynamic> json) =>
-      AuthOrganization(
-        id: _requiredString(json, 'id'),
-        name: _requiredString(json, 'name'),
-        slug: _requiredString(json, 'slug'),
-        logo: json['logo']?.toString(),
-        metadata: _map(json['metadata']),
-        createdAt: _requiredDate(json, 'createdAt'),
-        updatedAt: _requiredDate(json, 'updatedAt'),
-      );
 }
 
 /// Authentication data for auth organization member.
@@ -112,6 +113,17 @@ final class AuthOrganizationMember {
   }) : roles = normalizeAuthOrganizationRoles(roles),
        attributes = _attributes(attributes),
        createdAt = _utc(createdAt);
+
+  /// Creates an instance from a JSON map.
+  factory AuthOrganizationMember.fromJson(Map<String, dynamic> json) =>
+      AuthOrganizationMember(
+        id: _requiredString(json, 'id'),
+        organizationId: _requiredString(json, 'organizationId'),
+        userId: _requiredString(json, 'userId'),
+        roles: _strings(json['roles']),
+        attributes: _map(json['attributes']),
+        createdAt: _requiredDate(json, 'createdAt'),
+      );
 
   /// The unique identifier.
   final String id;
@@ -153,17 +165,6 @@ final class AuthOrganizationMember {
     'attributes': attributes,
     'createdAt': createdAt.toIso8601String(),
   };
-
-  /// Creates an instance from a JSON map.
-  factory AuthOrganizationMember.fromJson(Map<String, dynamic> json) =>
-      AuthOrganizationMember(
-        id: _requiredString(json, 'id'),
-        organizationId: _requiredString(json, 'organizationId'),
-        userId: _requiredString(json, 'userId'),
-        roles: _strings(json['roles']),
-        attributes: _map(json['attributes']),
-        createdAt: _requiredDate(json, 'createdAt'),
-      );
 }
 
 /// Authentication data for auth organization invitation status.
@@ -203,6 +204,23 @@ final class AuthOrganizationInvitation {
        attributes = _attributes(attributes),
        expiresAt = _utc(expiresAt),
        createdAt = _utc(createdAt);
+
+  /// Creates an instance from a JSON map.
+  factory AuthOrganizationInvitation.fromJson(Map<String, dynamic> json) =>
+      AuthOrganizationInvitation(
+        id: _requiredString(json, 'id'),
+        organizationId: _requiredString(json, 'organizationId'),
+        email: _requiredString(json, 'email'),
+        roles: _strings(json['roles']),
+        inviterId: _requiredString(json, 'inviterId'),
+        status: AuthOrganizationInvitationStatus.values.firstWhere(
+          (value) => value.name == json['status'],
+        ),
+        expiresAt: _requiredDate(json, 'expiresAt'),
+        createdAt: _requiredDate(json, 'createdAt'),
+        teamId: json['teamId']?.toString(),
+        attributes: _map(json['attributes']),
+      );
 
   /// The unique identifier.
   final String id;
@@ -271,23 +289,6 @@ final class AuthOrganizationInvitation {
     'teamId': teamId,
     'attributes': attributes,
   };
-
-  /// Creates an instance from a JSON map.
-  factory AuthOrganizationInvitation.fromJson(Map<String, dynamic> json) =>
-      AuthOrganizationInvitation(
-        id: _requiredString(json, 'id'),
-        organizationId: _requiredString(json, 'organizationId'),
-        email: _requiredString(json, 'email'),
-        roles: _strings(json['roles']),
-        inviterId: _requiredString(json, 'inviterId'),
-        status: AuthOrganizationInvitationStatus.values.firstWhere(
-          (value) => value.name == json['status'],
-        ),
-        expiresAt: _requiredDate(json, 'expiresAt'),
-        createdAt: _requiredDate(json, 'createdAt'),
-        teamId: json['teamId']?.toString(),
-        attributes: _map(json['attributes']),
-      );
 }
 
 /// Permission data for auth organization permission.
@@ -332,6 +333,18 @@ final class AuthOrganizationRole {
        permissions = normalizeAuthOrganizationPermissions(permissions),
        createdAt = _utc(createdAt),
        updatedAt = _utc(updatedAt);
+
+  /// Creates an instance from a JSON map.
+  factory AuthOrganizationRole.fromJson(Map<String, dynamic> json) =>
+      AuthOrganizationRole(
+        id: _requiredString(json, 'id'),
+        organizationId: _requiredString(json, 'organizationId'),
+        name: _requiredString(json, 'name'),
+        permissions: _permissionMap(json['permissions']),
+        predefined: json['predefined'] == true,
+        createdAt: _requiredDate(json, 'createdAt'),
+        updatedAt: _requiredDate(json, 'updatedAt'),
+      );
 
   /// The unique identifier.
   final String id;
@@ -379,18 +392,6 @@ final class AuthOrganizationRole {
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
   };
-
-  /// Creates an instance from a JSON map.
-  factory AuthOrganizationRole.fromJson(Map<String, dynamic> json) =>
-      AuthOrganizationRole(
-        id: _requiredString(json, 'id'),
-        organizationId: _requiredString(json, 'organizationId'),
-        name: _requiredString(json, 'name'),
-        permissions: _permissionMap(json['permissions']),
-        predefined: json['predefined'] == true,
-        createdAt: _requiredDate(json, 'createdAt'),
-        updatedAt: _requiredDate(json, 'updatedAt'),
-      );
 }
 
 /// Authentication data for auth organization team.
@@ -406,6 +407,17 @@ final class AuthOrganizationTeam {
   }) : attributes = _attributes(attributes),
        createdAt = _utc(createdAt),
        updatedAt = _utc(updatedAt);
+
+  /// Creates an instance from a JSON map.
+  factory AuthOrganizationTeam.fromJson(Map<String, dynamic> json) =>
+      AuthOrganizationTeam(
+        id: _requiredString(json, 'id'),
+        organizationId: _requiredString(json, 'organizationId'),
+        name: _requiredString(json, 'name'),
+        attributes: _map(json['attributes']),
+        createdAt: _requiredDate(json, 'createdAt'),
+        updatedAt: _requiredDate(json, 'updatedAt'),
+      );
 
   /// The unique identifier.
   final String id;
@@ -445,17 +457,6 @@ final class AuthOrganizationTeam {
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
   };
-
-  /// Creates an instance from a JSON map.
-  factory AuthOrganizationTeam.fromJson(Map<String, dynamic> json) =>
-      AuthOrganizationTeam(
-        id: _requiredString(json, 'id'),
-        organizationId: _requiredString(json, 'organizationId'),
-        name: _requiredString(json, 'name'),
-        attributes: _map(json['attributes']),
-        createdAt: _requiredDate(json, 'createdAt'),
-        updatedAt: _requiredDate(json, 'updatedAt'),
-      );
 }
 
 /// Authentication data for auth organization team member.
@@ -467,6 +468,15 @@ final class AuthOrganizationTeamMember {
     required this.userId,
     required DateTime createdAt,
   }) : createdAt = _utc(createdAt);
+
+  /// Creates an instance from a JSON map.
+  factory AuthOrganizationTeamMember.fromJson(Map<String, dynamic> json) =>
+      AuthOrganizationTeamMember(
+        id: _requiredString(json, 'id'),
+        teamId: _requiredString(json, 'teamId'),
+        userId: _requiredString(json, 'userId'),
+        createdAt: _requiredDate(json, 'createdAt'),
+      );
 
   /// The unique identifier.
   final String id;
@@ -487,15 +497,6 @@ final class AuthOrganizationTeamMember {
     'userId': userId,
     'createdAt': createdAt.toIso8601String(),
   };
-
-  /// Creates an instance from a JSON map.
-  factory AuthOrganizationTeamMember.fromJson(Map<String, dynamic> json) =>
-      AuthOrganizationTeamMember(
-        id: _requiredString(json, 'id'),
-        teamId: _requiredString(json, 'teamId'),
-        userId: _requiredString(json, 'userId'),
-        createdAt: _requiredDate(json, 'createdAt'),
-      );
 }
 
 /// A page of auth organization page.

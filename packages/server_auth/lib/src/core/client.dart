@@ -4,9 +4,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' show parseHttpDate;
 
-import 'email_otp_store.dart';
-import 'models.dart';
-import 'plugin.dart';
+import 'package:server_auth/src/core/email_otp_store.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/plugin.dart';
 
 /// A cookie received from an auth response.
 ///
@@ -24,35 +24,13 @@ class AuthClientCookie {
     this.secure = false,
   });
 
-  /// Cookie name.
-  final String name;
-
-  /// Cookie value.
-  final String value;
-
-  /// Absolute expiry supplied by the server, if present.
-  final DateTime? expires;
-
-  /// Server-supplied relative lifetime, if present.
-  final int? maxAge;
-
-  /// Whether the cookie must only be sent over HTTPS.
-  final bool secure;
-
-  /// Whether this cookie instructs the client to remove its stored value.
-  bool get isDeletion => (maxAge != null && maxAge! <= 0) || isExpired;
-
-  /// Whether the cookie's absolute expiry has passed.
-  bool get isExpired =>
-      expires != null && !expires!.isAfter(DateTime.now().toUtc());
-
   /// Parses the first cookie in a `Set-Cookie` header.
   factory AuthClientCookie.fromSetCookie(String header, {DateTime? now}) {
     final attributes = header.split(';');
     final first = attributes.first.trim();
     final separator = first.indexOf('=');
     if (separator <= 0) {
-      throw FormatException('Invalid Set-Cookie header');
+      throw const FormatException('Invalid Set-Cookie header');
     }
 
     final name = first.substring(0, separator).trim();
@@ -97,6 +75,28 @@ class AuthClientCookie {
       secure: secure,
     );
   }
+
+  /// Cookie name.
+  final String name;
+
+  /// Cookie value.
+  final String value;
+
+  /// Absolute expiry supplied by the server, if present.
+  final DateTime? expires;
+
+  /// Server-supplied relative lifetime, if present.
+  final int? maxAge;
+
+  /// Whether the cookie must only be sent over HTTPS.
+  final bool secure;
+
+  /// Whether this cookie instructs the client to remove its stored value.
+  bool get isDeletion => (maxAge != null && maxAge! <= 0) || isExpired;
+
+  /// Whether the cookie's absolute expiry has passed.
+  bool get isExpired =>
+      expires != null && !expires!.isAfter(DateTime.now().toUtc());
 }
 
 /// Stores cookies for an [AuthClient] instance.
@@ -144,15 +144,6 @@ class AuthClientProvider {
     required this.type,
   });
 
-  /// Stable provider identifier used in auth routes.
-  final String id;
-
-  /// Human-readable provider name.
-  final String name;
-
-  /// Provider category, such as `oauth` or `credentials`.
-  final String type;
-
   /// Decodes provider metadata from a JSON object.
   factory AuthClientProvider.fromJson(Map<String, dynamic> json) {
     final id = json['id']?.toString().trim() ?? '';
@@ -163,6 +154,15 @@ class AuthClientProvider {
     }
     return AuthClientProvider(id: id, name: name, type: type);
   }
+
+  /// Stable provider identifier used in auth routes.
+  final String id;
+
+  /// Human-readable provider name.
+  final String name;
+
+  /// Provider category, such as `oauth` or `credentials`.
+  final String type;
 }
 
 /// The result of an auth callback that may return a session or redirect.
@@ -214,6 +214,23 @@ class AuthClientSession {
     this.userAgent,
   });
 
+  /// Decodes session metadata from a JSON object.
+  factory AuthClientSession.fromJson(Map<String, dynamic> json) {
+    return AuthClientSession(
+      id: _requiredString(json, 'id'),
+      userId: _requiredString(json, 'userId'),
+      createdAt: _requiredDate(json, 'createdAt'),
+      expiresAt: _requiredDate(json, 'expiresAt'),
+      lastUsedAt: _requiredDate(json, 'lastUsedAt'),
+      revokedAt: _optionalDate(json, 'revokedAt'),
+      ipAddress: json['ipAddress']?.toString(),
+      userAgent: json['userAgent']?.toString(),
+      authenticationMethod: _requiredString(json, 'authenticationMethod'),
+      isCurrent: json['isCurrent'] == true,
+      active: json['active'] == true,
+    );
+  }
+
   /// Public session identifier.
   final String id;
 
@@ -246,23 +263,6 @@ class AuthClientSession {
 
   /// Whether the server considers the session active.
   final bool active;
-
-  /// Decodes session metadata from a JSON object.
-  factory AuthClientSession.fromJson(Map<String, dynamic> json) {
-    return AuthClientSession(
-      id: _requiredString(json, 'id'),
-      userId: _requiredString(json, 'userId'),
-      createdAt: _requiredDate(json, 'createdAt'),
-      expiresAt: _requiredDate(json, 'expiresAt'),
-      lastUsedAt: _requiredDate(json, 'lastUsedAt'),
-      revokedAt: _optionalDate(json, 'revokedAt'),
-      ipAddress: json['ipAddress']?.toString(),
-      userAgent: json['userAgent']?.toString(),
-      authenticationMethod: _requiredString(json, 'authenticationMethod'),
-      isCurrent: json['isCurrent'] == true,
-      active: json['active'] == true,
-    );
-  }
 }
 
 /// Public API-key metadata returned by the auth API.
@@ -281,6 +281,27 @@ final class AuthClientApiKey {
     this.lastUsedAt,
     this.revokedAt,
   });
+
+  /// Decodes API-key metadata from a JSON object.
+  factory AuthClientApiKey.fromJson(Map<String, dynamic> json) {
+    final scopes = json['scopes'];
+    if (scopes is! List || scopes.any((value) => value is! String)) {
+      throw const FormatException('Invalid API-key scopes');
+    }
+    return AuthClientApiKey(
+      id: _requiredString(json, 'id'),
+      userId: _requiredString(json, 'userId'),
+      name: _requiredString(json, 'name'),
+      keyPrefix: _requiredString(json, 'keyPrefix'),
+      scopes: List<String>.unmodifiable(scopes.cast<String>()),
+      createdAt: _requiredDate(json, 'createdAt'),
+      updatedAt: _requiredDate(json, 'updatedAt'),
+      expiresAt: _optionalDate(json, 'expiresAt'),
+      lastUsedAt: _optionalDate(json, 'lastUsedAt'),
+      revokedAt: _optionalDate(json, 'revokedAt'),
+      active: json['active'] == true,
+    );
+  }
 
   /// Public API-key identifier.
   final String id;
@@ -314,27 +335,6 @@ final class AuthClientApiKey {
 
   /// Whether the key can currently authenticate.
   final bool active;
-
-  /// Decodes API-key metadata from a JSON object.
-  factory AuthClientApiKey.fromJson(Map<String, dynamic> json) {
-    final scopes = json['scopes'];
-    if (scopes is! List || scopes.any((value) => value is! String)) {
-      throw const FormatException('Invalid API-key scopes');
-    }
-    return AuthClientApiKey(
-      id: _requiredString(json, 'id'),
-      userId: _requiredString(json, 'userId'),
-      name: _requiredString(json, 'name'),
-      keyPrefix: _requiredString(json, 'keyPrefix'),
-      scopes: List<String>.unmodifiable(scopes.cast<String>()),
-      createdAt: _requiredDate(json, 'createdAt'),
-      updatedAt: _requiredDate(json, 'updatedAt'),
-      expiresAt: _optionalDate(json, 'expiresAt'),
-      lastUsedAt: _optionalDate(json, 'lastUsedAt'),
-      revokedAt: _optionalDate(json, 'revokedAt'),
-      active: json['active'] == true,
-    );
-  }
 }
 
 /// Device-code response returned by the RFC 8628 authorization endpoint.
@@ -349,6 +349,22 @@ final class AuthClientDeviceAuthorization {
     this.verificationUriComplete,
     this.receivedAt,
   });
+
+  /// Decodes a device-authorization response from JSON.
+  factory AuthClientDeviceAuthorization.fromJson(
+    Map<String, dynamic> json, {
+    DateTime? receivedAt,
+  }) {
+    return AuthClientDeviceAuthorization(
+      deviceCode: _requiredString(json, 'device_code'),
+      userCode: _requiredString(json, 'user_code'),
+      verificationUri: _requiredString(json, 'verification_uri'),
+      expiresIn: _requiredSeconds(json, 'expires_in'),
+      interval: _requiredSeconds(json, 'interval'),
+      verificationUriComplete: json['verification_uri_complete']?.toString(),
+      receivedAt: receivedAt?.toUtc(),
+    );
+  }
 
   /// Secret device code used when polling the token endpoint.
   final String deviceCode;
@@ -371,22 +387,6 @@ final class AuthClientDeviceAuthorization {
   /// When the client received this response, used to enforce [expiresIn]
   /// locally while polling.
   final DateTime? receivedAt;
-
-  /// Decodes a device-authorization response from JSON.
-  factory AuthClientDeviceAuthorization.fromJson(
-    Map<String, dynamic> json, {
-    DateTime? receivedAt,
-  }) {
-    return AuthClientDeviceAuthorization(
-      deviceCode: _requiredString(json, 'device_code'),
-      userCode: _requiredString(json, 'user_code'),
-      verificationUri: _requiredString(json, 'verification_uri'),
-      expiresIn: _requiredSeconds(json, 'expires_in'),
-      interval: _requiredSeconds(json, 'interval'),
-      verificationUriComplete: json['verification_uri_complete']?.toString(),
-      receivedAt: receivedAt?.toUtc(),
-    );
-  }
 }
 
 /// Supplies the current UTC time to device-authorization polling.
@@ -424,10 +424,9 @@ final class AuthDeviceAuthorizationPollingContext {
 
 /// Allows a caller to interrupt an automatic device-authorization poll.
 final class AuthDeviceAuthorizationPollingController {
-  final Completer<void> _cancelled = Completer<void>();
-
   /// Creates a controller that is not cancelled.
   AuthDeviceAuthorizationPollingController();
+  final Completer<void> _cancelled = Completer<void>();
 
   /// Whether polling has been cancelled.
   bool get isCancelled => _cancelled.isCompleted;
@@ -522,21 +521,6 @@ final class AuthClientDeviceAccessToken {
     this.refreshToken,
   });
 
-  /// Access token issued by the authorization server.
-  final String accessToken;
-
-  /// Token scheme used in the authorization header.
-  final String tokenType;
-
-  /// Lifetime of the access token.
-  final Duration expiresIn;
-
-  /// Scopes granted to the access token.
-  final List<String> scopes;
-
-  /// Refresh token, when the authorization server issued one.
-  final String? refreshToken;
-
   /// Decodes an access-token response from JSON.
   factory AuthClientDeviceAccessToken.fromJson(Map<String, dynamic> json) {
     final rawScope = json['scope'];
@@ -551,6 +535,21 @@ final class AuthClientDeviceAccessToken {
       refreshToken: json['refresh_token']?.toString(),
     );
   }
+
+  /// Access token issued by the authorization server.
+  final String accessToken;
+
+  /// Token scheme used in the authorization header.
+  final String tokenType;
+
+  /// Lifetime of the access token.
+  final Duration expiresIn;
+
+  /// Scopes granted to the access token.
+  final List<String> scopes;
+
+  /// Refresh token, when the authorization server issued one.
+  final String? refreshToken;
 }
 
 /// Registration options returned by the WebAuthn ceremony-start endpoint.
@@ -566,18 +565,6 @@ final class AuthClientWebAuthnRegistrationOptions {
     required this.userId,
     required this.publicKey,
   });
-
-  /// Base64url-encoded challenge supplied by the server.
-  final String challenge;
-
-  /// Relying-party identifier expected by the authenticator.
-  final String relyingPartyId;
-
-  /// Base64url-encoded user handle supplied by the server.
-  final String userId;
-
-  /// Browser-shaped public-key options for `navigator.credentials.create`.
-  final Map<String, dynamic> publicKey;
 
   /// Decodes registration options from a JSON object.
   factory AuthClientWebAuthnRegistrationOptions.fromJson(
@@ -603,6 +590,18 @@ final class AuthClientWebAuthnRegistrationOptions {
     );
   }
 
+  /// Base64url-encoded challenge supplied by the server.
+  final String challenge;
+
+  /// Relying-party identifier expected by the authenticator.
+  final String relyingPartyId;
+
+  /// Base64url-encoded user handle supplied by the server.
+  final String userId;
+
+  /// Browser-shaped public-key options for `navigator.credentials.create`.
+  final Map<String, dynamic> publicKey;
+
   /// Returns the browser-shaped options as a mutable JSON map.
   Map<String, dynamic> toJson() => Map<String, dynamic>.from(publicKey);
 }
@@ -618,6 +617,40 @@ final class AuthClientWebAuthnAuthenticationOptions {
     required this.allowCredentials,
     this.userId,
   });
+
+  /// Decodes authentication options from a JSON object.
+  factory AuthClientWebAuthnAuthenticationOptions.fromJson(
+    Map<String, dynamic> json, {
+    String? userId,
+  }) {
+    final timeout = json['timeout'];
+    final rawCredentials = json['allowCredentials'];
+    if (timeout is! int ||
+        timeout <= 0 ||
+        (rawCredentials != null && rawCredentials is! List)) {
+      throw const FormatException('Invalid WebAuthn authentication options');
+    }
+    final credentials = rawCredentials == null
+        ? const <String>[]
+        : (rawCredentials as List<Object?>)
+              .map<String>((value) {
+                if (value is! Map) {
+                  throw const FormatException(
+                    'Invalid WebAuthn allowed credential',
+                  );
+                }
+                return _requiredString(Map<String, dynamic>.from(value), 'id');
+              })
+              .toList(growable: false);
+    return AuthClientWebAuthnAuthenticationOptions(
+      challenge: _requiredString(json, 'challenge'),
+      relyingPartyId: _requiredString(json, 'rpId'),
+      timeout: Duration(milliseconds: timeout),
+      userVerification: _requiredString(json, 'userVerification'),
+      allowCredentials: List<String>.unmodifiable(credentials),
+      userId: userId,
+    );
+  }
 
   /// Base64url-encoded challenge supplied by the server.
   final String challenge;
@@ -636,40 +669,6 @@ final class AuthClientWebAuthnAuthenticationOptions {
 
   /// User identifier bound to the ceremony, if known.
   final String? userId;
-
-  /// Decodes authentication options from a JSON object.
-  factory AuthClientWebAuthnAuthenticationOptions.fromJson(
-    Map<String, dynamic> json, {
-    String? userId,
-  }) {
-    final timeout = json['timeout'];
-    final rawCredentials = json['allowCredentials'];
-    if (timeout is! int ||
-        timeout <= 0 ||
-        (rawCredentials != null && rawCredentials is! List)) {
-      throw const FormatException('Invalid WebAuthn authentication options');
-    }
-    final credentials = rawCredentials == null
-        ? const <String>[]
-        : rawCredentials
-              .map((value) {
-                if (value is! Map) {
-                  throw const FormatException(
-                    'Invalid WebAuthn allowed credential',
-                  );
-                }
-                return _requiredString(Map<String, dynamic>.from(value), 'id');
-              })
-              .toList(growable: false);
-    return AuthClientWebAuthnAuthenticationOptions(
-      challenge: _requiredString(json, 'challenge'),
-      relyingPartyId: _requiredString(json, 'rpId'),
-      timeout: Duration(milliseconds: timeout),
-      userVerification: _requiredString(json, 'userVerification'),
-      allowCredentials: List<String>.unmodifiable(credentials),
-      userId: userId,
-    );
-  }
 
   /// Encodes the options in the shape expected by the browser API.
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -698,6 +697,34 @@ final class AuthClientWebAuthnCredential {
     this.name,
   });
 
+  /// Decodes passkey metadata from a JSON object.
+  factory AuthClientWebAuthnCredential.fromJson(Map<String, dynamic> json) {
+    final rawCounter = json['counter'];
+    if (rawCounter is! int || rawCounter < 0) {
+      throw const FormatException('Invalid WebAuthn credential counter');
+    }
+    final rawTransports = json['transports'];
+    if (rawTransports != null &&
+        (rawTransports is! List ||
+            rawTransports.any((value) => value is! String))) {
+      throw const FormatException('Invalid WebAuthn credential transports');
+    }
+    return AuthClientWebAuthnCredential(
+      credentialId: _requiredString(json, 'credential_id'),
+      userId: _requiredString(json, 'user_id'),
+      counter: rawCounter,
+      publicKey: json['public_key']?.toString(),
+      transports: rawTransports == null
+          ? null
+          : List<String>.unmodifiable(
+              (rawTransports as List<Object?>).cast<String>(),
+            ),
+      createdAt: _optionalDate(json, 'created_at'),
+      lastUsedAt: _optionalDate(json, 'last_used_at'),
+      name: json['name']?.toString(),
+    );
+  }
+
   /// Base64url-encoded credential identifier.
   final String credentialId;
 
@@ -721,44 +748,12 @@ final class AuthClientWebAuthnCredential {
 
   /// User-supplied display name for the passkey.
   final String? name;
-
-  /// Decodes passkey metadata from a JSON object.
-  factory AuthClientWebAuthnCredential.fromJson(Map<String, dynamic> json) {
-    final rawCounter = json['counter'];
-    if (rawCounter is! int || rawCounter < 0) {
-      throw const FormatException('Invalid WebAuthn credential counter');
-    }
-    final rawTransports = json['transports'];
-    if (rawTransports != null &&
-        (rawTransports is! List ||
-            rawTransports.any((value) => value is! String))) {
-      throw const FormatException('Invalid WebAuthn credential transports');
-    }
-    return AuthClientWebAuthnCredential(
-      credentialId: _requiredString(json, 'credential_id'),
-      userId: _requiredString(json, 'user_id'),
-      counter: rawCounter,
-      publicKey: json['public_key']?.toString(),
-      transports: rawTransports == null
-          ? null
-          : List<String>.unmodifiable(rawTransports.cast<String>()),
-      createdAt: _optionalDate(json, 'created_at'),
-      lastUsedAt: _optionalDate(json, 'last_used_at'),
-      name: json['name']?.toString(),
-    );
-  }
 }
 
 /// The one-time API-key response returned after create or rotate.
 final class AuthClientIssuedApiKey {
   /// Creates the one-time raw-key response.
   const AuthClientIssuedApiKey({required this.apiKey, required this.key});
-
-  /// Public metadata for the issued key.
-  final AuthClientApiKey apiKey;
-
-  /// Raw secret key, returned only during issuance or rotation.
-  final String key;
 
   /// Decodes a one-time API-key response from JSON.
   factory AuthClientIssuedApiKey.fromJson(Map<String, dynamic> json) {
@@ -768,6 +763,12 @@ final class AuthClientIssuedApiKey {
       key: key,
     );
   }
+
+  /// Public metadata for the issued key.
+  final AuthClientApiKey apiKey;
+
+  /// Raw secret key, returned only during issuance or rotation.
+  final String key;
 }
 
 /// Result returned after a passkey assertion is verified.
@@ -778,15 +779,6 @@ final class AuthClientWebAuthnAuthenticationResult {
     required this.credential,
     required this.session,
   });
-
-  /// User authenticated by the passkey.
-  final AuthUser user;
-
-  /// Passkey metadata updated by the verification.
-  final AuthClientWebAuthnCredential credential;
-
-  /// Session issued after the assertion was verified.
-  final AuthSession session;
 
   /// Decodes a passkey-authentication response from JSON.
   factory AuthClientWebAuthnAuthenticationResult.fromJson(
@@ -806,6 +798,15 @@ final class AuthClientWebAuthnAuthenticationResult {
       session: session,
     );
   }
+
+  /// User authenticated by the passkey.
+  final AuthUser user;
+
+  /// Passkey metadata updated by the verification.
+  final AuthClientWebAuthnCredential credential;
+
+  /// Session issued after the assertion was verified.
+  final AuthSession session;
 }
 
 /// TOTP enrollment data returned by a two-factor plugin.
@@ -816,15 +817,6 @@ class AuthClientTwoFactorEnrollment {
     required this.otpauthUri,
     required this.expiresAt,
   });
-
-  /// Shared secret used to generate TOTP codes.
-  final String secret;
-
-  /// `otpauth` URI for authenticator applications.
-  final Uri otpauthUri;
-
-  /// Time at which this enrollment expires.
-  final DateTime expiresAt;
 
   /// Decodes TOTP enrollment data from JSON.
   factory AuthClientTwoFactorEnrollment.fromJson(Map<String, dynamic> json) {
@@ -840,15 +832,21 @@ class AuthClientTwoFactorEnrollment {
       expiresAt: _requiredDate(json, 'expiresAt'),
     );
   }
+
+  /// Shared secret used to generate TOTP codes.
+  final String secret;
+
+  /// `otpauth` URI for authenticator applications.
+  final Uri otpauthUri;
+
+  /// Time at which this enrollment expires.
+  final DateTime expiresAt;
 }
 
 /// Recovery codes returned after two-factor activation or regeneration.
 class AuthClientTwoFactorRecoveryCodes {
   /// Creates a recovery-code collection.
   const AuthClientTwoFactorRecoveryCodes(this.codes);
-
-  /// One-time recovery codes issued by the server.
-  final List<String> codes;
 
   /// Decodes recovery codes from JSON.
   factory AuthClientTwoFactorRecoveryCodes.fromJson(Map<String, dynamic> json) {
@@ -860,6 +858,9 @@ class AuthClientTwoFactorRecoveryCodes {
       List<String>.unmodifiable(values.cast<String>()),
     );
   }
+
+  /// One-time recovery codes issued by the server.
+  final List<String> codes;
 }
 
 /// Result of completing a recent step-up verification.
@@ -890,18 +891,6 @@ class AuthClientTwoFactorStatus {
     this.lockedUntil,
   });
 
-  /// Whether two-factor authentication is enabled.
-  final bool enabled;
-
-  /// Number of unused recovery codes remaining.
-  final int recoveryCodesRemaining;
-
-  /// Enrollment expiry, when enrollment is in progress.
-  final DateTime? enrollmentExpiresAt;
-
-  /// Current lockout expiry, when the factor is temporarily locked.
-  final DateTime? lockedUntil;
-
   /// Decodes two-factor status from JSON.
   factory AuthClientTwoFactorStatus.fromJson(Map<String, dynamic> json) {
     final remaining = json['recoveryCodesRemaining'];
@@ -916,6 +905,18 @@ class AuthClientTwoFactorStatus {
       lockedUntil: _optionalDate(json, 'lockedUntil'),
     );
   }
+
+  /// Whether two-factor authentication is enabled.
+  final bool enabled;
+
+  /// Number of unused recovery codes remaining.
+  final int recoveryCodesRemaining;
+
+  /// Enrollment expiry, when enrollment is in progress.
+  final DateTime? enrollmentExpiresAt;
+
+  /// Current lockout expiry, when the factor is temporarily locked.
+  final DateTime? lockedUntil;
 }
 
 /// An error returned by an auth endpoint.
@@ -1027,12 +1028,12 @@ class AuthClientTransport {
 
   /// Replaces the bearer token used for JWT-based requests.
   void setBearerToken(String? token) {
-    _bearerToken = token?.trim().isEmpty == true ? null : token?.trim();
+    _bearerToken = token?.trim().isEmpty ?? false ? null : token?.trim();
   }
 
   /// Replaces the API key used for service-client requests.
   void setApiKey(String? key) {
-    _apiKey = key?.trim().isEmpty == true ? null : key?.trim();
+    _apiKey = key?.trim().isEmpty ?? false ? null : key?.trim();
   }
 
   /// Clears the cached CSRF token.
@@ -1252,7 +1253,7 @@ final class AuthClientPluginRegistry {
       }
       _installed[id] = _InstalledAuthClientPlugin(
         plugin: plugin,
-        api: plugin.install(context),
+        api: plugin.install(context) as Object,
       );
     }
   }
@@ -1293,9 +1294,6 @@ final class AuthClientPluginRegistry {
 ///
 /// New applications should use [AuthClient] with the client plugins they need.
 class AuthClientCore {
-  /// Creates a core client around an existing [transport].
-  AuthClientCore.fromTransport(this.transport);
-
   /// Creates a core client and its default transport when one is not supplied.
   AuthClientCore({
     required Uri baseUrl,
@@ -1319,6 +1317,9 @@ class AuthClientCore {
              bearerToken: bearerToken,
              apiKey: apiKey,
            );
+
+  /// Creates a core client around an existing [transport].
+  AuthClientCore.fromTransport(this.transport);
 
   /// Transport shared by all core operations.
   final AuthClientTransport transport;
@@ -1842,10 +1843,10 @@ class AuthClientCore {
 
   /// Signs in with a credentials provider.
   Future<AuthSession> signInWithCredentials({
+    required String password,
     String provider = 'credentials',
     String? email,
     String? username,
-    required String password,
     Map<String, dynamic>? attributes,
     String? captchaToken,
   }) async {
@@ -1879,10 +1880,10 @@ class AuthClientCore {
 
   /// Registers a new credentials account and signs the user in.
   Future<AuthSession> registerWithCredentials({
+    required String password,
     String provider = 'credentials',
     String? email,
     String? username,
-    required String password,
     Map<String, dynamic>? attributes,
     String? captchaToken,
   }) async {
@@ -1905,8 +1906,8 @@ class AuthClientCore {
 
   /// Sends a magic-link sign-in request.
   Future<AuthClientVerificationSent> signInWithEmail({
-    String provider = 'email',
     required String email,
+    String provider = 'email',
     String? callbackUrl,
   }) async {
     final response = await _mutatingRequest(
@@ -1958,9 +1959,9 @@ class AuthClientCore {
 
   /// Completes an email verification callback.
   Future<AuthClientAuthResult> verifyEmail({
-    String provider = 'email',
     required String email,
     required String token,
+    String provider = 'email',
   }) {
     return _completeCallback(
       provider: provider,
@@ -1992,8 +1993,8 @@ class AuthClientCore {
   /// Verifies the current user's password and refreshes the short-lived
   /// sensitive-action proof without replacing the current session.
   Future<void> reauthenticate({
-    String? identifier,
     required String currentPassword,
+    String? identifier,
   }) async {
     await _mutatingRequest(
       'POST',

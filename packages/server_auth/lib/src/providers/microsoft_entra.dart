@@ -1,4 +1,4 @@
-import '../core/core.dart';
+import 'package:server_auth/src/core/core.dart';
 
 /// Microsoft Entra ID (Azure AD) user profile.
 ///
@@ -16,6 +16,21 @@ class MicrosoftEntraProfile {
     this.oid,
     this.tid,
   });
+
+  /// Creates a [MicrosoftEntraProfile] from a JSON map returned by Microsoft Graph.
+  factory MicrosoftEntraProfile.fromJson(Map<String, dynamic> json) {
+    return MicrosoftEntraProfile(
+      sub: json['sub']?.toString() ?? json['oid']?.toString() ?? '',
+      email: json['email']?.toString(),
+      name: json['name']?.toString(),
+      preferredUsername: json['preferred_username']?.toString(),
+      picture: json['picture']?.toString(),
+      givenName: json['given_name']?.toString(),
+      familyName: json['family_name']?.toString(),
+      oid: json['oid']?.toString(),
+      tid: json['tid']?.toString(),
+    );
+  }
 
   /// Subject identifier (unique user ID).
   final String sub;
@@ -43,21 +58,6 @@ class MicrosoftEntraProfile {
 
   /// Tenant ID.
   final String? tid;
-
-  /// Creates a [MicrosoftEntraProfile] from a JSON map returned by Microsoft Graph.
-  factory MicrosoftEntraProfile.fromJson(Map<String, dynamic> json) {
-    return MicrosoftEntraProfile(
-      sub: json['sub']?.toString() ?? json['oid']?.toString() ?? '',
-      email: json['email']?.toString(),
-      name: json['name']?.toString(),
-      preferredUsername: json['preferred_username']?.toString(),
-      picture: json['picture']?.toString(),
-      givenName: json['given_name']?.toString(),
-      familyName: json['family_name']?.toString(),
-      oid: json['oid']?.toString(),
-      tid: json['tid']?.toString(),
-    );
-  }
 
   /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {

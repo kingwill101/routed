@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'models.dart' show AuthPrincipal;
+import 'package:server_auth/src/core/models.dart' show AuthPrincipal;
 
 /// Result for a guard evaluation.
 class GuardResult<TResponse> {

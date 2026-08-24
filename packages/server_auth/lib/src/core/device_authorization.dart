@@ -1,15 +1,15 @@
 import 'dart:async';
 
-import 'account_policy.dart';
-import 'deletion_transaction.dart';
-import 'exceptions.dart';
-import 'plugin.dart';
-import 'models.dart';
-import 'rate_limit.dart';
-import 'store.dart';
-import 'tokens.dart' show secureRandomToken;
-import 'users.dart' show authUserIsDisabled;
-import 'device_authorization_store.dart';
+import 'package:server_auth/src/core/account_policy.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/device_authorization_store.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/store.dart';
+import 'package:server_auth/src/core/tokens.dart' show secureRandomToken;
+import 'package:server_auth/src/core/users.dart' show authUserIsDisabled;
 
 /// Registry identifier for the RFC 8628 device-authorization plugin.
 const String authDeviceAuthorizationPluginId = 'device_authorization';
@@ -186,9 +186,12 @@ final class DeviceAuthorizationPlugin<TContext>
     this.pollInterval = const Duration(seconds: 5),
     this.issuanceLeaseTtl = const Duration(seconds: 30),
     DateTime Function()? clock,
-  }) : assert(deviceCodeTtl > Duration.zero),
-       assert(pollInterval > Duration.zero),
-       assert(issuanceLeaseTtl > Duration.zero),
+  }) : assert(deviceCodeTtl > Duration.zero, 'deviceCodeTtl must be positive'),
+       assert(pollInterval > Duration.zero, 'pollInterval must be positive'),
+       assert(
+         issuanceLeaseTtl > Duration.zero,
+         'issuanceLeaseTtl must be positive',
+       ),
        _clock = clock ?? DateTime.now,
        _authStore = null;
 
@@ -316,7 +319,7 @@ final class DeviceAuthorizationPlugin<TContext>
     if (hosts.isEmpty) return;
     hosts.single.registerOAuthTokenGrant(
       'urn:ietf:params:oauth:grant-type:device_code',
-      (invocation, request) => _deviceTokenGrant(invocation, request),
+      _deviceTokenGrant,
     );
     _contributesTokenEndpoint = false;
   }
@@ -508,7 +511,7 @@ final class DeviceAuthorizationPlugin<TContext>
       throw AuthFlowException('invalid_client');
     }
     final createdAt = (now ?? _clock()).toUtc();
-    final deviceCode = secureRandomToken(length: 32);
+    final deviceCode = secureRandomToken();
     final rawUserCode = _generateUserCode();
     await _store.create(
       AuthDeviceAuthorization(
@@ -609,7 +612,7 @@ final class DeviceAuthorizationPlugin<TContext>
         await _findCredentialEligibleUser(approvedUserId) == null) {
       throw AuthFlowException('invalid_grant');
     }
-    final leaseRaw = secureRandomToken(length: 32);
+    final leaseRaw = secureRandomToken();
     final leaseDigest = hashAuthDeviceAuthorizationIssuanceLease(leaseRaw);
     final leaseNow = (now ?? _clock()).toUtc();
     final leaseResult = await _store.beginIssuance(
@@ -691,7 +694,7 @@ final class DeviceAuthorizationPlugin<TContext>
         ? store as AuthAccountStateStore
         : null;
     final state = await states?.find(userId);
-    if (state?.disabled == true || state?.isLocked() == true) return null;
+    if ((state?.disabled ?? false) || (state?.isLocked() ?? false)) return null;
     return user;
   }
 
@@ -750,7 +753,7 @@ final class DeviceAuthorizationPlugin<TContext>
 
   static final AuthOperationCodec<Map<String, dynamic>> _mapCodec =
       AuthOperationCodec<Map<String, dynamic>>(
-        decode: (value) => Map<String, dynamic>.from(value),
+        decode: Map<String, dynamic>.from,
         encode: (value) => value,
       );
 

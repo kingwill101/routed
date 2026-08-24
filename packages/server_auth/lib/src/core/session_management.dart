@@ -1,5 +1,5 @@
-import 'models.dart';
-import 'store.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/store.dart';
 
 /// Safe public projection of a persisted server-side session.
 ///
@@ -23,6 +23,28 @@ class AuthSessionInfo {
     this.ipAddress,
     this.userAgent,
   });
+
+  /// Creates a safe projection from [record].
+  ///
+  /// Copies public session metadata from [record], excludes its token digest,
+  /// and defaults [isCurrent] to false.
+  factory AuthSessionInfo.fromRecord(
+    AuthSessionRecord record, {
+    bool isCurrent = false,
+  }) {
+    return AuthSessionInfo(
+      id: record.id,
+      userId: record.userId,
+      createdAt: record.createdAt,
+      expiresAt: record.expiresAt,
+      lastUsedAt: record.lastUsedAt,
+      revokedAt: record.revokedAt,
+      ipAddress: record.ipAddress,
+      userAgent: record.userAgent,
+      authenticationMethod: record.authenticationMethod,
+      isCurrent: isCurrent,
+    );
+  }
 
   /// Persisted session record identifier.
   final String id;
@@ -62,28 +84,6 @@ class AuthSessionInfo {
   bool isActive({DateTime? now}) {
     return revokedAt == null &&
         (now ?? DateTime.now()).toUtc().isBefore(expiresAt.toUtc());
-  }
-
-  /// Creates a safe projection from [record].
-  ///
-  /// Copies public session metadata from [record], excludes its token digest,
-  /// and defaults [isCurrent] to false.
-  factory AuthSessionInfo.fromRecord(
-    AuthSessionRecord record, {
-    bool isCurrent = false,
-  }) {
-    return AuthSessionInfo(
-      id: record.id,
-      userId: record.userId,
-      createdAt: record.createdAt,
-      expiresAt: record.expiresAt,
-      lastUsedAt: record.lastUsedAt,
-      revokedAt: record.revokedAt,
-      ipAddress: record.ipAddress,
-      userAgent: record.userAgent,
-      authenticationMethod: record.authenticationMethod,
-      isCurrent: isCurrent,
-    );
   }
 
   /// Converts this projection to a JSON-compatible map.

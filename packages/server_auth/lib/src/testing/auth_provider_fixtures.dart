@@ -1,10 +1,10 @@
-import '../core/api_key.dart';
-import '../core/email_otp.dart';
-import '../core/models.dart';
-import '../core/phone_number.dart';
-import '../core/phone_number_store.dart';
-import '../core/providers.dart';
-import 'auth_test_primitives.dart';
+import 'package:server_auth/src/core/api_key.dart';
+import 'package:server_auth/src/core/email_otp.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/phone_number.dart';
+import 'package:server_auth/src/core/phone_number_store.dart';
+import 'package:server_auth/src/core/providers.dart';
+import 'package:server_auth/src/testing/auth_test_primitives.dart';
 
 /// Credentials provider with a deterministic, explicitly test-only identity.
 final class AuthCredentialsProviderFixture {
@@ -117,7 +117,7 @@ final class AuthPhoneOtpFixture<TContext> {
   /// The digest key is intentionally public and fixture-only. Production code
   /// must supply an application secret instead of copying this setup. The
   /// fixture's auth runtime must use an [AuthPhoneNumberBackend], such as
-  /// [InMemoryAuthStore].
+  /// `InMemoryAuthStore`.
   PhoneNumberPlugin<TContext> plugin({
     Duration expiresIn = const Duration(minutes: 5),
     int allowedAttempts = 3,
@@ -174,8 +174,13 @@ final class AuthOAuthProviderFixture {
   /// Stable provider origin used by token and userinfo requests.
   static final Uri origin = Uri.parse('https://provider.example.test');
 
+  /// Stable provider identifier used by the fixture.
   final String providerId;
+
+  /// Claims returned by the fixture's user-information endpoint.
   final Map<String, dynamic> profile;
+
+  /// OAuth flow type exercised by the fixture.
   final AuthProviderType type;
 
   /// Real OAuth provider configured by the fixture.
@@ -204,7 +209,10 @@ final class AuthWebAuthnClientFixture {
     this.credentialId = 'Zml4dHVyZS1jcmVkZW50aWFs',
   });
 
+  /// User identifier included in browser-shaped payloads.
   final String userId;
+
+  /// Base64url credential identifier included in browser-shaped payloads.
   final String credentialId;
 
   /// Registration options accepted by the real typed client parser.
@@ -274,7 +282,10 @@ final class AuthApiKeyClientFixture {
     this.keyId = 'fixture-key-id',
   });
 
+  /// User identifier associated with the fixture key.
   final String userId;
+
+  /// Public identifier associated with the fixture key.
   final String keyId;
 
   /// Public metadata that never contains a raw key or hash.
@@ -306,6 +317,7 @@ final class AuthTwoFactorClientFixture {
   /// Creates a two-factor client fixture using [now] for expirations.
   AuthTwoFactorClientFixture(DateTime now) : now = now.toUtc();
 
+  /// Current instant used to calculate fixture expiration values.
   final DateTime now;
 
   /// Enrollment response with an obvious test-only TOTP secret.

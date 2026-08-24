@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'tokens.dart' show hashOpaqueToken;
+import 'package:server_auth/src/core/tokens.dart' show hashOpaqueToken;
 
 /// The short-lived values required to finish one OAuth authorization attempt.
 ///
@@ -55,7 +55,7 @@ abstract interface class AuthOAuthChallengeStore {
   /// Persists [challenge] for one authorization attempt.
   ///
   /// Implementations should reject invalid or expired challenges and protect
-  /// all secret fields. Durable implementations should hash [state] for
+  /// all secret fields. Durable implementations should hash `state` for
   /// lookup rather than using it as a persistence key; an in-memory store may
   /// retain the challenge fields for the lifetime of the process.
   FutureOr<void> save(AuthOAuthChallenge challenge);

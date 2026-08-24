@@ -1,25 +1,24 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-
-import 'account_deletion.dart';
-import 'account_policy.dart';
-import 'authorization.dart';
-import 'browser.dart';
-import 'browser_validator.dart';
-import 'callbacks.dart';
-import 'email_change.dart';
-import 'framework_session.dart';
-import 'plugin.dart';
-import 'jwt.dart';
-import 'models.dart';
-import 'password_hasher.dart';
-import 'password_policy.dart';
-import 'password_reset.dart';
-import 'providers.dart';
-import 'rate_limit.dart';
-import 'runtime_posture.dart';
-import 'store.dart';
+import 'package:server_auth/src/core/account_deletion.dart';
+import 'package:server_auth/src/core/account_policy.dart';
+import 'package:server_auth/src/core/authorization.dart';
+import 'package:server_auth/src/core/browser.dart';
+import 'package:server_auth/src/core/browser_validator.dart';
+import 'package:server_auth/src/core/callbacks.dart';
+import 'package:server_auth/src/core/email_change.dart';
+import 'package:server_auth/src/core/framework_session.dart';
+import 'package:server_auth/src/core/jwt.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/password_hasher.dart';
+import 'package:server_auth/src/core/password_policy.dart';
+import 'package:server_auth/src/core/password_reset.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/providers.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/runtime_posture.dart';
+import 'package:server_auth/src/core/store.dart';
 
 /// Declares whether an auth store is durable across process restarts.
 enum AuthStoreMode {

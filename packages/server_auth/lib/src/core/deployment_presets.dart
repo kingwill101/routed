@@ -3,24 +3,24 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
-import 'account_policy.dart';
-import 'api_key.dart';
-import 'auth_config.dart';
-import 'authorization.dart';
-import 'browser.dart';
-import 'browser_validator.dart';
-import 'callbacks.dart';
-import 'deployment.dart';
-import 'framework_session.dart';
-import 'jwt.dart';
-import 'models.dart';
-import 'options.dart';
-import 'password_policy.dart';
-import 'plugin.dart';
-import 'providers.dart';
-import 'rate_limit.dart';
-import 'runtime_posture.dart';
-import 'store.dart';
+import 'package:server_auth/src/core/account_policy.dart';
+import 'package:server_auth/src/core/api_key.dart';
+import 'package:server_auth/src/core/auth_config.dart';
+import 'package:server_auth/src/core/authorization.dart';
+import 'package:server_auth/src/core/browser.dart';
+import 'package:server_auth/src/core/browser_validator.dart';
+import 'package:server_auth/src/core/callbacks.dart';
+import 'package:server_auth/src/core/deployment.dart';
+import 'package:server_auth/src/core/framework_session.dart';
+import 'package:server_auth/src/core/jwt.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/options.dart';
+import 'package:server_auth/src/core/password_policy.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/providers.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/runtime_posture.dart';
+import 'package:server_auth/src/core/store.dart';
 
 /// Focused, typed presets for common auth deployment shapes.
 ///
@@ -86,9 +86,9 @@ abstract final class AuthDeploymentPresets {
     required Iterable<AuthProvider> providers,
     required AuthProductionBoundary boundary,
     required AuthLifecycleDelivery<TContext> lifecycleDelivery,
-    AuthFrameworkSessionHooks<TContext>? frameworkSessionHooks,
     required AuthRateLimiter<TContext> rateLimiter,
     required bool requireVerifiedEmail,
+    AuthFrameworkSessionHooks<TContext>? frameworkSessionHooks,
     Iterable<AuthServerPlugin<TContext>> plugins = const [],
     Duration sessionMaxAge = const Duration(days: 30),
     Duration sessionUpdateAge = const Duration(hours: 24),
@@ -151,13 +151,13 @@ abstract final class AuthDeploymentPresets {
     required Iterable<AuthProvider> providers,
     required AuthProductionBoundary boundary,
     required AuthLifecycleDelivery<TContext> lifecycleDelivery,
-    AuthFrameworkSessionHooks<TContext>? frameworkSessionHooks,
     required AuthRateLimiter<TContext> rateLimiter,
     required bool requireVerifiedEmail,
     required bool exposeJwtTokenInSessionResponse,
     required String jwtSecret,
     required Uri issuer,
     required Iterable<String> audience,
+    AuthFrameworkSessionHooks<TContext>? frameworkSessionHooks,
     Iterable<AuthServerPlugin<TContext>> plugins = const [],
     Duration tokenMaxAge = const Duration(hours: 1),
     String algorithm = 'HS256',
@@ -202,7 +202,6 @@ abstract final class AuthDeploymentPresets {
       maxAge: tokenMaxAge,
       algorithm: normalizedAlgorithm,
       cookieName: cookieName,
-      secure: true,
       sameSite: sameSite,
     );
     final options = _productionOptions<TContext>(
@@ -255,10 +254,10 @@ abstract final class AuthDeploymentPresets {
     required Iterable<AuthProvider> providers,
     required AuthProductionBoundary boundary,
     required AuthLifecycleDelivery<TContext> lifecycleDelivery,
-    AuthFrameworkSessionHooks<TContext>? frameworkSessionHooks,
     required AuthRateLimiter<TContext> rateLimiter,
     required bool requireVerifiedEmail,
     required bool allowSessionExchange,
+    AuthFrameworkSessionHooks<TContext>? frameworkSessionHooks,
     Iterable<AuthServerPlugin<TContext>> plugins = const [],
     String keyPrefix = 'rka',
     Duration defaultKeyLifetime = const Duration(days: 90),
@@ -356,7 +355,6 @@ AuthOptions<TContext> _productionOptions<TContext>({
     providers: providers.toList(growable: false),
     plugins: _plugins(plugins),
     store: store,
-    storeMode: AuthStoreMode.durable,
     runtimeMode: AuthRuntimeMode.production,
     productionBoundary: boundary,
     sessionStrategy: sessionStrategy,
@@ -375,7 +373,6 @@ AuthOptions<TContext> _productionOptions<TContext>({
     accountDeletionSender: lifecycleDelivery.accountDeletion,
     basePath: basePath,
     httpClient: httpClient,
-    enforceCsrf: true,
     requireVerifiedEmail: requireVerifiedEmail,
     exposeJwtTokenInSessionResponse: exposeJwtTokenInSessionResponse,
     rbac: rbac,
@@ -491,8 +488,6 @@ AuthCookiePolicy _productionCookiePolicy({
     throw ArgumentError.value(domain, 'cookieDomain', 'must be non-empty');
   }
   return AuthCookiePolicy(
-    httpOnly: true,
-    secure: true,
     sameSite: sameSite,
     domain: normalizedDomain,
   );

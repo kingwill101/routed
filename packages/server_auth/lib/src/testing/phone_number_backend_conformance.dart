@@ -1,19 +1,31 @@
 import 'dart:async';
 
-import '../core/models.dart';
-import '../core/phone_number_store.dart';
-import '../core/store.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/phone_number_store.dart';
+import 'package:server_auth/src/core/store.dart';
 
+/// Creates an isolated fixture for a phone-number backend conformance case.
 typedef AuthPhoneNumberBackendConformanceFactory =
     FutureOr<AuthPhoneNumberBackendConformanceFixture> Function();
 
-enum AuthPhoneNumberBackendConformanceFaultPoint { issue, verify }
+/// Identifies a phone-number operation at which a fault is injected.
+enum AuthPhoneNumberBackendConformanceFaultPoint {
+  /// Fails while issuing a verification challenge.
+  issue,
 
+  /// Fails while verifying a challenge.
+  verify,
+}
+
+/// Controls deterministic fault injection for a phone-number backend.
 abstract interface class AuthPhoneNumberBackendConformanceFaultController {
+  /// Fails the next operation at [point].
   void failNext(AuthPhoneNumberBackendConformanceFaultPoint point);
 }
 
+/// Supplies the phone-number backend and lifecycle hooks used by a case.
 final class AuthPhoneNumberBackendConformanceFixture {
+  /// Creates a fixture from the backend, store, and lifecycle hooks.
   const AuthPhoneNumberBackendConformanceFixture({
     required this.store,
     required this.backend,
@@ -22,17 +34,32 @@ final class AuthPhoneNumberBackendConformanceFixture {
     this.dispose,
   });
 
+  /// Core authentication store shared with the phone-number
+  /// `AuthPhoneNumberBackend`.
   final AuthStore store;
+
+  /// Phone-number backend under test.
   final AuthPhoneNumberBackend backend;
+
+  /// Fault controller for rollback cases.
   final AuthPhoneNumberBackendConformanceFaultController faults;
+
+  /// Deletes all phone-number state for a user identifier.
   final FutureOr<bool> Function(String userId) hardDeleteUser;
+
+  /// Releases resources owned by the fixture.
   final FutureOr<void> Function()? dispose;
 }
 
+/// Describes a failed phone-number backend conformance case.
 final class AuthPhoneNumberBackendConformanceFailure implements Exception {
+  /// Creates a failure for [caseId] caused by [cause].
   const AuthPhoneNumberBackendConformanceFailure(this.caseId, this.cause);
 
+  /// Stable identifier of the failed case.
   final String caseId;
+
+  /// Error raised by the adapter or the failed expectation.
   final Object cause;
 
   @override
@@ -40,17 +67,23 @@ final class AuthPhoneNumberBackendConformanceFailure implements Exception {
       'AuthPhoneNumberBackendConformanceFailure($caseId): $cause';
 }
 
+/// One independently runnable phone-number backend conformance case.
 final class AuthPhoneNumberBackendConformanceCase {
+  /// Creates a runnable conformance case.
   const AuthPhoneNumberBackendConformanceCase({
     required this.id,
     required this.description,
     required Future<void> Function() run,
   }) : _run = run;
 
+  /// Stable machine-readable case identifier.
   final String id;
+
+  /// Human-readable behavior covered by this case.
   final String description;
   final Future<void> Function() _run;
 
+  /// Runs this conformance case.
   Future<void> run() => _run();
 }
 
@@ -60,10 +93,13 @@ final class AuthPhoneNumberBackendConformanceCase {
 /// [AuthPhoneNumberBackendConformanceFaultController] to deterministic
 /// database faults. The suite accepts no process-local fallback.
 final class AuthPhoneNumberBackendConformanceSuite {
+  /// Creates a suite backed by [createFixture].
   AuthPhoneNumberBackendConformanceSuite(this.createFixture);
 
+  /// Creates the isolated fixture used by each case.
   final AuthPhoneNumberBackendConformanceFactory createFixture;
 
+  /// The isolated cases exposed by this suite.
   List<AuthPhoneNumberBackendConformanceCase> get cases => [
     _case(
       'issue_replay_binding',
@@ -134,7 +170,7 @@ final class AuthPhoneNumberBackendConformanceSuite {
   Future<void> _issueReplay(
     AuthPhoneNumberBackendConformanceFixture fixture,
   ) async {
-    final first = _issue(id: 'conformance-issue');
+    final first = _issue();
     _require(
       (await fixture.backend.issuePhoneNumberCode(first)).status ==
           AuthPhoneNumberIssueStatus.issued,
@@ -147,7 +183,7 @@ final class AuthPhoneNumberBackendConformanceSuite {
     );
     _require(
       (await fixture.backend.issuePhoneNumberCode(
-            _issue(id: 'conformance-issue', digest: 'different-digest'),
+            _issue(digest: 'different-digest'),
           )).status ==
           AuthPhoneNumberIssueStatus.replayMismatch,
       'issue ID was rebound to another digest',
@@ -295,7 +331,7 @@ final class AuthPhoneNumberBackendConformanceSuite {
   }
 }
 
-final _now = DateTime.utc(2030, 1, 1);
+final _now = DateTime.utc(2030);
 
 AuthPhoneNumberIssueCodeCommand _issue({
   String id = 'conformance-issue',

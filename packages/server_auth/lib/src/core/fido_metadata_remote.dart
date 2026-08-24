@@ -922,7 +922,7 @@ final class _FidoPkixCertificate {
           final values = constraints.elements ?? const <ASN1Object>[];
           var valueIndex = 0;
           if (values.isNotEmpty && values.first is ASN1Boolean) {
-            isCa = (values.first as ASN1Boolean).boolValue == true;
+            isCa = (values.first as ASN1Boolean).boolValue ?? false;
             valueIndex++;
           }
           if (valueIndex < values.length) {

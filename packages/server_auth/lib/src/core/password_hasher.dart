@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:pointycastle/key_derivators/argon2.dart';
 import 'package:pointycastle/key_derivators/api.dart';
+import 'package:pointycastle/key_derivators/argon2.dart';
 
 /// Result of verifying a password against a stored password hash.
 class PasswordVerification {
@@ -176,7 +176,6 @@ class Argon2idPasswordHasher implements PasswordHasher {
       memory: memoryKiB ?? this.memoryKiB,
       lanes: parallelism ?? this.parallelism,
       desiredKeyLength: length ?? derivedKeyLength,
-      version: Argon2Parameters.ARGON2_VERSION_13,
     );
     final input = Uint8List.fromList(utf8.encode(password));
     final output = Uint8List(length ?? derivedKeyLength);

@@ -1,4 +1,4 @@
-import 'providers.dart';
+import 'package:server_auth/src/core/providers.dart';
 
 /// Sign-in route branch selected for a request.
 enum AuthSignInRouteKind {
@@ -19,8 +19,8 @@ enum AuthSignInRouteKind {
 class AuthSignInRouteDecision {
   const AuthSignInRouteDecision._({
     required this.kind,
-    this.errorCode,
     required this.requiresCsrf,
+    this.errorCode,
     this.email,
   });
 
@@ -75,8 +75,8 @@ enum AuthRegisterRouteKind {
 class AuthRegisterRouteDecision {
   const AuthRegisterRouteDecision._({
     required this.kind,
-    this.errorCode,
     required this.requiresCsrf,
+    this.errorCode,
   });
 
   /// Creates a credentials decision that requires CSRF handling.

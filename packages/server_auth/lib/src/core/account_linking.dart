@@ -2,14 +2,14 @@ import 'dart:async';
 
 import 'package:http/http.dart' as http;
 
-import 'authentication_methods.dart';
-import 'exceptions.dart';
-import 'models.dart';
-import 'oauth.dart';
-import 'providers.dart';
-import 'store.dart';
-import 'tokens.dart' show secureRandomToken;
-import 'users.dart' show resolveAuthAccountId;
+import 'package:server_auth/src/core/authentication_methods.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/oauth.dart';
+import 'package:server_auth/src/core/providers.dart';
+import 'package:server_auth/src/core/store.dart';
+import 'package:server_auth/src/core/tokens.dart' show secureRandomToken;
+import 'package:server_auth/src/core/users.dart' show resolveAuthAccountId;
 
 /// Information about a linked provider account.
 class AuthLinkedAccountInfo {

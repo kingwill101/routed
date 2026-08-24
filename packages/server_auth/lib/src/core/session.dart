@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'models.dart';
-import 'tokens.dart' show hashOpaqueToken, secureRandomToken;
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/tokens.dart'
+    show hashOpaqueToken, secureRandomToken;
 
 /// Attribute key used to store the authenticated principal in request context.
 const String authPrincipalAttribute = 'auth.principal';
@@ -79,8 +80,8 @@ AuthSessionRefreshAction authSessionRefreshAction({
 void syncAuthSessionRefresh({
   required String? issuedAtValue,
   required Duration? updateAge,
-  DateTime? now,
   required void Function(DateTime issuedAtUtc) writeIssuedAt,
+  DateTime? now,
   void Function()? touchSession,
 }) {
   final age = updateAge;
@@ -200,7 +201,7 @@ Cookie buildExpiredRememberTokenCookie(
 
 /// Persistence contract for long-lived "remember me" tokens.
 ///
-/// Implementations must treat [token] as a secret: persist only a digest and
+/// Implementations must treat `token` as a secret: persist only a digest and
 /// compare the digest during [read], [consume], and [remove]. Never log or
 /// expose the raw token from a persistence adapter.
 abstract class RememberTokenStore {

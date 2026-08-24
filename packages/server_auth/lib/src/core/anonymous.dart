@@ -1,12 +1,13 @@
 import 'dart:async';
 
-import 'anonymous_store.dart';
-import 'deletion_transaction.dart';
-import 'exceptions.dart';
-import 'plugin.dart';
-import 'models.dart';
-import 'rate_limit.dart';
-import 'tokens.dart' show hashOpaqueToken, secureRandomToken;
+import 'package:server_auth/src/core/anonymous_store.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/tokens.dart'
+    show hashOpaqueToken, secureRandomToken;
 
 /// The stable plugin identifier for auth anonymous plugin.
 const String authAnonymousPluginId = 'anonymous';
@@ -111,8 +112,6 @@ final class AnonymousPlugin<TContext>
       requestCodec: _emptyRequestCodec,
       responseCodec: _authenticationResponseCodec,
       authentication: AuthOperationAuthentication.none,
-      originPolicy: AuthOperationOriginPolicy.browser,
-      csrfPolicy: AuthOperationCsrfPolicy.none,
       rateLimitOperation: const AuthRateLimitOperation('anonymous', 'sign_in'),
       handler: (invocation, request) => _signInEndpoint(invocation),
     ),
@@ -132,8 +131,6 @@ final class AnonymousPlugin<TContext>
       ),
       requestCodec: _emptyRequestCodec,
       responseCodec: _deletedResponseCodec,
-      authentication: AuthOperationAuthentication.session,
-      originPolicy: AuthOperationOriginPolicy.browser,
       csrfPolicy: AuthOperationCsrfPolicy.required,
       rateLimitOperation: const AuthRateLimitOperation('anonymous', 'delete'),
       handler: (invocation, request) => _deleteEndpoint(invocation),
@@ -305,7 +302,7 @@ final class AnonymousPlugin<TContext>
 
   static final AuthOperationCodec<Map<String, dynamic>> _emptyRequestCodec =
       AuthOperationCodec<Map<String, dynamic>>(
-        decode: (value) => Map<String, dynamic>.from(value),
+        decode: Map<String, dynamic>.from,
         encode: (value) => value,
         schema: const <String, Object?>{
           'type': 'object',

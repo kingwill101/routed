@@ -1,18 +1,18 @@
 import 'dart:async';
 
-import 'account_policy.dart';
-import 'admin_models.dart';
-import 'admin_store.dart';
-import 'deletion_transaction.dart';
-import 'exceptions.dart';
-import 'plugin.dart';
-import 'models.dart';
-import 'password_hasher.dart';
-import 'password_policy.dart';
-import 'rate_limit.dart';
-import 'store.dart';
-import 'tokens.dart' show secureRandomToken;
-import 'users.dart' show normalizeAuthEmail;
+import 'package:server_auth/src/core/account_policy.dart';
+import 'package:server_auth/src/core/admin_models.dart';
+import 'package:server_auth/src/core/admin_store.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/password_hasher.dart';
+import 'package:server_auth/src/core/password_policy.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/store.dart';
+import 'package:server_auth/src/core/tokens.dart' show secureRandomToken;
+import 'package:server_auth/src/core/users.dart' show normalizeAuthEmail;
 
 /// The stable plugin identifier for auth admin plugin.
 const String authAdminPluginId = 'admin';
@@ -119,8 +119,8 @@ final class AuthAdminAccessControl {
     for (final role in normalizeAuthAdminRoles(userRoles)) {
       final permissions = roles[role];
       final actions = permissions?[normalizedResource] ?? permissions?['*'];
-      if (actions?.any((value) => value == normalizedAction || value == '*') ==
-          true) {
+      if (actions?.any((value) => value == normalizedAction || value == '*') ??
+          false) {
         return true;
       }
     }
@@ -365,7 +365,6 @@ final class AdminPlugin<TContext>
           semantics: _operationSemantics(operation),
           requestCodec: _mapCodec,
           responseCodec: _objectCodec,
-          authentication: AuthOperationAuthentication.session,
           originPolicy: method == AuthOperationMethod.post
               ? AuthOperationOriginPolicy.browser
               : AuthOperationOriginPolicy.none,
@@ -1105,7 +1104,7 @@ final class AdminPlugin<TContext>
     final value = await _coreStore.users.findById(userId.trim());
     if (value == null) throw AuthFlowException('unauthorized');
     final state = await store.findUser(value.id);
-    if (state?.state.isBanned() == true) {
+    if (state?.state.isBanned() ?? false) {
       throw AuthFlowException('account_unavailable');
     }
     return value;

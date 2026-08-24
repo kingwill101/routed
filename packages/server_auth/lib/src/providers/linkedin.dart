@@ -1,4 +1,4 @@
-import '../core/core.dart';
+import 'package:server_auth/src/core/core.dart';
 
 /// LinkedIn user profile (OIDC).
 ///
@@ -15,6 +15,20 @@ class LinkedInProfile {
     this.familyName,
     this.locale,
   });
+
+  /// Creates a [LinkedInProfile] from a JSON map returned by the LinkedIn OIDC userinfo endpoint.
+  factory LinkedInProfile.fromJson(Map<String, dynamic> json) {
+    return LinkedInProfile(
+      sub: json['sub']?.toString() ?? '',
+      email: json['email']?.toString(),
+      emailVerified: json['email_verified'] == true,
+      name: json['name']?.toString(),
+      picture: json['picture']?.toString(),
+      givenName: json['given_name']?.toString(),
+      familyName: json['family_name']?.toString(),
+      locale: json['locale']?.toString(),
+    );
+  }
 
   /// Subject identifier (member ID).
   final String sub;
@@ -39,20 +53,6 @@ class LinkedInProfile {
 
   /// User's locale.
   final String? locale;
-
-  /// Creates a [LinkedInProfile] from a JSON map returned by the LinkedIn OIDC userinfo endpoint.
-  factory LinkedInProfile.fromJson(Map<String, dynamic> json) {
-    return LinkedInProfile(
-      sub: json['sub']?.toString() ?? '',
-      email: json['email']?.toString(),
-      emailVerified: json['email_verified'] == true,
-      name: json['name']?.toString(),
-      picture: json['picture']?.toString(),
-      givenName: json['given_name']?.toString(),
-      familyName: json['family_name']?.toString(),
-      locale: json['locale']?.toString(),
-    );
-  }
 
   /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {

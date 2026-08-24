@@ -2,8 +2,9 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart' show Hmac, sha256;
 
-import 'plugin.dart';
-import 'tokens.dart' show base64UrlNoPadding, constantTimeStringEquals;
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/tokens.dart'
+    show base64UrlNoPadding, constantTimeStringEquals;
 
 /// Stable plugin identifier for the last-authentication-method feature.
 const String authLastAuthenticationMethodPluginId =
@@ -15,6 +16,34 @@ const String authLastAuthenticationMethodPluginId =
 /// token, or user identifier. OAuth providers are represented as the stable
 /// namespace `oauth:<provider>`.
 final class AuthLastAuthenticationMethodId {
+  const AuthLastAuthenticationMethodId._(this.value);
+
+  /// Parses one canonical method ID and rejects delimiters or control input.
+  factory AuthLastAuthenticationMethodId.parse(String value) {
+    final candidate = value;
+    if (candidate.startsWith('oauth:')) {
+      final provider = candidate.substring('oauth:'.length);
+      if (!_oauthProviderPattern.hasMatch(provider)) {
+        throw const FormatException('Invalid OAuth provider namespace');
+      }
+      return AuthLastAuthenticationMethodId._(candidate);
+    }
+    if (!_identifierPattern.hasMatch(candidate)) {
+      throw const FormatException('Invalid authentication method identifier');
+    }
+    return AuthLastAuthenticationMethodId._(candidate);
+  }
+
+  /// Creates an OAuth namespace without accepting an arbitrary provider
+  /// payload or path-like value.
+  factory AuthLastAuthenticationMethodId.oauthProvider(String provider) {
+    final candidate = provider.trim().toLowerCase();
+    if (!_oauthProviderPattern.hasMatch(candidate)) {
+      throw const FormatException('Invalid OAuth provider namespace');
+    }
+    return AuthLastAuthenticationMethodId._('oauth:$candidate');
+  }
+
   /// Maximum length of a canonical method identifier.
   static const int maximumLength = 64;
   static final RegExp _identifierPattern = RegExp(r'^[a-z][a-z0-9_-]{0,63}$');
@@ -41,34 +70,6 @@ final class AuthLastAuthenticationMethodId {
 
   /// Identifier for a passkey login.
   static const passkey = AuthLastAuthenticationMethodId._('passkey');
-
-  const AuthLastAuthenticationMethodId._(this.value);
-
-  /// Parses one canonical method ID and rejects delimiters or control input.
-  factory AuthLastAuthenticationMethodId.parse(String value) {
-    final candidate = value;
-    if (candidate.startsWith('oauth:')) {
-      final provider = candidate.substring('oauth:'.length);
-      if (!_oauthProviderPattern.hasMatch(provider)) {
-        throw FormatException('Invalid OAuth provider namespace');
-      }
-      return AuthLastAuthenticationMethodId._(candidate);
-    }
-    if (!_identifierPattern.hasMatch(candidate)) {
-      throw FormatException('Invalid authentication method identifier');
-    }
-    return AuthLastAuthenticationMethodId._(candidate);
-  }
-
-  /// Creates an OAuth namespace without accepting an arbitrary provider
-  /// payload or path-like value.
-  factory AuthLastAuthenticationMethodId.oauthProvider(String provider) {
-    final candidate = provider.trim().toLowerCase();
-    if (!_oauthProviderPattern.hasMatch(candidate)) {
-      throw FormatException('Invalid OAuth provider namespace');
-    }
-    return AuthLastAuthenticationMethodId._('oauth:$candidate');
-  }
 
   /// Maps the generic host lifecycle labels to canonical method IDs.
   static AuthLastAuthenticationMethodId? fromLifecycle({
@@ -287,18 +288,6 @@ final class AuthLastAuthenticationMethodReadResult {
     required this.expiresAt,
   });
 
-  /// Authentication method represented by the signed browser state.
-  final AuthLastAuthenticationMethodId method;
-
-  /// Time at which the browser state expires.
-  final DateTime expiresAt;
-
-  /// Converts this result to its transport representation.
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'method': method.value,
-    'expiresAt': expiresAt.toUtc().toIso8601String(),
-  };
-
   /// Decodes a result from a validated JSON-compatible map.
   factory AuthLastAuthenticationMethodReadResult.fromJson(
     Map<String, dynamic> json,
@@ -323,6 +312,18 @@ final class AuthLastAuthenticationMethodReadResult {
       expiresAt: expiresAt.toUtc(),
     );
   }
+
+  /// Authentication method represented by the signed browser state.
+  final AuthLastAuthenticationMethodId method;
+
+  /// Time at which the browser state expires.
+  final DateTime expiresAt;
+
+  /// Converts this result to its transport representation.
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'method': method.value,
+    'expiresAt': expiresAt.toUtc().toIso8601String(),
+  };
 }
 
 /// Opt-in server plugin that records only a signed, bounded method ID.
@@ -395,7 +396,6 @@ final class AuthLastAuthenticationMethodPlugin<TContext>
           path: const AuthRoutePath('/last-authentication-method'),
           semantics: const AuthOperationSemantics.readOnly(),
           authentication: AuthOperationAuthentication.none,
-          originPolicy: AuthOperationOriginPolicy.browser,
           requestCodec: _requestCodec,
           responseCodec: _responseCodec,
           handler: (invocation, _) => read(invocation.context),

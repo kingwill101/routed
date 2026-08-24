@@ -2,10 +2,11 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../core/core.dart';
+import 'package:server_auth/src/core/core.dart';
 
 /// GitHub email payload returned by `/user/emails`.
 class GitHubEmail {
+  /// Creates an email record returned by GitHub.
   GitHubEmail({
     required this.email,
     required this.primary,
@@ -13,11 +14,7 @@ class GitHubEmail {
     required this.visibility,
   });
 
-  final String email;
-  final bool primary;
-  final bool verified;
-  final String visibility;
-
+  /// Creates an email record from a GitHub API response.
   factory GitHubEmail.fromJson(Map<String, dynamic> json) {
     return GitHubEmail(
       email: json['email']?.toString() ?? '',
@@ -26,10 +23,23 @@ class GitHubEmail {
       visibility: json['visibility']?.toString() ?? 'private',
     );
   }
+
+  /// Email address reported by GitHub.
+  final String email;
+
+  /// Whether GitHub marks this address as the account's primary address.
+  final bool primary;
+
+  /// Whether GitHub has verified this address.
+  final bool verified;
+
+  /// Visibility setting reported by GitHub.
+  final String visibility;
 }
 
 /// GitHub user plan information.
 class GitHubPlan {
+  /// Creates plan information returned by GitHub.
   const GitHubPlan({
     required this.collaborators,
     required this.name,
@@ -37,11 +47,7 @@ class GitHubPlan {
     required this.privateRepos,
   });
 
-  final int collaborators;
-  final String name;
-  final int space;
-  final int privateRepos;
-
+  /// Creates plan information from a GitHub API response.
   factory GitHubPlan.fromJson(Map<String, dynamic> json) {
     return GitHubPlan(
       collaborators: json['collaborators'] as int? ?? 0,
@@ -51,6 +57,19 @@ class GitHubPlan {
     );
   }
 
+  /// Number of collaborators included in the plan.
+  final int collaborators;
+
+  /// GitHub plan name.
+  final String name;
+
+  /// Storage space included in the plan, as reported by GitHub.
+  final int space;
+
+  /// Number of private repositories included in the plan.
+  final int privateRepos;
+
+  /// Serializes this plan using GitHub's response field names.
   Map<String, dynamic> toJson() => {
     'collaborators': collaborators,
     'name': name,
@@ -63,12 +82,12 @@ class GitHubPlan {
 ///
 /// See [Get the authenticated user](https://docs.github.com/en/rest/users/users#get-the-authenticated-user).
 class GitHubProfile {
+  /// Creates a profile returned by GitHub's authenticated-user endpoint.
   const GitHubProfile({
     required this.login,
     required this.id,
     required this.nodeId,
     required this.avatarUrl,
-    this.gravatarId,
     required this.url,
     required this.htmlUrl,
     required this.followersUrl,
@@ -82,6 +101,14 @@ class GitHubProfile {
     required this.receivedEventsUrl,
     required this.type,
     required this.siteAdmin,
+    required this.publicRepos,
+    required this.publicGists,
+    required this.followers,
+    required this.following,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.twoFactorAuthentication,
+    this.gravatarId,
     this.name,
     this.company,
     this.blog,
@@ -90,63 +117,16 @@ class GitHubProfile {
     this.hireable,
     this.bio,
     this.twitterUsername,
-    required this.publicRepos,
-    required this.publicGists,
-    required this.followers,
-    required this.following,
-    required this.createdAt,
-    required this.updatedAt,
     this.privateGists,
     this.totalPrivateRepos,
     this.ownedPrivateRepos,
     this.diskUsage,
     this.suspendedAt,
     this.collaborators,
-    required this.twoFactorAuthentication,
     this.plan,
   });
 
-  final String login;
-  final int id;
-  final String nodeId;
-  final String avatarUrl;
-  final String? gravatarId;
-  final String url;
-  final String htmlUrl;
-  final String followersUrl;
-  final String followingUrl;
-  final String gistsUrl;
-  final String starredUrl;
-  final String subscriptionsUrl;
-  final String organizationsUrl;
-  final String reposUrl;
-  final String eventsUrl;
-  final String receivedEventsUrl;
-  final String type;
-  final bool siteAdmin;
-  final String? name;
-  final String? company;
-  final String? blog;
-  final String? location;
-  final String? email;
-  final bool? hireable;
-  final String? bio;
-  final String? twitterUsername;
-  final int publicRepos;
-  final int publicGists;
-  final int followers;
-  final int following;
-  final String createdAt;
-  final String updatedAt;
-  final int? privateGists;
-  final int? totalPrivateRepos;
-  final int? ownedPrivateRepos;
-  final int? diskUsage;
-  final String? suspendedAt;
-  final int? collaborators;
-  final bool twoFactorAuthentication;
-  final GitHubPlan? plan;
-
+  /// Creates a profile from a GitHub API response.
   factory GitHubProfile.fromJson(Map<String, dynamic> json) {
     return GitHubProfile(
       login: json['login']?.toString() ?? '',
@@ -194,6 +174,127 @@ class GitHubProfile {
     );
   }
 
+  /// GitHub login name.
+  final String login;
+
+  /// Numeric GitHub account identifier.
+  final int id;
+
+  /// GraphQL node identifier for the account.
+  final String nodeId;
+
+  /// URL of the account avatar.
+  final String avatarUrl;
+
+  /// Legacy Gravatar identifier, when supplied by GitHub.
+  final String? gravatarId;
+
+  /// API URL for the account.
+  final String url;
+
+  /// Web URL for the account profile.
+  final String htmlUrl;
+
+  /// API URL for the account's followers.
+  final String followersUrl;
+
+  /// API URL for accounts followed by this user.
+  final String followingUrl;
+
+  /// API URL for the account's gists.
+  final String gistsUrl;
+
+  /// API URL for repositories starred by the account.
+  final String starredUrl;
+
+  /// API URL for the account's subscriptions.
+  final String subscriptionsUrl;
+
+  /// API URL for organizations owned by the account.
+  final String organizationsUrl;
+
+  /// API URL for repositories owned by the account.
+  final String reposUrl;
+
+  /// API URL for events performed by the account.
+  final String eventsUrl;
+
+  /// API URL for events received by the account.
+  final String receivedEventsUrl;
+
+  /// GitHub account type, such as `User` or `Organization`.
+  final String type;
+
+  /// Whether the account is a GitHub site administrator.
+  final bool siteAdmin;
+
+  /// Display name supplied by GitHub.
+  final String? name;
+
+  /// Company supplied by the account owner.
+  final String? company;
+
+  /// Personal blog URL or text supplied by the account owner.
+  final String? blog;
+
+  /// Location supplied by the account owner.
+  final String? location;
+
+  /// Public email supplied by GitHub, when available.
+  final String? email;
+
+  /// Whether the account owner is available for hire.
+  final bool? hireable;
+
+  /// Profile biography supplied by the account owner.
+  final String? bio;
+
+  /// Twitter username supplied by the account owner.
+  final String? twitterUsername;
+
+  /// Number of public repositories owned by the account.
+  final int publicRepos;
+
+  /// Number of public gists owned by the account.
+  final int publicGists;
+
+  /// Number of followers of the account.
+  final int followers;
+
+  /// Number of accounts followed by the user.
+  final int following;
+
+  /// Account creation timestamp as returned by GitHub.
+  final String createdAt;
+
+  /// Timestamp of the most recent profile update as returned by GitHub.
+  final String updatedAt;
+
+  /// Number of private gists, when GitHub supplies it.
+  final int? privateGists;
+
+  /// Number of private repositories visible to the account.
+  final int? totalPrivateRepos;
+
+  /// Number of private repositories owned by the account.
+  final int? ownedPrivateRepos;
+
+  /// Disk usage reported for the account.
+  final int? diskUsage;
+
+  /// Suspension timestamp, when the account is suspended.
+  final String? suspendedAt;
+
+  /// Number of collaborators reported for the account.
+  final int? collaborators;
+
+  /// Whether two-factor authentication is enabled for the account.
+  final bool twoFactorAuthentication;
+
+  /// Billing plan information, when GitHub supplies it.
+  final GitHubPlan? plan;
+
+  /// Serializes this profile using GitHub's response field names.
   Map<String, dynamic> toJson() => {
     'login': login,
     'id': id,
@@ -237,6 +338,7 @@ class GitHubProfile {
     'plan': plan?.toJson(),
   };
 
+  /// Returns a copy with an optionally replaced email address.
   GitHubProfile copyWith({String? email}) {
     return GitHubProfile(
       login: login,
@@ -318,6 +420,7 @@ class GitHubProfile {
 ///   `GET /user/emails` and selects the primary email.
 /// - For GitHub Enterprise Server, set [enterpriseBaseUrl].
 class GitHubProviderOptions {
+  /// Creates configuration for the GitHub OAuth provider.
   const GitHubProviderOptions({
     required this.clientId,
     required this.clientSecret,
@@ -326,10 +429,19 @@ class GitHubProviderOptions {
     this.scopes = const ['read:user', 'user:email'],
   });
 
+  /// OAuth application client identifier.
   final String clientId;
+
+  /// OAuth application client secret.
   final String clientSecret;
+
+  /// Callback URI registered with the GitHub OAuth application.
   final String redirectUri;
+
+  /// GitHub Enterprise Server origin, when using an enterprise deployment.
   final String? enterpriseBaseUrl;
+
+  /// OAuth scopes requested during authorization.
   final List<String> scopes;
 }
 
@@ -371,8 +483,7 @@ OAuthProvider<GitHubProfile> githubProvider(GitHubProviderOptions options) {
     userInfoEndpoint: Uri.parse('$apiBaseUrl/user'),
     redirectUri: options.redirectUri,
     scopes: options.scopes,
-    userInfoRequest: (token, httpClient, endpoint) =>
-        _loadGitHubUserInfo(token, httpClient, endpoint),
+    userInfoRequest: _loadGitHubUserInfo,
     profileParser: GitHubProfile.fromJson,
     profileSerializer: (profile) => profile.toJson(),
     profile: (profile) {

@@ -2,29 +2,29 @@ import 'dart:async';
 
 import 'package:http/http.dart' as http;
 
-import 'authentication_methods.dart';
-import 'email_auth_backend.dart';
-import 'exceptions.dart' show AuthFlowException;
-import 'jwt.dart' show JwtOptions, JwtVerifier;
-import 'models.dart';
-import 'oauth.dart';
-import 'oauth_challenge_store.dart';
-import 'password_hasher.dart';
-import 'password_policy.dart';
-import 'store.dart';
-import 'tokens.dart'
+import 'package:server_auth/src/core/authentication_methods.dart';
+import 'package:server_auth/src/core/email_auth_backend.dart';
+import 'package:server_auth/src/core/exceptions.dart' show AuthFlowException;
+import 'package:server_auth/src/core/jwt.dart' show JwtOptions, JwtVerifier;
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/oauth.dart';
+import 'package:server_auth/src/core/oauth_challenge_store.dart';
+import 'package:server_auth/src/core/password_hasher.dart';
+import 'package:server_auth/src/core/password_policy.dart';
+import 'package:server_auth/src/core/store.dart';
+import 'package:server_auth/src/core/tokens.dart'
     show
         constantTimeStringEquals,
         hashOpaqueToken,
         pkceS256CodeChallenge,
         secureRandomToken;
-import 'users.dart'
+import 'package:server_auth/src/core/users.dart'
     show
         authUsersDiffer,
         mergeAuthUser,
         normalizeAuthEmail,
         resolveAuthAccountId;
-import 'verification_token_store.dart';
+import 'package:server_auth/src/core/verification_token_store.dart';
 
 /// Framework-specific auth callback context.
 typedef AuthContext = dynamic;
@@ -501,9 +501,9 @@ AuthOAuthCallbackSessionValues resolveOAuthCallbackSessionValues({
   required String providerId,
   required String stateKey,
   required String pkceKey,
-  String nonceKey = '_auth.nonce',
   required String callbackKey,
   required String? Function(String key) readSession,
+  String nonceKey = '_auth.nonce',
 }) {
   return AuthOAuthCallbackSessionValues(
     expectedState: readSession(
@@ -587,10 +587,10 @@ class AuthOAuthAuthorizationStart {
   /// Creates the authorization parameters and transient values for a flow.
   const AuthOAuthAuthorizationStart({
     required this.state,
+    required this.parameters,
     this.nonce,
     this.codeVerifier,
     this.codeChallenge,
-    required this.parameters,
   });
 
   /// State value used to bind the callback to this authorization request.
@@ -614,11 +614,11 @@ class AuthOAuthAuthorizationResolution {
   /// Creates a resolved authorization start with its callback URI.
   const AuthOAuthAuthorizationResolution({
     required this.state,
+    required this.parameters,
+    required this.authorizationUri,
     this.nonce,
     this.codeVerifier,
     this.codeChallenge,
-    required this.parameters,
-    required this.authorizationUri,
   });
 
   /// State value persisted for callback validation.
@@ -681,9 +681,9 @@ resolveOAuthAuthorizationStart<TContext, TProfile extends Object>({
   required OAuthProvider<TProfile> provider,
   required String stateKey,
   required String pkceKey,
-  String nonceKey = '_auth.nonce',
   required String callbackKey,
   required void Function(String key, String value) writeSession,
+  String nonceKey = '_auth.nonce',
   AuthOAuthChallengeStore? challengeStore,
   Duration challengeTtl = const Duration(minutes: 10),
   String? callbackUrl,
@@ -824,9 +824,9 @@ AuthAccount buildOAuthAuthAccount({
 /// Consumes an email verification token from the configured typed store.
 Future<AuthVerificationToken?> consumeAuthVerificationToken({
   required AuthStore store,
-  AuthVerificationTokenStore? tokenStore,
   required String identifier,
   required String token,
+  AuthVerificationTokenStore? tokenStore,
 }) async {
   final tokens = tokenStore ?? store.verificationTokens;
   return Future.sync(() => tokens.consume(identifier, token));
@@ -835,8 +835,8 @@ Future<AuthVerificationToken?> consumeAuthVerificationToken({
 /// Deletes existing verification tokens from the configured typed store.
 Future<void> clearAuthVerificationTokens({
   required AuthStore store,
-  AuthVerificationTokenStore? tokenStore,
   required String identifier,
+  AuthVerificationTokenStore? tokenStore,
 }) async {
   final tokens = tokenStore ?? store.verificationTokens;
   await Future.sync(() => tokens.delete(identifier));
@@ -845,8 +845,8 @@ Future<void> clearAuthVerificationTokens({
 /// Persists a verification token in the configured typed store.
 Future<void> persistAuthVerificationToken({
   required AuthStore store,
-  AuthVerificationTokenStore? tokenStore,
   required AuthVerificationToken verification,
+  AuthVerificationTokenStore? tokenStore,
 }) async {
   final tokens = tokenStore ?? store.verificationTokens;
   await Future.sync(() => tokens.save(verification));
@@ -1355,9 +1355,9 @@ resolveOAuthSignInForProvider<TContext, TProfile extends Object>({
   required TContext context,
   required OAuthProvider<TProfile> provider,
   required String code,
+  required http.Client httpClient,
   String? codeVerifier,
   String? oidcNonce,
-  required http.Client httpClient,
   String Function()? fallbackAccountId,
 }) async {
   late OAuthTokenResponse tokenResponse;
@@ -1454,9 +1454,10 @@ resolveOAuthCallbackSignInForProvider<TContext, TProfile extends Object>({
   required String? receivedState,
   required String stateKey,
   required String pkceKey,
-  String nonceKey = '_auth.nonce',
   required String callbackKey,
   required String? Function(String key) readSession,
+  required http.Client httpClient,
+  String nonceKey = '_auth.nonce',
   void Function(String key)? removeSession,
   FutureOr<AuthOAuthChallenge?> Function(String providerId, String state)?
   consumeChallenge,
@@ -1469,7 +1470,6 @@ resolveOAuthCallbackSignInForProvider<TContext, TProfile extends Object>({
   /// a durable challenge store from accepting a callback initiated by another
   /// browser.
   bool requireBrowserState = false,
-  required http.Client httpClient,
   String Function()? fallbackAccountId,
 }) async {
   if (requireBrowserState) {
@@ -1744,7 +1744,7 @@ final class _PasswordAuthenticationMethodInventory
   ) async {
     final credential = await findAuthCredentialForUser(store, userId);
     return AuthAuthenticationMethodSnapshot.complete([
-      if (credential?.enabled == true)
+      if (credential?.enabled ?? false)
         AuthAuthenticationMethod.password(
           credential!.id,
           providerId: providerId,
@@ -1811,6 +1811,24 @@ class WebAuthnAuthenticator {
     this.name,
   });
 
+  /// Creates authenticator metadata from a JSON payload.
+  factory WebAuthnAuthenticator.fromJson(Map<String, dynamic> json) {
+    final rawCounter = json['counter'];
+    final rawTransports = json['transports'];
+    return WebAuthnAuthenticator(
+      credentialId: json['credential_id']?.toString() ?? '',
+      publicKey: json['public_key']?.toString() ?? '',
+      counter: rawCounter is int && rawCounter >= 0 ? rawCounter : 0,
+      userId: json['user_id']?.toString(),
+      transports: rawTransports is List
+          ? rawTransports.whereType<String>().toList(growable: false)
+          : null,
+      createdAt: _tryParseWebAuthnDate(json['created_at']),
+      lastUsedAt: _tryParseWebAuthnDate(json['last_used_at']),
+      name: json['name']?.toString(),
+    );
+  }
+
   /// Unique credential identifier.
   final String credentialId;
 
@@ -1846,24 +1864,6 @@ class WebAuthnAuthenticator {
     'last_used_at': lastUsedAt?.toIso8601String(),
     'name': name,
   };
-
-  /// Creates authenticator metadata from a JSON payload.
-  factory WebAuthnAuthenticator.fromJson(Map<String, dynamic> json) {
-    final rawCounter = json['counter'];
-    final rawTransports = json['transports'];
-    return WebAuthnAuthenticator(
-      credentialId: json['credential_id']?.toString() ?? '',
-      publicKey: json['public_key']?.toString() ?? '',
-      counter: rawCounter is int && rawCounter >= 0 ? rawCounter : 0,
-      userId: json['user_id']?.toString(),
-      transports: rawTransports is List
-          ? rawTransports.whereType<String>().toList(growable: false)
-          : null,
-      createdAt: _tryParseWebAuthnDate(json['created_at']),
-      lastUsedAt: _tryParseWebAuthnDate(json['last_used_at']),
-      name: json['name']?.toString(),
-    );
-  }
 }
 
 DateTime? _tryParseWebAuthnDate(Object? value) {
@@ -1916,10 +1916,10 @@ class WebAuthnUserInfo {
 class WebAuthnProvider extends AuthProvider {
   /// Creates a WebAuthn provider configuration.
   WebAuthnProvider({
-    super.id = 'webauthn',
-    super.name = 'Passkey',
     required this.getUserInfo,
     required this.getRelyingParty,
+    super.id = 'webauthn',
+    super.name = 'Passkey',
     this.timeout = const Duration(minutes: 5),
     this.enableConditionalUI = true,
     this.formFields = const {
@@ -2026,15 +2026,6 @@ class CallbackResult {
   /// Creates a callback result with an optional user, redirect, and error.
   const CallbackResult({required this.user, this.redirect, this.error});
 
-  /// Successfully authenticated user.
-  final AuthUser? user;
-
-  /// Optional redirect URL after authentication.
-  final String? redirect;
-
-  /// Error message if authentication failed.
-  final String? error;
-
   /// Creates a successful result.
   const CallbackResult.success(AuthUser this.user, {this.redirect})
     : error = null;
@@ -2043,6 +2034,15 @@ class CallbackResult {
   const CallbackResult.failure(String this.error)
     : user = null,
       redirect = null;
+
+  /// Successfully authenticated user.
+  final AuthUser? user;
+
+  /// Optional redirect URL after authentication.
+  final String? redirect;
+
+  /// Error message if authentication failed.
+  final String? error;
 
   /// Whether authentication succeeded.
   bool get isSuccess => user != null && error == null;

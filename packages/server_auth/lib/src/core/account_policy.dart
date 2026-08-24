@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'deletion_transaction.dart';
-import 'exceptions.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/exceptions.dart';
 
 /// Policy configuration for account states and authentication rules.
 class AuthAccountPolicy {
@@ -70,8 +70,6 @@ class AuthAccountPolicy {
 
   /// Returns safe defaults for development.
   static const AuthAccountPolicy development = AuthAccountPolicy(
-    requireEmailVerification: false,
-    allowUnverifiedSignIn: true,
     maxLoginAttempts: 10,
     lockoutDuration: Duration(minutes: 5),
   );
@@ -80,10 +78,7 @@ class AuthAccountPolicy {
   static const AuthAccountPolicy production = AuthAccountPolicy(
     requireEmailVerification: true,
     allowUnverifiedSignIn: false,
-    maxLoginAttempts: 5,
-    lockoutDuration: Duration(minutes: 15),
     disableAfterInactiveDays: 365,
-    requireReauthenticationForSensitiveActions: true,
   );
 }
 
@@ -102,6 +97,24 @@ class AuthAccountState {
     this.lastFailedLoginAt,
     this.lastEmailVerificationSentAt,
   });
+
+  /// Creates from JSON.
+  factory AuthAccountState.fromJson(Map<String, dynamic> json) {
+    return AuthAccountState(
+      userId: json['userId']?.toString() ?? '',
+      emailVerified: json['emailVerified'] == true,
+      disabled: json['disabled'] == true,
+      disabledReason: json['disabledReason']?.toString(),
+      disabledAt: _parseDate(json['disabledAt']),
+      lockedUntil: _parseDate(json['lockedUntil']),
+      failedLoginAttempts: json['failedLoginAttempts'] as int? ?? 0,
+      lastLoginAt: _parseDate(json['lastLoginAt']),
+      lastFailedLoginAt: _parseDate(json['lastFailedLoginAt']),
+      lastEmailVerificationSentAt: _parseDate(
+        json['lastEmailVerificationSentAt'],
+      ),
+    );
+  }
 
   /// User ID this state belongs to.
   final String userId;
@@ -140,7 +153,7 @@ class AuthAccountState {
   }
 
   /// Whether the account can authenticate.
-  bool canAuthenticate({DateTime? now, required AuthAccountPolicy policy}) {
+  bool canAuthenticate({required AuthAccountPolicy policy, DateTime? now}) {
     if (disabled) return false;
     if (isLocked(now: now)) return false;
     if (policy.requireEmailVerification && !emailVerified) {
@@ -167,7 +180,7 @@ class AuthAccountState {
     return AuthAccountState(
       userId: userId,
       emailVerified: emailVerified ?? this.emailVerified,
-      disabled: clearDisabled ? false : (disabled ?? this.disabled),
+      disabled: !clearDisabled && (disabled ?? this.disabled),
       disabledReason: clearDisabledReason
           ? null
           : (disabledReason ?? this.disabledReason),
@@ -196,24 +209,6 @@ class AuthAccountState {
         ?.toUtc()
         .toIso8601String(),
   };
-
-  /// Creates from JSON.
-  factory AuthAccountState.fromJson(Map<String, dynamic> json) {
-    return AuthAccountState(
-      userId: json['userId']?.toString() ?? '',
-      emailVerified: json['emailVerified'] == true,
-      disabled: json['disabled'] == true,
-      disabledReason: json['disabledReason']?.toString(),
-      disabledAt: _parseDate(json['disabledAt']),
-      lockedUntil: _parseDate(json['lockedUntil']),
-      failedLoginAttempts: json['failedLoginAttempts'] as int? ?? 0,
-      lastLoginAt: _parseDate(json['lastLoginAt']),
-      lastFailedLoginAt: _parseDate(json['lastFailedLoginAt']),
-      lastEmailVerificationSentAt: _parseDate(
-        json['lastEmailVerificationSentAt'],
-      ),
-    );
-  }
 
   static DateTime? _parseDate(dynamic value) {
     if (value == null) return null;

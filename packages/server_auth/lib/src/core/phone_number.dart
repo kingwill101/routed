@@ -4,15 +4,16 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart' show Hmac, sha256;
 
-import 'authentication_methods.dart';
-import 'deletion_transaction.dart';
-import 'exceptions.dart';
-import 'models.dart';
-import 'phone_number_store.dart';
-import 'plugin.dart';
-import 'rate_limit.dart';
-import 'tokens.dart' show base64UrlNoPadding, secureRandomToken;
-import 'users.dart' show authUserIsDisabled;
+import 'package:server_auth/src/core/authentication_methods.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/phone_number_store.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/tokens.dart'
+    show base64UrlNoPadding, secureRandomToken;
+import 'package:server_auth/src/core/users.dart' show authUserIsDisabled;
 
 /// Stable identifier for the phone-number plugin.
 const String authPhoneNumberPluginId = 'phone_number';
@@ -137,14 +138,14 @@ final class AuthPhoneNumberSendCodeRequest {
   /// Creates a phone-code request for [phoneNumber].
   const AuthPhoneNumberSendCodeRequest({required this.phoneNumber});
 
-  /// Phone number supplied by the caller.
-  final String phoneNumber;
-
   /// Decodes a phone-code request from JSON.
   factory AuthPhoneNumberSendCodeRequest.fromJson(Map<String, dynamic> json) =>
       AuthPhoneNumberSendCodeRequest(
         phoneNumber: _requiredString(json, 'phoneNumber'),
       );
+
+  /// Phone number supplied by the caller.
+  final String phoneNumber;
 
   /// Encodes this request as JSON.
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -176,6 +177,14 @@ final class AuthPhoneNumberVerifyRequest {
     this.name,
   });
 
+  /// Decodes a verification request from JSON.
+  factory AuthPhoneNumberVerifyRequest.fromJson(Map<String, dynamic> json) =>
+      AuthPhoneNumberVerifyRequest(
+        phoneNumber: _requiredString(json, 'phoneNumber'),
+        code: _requiredString(json, 'code'),
+        name: _optionalString(json, 'name'),
+      );
+
   /// Phone number associated with the code.
   final String phoneNumber;
 
@@ -184,14 +193,6 @@ final class AuthPhoneNumberVerifyRequest {
 
   /// Optional display name for a newly created user.
   final String? name;
-
-  /// Decodes a verification request from JSON.
-  factory AuthPhoneNumberVerifyRequest.fromJson(Map<String, dynamic> json) =>
-      AuthPhoneNumberVerifyRequest(
-        phoneNumber: _requiredString(json, 'phoneNumber'),
-        code: _requiredString(json, 'code'),
-        name: _optionalString(json, 'name'),
-      );
 
   /// Encodes this request as JSON.
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -435,8 +436,6 @@ final class PhoneNumberPlugin<TContext>
           requestCodec: _sendRequestCodec,
           responseCodec: _sendResponseCodec,
           authentication: AuthOperationAuthentication.none,
-          originPolicy: AuthOperationOriginPolicy.browser,
-          csrfPolicy: AuthOperationCsrfPolicy.none,
           rateLimitOperation: authPhoneNumberSendRateLimitOperation,
           rateLimitIdentifier: (request) =>
               _phoneRateLimitIdentifier(request.phoneNumber),
@@ -469,8 +468,6 @@ final class PhoneNumberPlugin<TContext>
           requestCodec: _verifyRequestCodec,
           responseCodec: _verifyResponseCodec,
           authentication: AuthOperationAuthentication.none,
-          originPolicy: AuthOperationOriginPolicy.browser,
-          csrfPolicy: AuthOperationCsrfPolicy.none,
           rateLimitOperation: authPhoneNumberVerifyRateLimitOperation,
           rateLimitIdentifier: (request) =>
               _phoneRateLimitIdentifier(request.phoneNumber),
@@ -503,7 +500,6 @@ final class PhoneNumberPlugin<TContext>
           ),
           requestCodec: _emptyRequestCodec,
           responseCodec: _objectResponseCodec,
-          authentication: AuthOperationAuthentication.session,
           csrfPolicy: AuthOperationCsrfPolicy.required,
           requiresRecentAuthentication: true,
           rateLimitOperation: authPhoneNumberRemovalRateLimitOperation,
@@ -633,7 +629,7 @@ final class PhoneNumberPlugin<TContext>
     final normalized = _normalizePhoneNumber(phoneNumber);
     final current = (now ?? DateTime.now()).toUtc();
     final rawCode = _generateCode(codeLength);
-    if (!RegExp('^[0-9]{${codeLength.toString()}}\$').hasMatch(rawCode)) {
+    if (!RegExp('^[0-9]{$codeLength}\$').hasMatch(rawCode)) {
       throw StateError('Phone code generator returned an invalid code');
     }
     final verification = AuthPhoneNumberVerification(
@@ -673,7 +669,7 @@ final class PhoneNumberPlugin<TContext>
     final normalized = _normalizePhoneNumber(phoneNumber);
     final normalizedCode = code.trim();
     if (!RegExp(
-      '^[0-9]{${codeLength.toString()}}\$',
+      '^[0-9]{$codeLength}\$',
     ).hasMatch(normalizedCode)) {
       throw AuthFlowException('invalid_phone_code');
     }
@@ -690,11 +686,11 @@ final class PhoneNumberPlugin<TContext>
             createUser?.call(
               context,
               normalized,
-              requestedName?.isEmpty == true ? null : requestedName,
+              requestedName?.isEmpty ?? false ? null : requestedName,
             ) ??
             AuthUser(
               id: secureRandomToken(length: 24),
-              name: requestedName?.isEmpty == true ? null : requestedName,
+              name: requestedName?.isEmpty ?? false ? null : requestedName,
             ),
       );
     }

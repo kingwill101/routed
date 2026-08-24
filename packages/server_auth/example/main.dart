@@ -20,7 +20,7 @@ void runProviderExample() {
 }
 
 Future<void> runJwtExample() async {
-  final sessionOptions = const JwtSessionOptions(
+  const sessionOptions = JwtSessionOptions(
     secret: 'replace-with-a-strong-secret',
     issuer: 'example-app',
     audience: <String>['example-api'],
@@ -49,7 +49,7 @@ class _ExampleRequestContext {
 }
 
 Future<void> runBearerAdapterExample() async {
-  final sessionOptions = const JwtSessionOptions(
+  const sessionOptions = JwtSessionOptions(
     secret: 'replace-with-a-strong-secret',
     issuer: 'example-app',
     audience: <String>['example-api'],

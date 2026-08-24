@@ -120,7 +120,7 @@ enum FidoMetadataNextUpdatePolicy {
 String normalizeFidoAaguid(String value) {
   final compactPattern = RegExp(r'^[0-9a-fA-F]{32}$');
   final dashedPattern = RegExp(
-    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
+    '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
     r'[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
   if (!compactPattern.hasMatch(value) && !dashedPattern.hasMatch(value)) {

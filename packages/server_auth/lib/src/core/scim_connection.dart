@@ -1,31 +1,35 @@
 import 'dart:async';
 
-import 'deletion_transaction.dart';
-import 'exceptions.dart';
-import 'models.dart';
-import 'plugin.dart';
-import 'rate_limit.dart';
-import 'scim.dart';
-import 'scim_connection_models.dart';
-import 'scim_connection_store.dart';
-import 'scim_models.dart';
-import 'tokens.dart' show hashOpaqueToken, secureRandomToken;
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/scim.dart';
+import 'package:server_auth/src/core/scim_connection_models.dart';
+import 'package:server_auth/src/core/scim_connection_store.dart';
+import 'package:server_auth/src/core/scim_models.dart';
+import 'package:server_auth/src/core/tokens.dart'
+    show hashOpaqueToken, secureRandomToken;
 
 /// Stable server-plugin identifier for managed SCIM connections.
 const String authScimConnectionPluginId = 'scim_connections';
 
 const String _persistenceSchemaId = 'scim.connections';
 
+/// Generates bounded identifiers and secrets for managed SCIM records.
 typedef AuthScimConnectionTokenGenerator = String Function({int length});
 
 /// Resolver that connects [ScimPlugin] to a managed digest-only store.
 final class AuthScimManagedBearerTokenResolver<TContext>
     implements AuthScimBearerTokenResolver<TContext> {
+  /// Creates a resolver backed by [store].
   AuthScimManagedBearerTokenResolver({
     required this.store,
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
 
+  /// Store containing the digest-only managed credentials.
   final AuthScimConnectionStore store;
   final DateTime Function() _clock;
 
@@ -53,6 +57,7 @@ final class AuthScimConnectionPlugin<TContext>
         AuthPersistenceContributor,
         AuthRateLimitContributor,
         AuthUserDeletionPlanContributor {
+  /// Creates a plugin for managing SCIM connections and credentials.
   AuthScimConnectionPlugin({
     required this.store,
     required this.authorize,
@@ -76,13 +81,28 @@ final class AuthScimConnectionPlugin<TContext>
     }
   }
 
+  /// Persistence boundary for connections, credentials, and replay receipts.
   final AuthScimConnectionStore store;
+
+  /// Authorizes each management operation for the current request.
   final AuthScimConnectionAuthorizer<TContext> authorize;
+
+  /// Prefix used for issued managed SCIM bearer tokens.
   final String tokenPrefix;
+
+  /// Lifetime applied when a credential does not specify an expiry.
   final Duration defaultCredentialLifetime;
+
+  /// Maximum lifetime accepted for an issued credential.
   final Duration maximumCredentialLifetime;
+
+  /// Generates connection identifiers.
   final AuthScimConnectionTokenGenerator connectionIdGenerator;
+
+  /// Generates credential identifiers.
   final AuthScimConnectionTokenGenerator credentialIdGenerator;
+
+  /// Generates the raw secret shown when a credential is issued.
   final AuthScimConnectionTokenGenerator secretGenerator;
   final DateTime Function() _clock;
   late AuthUserDeletionDomain _deletionDomain;
@@ -207,6 +227,7 @@ final class AuthScimConnectionPlugin<TContext>
     );
   }
 
+  /// Lists connections visible to [principal].
   Future<AuthScimConnectionPage> list({
     required AuthScimConnectionManagementPrincipal principal,
     int limit = 100,
@@ -221,6 +242,7 @@ final class AuthScimConnectionPlugin<TContext>
     ),
   );
 
+  /// Updates connection metadata using optimistic concurrency control.
   Future<AuthScimManagedConnection?> update({
     required AuthScimConnectionManagementPrincipal principal,
     required String connectionId,
@@ -252,6 +274,7 @@ final class AuthScimConnectionPlugin<TContext>
     );
   }
 
+  /// Disables a connection and revokes its active credentials.
   Future<AuthScimManagedConnection?> disable({
     required AuthScimConnectionManagementPrincipal principal,
     required String connectionId,
@@ -263,6 +286,7 @@ final class AuthScimConnectionPlugin<TContext>
     ),
   );
 
+  /// Lists credentials belonging to a connection visible to [principal].
   Future<AuthScimCredentialPage> listCredentials({
     required AuthScimConnectionManagementPrincipal principal,
     required String connectionId,
@@ -280,6 +304,7 @@ final class AuthScimConnectionPlugin<TContext>
     ),
   );
 
+  /// Issues one credential and returns its raw secret once.
   Future<AuthScimCredentialIssuance> issueCredential({
     required AuthScimConnectionManagementPrincipal principal,
     required String connectionId,
@@ -327,6 +352,7 @@ final class AuthScimConnectionPlugin<TContext>
     return _issuance(stored.credential, stored.replayed, generated.secret, now);
   }
 
+  /// Revokes a credential and issues its replacement atomically.
   Future<AuthScimCredentialIssuance?> rotateCredential({
     required AuthScimConnectionManagementPrincipal principal,
     required String connectionId,
@@ -376,6 +402,7 @@ final class AuthScimConnectionPlugin<TContext>
     return _issuance(stored.credential, stored.replayed, generated.secret, now);
   }
 
+  /// Revokes one credential without issuing a replacement.
   Future<AuthScimCredential?> revokeCredential({
     required AuthScimConnectionManagementPrincipal principal,
     required String connectionId,
@@ -500,7 +527,6 @@ final class AuthScimConnectionPlugin<TContext>
     semantics: semantics,
     requestCodec: _requestCodecFor(operation),
     responseCodec: _responseCodecFor(operation),
-    authentication: AuthOperationAuthentication.session,
     originPolicy: method == AuthOperationMethod.get
         ? AuthOperationOriginPolicy.none
         : AuthOperationOriginPolicy.browser,

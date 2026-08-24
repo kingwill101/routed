@@ -1,10 +1,10 @@
-import 'authentication_methods.dart';
-import 'plugin.dart';
-import 'options.dart';
-import 'providers.dart'
+import 'package:server_auth/src/core/authentication_methods.dart';
+import 'package:server_auth/src/core/options.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/providers.dart'
     show AuthProvider, AuthProviderType, validateAuthProviderConfiguration;
-import 'runtime_posture.dart';
-import 'store.dart';
+import 'package:server_auth/src/core/runtime_posture.dart';
+import 'package:server_auth/src/core/store.dart';
 
 /// Composed authentication runtime for one application.
 ///

@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'authentication_methods.dart';
-import 'email_auth_backend.dart';
-import 'plugin.dart';
-import 'providers.dart';
-import 'rate_limit.dart';
-import 'store.dart';
-import 'users.dart' show authUserIsDisabled;
+import 'package:server_auth/src/core/authentication_methods.dart';
+import 'package:server_auth/src/core/email_auth_backend.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/providers.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/store.dart';
+import 'package:server_auth/src/core/users.dart' show authUserIsDisabled;
 
 /// Rate-limit operation for requesting magic links.
 const AuthRateLimitOperation authMagicLinkSendRateLimitOperation =
@@ -80,9 +80,9 @@ final class MagicLinkPlugin<TContext> extends AuthProvider
   /// route-safe and [tokenExpiry] must be positive; [tokenGenerator] is useful
   /// for controlled tests and must return a non-empty token.
   MagicLinkPlugin({
+    required this.sendMagicLink,
     super.id = 'email',
     super.name = 'Email',
-    required this.sendMagicLink,
     this.tokenExpiry = const Duration(minutes: 15),
     this.tokenGenerator,
   }) : super(type: AuthProviderType.email) {
@@ -178,7 +178,7 @@ final class MagicLinkPlugin<TContext> extends AuthProvider
     _ensureConfigured();
     final user = await _users.findById(userId);
     return AuthAuthenticationMethodSnapshot.complete([
-      if (user?.email?.isNotEmpty == true && !authUserIsDisabled(user!))
+      if ((user?.email?.isNotEmpty ?? false) && !authUserIsDisabled(user!))
         AuthAuthenticationMethod.emailLink(providerId: id, userId: userId),
     ]);
   }
@@ -247,7 +247,6 @@ final class MagicLinkPlugin<TContext> extends AuthProvider
     requestCodec: _mapCodec,
     responseCodec: _objectCodec,
     authentication: AuthOperationAuthentication.none,
-    originPolicy: AuthOperationOriginPolicy.browser,
     csrfPolicy: method == AuthOperationMethod.post
         ? AuthOperationCsrfPolicy.required
         : AuthOperationCsrfPolicy.none,
@@ -318,7 +317,7 @@ final class MagicLinkPlugin<TContext> extends AuthProvider
 
   static final AuthOperationCodec<Map<String, dynamic>> _mapCodec =
       AuthOperationCodec<Map<String, dynamic>>(
-        decode: (value) => Map<String, dynamic>.from(value),
+        decode: Map<String, dynamic>.from,
         encode: (value) => value,
       );
 

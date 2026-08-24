@@ -3,10 +3,10 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
-import 'callbacks.dart';
-import 'jwt.dart';
-import 'models.dart';
-import 'session.dart';
+import 'package:server_auth/src/core/callbacks.dart';
+import 'package:server_auth/src/core/jwt.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/session.dart';
 
 /// Result of updating an auth session for a selected strategy.
 class AuthSessionUpdateResolution {
@@ -87,7 +87,6 @@ resolveAuthSessionUpdateForStrategyWithCallbacks<TContext>({
         context: context,
         options: jwtOptions,
         user: user,
-        strategy: AuthSessionStrategy.jwt,
         protectedClaims: protectedJwtClaims,
       );
       return AuthSessionUpdateResolution(

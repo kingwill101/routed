@@ -1,23 +1,36 @@
 import 'dart:async';
 
-import 'deletion_transaction.dart';
-import 'scim_connection_models.dart';
-import 'scim_models.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/scim_connection_models.dart';
+import 'package:server_auth/src/core/scim_models.dart';
 
 /// Stable failure codes returned by managed SCIM persistence adapters.
 enum AuthScimConnectionStoreFailure {
+  /// The record conflicts with an existing connection or credential.
   conflict,
+
+  /// The requested record does not exist.
   notFound,
+
+  /// The connection or credential is disabled.
   disabled,
+
+  /// The requested scopes are not allowed by the connection.
   scopeMismatch,
+
+  /// An idempotency key was reused for a different request.
   replayMismatch,
+
+  /// The store has reached one of its configured bounds.
   capacity,
 }
 
 /// Sanitized managed-SCIM persistence failure.
 final class AuthScimConnectionStoreException implements Exception {
+  /// Creates a sanitized exception with [failure].
   const AuthScimConnectionStoreException(this.failure);
 
+  /// Stable failure code exposed to the plugin layer.
   final AuthScimConnectionStoreFailure failure;
 
   @override
@@ -26,55 +39,78 @@ final class AuthScimConnectionStoreException implements Exception {
 
 /// Required replay binding for an issuance transaction.
 final class AuthScimIdempotencyBinding {
+  /// Creates a bounded replay binding for one mutation.
   AuthScimIdempotencyBinding({required String key, required String fingerprint})
     : key = _bounded(key, 'key', 128),
       fingerprint = _bounded(fingerprint, 'fingerprint', 512);
 
+  /// Caller-provided key used to recognize retries.
   final String key;
+
+  /// Digest-like fingerprint of the original mutation payload.
   final String fingerprint;
 }
 
 /// Atomic connection + initial credential creation command.
 final class AuthScimCreateConnectionTransaction {
+  /// Creates an atomic connection-creation command.
   const AuthScimCreateConnectionTransaction({
     required this.connection,
     required this.credential,
     required this.idempotency,
   });
 
+  /// Connection record to persist.
   final AuthScimManagedConnection connection;
+
+  /// Initial credential record to persist with [connection].
   final AuthScimCredentialRecord credential;
+
+  /// Replay binding for this creation request.
   final AuthScimIdempotencyBinding idempotency;
 }
 
 /// Atomic connection update command.
 final class AuthScimUpdateConnectionTransaction {
+  /// Creates an optimistic-concurrency connection update command.
   const AuthScimUpdateConnectionTransaction({
     required this.binding,
     required this.connection,
     required this.expectedUpdatedAt,
   });
 
+  /// Tenant and organization binding that owns the connection.
   final AuthScimConnectionBinding binding;
+
+  /// Replacement connection metadata.
   final AuthScimManagedConnection connection;
+
+  /// Timestamp that must still be current for the update to apply.
   final DateTime expectedUpdatedAt;
 }
 
 /// Atomic credential issuance command.
 final class AuthScimIssueCredentialTransaction {
+  /// Creates an atomic credential-issuance command.
   const AuthScimIssueCredentialTransaction({
     required this.binding,
     required this.credential,
     required this.idempotency,
   });
 
+  /// Tenant and organization binding that owns the credential.
   final AuthScimConnectionBinding binding;
+
+  /// Credential record to persist.
   final AuthScimCredentialRecord credential;
+
+  /// Replay binding for this issuance request.
   final AuthScimIdempotencyBinding idempotency;
 }
 
 /// Atomic revoke-old/create-new rotation command.
 final class AuthScimRotateCredentialTransaction {
+  /// Creates an atomic credential-rotation command.
   const AuthScimRotateCredentialTransaction({
     required this.binding,
     required this.connectionId,
@@ -84,40 +120,62 @@ final class AuthScimRotateCredentialTransaction {
     required this.idempotency,
   });
 
+  /// Tenant and organization binding that owns the credential.
   final AuthScimConnectionBinding binding;
+
+  /// Connection containing the credential to rotate.
   final String connectionId;
+
+  /// Existing credential identifier to revoke.
   final String credentialId;
+
+  /// Replacement credential record to persist.
   final AuthScimCredentialRecord replacement;
+
+  /// Timestamp at which the old credential is revoked.
   final DateTime revokedAt;
+
+  /// Replay binding for this rotation request.
   final AuthScimIdempotencyBinding idempotency;
 }
 
 /// Stored result of a one-time credential transaction.
 final class AuthScimStoredCredentialIssuance {
+  /// Creates the stored result of credential issuance or replay.
   const AuthScimStoredCredentialIssuance({
     required this.credential,
     required this.replayed,
   });
 
+  /// Stored credential record.
   final AuthScimCredentialRecord credential;
+
+  /// Whether the store returned a previously committed issuance.
   final bool replayed;
 }
 
 /// Stored result of connection creation.
 final class AuthScimStoredConnectionCreation {
+  /// Creates the stored result of connection creation or replay.
   const AuthScimStoredConnectionCreation({
     required this.connection,
     required this.credential,
     required this.replayed,
   });
 
+  /// Stored connection record.
   final AuthScimManagedConnection connection;
+
+  /// Stored initial credential record.
   final AuthScimCredentialRecord credential;
+
+  /// Whether the store returned a previously committed creation.
   final bool replayed;
 }
 
 /// Bounded connection query. Adapters must enforce the exact binding.
 final class AuthScimConnectionCatalogQuery {
+  /// Creates a bounded query for connections in [binding].
   AuthScimConnectionCatalogQuery({
     required this.binding,
     this.limit = 100,
@@ -126,13 +184,19 @@ final class AuthScimConnectionCatalogQuery {
     _page(limit, offset);
   }
 
+  /// Tenant and organization binding that results must match.
   final AuthScimConnectionBinding binding;
+
+  /// Maximum number of connections to return.
   final int limit;
+
+  /// Zero-based result offset.
   final int offset;
 }
 
 /// Bounded credential query. Adapters must enforce connection ownership.
 final class AuthScimCredentialCatalogQuery {
+  /// Creates a bounded query for credentials in [connectionId].
   AuthScimCredentialCatalogQuery({
     required this.binding,
     required String connectionId,
@@ -142,22 +206,32 @@ final class AuthScimCredentialCatalogQuery {
     _page(limit, offset);
   }
 
+  /// Tenant and organization binding that results must match.
   final AuthScimConnectionBinding binding;
+
+  /// Connection whose credentials are queried.
   final String connectionId;
+
+  /// Maximum number of credentials to return.
   final int limit;
+
+  /// Zero-based result offset.
   final int offset;
 }
 
 /// Complete atomic persistence boundary for managed SCIM connections.
 abstract interface class AuthScimConnectionStore {
+  /// Creates a connection and its initial credential atomically.
   FutureOr<AuthScimStoredConnectionCreation> createConnection(
     AuthScimCreateConnectionTransaction transaction,
   );
 
+  /// Lists connections matching [query].
   FutureOr<AuthScimConnectionPage> listConnections(
     AuthScimConnectionCatalogQuery query,
   );
 
+  /// Finds a connection by ID within [binding].
   FutureOr<AuthScimManagedConnection?> findConnection(
     AuthScimConnectionBinding binding,
     String connectionId,
@@ -175,14 +249,17 @@ abstract interface class AuthScimConnectionStore {
     required DateTime disabledAt,
   });
 
+  /// Issues a credential atomically and records its replay binding.
   FutureOr<AuthScimStoredCredentialIssuance> issueCredential(
     AuthScimIssueCredentialTransaction transaction,
   );
 
+  /// Revokes one credential and creates its replacement atomically.
   FutureOr<AuthScimStoredCredentialIssuance?> rotateCredential(
     AuthScimRotateCredentialTransaction transaction,
   );
 
+  /// Revokes one credential within the exact connection binding.
   FutureOr<AuthScimCredentialRecord?> revokeCredential(
     AuthScimConnectionBinding binding,
     String connectionId,
@@ -190,6 +267,7 @@ abstract interface class AuthScimConnectionStore {
     required DateTime revokedAt,
   });
 
+  /// Lists credentials matching [query] at [now].
   FutureOr<AuthScimCredentialPage> listCredentials(
     AuthScimCredentialCatalogQuery query, {
     required DateTime now,
@@ -211,13 +289,14 @@ abstract interface class AuthScimConnectionStore {
   FutureOr<void> deleteForTenant(String tenantId);
 }
 
-/// Optional injected failure point used by adapter and rollback tests.
+/// Injects a named failure point into adapter and rollback tests.
 typedef AuthScimConnectionStoreFaultInjector =
     FutureOr<void> Function(String operation);
 
 /// Bounded transactional in-memory implementation for tests and development.
 final class InMemoryAuthScimConnectionStore
     implements AuthScimConnectionStore, AuthInMemoryUserDeletionStore {
+  /// Creates a bounded transactional store for tests and development.
   InMemoryAuthScimConnectionStore({
     this.maxConnections = 1000,
     this.maxCredentials = 10000,
@@ -235,11 +314,22 @@ final class InMemoryAuthScimConnectionStore
     }
   }
 
+  /// Maximum number of connections retained by the store.
   final int maxConnections;
+
+  /// Maximum number of credentials retained by the store.
   final int maxCredentials;
+
+  /// Maximum number of credentials retained for one connection.
   final int maxCredentialsPerConnection;
+
+  /// Maximum number of idempotency replay records retained.
   final int maxReplayRecords;
+
+  /// Retention period for idempotency replay records.
   final Duration replayTtl;
+
+  /// Optional deterministic fault injector used by tests.
   final AuthScimConnectionStoreFaultInjector? injectFault;
 
   final Map<String, AuthScimManagedConnection> _connections =

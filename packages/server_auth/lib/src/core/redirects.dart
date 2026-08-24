@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'models.dart' show AuthResult, AuthSession;
+import 'package:server_auth/src/core/models.dart' show AuthResult, AuthSession;
 
 /// Builds a base URL (`scheme://host[:port]`) from [uri].
 ///

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'models.dart';
+import 'package:server_auth/src/core/models.dart';
 
 /// Outcome of one backend-owned anonymous-account mutation.
 enum AuthAnonymousMutationStatus {
@@ -111,7 +111,7 @@ final class AuthAnonymousCompleteUpgradeCommand {
   final String targetUserId;
 }
 
-/// Optional persistence capability required by [AnonymousPlugin].
+/// Optional persistence capability required by `AnonymousPlugin`.
 ///
 /// Durable implementations must execute each method in a real backend
 /// transaction and persist operation receipts in the same transaction as the

@@ -1,5 +1,5 @@
-import 'client.dart';
-import 'models.dart';
+import 'package:server_auth/src/core/client.dart';
+import 'package:server_auth/src/core/models.dart';
 
 /// Adds the provider-discovery API to an [AuthClient].
 final class AuthProviderClientPlugin
@@ -57,9 +57,9 @@ final class AuthCredentialsClient {
 
   /// Signs in with an email address or username and [password].
   Future<AuthSession> signIn({
+    required String password,
     String? email,
     String? username,
-    required String password,
     Map<String, dynamic>? attributes,
   }) => _core.signInWithCredentials(
     provider: provider,
@@ -71,9 +71,9 @@ final class AuthCredentialsClient {
 
   /// Registers a user with an email address or username and [password].
   Future<AuthSession> register({
+    required String password,
     String? email,
     String? username,
-    required String password,
     Map<String, dynamic>? attributes,
   }) => _core.registerWithCredentials(
     provider: provider,
@@ -629,8 +629,8 @@ final class AuthPasswordClient {
 
   /// Re-authenticates the current user with [currentPassword].
   Future<void> reauthenticate({
-    String? identifier,
     required String currentPassword,
+    String? identifier,
   }) => _core.reauthenticate(
     identifier: identifier,
     currentPassword: currentPassword,

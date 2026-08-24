@@ -57,7 +57,7 @@ final class AuthTestHttpResponse {
     headers: <String, String>{'content-type': 'application/json', ...headers},
   );
 
-  /// Creates the bounded public error shape consumed by [AuthClientTransport].
+  /// Creates the bounded public error shape consumed by `AuthClientTransport`.
   factory AuthTestHttpResponse.error(
     String code, {
     int statusCode = 400,
@@ -69,8 +69,13 @@ final class AuthTestHttpResponse {
     headers: headers,
   );
 
+  /// HTTP status code returned to the client.
   final int statusCode;
+
+  /// UTF-8 response body.
   final String body;
+
+  /// Response headers.
   final Map<String, String> headers;
 }
 
@@ -93,7 +98,7 @@ final class _AuthTestHttpStep {
 /// Deterministic `package:http` client for auth client and provider tests.
 ///
 /// Responses are consumed in order. Every request is captured before its
-/// responder runs, so [AuthTestGate] can pause a request while another request
+/// responder runs, so `AuthTestGate` can pause a request while another request
 /// enters the fixture. Use [enqueueFailure] or [enqueueOneTimeJson] for error
 /// and replay scenarios.
 final class AuthTestHttpClient extends http.BaseClient {

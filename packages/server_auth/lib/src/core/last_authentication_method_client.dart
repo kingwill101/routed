@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'client.dart';
-import 'plugin.dart';
-import 'last_authentication_method.dart';
+import 'package:server_auth/src/core/client.dart';
+import 'package:server_auth/src/core/last_authentication_method.dart';
+import 'package:server_auth/src/core/plugin.dart';
 
 /// Installs only the typed last-authentication-method read API.
 final class AuthLastAuthenticationMethodClientPlugin

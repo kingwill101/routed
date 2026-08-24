@@ -3,18 +3,18 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:jose/jose.dart' show JsonWebSignatureBuilder;
-
-import 'exceptions.dart';
-import 'account_policy.dart';
-import 'deletion_transaction.dart';
-import 'models.dart';
-import 'plugin.dart';
-import 'oauth_client_store.dart';
-import 'oauth_provider_models.dart';
-import 'rate_limit.dart';
-import 'store.dart';
-import 'tokens.dart' show hashOpaqueToken, secureRandomToken;
-import 'users.dart' show authUserIsDisabled;
+import 'package:server_auth/src/core/account_policy.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/oauth_client_store.dart';
+import 'package:server_auth/src/core/oauth_provider_models.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/store.dart';
+import 'package:server_auth/src/core/tokens.dart'
+    show hashOpaqueToken, secureRandomToken;
+import 'package:server_auth/src/core/users.dart' show authUserIsDisabled;
 
 /// Stable identifier for [OAuthProviderModePlugin].
 const String authOAuthProviderModePluginId = 'oauth_provider_mode';
@@ -1141,7 +1141,7 @@ final class OAuthProviderModePlugin<TContext>
         ? _store as AuthAccountStateStore
         : null;
     final state = await states?.find(userId);
-    if (state?.disabled == true || state?.isLocked() == true) return null;
+    if ((state?.disabled ?? false) || (state?.isLocked() ?? false)) return null;
     return user;
   }
 

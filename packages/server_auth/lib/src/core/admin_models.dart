@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'models.dart';
-import 'users.dart' show normalizeAuthEmail;
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/users.dart' show normalizeAuthEmail;
 
 /// Resource/action permissions assigned to one administrative role.
 typedef AuthAdminPermissionSet = Map<String, Iterable<String>>;
@@ -106,7 +106,8 @@ final class AuthAdminMutationAuthorization {
       return effectiveRoles.any((role) {
         final permissions = rolePermissions[role];
         final actions = permissions?[resource] ?? permissions?['*'];
-        return actions?.any((value) => value == action || value == '*') == true;
+        return actions?.any((value) => value == action || value == '*') ??
+            false;
       });
     });
   }
@@ -152,6 +153,25 @@ final class AuthAdminUserState {
        lastFailedLoginAt = lastFailedLoginAt?.toUtc(),
        createdAt = (createdAt ?? DateTime.now()).toUtc(),
        updatedAt = (updatedAt ?? DateTime.now()).toUtc();
+
+  /// Creates an instance from a JSON map.
+  factory AuthAdminUserState.fromJson(Map<String, dynamic> json) =>
+      AuthAdminUserState(
+        userId: _requiredString(json, 'userId'),
+        banned: json['banned'] == true,
+        banReason: json['banReason']?.toString(),
+        banExpiresAt: _optionalDate(json['banExpiresAt']),
+        emailVerified: json['emailVerified'] == true,
+        disabled: json['disabled'] == true,
+        disabledReason: json['disabledReason']?.toString(),
+        disabledAt: _optionalDate(json['disabledAt']),
+        lockedUntil: _optionalDate(json['lockedUntil']),
+        failedLoginAttempts: json['failedLoginAttempts'] as int? ?? 0,
+        lastLoginAt: _optionalDate(json['lastLoginAt']),
+        lastFailedLoginAt: _optionalDate(json['lastFailedLoginAt']),
+        createdAt: _requiredDate(json, 'createdAt'),
+        updatedAt: _requiredDate(json, 'updatedAt'),
+      );
 
   /// The identifier of the user.
   final String userId;
@@ -240,7 +260,7 @@ final class AuthAdminUserState {
     banReason: clearBanReason ? null : banReason ?? this.banReason,
     banExpiresAt: clearBanExpiresAt ? null : banExpiresAt ?? this.banExpiresAt,
     emailVerified: emailVerified ?? this.emailVerified,
-    disabled: clearDisabled ? false : (disabled ?? this.disabled),
+    disabled: !clearDisabled && (disabled ?? this.disabled),
     disabledReason: clearDisabledReason
         ? null
         : (disabledReason ?? this.disabledReason),
@@ -270,31 +290,18 @@ final class AuthAdminUserState {
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
   };
-
-  /// Creates an instance from a JSON map.
-  factory AuthAdminUserState.fromJson(Map<String, dynamic> json) =>
-      AuthAdminUserState(
-        userId: _requiredString(json, 'userId'),
-        banned: json['banned'] == true,
-        banReason: json['banReason']?.toString(),
-        banExpiresAt: _optionalDate(json['banExpiresAt']),
-        emailVerified: json['emailVerified'] == true,
-        disabled: json['disabled'] == true,
-        disabledReason: json['disabledReason']?.toString(),
-        disabledAt: _optionalDate(json['disabledAt']),
-        lockedUntil: _optionalDate(json['lockedUntil']),
-        failedLoginAttempts: json['failedLoginAttempts'] as int? ?? 0,
-        lastLoginAt: _optionalDate(json['lastLoginAt']),
-        lastFailedLoginAt: _optionalDate(json['lastFailedLoginAt']),
-        createdAt: _requiredDate(json, 'createdAt'),
-        updatedAt: _requiredDate(json, 'updatedAt'),
-      );
 }
 
 /// Authentication data for auth admin user.
 final class AuthAdminUser {
   /// Creates an instance of AuthAdminUser.
   const AuthAdminUser({required this.user, required this.state});
+
+  /// Creates an instance from a JSON map.
+  factory AuthAdminUser.fromJson(Map<String, dynamic> json) => AuthAdminUser(
+    user: AuthUser.fromJson(json),
+    state: AuthAdminUserState.fromJson(json),
+  );
 
   /// The user associated with this value.
   final AuthUser user;
@@ -307,12 +314,6 @@ final class AuthAdminUser {
     ...user.redacted().toJson(),
     ...state.toJson(),
   };
-
-  /// Creates an instance from a JSON map.
-  factory AuthAdminUser.fromJson(Map<String, dynamic> json) => AuthAdminUser(
-    user: AuthUser.fromJson(json),
-    state: AuthAdminUserState.fromJson(json),
-  );
 }
 
 /// Authentication data for auth admin user sort field.
@@ -384,6 +385,15 @@ final class AuthAdminUserPage {
     required this.offset,
   });
 
+  /// Creates an instance from a JSON map.
+  factory AuthAdminUserPage.fromJson(Map<String, dynamic> json) =>
+      AuthAdminUserPage(
+        items: _mapList(json['items']).map(AuthAdminUser.fromJson).toList(),
+        total: _integer(json['total']),
+        limit: _integer(json['limit']),
+        offset: _integer(json['offset']),
+      );
+
   /// The items associated with this value.
   final List<AuthAdminUser> items;
 
@@ -403,15 +413,6 @@ final class AuthAdminUserPage {
     'limit': limit,
     'offset': offset,
   };
-
-  /// Creates an instance from a JSON map.
-  factory AuthAdminUserPage.fromJson(Map<String, dynamic> json) =>
-      AuthAdminUserPage(
-        items: _mapList(json['items']).map(AuthAdminUser.fromJson).toList(),
-        total: _integer(json['total']),
-        limit: _integer(json['limit']),
-        offset: _integer(json['offset']),
-      );
 }
 
 /// Authentication data for auth admin session.
@@ -430,6 +431,38 @@ final class AuthAdminSession {
     this.userAgent,
     this.impersonatedBy,
   });
+
+  /// Creates an instance from a persisted record.
+  factory AuthAdminSession.fromRecord(AuthSessionRecord record) =>
+      AuthAdminSession(
+        id: record.id,
+        userId: record.userId,
+        createdAt: record.createdAt.toUtc(),
+        expiresAt: record.expiresAt.toUtc(),
+        lastUsedAt: record.lastUsedAt.toUtc(),
+        revokedAt: record.revokedAt?.toUtc(),
+        ipAddress: record.ipAddress,
+        userAgent: record.userAgent,
+        authenticationMethod: record.authenticationMethod,
+        active: record.isActive(),
+        impersonatedBy: record.impersonatedBy,
+      );
+
+  /// Creates an instance from a JSON map.
+  factory AuthAdminSession.fromJson(Map<String, dynamic> json) =>
+      AuthAdminSession(
+        id: _requiredString(json, 'id'),
+        userId: _requiredString(json, 'userId'),
+        createdAt: _requiredDate(json, 'createdAt'),
+        expiresAt: _requiredDate(json, 'expiresAt'),
+        lastUsedAt: _requiredDate(json, 'lastUsedAt'),
+        revokedAt: _optionalDate(json['revokedAt']),
+        ipAddress: json['ipAddress']?.toString(),
+        userAgent: json['userAgent']?.toString(),
+        authenticationMethod: _requiredString(json, 'authenticationMethod'),
+        active: json['active'] == true,
+        impersonatedBy: json['impersonatedBy']?.toString(),
+      );
 
   /// The unique identifier.
   final String id;
@@ -464,22 +497,6 @@ final class AuthAdminSession {
   /// The impersonated by associated with this value.
   final String? impersonatedBy;
 
-  /// Creates an instance from a persisted record.
-  factory AuthAdminSession.fromRecord(AuthSessionRecord record) =>
-      AuthAdminSession(
-        id: record.id,
-        userId: record.userId,
-        createdAt: record.createdAt.toUtc(),
-        expiresAt: record.expiresAt.toUtc(),
-        lastUsedAt: record.lastUsedAt.toUtc(),
-        revokedAt: record.revokedAt?.toUtc(),
-        ipAddress: record.ipAddress,
-        userAgent: record.userAgent,
-        authenticationMethod: record.authenticationMethod,
-        active: record.isActive(),
-        impersonatedBy: record.impersonatedBy,
-      );
-
   /// Converts this value to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -494,28 +511,19 @@ final class AuthAdminSession {
     'active': active,
     'impersonatedBy': impersonatedBy,
   };
-
-  /// Creates an instance from a JSON map.
-  factory AuthAdminSession.fromJson(Map<String, dynamic> json) =>
-      AuthAdminSession(
-        id: _requiredString(json, 'id'),
-        userId: _requiredString(json, 'userId'),
-        createdAt: _requiredDate(json, 'createdAt'),
-        expiresAt: _requiredDate(json, 'expiresAt'),
-        lastUsedAt: _requiredDate(json, 'lastUsedAt'),
-        revokedAt: _optionalDate(json['revokedAt']),
-        ipAddress: json['ipAddress']?.toString(),
-        userAgent: json['userAgent']?.toString(),
-        authenticationMethod: _requiredString(json, 'authenticationMethod'),
-        active: json['active'] == true,
-        impersonatedBy: json['impersonatedBy']?.toString(),
-      );
 }
 
 /// Authentication data for auth admin warning.
 final class AuthAdminWarning {
   /// Creates an instance of AuthAdminWarning.
   const AuthAdminWarning({required this.code, this.message});
+
+  /// Creates an instance from a JSON map.
+  factory AuthAdminWarning.fromJson(Map<String, dynamic> json) =>
+      AuthAdminWarning(
+        code: _requiredString(json, 'code'),
+        message: json['message']?.toString(),
+      );
 
   /// The code associated with this value.
   final String code;
@@ -525,13 +533,6 @@ final class AuthAdminWarning {
 
   /// Converts this value to a JSON-compatible map.
   Map<String, dynamic> toJson() => {'code': code, 'message': message};
-
-  /// Creates an instance from a JSON map.
-  factory AuthAdminWarning.fromJson(Map<String, dynamic> json) =>
-      AuthAdminWarning(
-        code: _requiredString(json, 'code'),
-        message: json['message']?.toString(),
-      );
 }
 
 /// Result returned by auth admin mutation result.
@@ -859,5 +860,8 @@ DateTime? _optionalDate(Object? value) =>
 int _integer(Object? value) => value is int ? value : int.parse('$value');
 
 List<Map<String, dynamic>> _mapList(Object? value) => value is List
-    ? value.whereType<Map>().map(Map<String, dynamic>.from).toList()
+    ? value
+          .whereType<Map<Object?, Object?>>()
+          .map<Map<String, dynamic>>(Map<String, dynamic>.from)
+          .toList()
     : const <Map<String, dynamic>>[];

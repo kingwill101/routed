@@ -1,13 +1,13 @@
 import 'dart:async';
 
-import 'authentication_methods.dart';
-import 'deletion_transaction.dart';
-import 'models.dart';
-import 'password_hasher.dart';
-import 'password_policy.dart';
-import 'providers.dart';
-import 'rate_limit.dart';
-import 'store.dart';
+import 'package:server_auth/src/core/authentication_methods.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/password_hasher.dart';
+import 'package:server_auth/src/core/password_policy.dart';
+import 'package:server_auth/src/core/providers.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/store.dart';
 
 /// HTTP method exposed by a portable auth plugin operation.
 enum AuthOperationMethod {
@@ -262,13 +262,6 @@ const AuthRoutePath authCallbackProviderRoute = AuthRoutePath(
 
 /// Namespaced request data supplied to a portable auth endpoint.
 final class AuthEndpointRequest {
-  /// Creates an empty endpoint request.
-  const AuthEndpointRequest.empty()
-    : path = const <AuthRouteParameterKey, String>{},
-      query = const <String, dynamic>{},
-      body = const <String, dynamic>{},
-      headers = const <String, String>{};
-
   /// Creates an endpoint request with immutable path, query, body, and headers.
   AuthEndpointRequest({
     Map<AuthRouteParameterKey, String> path =
@@ -282,6 +275,13 @@ final class AuthEndpointRequest {
        headers = Map<String, String>.unmodifiable(
          headers.map((key, value) => MapEntry(key.toLowerCase(), value)),
        );
+
+  /// Creates an empty endpoint request.
+  const AuthEndpointRequest.empty()
+    : path = const <AuthRouteParameterKey, String>{},
+      query = const <String, dynamic>{},
+      body = const <String, dynamic>{},
+      headers = const <String, String>{};
 
   /// Values captured for declared route parameters.
   final Map<AuthRouteParameterKey, String> path;
@@ -1089,7 +1089,10 @@ final class AuthEndpointResponseContract {
     required this.statusCode,
     required this.description,
     this.contract,
-  }) : assert(statusCode >= 100 && statusCode <= 599);
+  }) : assert(
+         statusCode >= 100 && statusCode <= 599,
+         'statusCode must be between 100 and 599',
+       );
 
   /// HTTP status code represented by the response.
   final int statusCode;
@@ -1576,12 +1579,11 @@ class AuthServerPluginRegistry<TContext> {
       final inventory = plugin is AuthAuthenticationMethodInventoryContributor
           ? plugin as AuthAuthenticationMethodInventoryContributor
           : null;
-      final inventoryEnabled = inventory == null
-          ? false
-          : plugin is AuthAuthenticationMethodInventoryControl
-          ? (plugin as AuthAuthenticationMethodInventoryControl)
-                .authenticationMethodInventoryEnabled
-          : true;
+      final inventoryEnabled =
+          !(inventory == null) &&
+          (plugin is! AuthAuthenticationMethodInventoryControl ||
+              (plugin as AuthAuthenticationMethodInventoryControl)
+                  .authenticationMethodInventoryEnabled);
       if (inventoryEnabled != (methodNamespace != null)) {
         throw StateError(
           'Plugin "${plugin.id}" must declare exactly one active '
@@ -1667,7 +1669,7 @@ class AuthServerPluginRegistry<TContext> {
     if (_historicalUserDataNamespaces.isEmpty) return;
     final coordinator = deletionHost!.userDeletionCoordinator;
     if (coordinator
-        case AuthHistoricalUserDeletionNamespaceCoordinator capability) {
+        case final AuthHistoricalUserDeletionNamespaceCoordinator capability) {
       capability.bindHistoricalUserDeletionNamespaces(
         _historicalUserDataNamespaces,
       );

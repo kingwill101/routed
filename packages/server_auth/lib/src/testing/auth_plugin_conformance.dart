@@ -4,10 +4,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import '../core/client.dart';
-import '../core/plugin.dart';
-import '../core/rate_limit.dart';
-import '../core/runtime.dart';
+import 'package:server_auth/src/core/client.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/runtime.dart';
 
 /// One HTTP response used to exercise an installed client operation.
 final class AuthClientConformanceResponse {
@@ -55,6 +55,7 @@ typedef AuthInstalledClientResponseVerifier = void Function(Object? value);
 /// request codec, checks response JSON against the server schema, and feeds
 /// the client both valid and malformed responses.
 final class AuthInstalledClientOperationContract {
+  /// Creates a client-operation contract.
   const AuthInstalledClientOperationContract({
     required this.endpointId,
     required this.plugin,
@@ -89,6 +90,7 @@ final class AuthInstalledClientOperationContract {
 
 /// The result of running one plugin-composition conformance case.
 final class AuthPluginConformanceResult {
+  /// Creates a successful conformance result.
   const AuthPluginConformanceResult.passed();
 
   /// Whether the composed plugin topology satisfied this case.
@@ -555,14 +557,14 @@ final class AuthPluginConformanceSuite<TContext> {
       final security = endpoint is AuthEndpointSecurityDescriptor
           ? endpoint as AuthEndpointSecurityDescriptor
           : null;
-      if (security?.requiresRecentAuthentication == true &&
+      if ((security?.requiresRecentAuthentication ?? false) &&
           endpoint.authentication != AuthOperationAuthentication.session) {
         _fail(
           'Sensitive mutation "${endpoint.id}" must use session '
           'authentication so the host can validate recent proof.',
         );
       }
-      if (security?.requiresRecentAuthentication == true &&
+      if ((security?.requiresRecentAuthentication ?? false) &&
           !isBrowserProtected) {
         _fail(
           'Sensitive mutation "${endpoint.id}" must require browser origin '
@@ -821,7 +823,7 @@ void _verifyObservedRequest<TContext>(
       'not $expectedMethod.',
     );
   }
-  final actualPath = request.url.path.replaceFirst(RegExp(r'^/auth'), '');
+  final actualPath = request.url.path.replaceFirst(RegExp('^/auth'), '');
   if (_canonicalPath(actualPath) != endpoint.path.validate()) {
     _fail(
       'Installed client operation "${endpoint.id}" uses path '
@@ -877,9 +879,9 @@ void _verifyJsonShape(
   }
 
   final oneOf = schema['oneOf'];
-  if (oneOf is List) {
+  if (oneOf is List<Object?>) {
     var matches = 0;
-    for (final candidate in oneOf.whereType<Map>()) {
+    for (final candidate in oneOf.whereType<Map<Object?, Object?>>()) {
       try {
         _verifyJsonShape(value, Map<String, Object?>.from(candidate), label);
         matches++;
@@ -892,8 +894,10 @@ void _verifyJsonShape(
 
   final rawTypes = schema['type'];
   final types = switch (rawTypes) {
-    String type => <String>[type],
-    List values => values.whereType<String>().toList(growable: false),
+    final String type => <String>[type],
+    final List<Object?> values => values.whereType<String>().toList(
+      growable: false,
+    ),
     _ => const <String>[],
   };
   if (types.isNotEmpty && !types.any((type) => _matchesJsonType(value, type))) {

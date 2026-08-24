@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'exceptions.dart';
-import 'jwt.dart';
-import 'models.dart';
-import 'providers.dart';
-import 'users.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/jwt.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/providers.dart';
+import 'package:server_auth/src/core/users.dart';
 
 /// Callback invoked before completing a sign-in flow.
 typedef AuthSignInCallback<TContext> =
@@ -58,7 +58,7 @@ Future<AuthSignInResult> resolveAuthSignInDecision<TContext>({
   if (callback == null) {
     return const AuthSignInResult.allow();
   }
-  return await Future<AuthSignInResult>.value(callback(context));
+  return Future<AuthSignInResult>.value(callback(context));
 }
 
 /// Resolves sign-in decision and returns redirect when allowed.
@@ -143,7 +143,7 @@ Future<String?> resolveAuthSignInRedirectTarget<TContext>({
       );
 
   final target = decidedRedirect ?? callbackUrl;
-  return await Future<String?>.value(resolveRedirect(target));
+  return Future<String?>.value(resolveRedirect(target));
 }
 
 /// Evaluates JWT callback behavior with pass-through defaults.
@@ -178,7 +178,7 @@ Future<String?> resolveAuthRedirectTarget<TContext>({
   if (callback == null) {
     return null;
   }
-  return await Future<String?>.value(callback(context));
+  return Future<String?>.value(callback(context));
 }
 
 /// Evaluates redirect callback behavior with fallback pass-through semantics.
@@ -393,7 +393,6 @@ resolveAuthSignInResultForStrategyWithCallbacks<TContext>({
         context: context,
         options: jwtOptions,
         user: user,
-        strategy: AuthSessionStrategy.jwt,
         provider: provider,
         account: account,
         profile: profile,

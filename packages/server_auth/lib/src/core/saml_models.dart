@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'models.dart';
-import 'plugin.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/plugin.dart';
 
 /// Stable identifier for the SAML server plugin and persistence schema.
 const String authSamlPluginId = 'saml_sso';
@@ -259,6 +259,7 @@ final class AuthSamlSignatureProof {
   final String canonicalizationAlgorithm;
 }
 
+/// Verifies parsed SAML responses against an application-owned trust policy.
 abstract interface class AuthSamlAssertionVerifier {
   /// Verifies [input] and returns the exact signed-reference proof.
   FutureOr<AuthSamlSignatureProof> verify(AuthSamlVerificationInput input);
@@ -358,7 +359,7 @@ String _normalizeDomain(String value) {
   final domain = value.trim().toLowerCase();
   if (domain.isEmpty ||
       domain.length > 253 ||
-      domain.contains(RegExp(r'[^a-z0-9.-]')) ||
+      domain.contains(RegExp('[^a-z0-9.-]')) ||
       domain.startsWith('.') ||
       domain.endsWith('.') ||
       domain.contains('..')) {
@@ -380,7 +381,7 @@ void _requireProviderId(String value) {
   final normalized = value.trim();
   if (normalized.isEmpty ||
       normalized.length > 128 ||
-      normalized.contains(RegExp(r'[^A-Za-z0-9._-]'))) {
+      normalized.contains(RegExp('[^A-Za-z0-9._-]'))) {
     throw ArgumentError.value(
       value,
       'providerId',

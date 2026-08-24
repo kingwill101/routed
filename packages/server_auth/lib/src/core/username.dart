@@ -1,17 +1,17 @@
-import 'authentication_methods.dart';
-import 'account_policy.dart';
-import 'exceptions.dart';
-import 'models.dart';
-import 'password_hasher.dart';
-import 'password_policy.dart';
-import 'plugin.dart';
-import 'providers.dart';
-import 'rate_limit.dart';
-import 'tokens.dart' show secureRandomToken;
-import 'two_factor.dart';
-import 'store.dart';
-import 'users.dart';
-import 'username_store.dart';
+import 'package:server_auth/src/core/account_policy.dart';
+import 'package:server_auth/src/core/authentication_methods.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/password_hasher.dart';
+import 'package:server_auth/src/core/password_policy.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/providers.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/store.dart';
+import 'package:server_auth/src/core/tokens.dart' show secureRandomToken;
+import 'package:server_auth/src/core/two_factor.dart';
+import 'package:server_auth/src/core/username_store.dart';
+import 'package:server_auth/src/core/users.dart';
 
 /// Stable identifier for the username plugin.
 const String authUsernamePluginId = 'username';
@@ -77,7 +77,7 @@ final class AuthUsernameIdentifierPolicy {
     this.caseCanonicalization = AuthUsernameCaseCanonicalization.lowercase,
     this.minimumLength = 3,
     this.maximumLength = 32,
-    this.allowedCharactersPattern = r'[a-z0-9._-]',
+    this.allowedCharactersPattern = '[a-z0-9._-]',
     this.requireDottedEmailDomain = true,
   }) : _allowedCharacters = RegExp(
          '^(?:$allowedCharactersPattern)+\$',
@@ -203,18 +203,6 @@ final class AuthUsernameRegistrationRequest {
     this.captchaToken,
   });
 
-  /// Requested username.
-  final String username;
-
-  /// Optional email address to associate with the account.
-  final String? email;
-
-  /// Password for the new account.
-  final String password;
-
-  /// Optional captcha token required by a server policy plugin.
-  final String? captchaToken;
-
   /// Decodes a registration request from JSON.
   factory AuthUsernameRegistrationRequest.fromJson(Map<String, dynamic> json) =>
       AuthUsernameRegistrationRequest(
@@ -227,6 +215,18 @@ final class AuthUsernameRegistrationRequest {
           maximumLength: 16384,
         ),
       );
+
+  /// Requested username.
+  final String username;
+
+  /// Optional email address to associate with the account.
+  final String? email;
+
+  /// Password for the new account.
+  final String password;
+
+  /// Optional captcha token required by a server policy plugin.
+  final String? captchaToken;
 }
 
 /// JSON request for signing in with a username credential.
@@ -237,15 +237,6 @@ final class AuthUsernameSignInRequest {
     required this.password,
     this.captchaToken,
   });
-
-  /// Username or email identifier supplied by the caller.
-  final String identifier;
-
-  /// Password to verify.
-  final String password;
-
-  /// Optional captcha token required by a server policy plugin.
-  final String? captchaToken;
 
   /// Decodes a sign-in request from JSON.
   factory AuthUsernameSignInRequest.fromJson(Map<String, dynamic> json) =>
@@ -258,6 +249,15 @@ final class AuthUsernameSignInRequest {
           maximumLength: 16384,
         ),
       );
+
+  /// Username or email identifier supplied by the caller.
+  final String identifier;
+
+  /// Password to verify.
+  final String password;
+
+  /// Optional captcha token required by a server policy plugin.
+  final String? captchaToken;
 }
 
 /// JSON request for changing a username credential.
@@ -265,12 +265,12 @@ final class AuthUsernameChangeRequest {
   /// Creates a username-change request.
   const AuthUsernameChangeRequest({required this.username});
 
-  /// New username requested by the caller.
-  final String username;
-
   /// Decodes a username-change request from JSON.
   factory AuthUsernameChangeRequest.fromJson(Map<String, dynamic> json) =>
       AuthUsernameChangeRequest(username: _requiredString(json, 'username'));
+
+  /// New username requested by the caller.
+  final String username;
 }
 
 /// JSON response describing a username change.
@@ -416,7 +416,7 @@ final class UsernamePlugin<TContext>
     final user = await _users.findById(userId);
     final state = await _accountStates?.find(userId);
     return AuthAuthenticationMethodSnapshot.complete([
-      if (credential?.enabled == true &&
+      if ((credential?.enabled ?? false) &&
           user != null &&
           !authUserIsDisabled(user) &&
           state?.disabled != true &&
@@ -506,7 +506,6 @@ final class UsernamePlugin<TContext>
           requestCodec: _registrationRequestCodec,
           responseCodec: _responseCodec,
           authentication: AuthOperationAuthentication.none,
-          originPolicy: AuthOperationOriginPolicy.browser,
           rateLimitOperation: authUsernameRegistrationRateLimitOperation,
           rateLimitIdentifier: (request) =>
               identifierPolicy.normalizeUsername(request.username),
@@ -537,7 +536,6 @@ final class UsernamePlugin<TContext>
           requestCodec: _signInRequestCodec,
           responseCodec: _responseCodec,
           authentication: AuthOperationAuthentication.none,
-          originPolicy: AuthOperationOriginPolicy.browser,
           rateLimitOperation: authUsernameSignInRateLimitOperation,
           rateLimitIdentifier: (request) =>
               identifierPolicy.resolve(request.identifier)?.value,
@@ -573,8 +571,6 @@ final class UsernamePlugin<TContext>
           ),
           requestCodec: _changeRequestCodec,
           responseCodec: _changeResponseCodec,
-          authentication: AuthOperationAuthentication.session,
-          originPolicy: AuthOperationOriginPolicy.browser,
           csrfPolicy: AuthOperationCsrfPolicy.required,
           rateLimitOperation: authUsernameChangeRateLimitOperation,
           handler: (invocation, request) => changeUsername(
@@ -598,8 +594,6 @@ final class UsernamePlugin<TContext>
           ),
           requestCodec: _emptyRequestCodec,
           responseCodec: _objectResponseCodec,
-          authentication: AuthOperationAuthentication.session,
-          originPolicy: AuthOperationOriginPolicy.browser,
           csrfPolicy: AuthOperationCsrfPolicy.required,
           requiresRecentAuthentication: true,
           rateLimitOperation: authUsernameRemovalRateLimitOperation,
@@ -807,8 +801,8 @@ final class UsernamePlugin<TContext>
     final state = user == null ? null : await _accountStates?.find(user.id);
     if (user == null ||
         authUserIsDisabled(user) ||
-        state?.disabled == true ||
-        state?.isLocked() == true) {
+        (state?.disabled ?? false) ||
+        (state?.isLocked() ?? false)) {
       throw AuthFlowException('invalid_credentials');
     }
     final username = user.attributes['username'];
@@ -918,8 +912,8 @@ final class UsernamePlugin<TContext>
     final state = await _accountStates?.find(normalized);
     if (user == null ||
         authUserIsDisabled(user) ||
-        state?.disabled == true ||
-        state?.isLocked() == true) {
+        (state?.disabled ?? false) ||
+        (state?.isLocked() ?? false)) {
       throw AuthFlowException(failureCode);
     }
     return user;

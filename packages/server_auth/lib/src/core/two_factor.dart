@@ -3,13 +3,12 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:hashlib/hashlib.dart';
-
-import 'deletion_transaction.dart';
-import 'exceptions.dart';
-import 'plugin.dart';
-import 'models.dart';
-import 'rate_limit.dart';
-import 'tokens.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/tokens.dart';
 
 /// Stable ID for the built-in two-factor plugin.
 const authTwoFactorPluginId = 'two_factor';
@@ -1552,7 +1551,7 @@ final class InMemoryAuthTwoFactorBackend
     AuthTwoFactorBeginEnrollmentCommand command,
   ) => _atomic(command.record.userId, () {
     final current = factorStore._records[command.record.userId];
-    if (current?.verified == true) {
+    if (current?.verified ?? false) {
       return const AuthTwoFactorCommandResult(
         AuthTwoFactorCommandStatus.conflict,
       );
@@ -2688,7 +2687,7 @@ final class TwoFactorPlugin<TContext>
   }) async {
     _requireUserId(userId);
     final existing = await backend.factorStore.findByUserId(userId);
-    if (existing?.verified == true) {
+    if (existing?.verified ?? false) {
       throw AuthFlowException('two_factor_already_enabled');
     }
     final issuedAt = (now ?? DateTime.now()).toUtc();
@@ -3160,7 +3159,6 @@ String generateAuthTotpCode(
     secret,
     counter: counterBytes,
     digits: digits,
-    algo: sha1,
   ).valueString();
 }
 
@@ -3223,10 +3221,10 @@ List<int> _secureBytes(int length) {
 
 AuthEndpointDescriptor<TContext> _twoFactorHostEndpoint<TContext>({
   required String id,
-  AuthOperationMethod method = AuthOperationMethod.post,
   required AuthRoutePath path,
   required Map<String, Object?> requestSchema,
   required Map<String, Object?> responseSchema,
+  AuthOperationMethod method = AuthOperationMethod.post,
   AuthOperationAuthentication authentication =
       AuthOperationAuthentication.session,
   bool protectMutation = true,

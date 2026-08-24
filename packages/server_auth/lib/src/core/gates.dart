@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'models.dart';
+import 'package:server_auth/src/core/models.dart';
 
 /// Generic gate callback contract.
 typedef AuthGateCallback<TContext> =

@@ -10,8 +10,11 @@ class PasswordPolicy {
   /// [minimumLength] must be at least one, and [maximumLength] must not be
   /// shorter than it. These invariants are enforced with assertions.
   const PasswordPolicy({this.minimumLength = 12, this.maximumLength = 1024})
-    : assert(minimumLength >= 1),
-      assert(maximumLength >= minimumLength);
+    : assert(minimumLength >= 1, 'minimumLength must be positive'),
+      assert(
+        maximumLength >= minimumLength,
+        'maximumLength must be at least minimumLength',
+      );
 
   /// Minimum password length accepted during registration.
   final int minimumLength;

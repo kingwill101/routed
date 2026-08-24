@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'models.dart';
+import 'package:server_auth/src/core/models.dart';
 
 /// Opaque identity for one persistence/transaction domain.
 ///
@@ -10,7 +10,7 @@ import 'models.dart';
 /// adapter instance.
 abstract interface class AuthUserDeletionDomain {}
 
-/// The domain owned by [InMemoryAuthStore].
+/// The domain owned by `InMemoryAuthStore`.
 ///
 /// This type is public so in-memory plugin stores can construct typed plans,
 /// but identity rather than type is what authorizes a plan for execution.
@@ -351,18 +351,18 @@ final class AuthUserDeletionPreflight {
         );
       }
       if (plan.userId != normalizedUserId) {
-        throw AuthUserDeletionPreflightException(
+        throw const AuthUserDeletionPreflightException(
           'Deletion plan user does not match the requested user.',
         );
       }
       if (!identical(plan.domain, domain)) {
-        throw AuthUserDeletionPreflightException(
+        throw const AuthUserDeletionPreflightException(
           'Deletion plan belongs to a foreign persistence domain.',
         );
       }
       final namespace = _normalizeNamespace(plan.namespace);
       if (namespace != plan.namespace || !namespaces.add(namespace)) {
-        throw AuthUserDeletionPreflightException(
+        throw const AuthUserDeletionPreflightException(
           'Deletion plan namespaces must be unique and normalized.',
         );
       }

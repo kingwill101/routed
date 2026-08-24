@@ -1,16 +1,21 @@
 import 'dart:async';
 
-import '../core/account_policy.dart';
-import '../core/authentication_methods.dart';
-import '../core/deletion_transaction.dart';
-import '../core/models.dart';
-import '../core/store.dart';
-import '../core/username_store.dart';
+import 'package:server_auth/src/core/account_policy.dart';
+import 'package:server_auth/src/core/authentication_methods.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/store.dart';
+import 'package:server_auth/src/core/username_store.dart';
 
+/// Describes a failed username-store conformance case.
 final class AuthUsernameStoreConformanceFailure implements Exception {
+  /// Creates a failure for [caseId] caused by [cause].
   const AuthUsernameStoreConformanceFailure(this.caseId, this.cause);
 
+  /// Stable identifier of the failed case.
   final String caseId;
+
+  /// Error raised by the adapter or the failed expectation.
   final Object cause;
 
   @override
@@ -19,11 +24,13 @@ final class AuthUsernameStoreConformanceFailure implements Exception {
 
 /// Isolated adapter fixture for the public username transaction verifier.
 final class AuthUsernameStoreConformanceFixture {
+  /// Creates a fixture from the username-capable store and fault hook.
   const AuthUsernameStoreConformanceFixture({
     required this.store,
     this.armFault,
   });
 
+  /// Core authentication store under test.
   final AuthStore store;
 
   /// Arms one deterministic failure inside the adapter's next transaction.
@@ -531,7 +538,7 @@ final class _UsernameInventory
   ) async {
     final credential = await store.findUsernameForUser(requestedUserId);
     return AuthAuthenticationMethodSnapshot.complete([
-      if (credential?.enabled == true)
+      if (credential?.enabled ?? false)
         AuthAuthenticationMethod.username(credential!.id),
     ]);
   }

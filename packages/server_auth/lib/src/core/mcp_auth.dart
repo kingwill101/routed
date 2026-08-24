@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'exceptions.dart';
-import 'plugin.dart';
-import 'rate_limit.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
 
 /// Stable identifier for [McpAuthPlugin].
 const String authMcpPluginId = 'mcp_auth';
@@ -308,7 +308,6 @@ final class McpAuthPlugin<TContext>
     responseCodec: _responseCodec,
     authentication: AuthOperationAuthentication.none,
     originPolicy: AuthOperationOriginPolicy.none,
-    csrfPolicy: AuthOperationCsrfPolicy.none,
     handler: (invocation, request) => payload,
   );
 
@@ -335,7 +334,6 @@ final class McpAuthPlugin<TContext>
         ),
         authentication: AuthOperationAuthentication.none,
         originPolicy: AuthOperationOriginPolicy.none,
-        csrfPolicy: AuthOperationCsrfPolicy.none,
         rateLimitOperation: const AuthRateLimitOperation(
           'mcp_auth',
           'register_client',
@@ -351,7 +349,7 @@ final class McpAuthPlugin<TContext>
 
   static final AuthOperationCodec<Map<String, dynamic>> _requestCodec =
       AuthOperationCodec<Map<String, dynamic>>(
-        decode: (value) => Map<String, dynamic>.from(value),
+        decode: Map<String, dynamic>.from,
         encode: (value) => value,
       );
 

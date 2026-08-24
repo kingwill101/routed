@@ -165,24 +165,6 @@ final class AuthScimUserName {
     }
   }
 
-  /// Display-formatted name.
-  final String? formatted;
-
-  /// Family name.
-  final String? familyName;
-
-  /// Given name.
-  final String? givenName;
-
-  /// Middle name.
-  final String? middleName;
-
-  /// Honorific prefix.
-  final String? honorificPrefix;
-
-  /// Honorific suffix.
-  final String? honorificSuffix;
-
   /// Decodes a bounded SCIM name object.
   factory AuthScimUserName.fromJson(Map<String, dynamic> json) {
     _onlyKeys(json, const <String>{
@@ -202,6 +184,24 @@ final class AuthScimUserName {
       honorificSuffix: _optionalString(json, 'honorificSuffix', 128),
     );
   }
+
+  /// Display-formatted name.
+  final String? formatted;
+
+  /// Family name.
+  final String? familyName;
+
+  /// Given name.
+  final String? givenName;
+
+  /// Middle name.
+  final String? middleName;
+
+  /// Honorific prefix.
+  final String? honorificPrefix;
+
+  /// Honorific suffix.
+  final String? honorificSuffix;
 
   /// Encodes this name object.
   Map<String, Object?> toJson() => <String, Object?>{
@@ -227,18 +227,6 @@ final class AuthScimUserEmail {
     if (display != null) _bounded(display!, 'email.display', 256);
   }
 
-  /// Email address value.
-  final String value;
-
-  /// Application-defined email type.
-  final String? type;
-
-  /// Presentation label for the email address.
-  final String? display;
-
-  /// Whether this is the primary email address.
-  final bool primary;
-
   /// Decodes a bounded SCIM email object.
   factory AuthScimUserEmail.fromJson(Map<String, dynamic> json) {
     _onlyKeys(json, const <String>{'value', 'type', 'display', 'primary'});
@@ -253,6 +241,18 @@ final class AuthScimUserEmail {
       primary: primary == true,
     );
   }
+
+  /// Email address value.
+  final String value;
+
+  /// Application-defined email type.
+  final String? type;
+
+  /// Presentation label for the email address.
+  final String? display;
+
+  /// Whether this is the primary email address.
+  final bool primary;
 
   /// Encodes this email object.
   Map<String, Object?> toJson() => <String, Object?>{
@@ -280,24 +280,6 @@ final class AuthScimUserData {
     _validateEmails(this.emails);
   }
 
-  /// User name used by the SCIM directory.
-  final String userName;
-
-  /// Application-owned external identifier.
-  final String? externalId;
-
-  /// Whether the user is active in the directory.
-  final bool active;
-
-  /// Structured name, when supplied.
-  final AuthScimUserName? name;
-
-  /// Display name, when supplied.
-  final String? displayName;
-
-  /// Email values associated with the user.
-  final List<AuthScimUserEmail> emails;
-
   /// Decodes strict SCIM User mutation data.
   factory AuthScimUserData.fromJson(Map<String, dynamic> json) {
     _onlyKeys(json, const <String>{
@@ -317,12 +299,30 @@ final class AuthScimUserData {
     return AuthScimUserData(
       userName: _requiredString(json, 'userName', 256),
       externalId: _optionalString(json, 'externalId', 256),
-      active: active is bool ? active : true,
+      active: active is! bool || active,
       name: _optionalObject(json, 'name', AuthScimUserName.fromJson),
       displayName: _optionalString(json, 'displayName', 256),
       emails: _emails(json['emails']),
     );
   }
+
+  /// User name used by the SCIM directory.
+  final String userName;
+
+  /// Application-owned external identifier.
+  final String? externalId;
+
+  /// Whether the user is active in the directory.
+  final bool active;
+
+  /// Structured name, when supplied.
+  final AuthScimUserName? name;
+
+  /// Display name, when supplied.
+  final String? displayName;
+
+  /// Email values associated with the user.
+  final List<AuthScimUserEmail> emails;
 
   /// Encodes this User data object.
   Map<String, Object?> toJson() => <String, Object?>{
@@ -482,17 +482,6 @@ final class AuthScimUserFilter {
   /// Creates an equality filter for [attribute] and [value].
   const AuthScimUserFilter({required this.attribute, required this.value});
 
-  /// Attribute tested by this filter.
-  final AuthScimUserFilterAttribute attribute;
-
-  /// Exact value to compare.
-  final String value;
-
-  static final RegExp _expression = RegExp(
-    r'^\s*(id|userName|externalId|emails\.value)\s+eq\s+"((?:[^"\\]|\\["\\])*)"\s*$',
-    caseSensitive: false,
-  );
-
   /// Parses the bounded SCIM equality filter syntax.
   factory AuthScimUserFilter.parse(String source) {
     if (source.length > 512 || _containsControl(source)) {
@@ -517,9 +506,20 @@ final class AuthScimUserFilter {
       value: value,
     );
   }
+
+  /// Attribute tested by this filter.
+  final AuthScimUserFilterAttribute attribute;
+
+  /// Exact value to compare.
+  final String value;
+
+  static final RegExp _expression = RegExp(
+    r'^\s*(id|userName|externalId|emails\.value)\s+eq\s+"((?:[^"\\]|\\["\\])*)"\s*$',
+    caseSensitive: false,
+  );
 }
 
-/// Bounded query supplied to [AuthScimProvisioningStore.listUsers].
+/// Bounded query supplied to `AuthScimProvisioningStore.listUsers`.
 final class AuthScimListUsersQuery {
   /// Creates a bounded User listing query.
   const AuthScimListUsersQuery({
@@ -527,15 +527,6 @@ final class AuthScimListUsersQuery {
     required this.count,
     this.filter,
   });
-
-  /// One-based index of the first requested resource.
-  final int startIndex;
-
-  /// Number of resources requested.
-  final int count;
-
-  /// Optional equality filter.
-  final AuthScimUserFilter? filter;
 
   /// Decodes and bounds a SCIM User listing request.
   factory AuthScimListUsersQuery.fromJson(
@@ -556,14 +547,24 @@ final class AuthScimListUsersQuery {
     if (rawFilter != null && rawFilter is! String) {
       throw const FormatException('Invalid SCIM filter.');
     }
+    final filterText = rawFilter as String?;
     return AuthScimListUsersQuery(
       startIndex: startIndex,
       count: requestedCount.clamp(0, maximumPageSize),
-      filter: rawFilter == null || rawFilter.trim().isEmpty
+      filter: filterText == null || filterText.trim().isEmpty
           ? null
-          : AuthScimUserFilter.parse(rawFilter),
+          : AuthScimUserFilter.parse(filterText),
     );
   }
+
+  /// One-based index of the first requested resource.
+  final int startIndex;
+
+  /// Number of resources requested.
+  final int count;
+
+  /// Optional equality filter.
+  final AuthScimUserFilter? filter;
 }
 
 /// Tenant-bound page returned by an application provisioning store.
@@ -613,18 +614,6 @@ final class AuthScimGroupMember {
     }
   }
 
-  /// Referenced SCIM resource identifier.
-  final String value;
-
-  /// Referenced resource type.
-  final AuthScimGroupMemberType type;
-
-  /// Optional display label.
-  final String? display;
-
-  /// Optional resource reference URI.
-  final Uri? reference;
-
   /// Decodes a bounded Group member object.
   factory AuthScimGroupMember.fromJson(Map<String, dynamic> json) {
     _onlyKeys(json, const <String>{'value', 'type', 'display', r'$ref'});
@@ -641,6 +630,18 @@ final class AuthScimGroupMember {
       reference: rawReference == null ? null : Uri.parse(rawReference),
     );
   }
+
+  /// Referenced SCIM resource identifier.
+  final String value;
+
+  /// Referenced resource type.
+  final AuthScimGroupMemberType type;
+
+  /// Optional display label.
+  final String? display;
+
+  /// Optional resource reference URI.
+  final Uri? reference;
 
   /// Encodes this Group member object.
   Map<String, Object?> toJson() => <String, Object?>{
@@ -668,15 +669,6 @@ final class AuthScimGroupData {
     _validateGroupMembers(this.members, maximumMembers: maximumMembers);
   }
 
-  /// Required display name.
-  final String displayName;
-
-  /// Application-owned external identifier.
-  final String? externalId;
-
-  /// Direct members of the group.
-  final List<AuthScimGroupMember> members;
-
   /// Decodes strict SCIM Group mutation data.
   factory AuthScimGroupData.fromJson(
     Map<String, dynamic> json, {
@@ -696,6 +688,15 @@ final class AuthScimGroupData {
       maximumMembers: maximumMembers,
     );
   }
+
+  /// Required display name.
+  final String displayName;
+
+  /// Application-owned external identifier.
+  final String? externalId;
+
+  /// Direct members of the group.
+  final List<AuthScimGroupMember> members;
 
   /// Encodes this Group data object.
   Map<String, Object?> toJson() => <String, Object?>{
@@ -801,17 +802,6 @@ final class AuthScimGroupFilter {
   /// Creates an equality filter for [attribute] and [value].
   const AuthScimGroupFilter({required this.attribute, required this.value});
 
-  /// Attribute tested by this filter.
-  final AuthScimGroupFilterAttribute attribute;
-
-  /// Exact value to compare.
-  final String value;
-
-  static final RegExp _expression = RegExp(
-    r'^\s*(id|displayName|externalId)\s+eq\s+"((?:[^"\\]|\\["\\])*)"\s*$',
-    caseSensitive: false,
-  );
-
   /// Parses the bounded SCIM Group equality filter syntax.
   factory AuthScimGroupFilter.parse(String source) {
     if (source.length > 512 || _containsControl(source)) {
@@ -836,9 +826,20 @@ final class AuthScimGroupFilter {
       value: value,
     );
   }
+
+  /// Attribute tested by this filter.
+  final AuthScimGroupFilterAttribute attribute;
+
+  /// Exact value to compare.
+  final String value;
+
+  static final RegExp _expression = RegExp(
+    r'^\s*(id|displayName|externalId)\s+eq\s+"((?:[^"\\]|\\["\\])*)"\s*$',
+    caseSensitive: false,
+  );
 }
 
-/// Bounded query supplied to [AuthScimProvisioningStore.listGroups].
+/// Bounded query supplied to `AuthScimProvisioningStore.listGroups`.
 final class AuthScimListGroupsQuery {
   /// Creates a bounded Group listing query.
   const AuthScimListGroupsQuery({
@@ -846,15 +847,6 @@ final class AuthScimListGroupsQuery {
     required this.count,
     this.filter,
   });
-
-  /// One-based index of the first requested resource.
-  final int startIndex;
-
-  /// Number of resources requested.
-  final int count;
-
-  /// Optional equality filter.
-  final AuthScimGroupFilter? filter;
 
   /// Decodes and bounds a SCIM Group listing request.
   factory AuthScimListGroupsQuery.fromJson(
@@ -873,16 +865,27 @@ final class AuthScimListGroupsQuery {
     if (rawFilter != null && rawFilter is! String) {
       throw const FormatException('Invalid SCIM Group filter.');
     }
+    final filterText = rawFilter as String?;
     return AuthScimListGroupsQuery(
       startIndex: startIndex,
       count: requestedCount.clamp(0, maximumPageSize),
-      filter: rawFilter == null || rawFilter.trim().isEmpty
+      filter: filterText == null || filterText.trim().isEmpty
           ? null
-          : AuthScimGroupFilter.parse(rawFilter),
+          : AuthScimGroupFilter.parse(filterText),
     );
   }
+
+  /// One-based index of the first requested resource.
+  final int startIndex;
+
+  /// Number of resources requested.
+  final int count;
+
+  /// Optional equality filter.
+  final AuthScimGroupFilter? filter;
 }
 
+/// A page of SCIM Group resources returned by a connection-bound query.
 final class AuthScimGroupPage {
   /// Creates a page of connection-bound Group resources.
   AuthScimGroupPage({
@@ -915,22 +918,6 @@ enum AuthScimGroupPatchPath {
 
 /// One validated SCIM Group patch operation.
 final class AuthScimGroupPatchOperation {
-  /// Creates an internal validated Group patch operation.
-  const AuthScimGroupPatchOperation._({
-    required this.kind,
-    required this.path,
-    required this.value,
-  });
-
-  /// Operation semantics.
-  final AuthScimPatchOperationKind kind;
-
-  /// Group attribute targeted by the operation.
-  final AuthScimGroupPatchPath path;
-
-  /// Typed operation value, when present.
-  final Object? value;
-
   /// Decodes and validates one Group patch operation.
   factory AuthScimGroupPatchOperation.fromJson(
     Map<String, dynamic> json, {
@@ -982,6 +969,22 @@ final class AuthScimGroupPatchOperation {
     };
     return AuthScimGroupPatchOperation._(kind: kind, path: path, value: value);
   }
+
+  /// Creates an internal validated Group patch operation.
+  const AuthScimGroupPatchOperation._({
+    required this.kind,
+    required this.path,
+    required this.value,
+  });
+
+  /// Operation semantics.
+  final AuthScimPatchOperationKind kind;
+
+  /// Group attribute targeted by the operation.
+  final AuthScimGroupPatchPath path;
+
+  /// Typed operation value, when present.
+  final Object? value;
 }
 
 /// Strict, bounded SCIM Group PatchOp document.
@@ -994,9 +997,6 @@ final class AuthScimGroupPatchDocument {
       throw const FormatException('Invalid SCIM patch operation count.');
     }
   }
-
-  /// Operations applied in request order.
-  final List<AuthScimGroupPatchOperation> operations;
 
   /// Decodes and validates a Group PatchOp document.
   factory AuthScimGroupPatchDocument.fromJson(
@@ -1025,6 +1025,9 @@ final class AuthScimGroupPatchDocument {
       }),
     );
   }
+
+  /// Operations applied in request order.
+  final List<AuthScimGroupPatchOperation> operations;
 
   /// Applies this document to [current].
   AuthScimGroupData apply(
@@ -1147,22 +1150,6 @@ enum AuthScimUserPatchPath {
 
 /// One validated SCIM user patch operation.
 final class AuthScimPatchOperation {
-  /// Creates an internal validated User patch operation.
-  const AuthScimPatchOperation._({
-    required this.kind,
-    required this.path,
-    required this.value,
-  });
-
-  /// Operation semantics.
-  final AuthScimPatchOperationKind kind;
-
-  /// User attribute targeted by the operation.
-  final AuthScimUserPatchPath path;
-
-  /// Typed operation value, when present.
-  final Object? value;
-
   /// Decodes and validates one User patch operation.
   factory AuthScimPatchOperation.fromJson(Map<String, dynamic> json) {
     _onlyKeys(json, const <String>{'op', 'path', 'value'});
@@ -1202,6 +1189,22 @@ final class AuthScimPatchOperation {
     final value = _patchValue(path, json['value']);
     return AuthScimPatchOperation._(kind: kind, path: path, value: value);
   }
+
+  /// Creates an internal validated User patch operation.
+  const AuthScimPatchOperation._({
+    required this.kind,
+    required this.path,
+    required this.value,
+  });
+
+  /// Operation semantics.
+  final AuthScimPatchOperationKind kind;
+
+  /// User attribute targeted by the operation.
+  final AuthScimUserPatchPath path;
+
+  /// Typed operation value, when present.
+  final Object? value;
 }
 
 /// Strict, bounded SCIM PatchOp document.
@@ -1213,9 +1216,6 @@ final class AuthScimPatchDocument {
       throw const FormatException('Invalid SCIM patch operation count.');
     }
   }
-
-  /// Operations applied in request order.
-  final List<AuthScimPatchOperation> operations;
 
   /// Decodes and validates a User PatchOp document.
   factory AuthScimPatchDocument.fromJson(
@@ -1242,6 +1242,9 @@ final class AuthScimPatchDocument {
       }),
     );
   }
+
+  /// Operations applied in request order.
+  final List<AuthScimPatchOperation> operations;
 
   /// Applies this validated document to current user data.
   AuthScimUserData apply(AuthScimUserData current) {

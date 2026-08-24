@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'deletion_transaction.dart';
-import 'exceptions.dart';
-import 'models.dart';
-import 'password_hasher.dart';
-import 'store.dart';
-import 'tokens.dart' show secureRandomToken;
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/password_hasher.dart';
+import 'package:server_auth/src/core/store.dart';
+import 'package:server_auth/src/core/tokens.dart' show secureRandomToken;
 
 /// Request for initiating account deletion.
 class AuthAccountDeletionRequest {

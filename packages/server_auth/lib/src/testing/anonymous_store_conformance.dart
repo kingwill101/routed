@@ -1,24 +1,35 @@
 import 'dart:async';
 
-import '../core/anonymous_store.dart';
-import '../core/deletion_transaction.dart';
-import '../core/models.dart';
-import '../core/store.dart';
+import 'package:server_auth/src/core/anonymous_store.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/store.dart';
 
+/// Creates an isolated fixture for an anonymous-store conformance case.
 typedef AuthAnonymousStoreConformanceFactory =
     FutureOr<AuthAnonymousStoreConformanceFixture> Function();
 
+/// Identifies a transaction point at which an anonymous-store fault is injected.
 enum AuthAnonymousStoreConformanceFaultPoint {
+  /// Fails after an anonymous account creation write.
   afterCreateWrite,
+
+  /// Fails while deleting an anonymous account.
   duringDelete,
+
+  /// Fails while upgrading an anonymous account.
   duringUpgrade,
 }
 
+/// Controls deterministic fault injection for an anonymous-store adapter.
 abstract interface class AuthAnonymousStoreConformanceFaultController {
+  /// Fails the next operation at [point].
   void failNext(AuthAnonymousStoreConformanceFaultPoint point);
 }
 
+/// Supplies the stores and fault hooks used by an anonymous conformance case.
 final class AuthAnonymousStoreConformanceFixture {
+  /// Creates a fixture from the supplied stores and fault controller.
   const AuthAnonymousStoreConformanceFixture({
     required this.store,
     required this.mutations,
@@ -26,33 +37,51 @@ final class AuthAnonymousStoreConformanceFixture {
     this.dispose,
   });
 
+  /// Core authentication store shared with [mutations].
   final AuthStore store;
+
+  /// Anonymous-account mutation capability under test.
   final AuthAnonymousAccountMutationStore mutations;
+
+  /// Fault controller for transaction rollback cases.
   final AuthAnonymousStoreConformanceFaultController faults;
+
+  /// Releases resources owned by the fixture.
   final FutureOr<void> Function()? dispose;
 }
 
+/// Describes a failed anonymous-store conformance case.
 final class AuthAnonymousStoreConformanceFailure implements Exception {
+  /// Creates a failure for [caseId] caused by [cause].
   const AuthAnonymousStoreConformanceFailure(this.caseId, this.cause);
 
+  /// Stable identifier of the failed case.
   final String caseId;
+
+  /// Error raised by the adapter or the failed expectation.
   final Object cause;
 
   @override
   String toString() => 'AuthAnonymousStoreConformanceFailure($caseId): $cause';
 }
 
+/// One independently runnable anonymous-store conformance case.
 final class AuthAnonymousStoreConformanceCase {
+  /// Creates a runnable conformance case.
   const AuthAnonymousStoreConformanceCase({
     required this.id,
     required this.description,
     required Future<void> Function() run,
   }) : _run = run;
 
+  /// Stable machine-readable case identifier.
   final String id;
+
+  /// Human-readable behavior covered by this case.
   final String description;
   final Future<void> Function() _run;
 
+  /// Runs this conformance case.
   Future<void> run() => _run();
 }
 
@@ -62,10 +91,14 @@ final class AuthAnonymousStoreConformanceCase {
 /// implementation and wire [AuthAnonymousStoreConformanceFaultController] to
 /// database fault injection. The suite never accepts an in-memory fallback.
 final class AuthAnonymousStoreConformanceSuite {
+  /// Creates a suite backed by [createFixture].
   AuthAnonymousStoreConformanceSuite(this.createFixture);
 
+  /// Creates the isolated fixture used by each case.
+  /// Creates the isolated fixture used by each case.
   final AuthAnonymousStoreConformanceFactory createFixture;
 
+  /// The isolated cases exposed by this suite.
   List<AuthAnonymousStoreConformanceCase> get cases => [
     _case(
       'create_replay',

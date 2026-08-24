@@ -1,4 +1,4 @@
-import '../core/core.dart';
+import 'package:server_auth/src/core/core.dart';
 
 /// Twitter/X user profile returned by the API.
 ///
@@ -18,6 +18,25 @@ class TwitterProfile {
     this.createdAt,
     this.pinnedTweetId,
   });
+
+  /// Creates a [TwitterProfile] from a JSON map returned by the Twitter API v2.
+  factory TwitterProfile.fromJson(Map<String, dynamic> json) {
+    // Twitter API wraps user data in 'data' object
+    final data = json['data'] as Map<String, dynamic>? ?? json;
+    return TwitterProfile(
+      id: data['id']?.toString() ?? '',
+      name: data['name']?.toString() ?? '',
+      username: data['username']?.toString() ?? '',
+      description: data['description']?.toString(),
+      profileImageUrl: data['profile_image_url']?.toString(),
+      location: data['location']?.toString(),
+      url: data['url']?.toString(),
+      verified: data['verified'] as bool?,
+      protected: data['protected'] as bool?,
+      createdAt: data['created_at']?.toString(),
+      pinnedTweetId: data['pinned_tweet_id']?.toString(),
+    );
+  }
 
   /// Unique identifier of the user.
   final String id;
@@ -51,25 +70,6 @@ class TwitterProfile {
 
   /// ID of the user's pinned tweet.
   final String? pinnedTweetId;
-
-  /// Creates a [TwitterProfile] from a JSON map returned by the Twitter API v2.
-  factory TwitterProfile.fromJson(Map<String, dynamic> json) {
-    // Twitter API wraps user data in 'data' object
-    final data = json['data'] as Map<String, dynamic>? ?? json;
-    return TwitterProfile(
-      id: data['id']?.toString() ?? '',
-      name: data['name']?.toString() ?? '',
-      username: data['username']?.toString() ?? '',
-      description: data['description']?.toString(),
-      profileImageUrl: data['profile_image_url']?.toString(),
-      location: data['location']?.toString(),
-      url: data['url']?.toString(),
-      verified: data['verified'] as bool?,
-      protected: data['protected'] as bool?,
-      createdAt: data['created_at']?.toString(),
-      pinnedTweetId: data['pinned_tweet_id']?.toString(),
-    );
-  }
 
   /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {
@@ -174,14 +174,12 @@ OAuthProvider<TwitterProfile> twitterProvider(TwitterProviderOptions options) {
     ),
     redirectUri: options.redirectUri,
     scopes: options.scopes,
-    usePkce: true,
     profileParser: TwitterProfile.fromJson,
     profileSerializer: (profile) => profile.toJson(),
     profile: (profile) {
       return AuthUser(
         id: profile.id,
         name: profile.name,
-        email: null, // Twitter doesn't return email by default
         image: profile.profileImageUrl,
         attributes: profile.toJson(),
       );

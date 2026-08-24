@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'gates.dart';
-import 'models.dart';
+import 'package:server_auth/src/core/gates.dart';
+import 'package:server_auth/src/core/models.dart';
 
 /// Role-based ability definition.
 class RbacAbility {
@@ -28,7 +28,7 @@ class RbacAbility {
 
   /// Creates a role ability that requires all roles in [roles].
   factory RbacAbility.all(List<String> roles, {bool allowGuest = false}) {
-    return RbacAbility(roles: roles, any: false, allowGuest: allowGuest);
+    return RbacAbility(roles: roles, allowGuest: allowGuest);
   }
 
   /// Roles required to satisfy the ability.

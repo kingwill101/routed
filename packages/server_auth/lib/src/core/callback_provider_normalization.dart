@@ -1,5 +1,5 @@
-import 'providers.dart' show CallbackResult;
-import 'models.dart' show AuthUser;
+import 'package:server_auth/src/core/models.dart' show AuthUser;
+import 'package:server_auth/src/core/providers.dart' show CallbackResult;
 
 /// Framework-agnostic normalized outcome for callback-provider results.
 class AuthCallbackProviderOutcome {
@@ -45,7 +45,7 @@ AuthCallbackProviderOutcome normalizeAuthCallbackProviderResult(
     );
   }
   return AuthCallbackProviderOutcome.success(
-    user: result.user!,
+    user: result.user,
     redirectUrl: result.redirect,
   );
 }

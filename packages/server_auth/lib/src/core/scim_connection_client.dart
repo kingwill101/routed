@@ -1,9 +1,9 @@
 import 'dart:convert';
 
-import 'client.dart';
-import 'plugin.dart';
-import 'scim_connection_models.dart';
-import 'scim_models.dart';
+import 'package:server_auth/src/core/client.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/scim_connection_models.dart';
+import 'package:server_auth/src/core/scim_models.dart';
 
 /// Installs only the managed-SCIM connection API selected by the application.
 final class AuthScimConnectionClientPlugin

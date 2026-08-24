@@ -1,14 +1,14 @@
 import 'dart:async';
 
-import '../core/authentication_methods.dart';
-import '../core/deletion_transaction.dart';
-import '../core/device_authorization_store.dart';
-import '../core/email_auth_backend.dart';
-import '../core/email_otp_store.dart';
-import '../core/models.dart';
-import '../core/oauth_challenge_store.dart';
-import '../core/password_reset_token_store.dart';
-import '../core/store.dart';
+import 'package:server_auth/src/core/authentication_methods.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/device_authorization_store.dart';
+import 'package:server_auth/src/core/email_auth_backend.dart';
+import 'package:server_auth/src/core/email_otp_store.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/oauth_challenge_store.dart';
+import 'package:server_auth/src/core/password_reset_token_store.dart';
+import 'package:server_auth/src/core/store.dart';
 
 /// Creates a fresh, isolated fixture for one conformance case.
 ///
@@ -1066,15 +1066,14 @@ Future<void> _verifyDeviceAuthorizationContention(AuthStore store) async {
     'device authorization lease changed the approved user',
   );
   _check(
-    await Future.sync(
-          () => store.deviceAuthorizations.releaseIssuance(
-            authorization.deviceCodeHash,
-            clientId: authorization.clientId,
-            leaseDigest: 'device-lease-stale',
-            now: now,
-          ),
-        ) ==
-        false,
+    !(await Future.sync(
+      () => store.deviceAuthorizations.releaseIssuance(
+        authorization.deviceCodeHash,
+        clientId: authorization.clientId,
+        leaseDigest: 'device-lease-stale',
+        now: now,
+      ),
+    )),
     'a stale device authorization lease was released',
   );
   _check(
@@ -1206,7 +1205,7 @@ Future<void> _verifyAccountDeletionTransaction(AuthStore store) async {
   );
 
   _FaultingDeletionContributor? faultingContributor;
-  if (coordinator.domain case AuthInMemoryUserDeletionDomain domain) {
+  if (coordinator.domain case final AuthInMemoryUserDeletionDomain domain) {
     faultingContributor = _FaultingDeletionContributor(
       domain: domain,
       error: StateError('contributor rollback marker'),
@@ -1425,8 +1424,8 @@ AuthAccount _account(String userId, {required String accountId}) {
 AuthSessionRecord _session(
   String id,
   String tokenHash, {
-  String userId = 'user-1',
   required DateTime now,
+  String userId = 'user-1',
 }) {
   return AuthSessionRecord(
     id: id,

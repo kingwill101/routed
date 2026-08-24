@@ -1,7 +1,8 @@
 import 'dart:async';
 
-import 'deletion_transaction.dart';
-import 'tokens.dart' show hashOpaqueToken, secureRandomToken;
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/tokens.dart'
+    show hashOpaqueToken, secureRandomToken;
 
 /// Persisted password-reset challenge metadata.
 ///

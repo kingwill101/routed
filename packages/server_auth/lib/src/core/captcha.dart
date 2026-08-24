@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'exceptions.dart';
-import 'plugin.dart';
-import 'providers.dart';
-import 'tokens.dart' show hashOpaqueToken;
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/providers.dart';
+import 'package:server_auth/src/core/tokens.dart' show hashOpaqueToken;
 
 /// Stable ID for the opt-in captcha policy plugin.
 const authCaptchaPluginId = 'captcha';
@@ -32,8 +32,14 @@ final class AuthCaptchaPluginConfig {
     this.replayRetention = const Duration(minutes: 10),
     this.maxTrackedTokens = 4096,
     this.clock,
-  }) : assert(maxTokenLength > 0 && maxTokenLength <= 16384),
-       assert(maxTrackedTokens > 0 && maxTrackedTokens <= 100000);
+  }) : assert(
+         maxTokenLength > 0 && maxTokenLength <= 16384,
+         'maxTokenLength must be between 1 and 16384',
+       ),
+       assert(
+         maxTrackedTokens > 0 && maxTrackedTokens <= 100000,
+         'maxTrackedTokens must be between 1 and 100000',
+       );
 
   /// Maximum time allowed for one application-owned vendor verification.
   final Duration providerTimeout;

@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'client.dart';
-import 'plugin.dart';
-import 'models.dart';
+import 'package:server_auth/src/core/client.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/plugin.dart';
 
 /// Installs only the phone-number API on an [AuthClient].
 final class AuthPhoneNumberClientPlugin

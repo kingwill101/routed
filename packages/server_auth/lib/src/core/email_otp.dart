@@ -2,18 +2,18 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart' show Hmac, sha256;
-
-import 'authentication_methods.dart';
-import 'deletion_transaction.dart';
-import 'email_auth_backend.dart';
-import 'email_otp_store.dart';
-import 'exceptions.dart';
-import 'plugin.dart';
-import 'models.dart';
-import 'rate_limit.dart';
-import 'store.dart';
-import 'tokens.dart' show base64UrlNoPadding, secureRandomToken;
-import 'users.dart' show authUserIsDisabled;
+import 'package:server_auth/src/core/authentication_methods.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/email_auth_backend.dart';
+import 'package:server_auth/src/core/email_otp_store.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/store.dart';
+import 'package:server_auth/src/core/tokens.dart'
+    show base64UrlNoPadding, secureRandomToken;
+import 'package:server_auth/src/core/users.dart' show authUserIsDisabled;
 
 /// Stable identifier for the optional email OTP plugin.
 const String authEmailOtpPluginId = 'email_otp';
@@ -93,9 +93,12 @@ final class EmailOtpPlugin<TContext>
   }) : _secret = secret,
        _rateLimitHashKey = utf8.encode(secret),
        _generateOtp = generateOtp ?? _defaultOtp,
-       assert(otpLength >= 4 && otpLength <= 12),
-       assert(expiresIn > Duration.zero),
-       assert(allowedAttempts > 0) {
+       assert(
+         otpLength >= 4 && otpLength <= 12,
+         'otpLength must be between 4 and 12',
+       ),
+       assert(expiresIn > Duration.zero, 'expiresIn must be positive'),
+       assert(allowedAttempts > 0, 'allowedAttempts must be positive') {
     if (_rateLimitHashKey.length < 32) {
       throw ArgumentError(
         'secret must contain at least 32 UTF-8 bytes',
@@ -166,7 +169,7 @@ final class EmailOtpPlugin<TContext>
     _ensureConfigured();
     final user = await _users.findById(userId);
     return AuthAuthenticationMethodSnapshot.complete([
-      if (user?.email?.isNotEmpty == true && !authUserIsDisabled(user!))
+      if ((user?.email?.isNotEmpty ?? false) && !authUserIsDisabled(user!))
         AuthAuthenticationMethod.emailOtp(userId),
     ]);
   }
@@ -274,9 +277,9 @@ final class EmailOtpPlugin<TContext>
     required String id,
     required AuthRoutePath path,
     required AuthOperationAuthentication authentication,
+    required String operationName,
     AuthOperationOriginPolicy originPolicy = AuthOperationOriginPolicy.browser,
     AuthOperationCsrfPolicy csrfPolicy = AuthOperationCsrfPolicy.required,
-    required String operationName,
   }) => TypedAuthEndpointDescriptor<TContext, Map<String, dynamic>, Object?>(
     id: id,
     method: AuthOperationMethod.post,
@@ -309,7 +312,7 @@ final class EmailOtpPlugin<TContext>
     originPolicy: originPolicy,
     csrfPolicy: csrfPolicy,
     rateLimitOperation: AuthRateLimitOperation('email_otp', operationName),
-    rateLimitIdentifier: (request) => _emailRateLimitIdentifier(request),
+    rateLimitIdentifier: _emailRateLimitIdentifier,
     handler: (invocation, request) => _invokeEndpoint(id, invocation, request),
   );
 
@@ -398,7 +401,7 @@ final class EmailOtpPlugin<TContext>
     final normalizedEmail = _email(email);
     final current = (now ?? DateTime.now()).toUtc();
     final code = _generateOtp(otpLength);
-    if (!RegExp('^[0-9]{${otpLength.toString()}}\$').hasMatch(code)) {
+    if (!RegExp('^[0-9]{$otpLength}\$').hasMatch(code)) {
       throw StateError('Email OTP generator returned an invalid code');
     }
     final expiresAt = current.add(expiresIn);
@@ -464,8 +467,8 @@ final class EmailOtpPlugin<TContext>
           candidate: AuthUser(
             id: secureRandomToken(length: 24),
             email: normalizedEmail,
-            name: name?.trim().isEmpty == true ? null : name?.trim(),
-            image: image?.trim().isEmpty == true ? null : image?.trim(),
+            name: name?.trim().isEmpty ?? false ? null : name?.trim(),
+            image: image?.trim().isEmpty ?? false ? null : image?.trim(),
           ),
           disableSignUp: disableSignUp,
         ),
@@ -617,7 +620,7 @@ final class EmailOtpPlugin<TContext>
 
   static final AuthOperationCodec<Map<String, dynamic>> _mapCodec =
       AuthOperationCodec<Map<String, dynamic>>(
-        decode: (value) => Map<String, dynamic>.from(value),
+        decode: Map<String, dynamic>.from,
         encode: (value) => value,
       );
 

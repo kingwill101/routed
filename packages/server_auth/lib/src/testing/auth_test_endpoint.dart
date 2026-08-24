@@ -1,9 +1,9 @@
 import 'dart:convert';
 
-import '../core/exceptions.dart';
-import '../core/models.dart';
-import '../core/plugin.dart';
-import 'auth_test_http.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/testing/auth_test_http.dart';
 
 /// Builds an invocation for one portable plugin endpoint request.
 typedef AuthTestInvocationFactory<TContext> =

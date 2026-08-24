@@ -717,7 +717,7 @@ DateTime _parseIsoDate(Object? value) {
   }
   final dateOnly = RegExp(r'^([0-9]{4})-([0-9]{2})-([0-9]{2})$');
   final dateTime = RegExp(
-    r'^([0-9]{4})-([0-9]{2})-([0-9]{2})T'
+    '^([0-9]{4})-([0-9]{2})-([0-9]{2})T'
     r'([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]{1,9}))?'
     r'(Z|[+-][0-9]{2}:[0-9]{2})$',
   );
@@ -846,7 +846,7 @@ final class _JsonDuplicateScanner {
 
   final String source;
   final int maximumDepth;
-  var index = 0;
+  int index = 0;
 
   void scan() {
     _value(0);

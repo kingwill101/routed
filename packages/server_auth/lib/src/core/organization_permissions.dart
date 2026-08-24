@@ -1,5 +1,5 @@
-import 'organization_models.dart';
-import 'organization_store.dart';
+import 'package:server_auth/src/core/organization_models.dart';
+import 'package:server_auth/src/core/organization_store.dart';
 
 /// Permissions assigned to auth organization permission set.
 typedef AuthOrganizationPermissionSet = Map<String, Iterable<String>>;
@@ -132,8 +132,8 @@ bool _allows(
   return actions?.any((value) {
         final normalized = value.trim().toLowerCase();
         return normalized == action || normalized == '*';
-      }) ==
-      true;
+      }) ??
+      false;
 }
 
 /// Explicit tenant authorization context. Organization roles stay separate

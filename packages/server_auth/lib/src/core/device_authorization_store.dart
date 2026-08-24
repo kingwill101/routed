@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'deletion_transaction.dart';
-import 'tokens.dart' show hashOpaqueToken;
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/tokens.dart' show hashOpaqueToken;
 
 /// State of an RFC 8628 device authorization transaction.
 enum AuthDeviceAuthorizationStatus {
@@ -334,7 +334,7 @@ final class InMemoryAuthDeviceAuthorizationStore
   /// [maxEntries] must be positive; oldest insertion-order records are evicted
   /// when capacity is reached.
   InMemoryAuthDeviceAuthorizationStore({this.maxEntries = 1024})
-    : assert(maxEntries > 0);
+    : assert(maxEntries > 0, 'maxEntries must be positive');
 
   /// Maximum number of unexpired records retained in memory.
   final int maxEntries;
@@ -624,7 +624,7 @@ final class InMemoryAuthDeviceAuthorizationStore
       entry.status == AuthDeviceAuthorizationStatus.approved &&
       entry.clientId == clientId.trim() &&
       entry.issuanceLeaseDigest == leaseDigest.trim() &&
-      entry.issuanceLeaseExpiresAt?.toUtc().isAfter(now) == true &&
+      (entry.issuanceLeaseExpiresAt?.toUtc().isAfter(now) ?? false) &&
       !entry.isExpired(now: now);
 }
 
@@ -653,15 +653,15 @@ void _validate(AuthDeviceAuthorization authorization) {
       )) {
     throw ArgumentError('Invalid device authorization');
   }
-  if (authorization.userId?.trim().isEmpty == true) {
+  if (authorization.userId?.trim().isEmpty ?? false) {
     throw ArgumentError('Device authorization userId must not be empty');
   }
   final leaseDigest = authorization.issuanceLeaseDigest;
   final leaseExpiresAt = authorization.issuanceLeaseExpiresAt;
   if ((leaseDigest == null) != (leaseExpiresAt == null) ||
-      leaseDigest?.trim().isEmpty == true ||
-      leaseExpiresAt?.toUtc().isAfter(authorization.expiresAt.toUtc()) ==
-          true) {
+      (leaseDigest?.trim().isEmpty ?? false) ||
+      (leaseExpiresAt?.toUtc().isAfter(authorization.expiresAt.toUtc()) ??
+          false)) {
     throw ArgumentError('Invalid device authorization issuance lease');
   }
 }

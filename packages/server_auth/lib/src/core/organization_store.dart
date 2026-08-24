@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'deletion_transaction.dart';
-import 'exceptions.dart';
-import 'organization_models.dart';
-import 'users.dart' show normalizeAuthEmail;
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/organization_models.dart';
+import 'package:server_auth/src/core/users.dart' show normalizeAuthEmail;
 
 /// Authentication data for auth organization create transaction.
 final class AuthOrganizationCreateTransaction {
@@ -112,9 +112,9 @@ final class AuthOrganizationInvitationAcceptance {
     required this.email,
     required this.membership,
     required this.membershipLimit,
+    required this.now,
     this.teamMembership,
     this.teamMemberLimit,
-    required this.now,
   });
 
   /// The identifier of invitation.
@@ -646,8 +646,8 @@ abstract interface class AuthOrganizationUserDeletionStore {
   /// Deletes user data.
   FutureOr<void> deleteUserData(
     String userId, {
-    String? email,
     required String creatorRole,
+    String? email,
   });
 }
 
@@ -938,10 +938,8 @@ final class InMemoryAuthOrganizationStore
       case AuthOrganizationMembershipMutationKind.replaceRoles:
         _require(replacementRoles != null, 'invalid_role');
         _require(replacementRoles!.isNotEmpty, 'invalid_role');
-        break;
       case AuthOrganizationMembershipMutationKind.remove:
         _require(replacementRoles == null, 'invalid_role');
-        break;
     }
     final affectsCreator =
         target.roles.contains(creatorRole) ||
@@ -1409,14 +1407,19 @@ final class InMemoryAuthOrganizationStore
     AuthOrganizationStoreCommand<TResult> command,
   ) => _atomic(() {
     final Object result = switch (command) {
-      AuthOrganizationCreateInvitationCommand value => _executeCreateInvitation(
+      final AuthOrganizationCreateInvitationCommand value =>
+        _executeCreateInvitation(
+          value,
+        ),
+      final AuthOrganizationTransitionInvitationCommand value =>
+        _executeTransitionInvitation(value),
+      final AuthOrganizationRoleMutationCommand value => _executeRoleMutation(
         value,
       ),
-      AuthOrganizationTransitionInvitationCommand value =>
-        _executeTransitionInvitation(value),
-      AuthOrganizationRoleMutationCommand value => _executeRoleMutation(value),
-      AuthOrganizationTeamMutationCommand value => _executeTeamMutation(value),
-      AuthOrganizationTeamMemberMutationCommand value =>
+      final AuthOrganizationTeamMutationCommand value => _executeTeamMutation(
+        value,
+      ),
+      final AuthOrganizationTeamMemberMutationCommand value =>
         _executeTeamMemberMutation(value),
     };
     return result as TResult;
@@ -1861,8 +1864,8 @@ final class InMemoryAuthOrganizationStore
   @override
   Future<void> deleteUserData(
     String userId, {
-    String? email,
     required String creatorRole,
+    String? email,
   }) => _atomic(() {
     final id = userId.trim();
     final normalizedEmail = email == null ? null : normalizeAuthEmail(email);

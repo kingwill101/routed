@@ -5,9 +5,10 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:jose/jose.dart';
 
-import 'bearer.dart' show extractBearerToken;
-import 'models.dart' show AuthSession, AuthSessionStrategy, AuthUser;
-import 'users.dart' show authUserFromJwtClaims;
+import 'package:server_auth/src/core/bearer.dart' show extractBearerToken;
+import 'package:server_auth/src/core/models.dart'
+    show AuthSession, AuthSessionStrategy, AuthUser;
+import 'package:server_auth/src/core/users.dart' show authUserFromJwtClaims;
 
 export 'package:jose/jose.dart';
 
@@ -409,7 +410,6 @@ JwtOptions? materializeJwtVerifierOptions({
       .toList(growable: false);
 
   return JwtOptions(
-    enabled: true,
     issuer: normalizedIssuer,
     audience: audience.toList(growable: false),
     requiredClaims: requiredClaims.toList(growable: false),
@@ -721,7 +721,6 @@ class JwtSessionOptions {
     return JwtOptions(
       issuer: issuer,
       audience: audience ?? const <String>[],
-      requiredClaims: const <String>['exp'],
       algorithms: [algorithm],
       inlineKeys: [jwtSecretKey(secret).toJson()],
       header: header,

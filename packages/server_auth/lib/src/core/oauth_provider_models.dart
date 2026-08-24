@@ -1,6 +1,6 @@
 import 'package:jose/jose.dart' show JsonWebKey;
 
-import 'plugin.dart';
+import 'package:server_auth/src/core/plugin.dart';
 
 /// Represents an OAuth client registered with this application.
 class OAuthClient {
@@ -14,8 +14,8 @@ class OAuthClient {
     required this.clientId,
     required this.clientSecretHash,
     required this.name,
-    this.description,
     required this.redirectUris,
+    this.description,
     this.grantTypes = const ['authorization_code'],
     this.scopes = const ['openid', 'profile', 'email'],
     this.tokenEndpointAuthMethod = 'client_secret_basic',
@@ -23,6 +23,27 @@ class OAuthClient {
     this.updatedAt,
     this.enabled = true,
   });
+
+  /// Creates a client from JSON.
+  ///
+  /// Missing list fields become empty lists, and only an explicit `false`
+  /// disables the client. Dates are parsed as UTC when valid.
+  factory OAuthClient.fromJson(Map<String, dynamic> json) {
+    return OAuthClient(
+      clientId: json['clientId']?.toString() ?? '',
+      clientSecretHash: json['clientSecretHash']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      description: json['description']?.toString(),
+      redirectUris: _stringList(json['redirectUris']),
+      grantTypes: _stringList(json['grantTypes']),
+      scopes: _stringList(json['scopes']),
+      tokenEndpointAuthMethod:
+          json['tokenEndpointAuthMethod']?.toString() ?? 'client_secret_basic',
+      createdAt: _parseDate(json['createdAt']),
+      updatedAt: _parseDate(json['updatedAt']),
+      enabled: json['enabled'] != false,
+    );
+  }
 
   /// Unique client identifier.
   final String clientId;
@@ -109,27 +130,6 @@ class OAuthClient {
     ...toJson(),
     'clientSecretHash': clientSecretHash,
   };
-
-  /// Creates a client from JSON.
-  ///
-  /// Missing list fields become empty lists, and only an explicit `false`
-  /// disables the client. Dates are parsed as UTC when valid.
-  factory OAuthClient.fromJson(Map<String, dynamic> json) {
-    return OAuthClient(
-      clientId: json['clientId']?.toString() ?? '',
-      clientSecretHash: json['clientSecretHash']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
-      description: json['description']?.toString(),
-      redirectUris: _stringList(json['redirectUris']),
-      grantTypes: _stringList(json['grantTypes']),
-      scopes: _stringList(json['scopes']),
-      tokenEndpointAuthMethod:
-          json['tokenEndpointAuthMethod']?.toString() ?? 'client_secret_basic',
-      createdAt: _parseDate(json['createdAt']),
-      updatedAt: _parseDate(json['updatedAt']),
-      enabled: json['enabled'] != false,
-    );
-  }
 
   static List<String> _stringList(dynamic value) {
     if (value is List) {

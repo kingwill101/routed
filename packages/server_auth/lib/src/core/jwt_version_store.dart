@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'deletion_transaction.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
 
 /// Persistence contract for per-user JWT session versions.
 ///

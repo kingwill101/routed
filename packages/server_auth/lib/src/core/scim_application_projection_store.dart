@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'scim_application_projection.dart';
+import 'package:server_auth/src/core/scim_application_projection.dart';
 
 /// Bounded retention settings for the reference in-memory projection store.
 final class AuthScimApplicationProjectionStoreOptions {
@@ -37,6 +37,7 @@ enum AuthScimApplicationProjectionFaultPoint {
   duringScopeDeletion,
 }
 
+/// Injects a deterministic failure at a reference-store [point].
 typedef AuthScimApplicationProjectionFaultInjector =
     FutureOr<void> Function(AuthScimApplicationProjectionFaultPoint point);
 
@@ -46,7 +47,7 @@ typedef AuthScimApplicationProjectionFaultInjector =
 /// role, session, or sign-in operation. It serializes mutations, rolls back
 /// failed writes, enforces exact scope/resource keys, and fences deleted
 /// connection scopes. Durable adapters should implement the same behavior and
-/// run [AuthScimApplicationProjectionStoreConformanceSuite] from
+/// run `AuthScimApplicationProjectionStoreConformanceSuite` from
 /// `package:server_auth/testing.dart`.
 final class InMemoryAuthScimApplicationProjectionStore
     implements AuthScimApplicationProjectionStore {

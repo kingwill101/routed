@@ -1,31 +1,43 @@
 import 'dart:async';
 
-import '../core/email_auth_backend.dart';
-import '../core/email_otp_store.dart';
-import '../core/models.dart';
-import '../core/store.dart';
-import '../core/tokens.dart' show hashOpaqueToken;
+import 'package:server_auth/src/core/email_auth_backend.dart';
+import 'package:server_auth/src/core/email_otp_store.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/store.dart';
+import 'package:server_auth/src/core/tokens.dart' show hashOpaqueToken;
 
 /// Fresh adapter fixture used by each email-auth conformance case.
 final class AuthEmailBackendConformanceFixture {
+  /// Creates a fixture from the email capabilities and user store.
   const AuthEmailBackendConformanceFixture({
     required this.magicLinks,
     required this.emailOtps,
     required this.users,
   });
 
+  /// Magic-link backend under test.
   final AuthMagicLinkBackend magicLinks;
+
+  /// Email OTP backend under test.
   final AuthEmailOtpBackend emailOtps;
+
+  /// User store shared by the backend capabilities.
   final AuthUserStore users;
 }
 
+/// Creates an isolated fixture for an email-auth conformance case.
 typedef AuthEmailBackendConformanceFixtureFactory =
     FutureOr<AuthEmailBackendConformanceFixture> Function();
 
+/// Describes a failed email-auth conformance case.
 final class AuthEmailBackendConformanceFailure implements Exception {
+  /// Creates a failure for [caseId] caused by [cause].
   const AuthEmailBackendConformanceFailure(this.caseId, this.cause);
 
+  /// Stable identifier of the failed case.
   final String caseId;
+
+  /// Error raised by the adapter or the failed expectation.
   final Object cause;
 
   @override
@@ -43,7 +55,7 @@ Future<void> verifyAuthEmailBackendConformance(
 ) async {
   await _case('magic-link.concurrent-one-winner', () async {
     final fixture = await createFixture();
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     await fixture.magicLinks.issueMagicLink(
       AuthMagicLinkIssueCommand(_magicRecord('magic-token', now: now)),
     );
@@ -81,7 +93,7 @@ Future<void> verifyAuthEmailBackendConformance(
 
   await _case('magic-link.provider-isolation', () async {
     final fixture = await createFixture();
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     await fixture.magicLinks.issueMagicLink(
       AuthMagicLinkIssueCommand(_magicRecord('provider-a', now: now)),
     );
@@ -110,7 +122,7 @@ Future<void> verifyAuthEmailBackendConformance(
 
   await _case('email-otp.concurrent-one-winner', () async {
     final fixture = await createFixture();
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     await fixture.emailOtps.issueEmailOtp(
       AuthEmailOtpIssueCommand(_otp('123456', now: now, maxAttempts: 32)),
     );
@@ -142,7 +154,7 @@ Future<void> verifyAuthEmailBackendConformance(
 
   await _case('email-otp.attempt-lockout', () async {
     final fixture = await createFixture();
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     await fixture.emailOtps.issueEmailOtp(
       AuthEmailOtpIssueCommand(_otp('123456', now: now, maxAttempts: 2)),
     );
@@ -181,7 +193,7 @@ Future<void> verifyAuthEmailBackendConformance(
 
   await _case('email-otp.sign-in-user-transaction', () async {
     final fixture = await createFixture();
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     await fixture.emailOtps.issueEmailOtp(
       AuthEmailOtpIssueCommand(_otp('654321', now: now, maxAttempts: 32)),
     );
@@ -214,7 +226,7 @@ Future<void> verifyAuthEmailBackendConformance(
 
   await _case('email-otp.verify-user-binding', () async {
     final fixture = await createFixture();
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     const userId = 'verify-user';
     await fixture.users.create(AuthUser(id: userId, email: _email));
     await fixture.emailOtps.issueEmailOtp(

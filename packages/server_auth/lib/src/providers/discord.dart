@@ -1,4 +1,4 @@
-import '../core/core.dart';
+import 'package:server_auth/src/core/core.dart';
 
 /// Discord user profile returned by the userinfo endpoint.
 ///
@@ -23,6 +23,28 @@ class DiscordProfile {
     this.premiumType,
     this.publicFlags,
   });
+
+  /// Creates a [DiscordProfile] from a JSON map returned by the Discord API.
+  factory DiscordProfile.fromJson(Map<String, dynamic> json) {
+    return DiscordProfile(
+      id: json['id']?.toString() ?? '',
+      username: json['username']?.toString() ?? '',
+      discriminator: json['discriminator']?.toString(),
+      globalName: json['global_name']?.toString(),
+      avatar: json['avatar']?.toString(),
+      bot: json['bot'] as bool?,
+      system: json['system'] as bool?,
+      mfaEnabled: json['mfa_enabled'] as bool?,
+      banner: json['banner']?.toString(),
+      accentColor: json['accent_color'] as int?,
+      locale: json['locale']?.toString(),
+      verified: json['verified'] as bool?,
+      email: json['email']?.toString(),
+      flags: json['flags'] as int?,
+      premiumType: json['premium_type'] as int?,
+      publicFlags: json['public_flags'] as int?,
+    );
+  }
 
   /// The user's id.
   final String id;
@@ -71,28 +93,6 @@ class DiscordProfile {
 
   /// The public flags on a user's account.
   final int? publicFlags;
-
-  /// Creates a [DiscordProfile] from a JSON map returned by the Discord API.
-  factory DiscordProfile.fromJson(Map<String, dynamic> json) {
-    return DiscordProfile(
-      id: json['id']?.toString() ?? '',
-      username: json['username']?.toString() ?? '',
-      discriminator: json['discriminator']?.toString(),
-      globalName: json['global_name']?.toString(),
-      avatar: json['avatar']?.toString(),
-      bot: json['bot'] as bool?,
-      system: json['system'] as bool?,
-      mfaEnabled: json['mfa_enabled'] as bool?,
-      banner: json['banner']?.toString(),
-      accentColor: json['accent_color'] as int?,
-      locale: json['locale']?.toString(),
-      verified: json['verified'] as bool?,
-      email: json['email']?.toString(),
-      flags: json['flags'] as int?,
-      premiumType: json['premium_type'] as int?,
-      publicFlags: json['public_flags'] as int?,
-    );
-  }
 
   /// Converts this profile to a JSON-serializable map.
   Map<String, dynamic> toJson() => {

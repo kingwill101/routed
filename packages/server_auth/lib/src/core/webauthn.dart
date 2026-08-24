@@ -7,17 +7,16 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:cryptography/cryptography.dart' as cryptography;
 import 'package:pointycastle/asn1.dart';
 import 'package:pointycastle/export.dart';
-
-import 'authentication_methods.dart';
-import 'deletion_transaction.dart';
-import 'exceptions.dart';
-import 'plugin.dart';
-import 'models.dart';
-import 'providers.dart';
-import 'rate_limit.dart';
-import 'store.dart';
-import 'tokens.dart';
-import 'webauthn_store.dart';
+import 'package:server_auth/src/core/authentication_methods.dart';
+import 'package:server_auth/src/core/deletion_transaction.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/plugin.dart';
+import 'package:server_auth/src/core/providers.dart';
+import 'package:server_auth/src/core/rate_limit.dart';
+import 'package:server_auth/src/core/store.dart';
+import 'package:server_auth/src/core/tokens.dart';
+import 'package:server_auth/src/core/webauthn_store.dart';
 
 /// Stable ID for the opt-in WebAuthn plugin.
 const String authWebAuthnPluginId = 'webauthn';
@@ -370,7 +369,7 @@ final class WebAuthnPlugin<TContext>
     this.challengeTtl = const Duration(minutes: 5),
     this.attestationTrustPolicy =
         const WebAuthnAttestationTrustPolicy.passkeys(),
-  }) : assert(challengeTtl > Duration.zero);
+  }) : assert(challengeTtl > Duration.zero, 'challengeTtl must be positive');
 
   /// Provider configuration used to derive relying-party and ceremony options.
   final WebAuthnProvider provider;
@@ -485,7 +484,7 @@ final class WebAuthnPlugin<TContext>
     final capabilities =
         storage ??
         switch (context.store) {
-          AuthWebAuthnStoreCapabilities capabilities => capabilities,
+          final AuthWebAuthnStoreCapabilities capabilities => capabilities,
           _ => null,
         };
     if (capabilities == null) {
@@ -497,7 +496,7 @@ final class WebAuthnPlugin<TContext>
     _challengeStore = capabilities.webAuthnChallenges;
     _authenticatorStore = capabilities.webAuthnAuthenticators;
     _deletionPlanFactory = switch (capabilities) {
-      AuthWebAuthnUserDeletionPlanFactory factory => factory,
+      final AuthWebAuthnUserDeletionPlanFactory factory => factory,
       _ => null,
     };
     _userStore = context.store.users;
@@ -739,7 +738,7 @@ final class WebAuthnPlugin<TContext>
 
   static final AuthOperationCodec<Map<String, dynamic>> _mapCodec =
       AuthOperationCodec<Map<String, dynamic>>(
-        decode: (value) => Map<String, dynamic>.from(value),
+        decode: Map<String, dynamic>.from,
         encode: (value) => value,
       );
 
@@ -1053,7 +1052,7 @@ final class WebAuthnPlugin<TContext>
     _ensureConfigured();
     final relyingParty = _validatedRelyingParty(context);
     final normalizedUserId = userId?.trim();
-    if (normalizedUserId?.isEmpty == true) {
+    if (normalizedUserId?.isEmpty ?? false) {
       throw AuthFlowException('webauthn_user_invalid');
     }
     final current = (now ?? DateTime.now()).toUtc();
@@ -1105,7 +1104,7 @@ final class WebAuthnPlugin<TContext>
       throw AuthFlowException('webauthn_credential_invalid');
     }
     final requestedUserId = userId?.trim();
-    if (requestedUserId?.isEmpty == true ||
+    if ((requestedUserId?.isEmpty ?? false) ||
         (requestedUserId != null && requestedUserId != authenticator.userId)) {
       throw AuthFlowException('webauthn_credential_invalid');
     }
@@ -1185,7 +1184,7 @@ final class WebAuthnPlugin<TContext>
           target: AuthAuthenticationMethod.passkey(credentialId),
           mutate: () => _authenticatorStore.deleteForUser(userId, credentialId),
         ),
-      AuthWebAuthnAuthenticatorMutationStore mutationStore =>
+      final AuthWebAuthnAuthenticatorMutationStore mutationStore =>
         await mutationStore.removeCredentialIfSafe(
           AuthWebAuthnCredentialRemovalCommand(
             userId: userId,
@@ -1321,7 +1320,9 @@ final class WebAuthnPlugin<TContext>
               .toList(growable: false)
         : null;
     final name = input['name']?.toString().trim();
-    if (name?.isEmpty == true) throw AuthFlowException('webauthn_name_invalid');
+    if (name?.isEmpty ?? false) {
+      throw AuthFlowException('webauthn_name_invalid');
+    }
     if (assertion) {
       final authenticatorData = _decodeField(response, 'authenticatorData');
       final signature = _decodeField(response, 'signature');
@@ -1396,10 +1397,11 @@ final class WebAuthnPlugin<TContext>
       throw AuthFlowException('webauthn_attestation_invalid');
     }
     final format = decoded['fmt'] as String;
-    final statement = decoded['attStmt'];
-    if (statement is! Map) {
+    final rawStatement = decoded['attStmt'];
+    if (rawStatement is! Map) {
       throw AuthFlowException('webauthn_attestation_invalid');
     }
+    final statement = Map<Object?, Object?>.from(rawStatement);
     final authData = decoded['authData'];
     if (authData is! List ||
         authData.any((value) => value is! int || value < 0 || value > 255)) {
@@ -1477,7 +1479,7 @@ final class WebAuthnPlugin<TContext>
   }
 
   Future<_VerifiedAttestationStatement> _verifyPackedAttestation({
-    required Map statement,
+    required Map<Object?, Object?> statement,
     required Uint8List authenticatorData,
     required Uint8List clientDataHash,
     required Uint8List credentialPublicKey,
@@ -1554,7 +1556,7 @@ final class WebAuthnPlugin<TContext>
   }
 
   Future<_VerifiedAttestationStatement> _verifyFidoU2fAttestation({
-    required Map statement,
+    required Map<Object?, Object?> statement,
     required Uint8List authenticatorData,
     required Uint8List clientDataHash,
     required Uint8List credentialId,
@@ -1629,7 +1631,7 @@ final class WebAuthnPlugin<TContext>
   }
 
   Future<_VerifiedAttestationStatement> _verifyAndroidKeyAttestation({
-    required Map statement,
+    required Map<Object?, Object?> statement,
     required Uint8List authenticatorData,
     required Uint8List clientDataHash,
     required Uint8List credentialPublicKey,
@@ -1701,7 +1703,7 @@ final class WebAuthnPlugin<TContext>
   }
 
   Future<_VerifiedAttestationStatement> _verifyAppleAttestation({
-    required Map statement,
+    required Map<Object?, Object?> statement,
     required Uint8List authenticatorData,
     required Uint8List clientDataHash,
     required Uint8List credentialPublicKey,
@@ -1744,7 +1746,7 @@ final class WebAuthnPlugin<TContext>
   }
 
   Future<_VerifiedAttestationStatement> _verifyTpmAttestation({
-    required Map statement,
+    required Map<Object?, Object?> statement,
     required Uint8List authenticatorData,
     required Uint8List clientDataHash,
     required Uint8List credentialPublicKey,
@@ -2368,7 +2370,7 @@ final class WebAuthnPlugin<TContext>
             }
             if (fields.isNotEmpty) {
               isCertificateAuthority =
-                  (fields.first as ASN1Boolean).boolValue == true;
+                  (fields.first as ASN1Boolean).boolValue ?? false;
               if (!isCertificateAuthority && fields.length == 2) {
                 throw const FormatException();
               }
@@ -2376,7 +2378,7 @@ final class WebAuthnPlugin<TContext>
           } else if (extensionIdentifier == '2.5.29.17') {
             hasTpmSubjectAlternativeName =
                 isCritical &&
-                (extensionElements[1] as ASN1Boolean).boolValue == true &&
+                ((extensionElements[1] as ASN1Boolean).boolValue ?? false) &&
                 _hasTpmSubjectAlternativeName(value.octets);
           } else if (extensionIdentifier == '2.5.29.37') {
             hasTpmAikExtendedKeyUsage = _hasTpmAikExtendedKeyUsage(
@@ -2384,7 +2386,7 @@ final class WebAuthnPlugin<TContext>
             );
           } else if (extensionIdentifier == '1.3.6.1.4.1.45724.1.1.4') {
             if (isCritical &&
-                (extensionElements[1] as ASN1Boolean).boolValue == true) {
+                ((extensionElements[1] as ASN1Boolean).boolValue ?? false)) {
               throw const FormatException();
             }
             final encodedAaguid = ASN1Parser(value.octets).nextObject();
@@ -2477,7 +2479,7 @@ final class WebAuthnPlugin<TContext>
           }
         }
         if (_isTpmHexIdentifier(attributes['2.23.133.2.1']) &&
-            attributes['2.23.133.2.2']?.trim().isNotEmpty == true &&
+            (attributes['2.23.133.2.2']?.trim().isNotEmpty ?? false) &&
             _isTpmHexIdentifier(attributes['2.23.133.2.3'])) {
           validDirectoryName = true;
         }
@@ -2749,7 +2751,7 @@ final class WebAuthnPlugin<TContext>
       throw AuthFlowException('webauthn_attestation_invalid');
     }
     final credentialLength = (bytes[53] << 8) | bytes[54];
-    final credentialStart = 55;
+    const credentialStart = 55;
     final credentialEnd = credentialStart + credentialLength;
     if (credentialLength == 0 ||
         credentialLength > 1024 ||
@@ -3314,17 +3316,13 @@ final class _StrictCborReader {
           return 'text:${utf8.decode(value, allowMalformed: false)}';
         case 4:
           _readSequence(argument, map: false);
-          break;
         case 5:
           _readSequence(argument, map: true);
-          break;
         case 6:
           if (argument == null) throw const FormatException();
           _readItem();
-          break;
         case 7:
           if (argument == null) throw const FormatException();
-          break;
         default:
           throw const FormatException();
       }

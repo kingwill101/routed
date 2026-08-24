@@ -1,10 +1,10 @@
 import 'dart:convert';
 
-import 'client.dart';
-import 'plugin.dart';
-import 'email_otp_store.dart';
-import 'models.dart';
-import 'magic_link.dart' show MagicLinkPlugin;
+import 'package:server_auth/src/core/client.dart';
+import 'package:server_auth/src/core/email_otp_store.dart';
+import 'package:server_auth/src/core/magic_link.dart' show MagicLinkPlugin;
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/plugin.dart';
 
 /// Installs the email magic-link API on an [AuthClient].
 ///

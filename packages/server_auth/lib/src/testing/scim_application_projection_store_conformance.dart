@@ -1,40 +1,61 @@
 import 'dart:async';
 
-import '../core/scim_application_projection.dart';
+import 'package:server_auth/src/core/scim_application_projection.dart';
 
+/// Creates an isolated fixture for a SCIM projection conformance case.
 typedef AuthScimApplicationProjectionStoreConformanceFactory =
     FutureOr<AuthScimApplicationProjectionStoreConformanceFixture> Function();
 
+/// Identifies a projection operation at which a fault is injected.
 enum AuthScimApplicationProjectionStoreConformanceFaultPoint {
+  /// Fails an application projection.
   apply,
+
+  /// Fails a scope reconciliation.
   reconcile,
+
+  /// Fails deletion of a projection scope.
   deleteScope,
 }
 
+/// Controls deterministic fault injection for a SCIM projection store.
 abstract interface class AuthScimApplicationProjectionStoreConformanceFaultController {
+  /// Fails the next operation at [point].
   void failNext(AuthScimApplicationProjectionStoreConformanceFaultPoint point);
 }
 
+/// Supplies the projection store and lifecycle hooks used by a case.
 final class AuthScimApplicationProjectionStoreConformanceFixture {
+  /// Creates a fixture from the projection store and fault controller.
   const AuthScimApplicationProjectionStoreConformanceFixture({
     required this.store,
     required this.faults,
     this.dispose,
   });
 
+  /// Application-owned projection store under test.
   final AuthScimApplicationProjectionStore store;
+
+  /// Fault controller for rollback cases.
   final AuthScimApplicationProjectionStoreConformanceFaultController faults;
+
+  /// Releases resources owned by the fixture.
   final FutureOr<void> Function()? dispose;
 }
 
+/// Describes a failed SCIM projection conformance case.
 final class AuthScimApplicationProjectionStoreConformanceFailure
     implements Exception {
+  /// Creates a failure for [caseId] caused by [cause].
   const AuthScimApplicationProjectionStoreConformanceFailure(
     this.caseId,
     this.cause,
   );
 
+  /// Stable identifier of the failed case.
   final String caseId;
+
+  /// Error raised by the adapter or the failed expectation.
   final Object cause;
 
   @override
@@ -42,17 +63,23 @@ final class AuthScimApplicationProjectionStoreConformanceFailure
       'AuthScimApplicationProjectionStoreConformanceFailure($caseId): $cause';
 }
 
+/// One independently runnable SCIM projection conformance case.
 final class AuthScimApplicationProjectionStoreConformanceCase {
+  /// Creates a runnable conformance case.
   const AuthScimApplicationProjectionStoreConformanceCase({
     required this.id,
     required this.description,
     required Future<void> Function() run,
   }) : _run = run;
 
+  /// Stable machine-readable case identifier.
   final String id;
+
+  /// Human-readable behavior covered by this case.
   final String description;
   final Future<void> Function() _run;
 
+  /// Runs this conformance case.
   Future<void> run() => _run();
 }
 
@@ -63,10 +90,13 @@ final class AuthScimApplicationProjectionStoreConformanceCase {
 /// deletion. It intentionally has no auth-user or session fixture: projection
 /// records must remain unable to create a sign-in method or grant access.
 final class AuthScimApplicationProjectionStoreConformanceSuite {
+  /// Creates a suite backed by [createFixture].
   AuthScimApplicationProjectionStoreConformanceSuite(this.createFixture);
 
+  /// Creates the isolated fixture used by each case.
   final AuthScimApplicationProjectionStoreConformanceFactory createFixture;
 
+  /// The isolated cases exposed by this suite.
   List<AuthScimApplicationProjectionStoreConformanceCase> get cases => [
     _case(
       'apply_replay_binding',

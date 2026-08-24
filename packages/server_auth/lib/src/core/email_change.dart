@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'exceptions.dart';
-import 'models.dart';
-import 'password_hasher.dart';
-import 'password_policy.dart';
-import 'store.dart';
-import 'tokens.dart' show secureRandomToken;
-import 'users.dart' show normalizeAuthEmail;
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/password_hasher.dart';
+import 'package:server_auth/src/core/password_policy.dart';
+import 'package:server_auth/src/core/store.dart';
+import 'package:server_auth/src/core/tokens.dart' show secureRandomToken;
+import 'package:server_auth/src/core/users.dart' show normalizeAuthEmail;
 
 /// Delivery payload for an email-change confirmation.
 final class AuthEmailChangeRequest<TContext> {

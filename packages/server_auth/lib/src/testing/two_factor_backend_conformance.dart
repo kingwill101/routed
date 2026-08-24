@@ -1,15 +1,20 @@
 import 'dart:async';
 
-import '../core/two_factor.dart';
+import 'package:server_auth/src/core/two_factor.dart';
 
+/// Creates an isolated two-factor backend for a conformance case.
 typedef AuthTwoFactorBackendConformanceFactory =
     FutureOr<AuthTwoFactorBackend> Function();
 
 /// Identifies a failed durable two-factor backend conformance case.
 final class AuthTwoFactorBackendConformanceFailure implements Exception {
+  /// Creates a failure for [caseId] caused by [cause].
   const AuthTwoFactorBackendConformanceFailure(this.caseId, this.cause);
 
+  /// Stable identifier of the failed case.
   final String caseId;
+
+  /// Error raised by the backend or the failed expectation.
   final Object cause;
 
   @override
@@ -28,7 +33,7 @@ Future<void> verifyAuthTwoFactorBackendConformance(
 ) async {
   await _case('concurrent_enrollment_verification', () async {
     final backend = await createBackend();
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     final pending = _factor('conformance-enroll', now, verified: false);
     await backend.factorStore.save(pending);
     final command = AuthTwoFactorVerifyEnrollmentCommand(
@@ -54,7 +59,7 @@ Future<void> verifyAuthTwoFactorBackendConformance(
 
   await _case('recovery_code_single_use', () async {
     final backend = await createBackend();
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     await backend.factorStore.save(
       _factor(
         'conformance-recovery',
@@ -84,7 +89,7 @@ Future<void> verifyAuthTwoFactorBackendConformance(
 
   await _case('pending_recovery_completion', () async {
     final backend = await createBackend();
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     const userId = 'conformance-pending-recovery';
     await backend.factorStore.save(
       _factor(userId, now, recoveryCodeHashes: const <String>['recovery-hash']),
@@ -114,7 +119,7 @@ Future<void> verifyAuthTwoFactorBackendConformance(
 
   await _case('disable_clears_related_state', () async {
     final backend = await createBackend();
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     const userId = 'conformance-disable';
     final factor = _factor(userId, now);
     await backend.factorStore.save(factor);
@@ -180,7 +185,7 @@ Future<void> verifyAuthTwoFactorBackendConformance(
 
   await _case('session_binding_and_user_isolation', () async {
     final backend = await createBackend();
-    final now = DateTime.utc(2030, 1, 1);
+    final now = DateTime.utc(2030);
     await backend.stepUpStore.create(
       AuthTwoFactorStepUpRecord(
         id: 'proof-id',

@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'exceptions.dart';
-import 'models.dart';
-import 'password_policy.dart';
-import 'plugin.dart';
+import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart';
+import 'package:server_auth/src/core/password_policy.dart';
+import 'package:server_auth/src/core/plugin.dart';
 
 /// Stable ID for the opt-in breached-password policy plugin.
 const authBreachedPasswordPluginId = 'breached_password';
@@ -27,7 +27,10 @@ final class AuthBreachedPasswordPluginConfig {
     this.checkRegistration = true,
     this.checkPasswordReset = true,
     this.checkPasswordChange = true,
-  }) : assert(maxPasswordLength > 0 && maxPasswordLength <= 4096);
+  }) : assert(
+         maxPasswordLength > 0 && maxPasswordLength <= 4096,
+         'maxPasswordLength must be between 1 and 4096',
+       );
 
   /// Maximum time allowed for one application-owned lookup.
   final Duration providerTimeout;
@@ -113,7 +116,7 @@ final class BreachedPasswordPlugin<TContext>
   /// Creates opt-in breached-password enforcement using [lookup].
   ///
   /// [config] controls operations, timeout, and input length. The plugin must
-  /// be configured by [AuthRuntime] before enforcement begins.
+  /// be configured by `AuthRuntime` before enforcement begins.
   BreachedPasswordPlugin({
     required this.lookup,
     this.config = const AuthBreachedPasswordPluginConfig(),

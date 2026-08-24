@@ -287,6 +287,7 @@ final class AuthScimApplicationProjectionCommand {
   final int? expectedVersion;
 }
 
+/// Outcome statuses returned after applying one projection command.
 enum AuthScimApplicationProjectionStatus {
   /// The command changed the projection.
   applied,
@@ -424,6 +425,7 @@ enum AuthScimApplicationProjectionDriftKind {
   unexpected,
 }
 
+/// Describes a difference between authoritative and projected subject state.
 final class AuthScimApplicationProjectionDrift {
   /// Creates a validated difference for one projection subject.
   AuthScimApplicationProjectionDrift({
@@ -600,6 +602,7 @@ final class AuthScimApplicationReconciliationCommand {
   final List<AuthScimApplicationProjectionSnapshot> authoritative;
 }
 
+/// Outcome statuses returned after applying a complete reconciliation.
 enum AuthScimApplicationReconciliationStatus {
   /// The reconciliation changed the projection.
   applied,
@@ -701,6 +704,7 @@ final class AuthScimApplicationProjectionScopeDeletionCommand {
   final String expectedProjectionSnapshotId;
 }
 
+/// Outcome statuses returned after deleting and fencing a projection scope.
 enum AuthScimApplicationProjectionScopeDeletionStatus {
   /// The scope was deleted and fenced.
   applied,
