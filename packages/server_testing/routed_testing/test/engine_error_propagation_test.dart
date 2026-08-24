@@ -2,8 +2,8 @@
 @Timeout(Duration(seconds: 10))
 library;
 
-import 'package:test/test.dart';
 import 'package:routed_testing/routed_testing.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('engineGroup error propagation', () {

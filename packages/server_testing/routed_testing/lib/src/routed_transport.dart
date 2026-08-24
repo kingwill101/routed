@@ -34,18 +34,8 @@ import 'package:server_testing/server_testing.dart';
 /// }
 /// ```
 class RoutedRequestHandler implements RequestHandler {
-  /// The Routed Engine instance that will handle the requests.
-  ///
-  /// This engine contains all your route definitions and middleware.
-  /// If not provided in the constructor, a new empty Engine is created.
-  final Engine _engine;
-
-  /// The HTTP server instance when using [TransportMode.ephemeralServer].
-  HttpServer? _server;
-
-  final bool autoCloseEngine;
-
-  /// Creates a new handler that adapts a Routed Engine to the RequestHandler interface.
+  /// Creates a new handler that adapts a Routed Engine to the
+  /// [RequestHandler] interface.
   ///
   /// [engine] is an optional Routed Engine instance. If not provided, a new
   /// empty Engine will be created.
@@ -59,8 +49,23 @@ class RoutedRequestHandler implements RequestHandler {
   /// // Or create a handler with a new engine
   /// final handler = RoutedRequestHandler();
   /// ```
+  // Keep the optional boolean positional for compatibility with earlier
+  // releases of this testing adapter.
+  // ignore: avoid_positional_boolean_parameters
   RoutedRequestHandler([Engine? engine, this.autoCloseEngine = false])
     : _engine = engine ?? Engine();
+
+  /// The Routed Engine instance that will handle the requests.
+  ///
+  /// This engine contains all your route definitions and middleware.
+  /// If not provided in the constructor, a new empty Engine is created.
+  final Engine _engine;
+
+  /// The HTTP server instance when using [TransportMode.ephemeralServer].
+  HttpServer? _server;
+
+  /// Whether [close] also closes the adapted engine.
+  final bool autoCloseEngine;
 
   /// Handles an HTTP request by delegating to the Routed Engine.
   ///
@@ -100,11 +105,10 @@ class RoutedRequestHandler implements RequestHandler {
       shared: true,
     );
 
-    _server!.listen((request) {
-      // ignore: unawaited_futures
-      _engine.handleRequest(request);
-    });
+    _server!.listen(_engine.handleRequest);
 
+    // `attachServer` is the framework hook that associates the ephemeral
+    // server with the engine for request lifecycle cleanup.
     // ignore: invalid_use_of_internal_member
     _engine.attachServer(_server!);
 
@@ -113,7 +117,8 @@ class RoutedRequestHandler implements RequestHandler {
 
   /// Closes the HTTP server if one was started.
   ///
-  /// This method is called by server_testing when cleaning up resources after tests.
+  /// This method is called by server_testing when cleaning up resources after
+  /// tests.
   /// [force] indicates whether to force close any active connections.
   @override
   Future<void> close([bool force = true]) async {

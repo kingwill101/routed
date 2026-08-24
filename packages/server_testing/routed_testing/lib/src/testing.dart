@@ -11,9 +11,12 @@ import 'package:test/test.dart'
 /// It receives the `Engine` and `TestClient` instances for the test.
 typedef TestCallback = Future<void> Function(Engine engine, TestClient client);
 
-/// A callback function used by the `engineGroup` helper to define tests within the group.
+/// A callback function used by the `engineGroup` helper to define tests within
+/// the group.
+///
 /// It receives the shared `Engine` and `TestClient` instances, and a function
-/// (`engineTest`) which should be used to define individual tests within the group.
+/// (`engineTest`) which should be used to define individual tests within the
+/// group.
 typedef EngineTestFunction =
     void Function(String description, TestCallback callback);
 
@@ -27,14 +30,16 @@ typedef EngineTestFunction =
 ///   `Engine` and `TestClient` instances.
 /// - `engine`: An optional existing `Engine` instance to use. If not provided,
 ///   a new one is created with default providers.
-/// - `client`: An optional existing `TestClient` instance to use. If not provided,
-///   a new one is created based on `transportMode`.
-/// - `transportMode`: The transport mode for the `TestClient` (defaults to `inMemory`).
-/// - `engineConfig`: An `EngineConfig` instance for the `Engine` if a new one is created.
+/// - `client`: An optional existing `TestClient` instance to use. If not
+///   provided, a new one is created based on `transportMode`.
+/// - `transportMode`: The transport mode for the `TestClient` (defaults to
+///   `inMemory`).
+/// - `engineConfig`: An `EngineConfig` instance for the `Engine` if a new one
+///   is created.
 /// - `options`: A list of `EngineOpt` for the `Engine` if a new one is created.
 /// - `providers`: Custom providers to use instead of default providers.
-/// - `autoCloseEngine`: Close the provided engine after the test finishes. Engines
-///   created by this helper are always closed automatically.
+/// - `autoCloseEngine`: Close the provided engine after the test finishes.
+///   Engines created by this helper are always closed automatically.
 @visibleForTesting
 @isTest
 void engineTest(
@@ -84,9 +89,9 @@ void engineTest(
 @isTestGroup
 void engineGroup(
   String description, {
-  Engine? engine,
   required void Function(Engine engine, TestClient client, EngineTestFunction)
   define,
+  Engine? engine,
   TransportMode transportMode = TransportMode.inMemory,
   EngineConfig? engineConfig,
   List<EngineOpt>? options,

@@ -1,3 +1,7 @@
+## Unreleased
+
+- Adopt `very_good_analysis` and complete the public API documentation.
+
 ## 0.4.0
 
 - **Breaking:** Require `routed_core >=0.4.0` for the typed configuration API.
