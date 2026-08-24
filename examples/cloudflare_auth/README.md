@@ -3,6 +3,8 @@
 This is a runnable Routed application for Cloudflare Workers. It uses:
 
 - `CloudflareD1AuthStore` for durable auth data and migrations in D1
+- a sharded SQLite-backed Durable Object store for shared rate-limit counters
+  and locks
 - encrypted, signed server sessions in an HttpOnly cookie
 - the built-in credentials provider and `/auth` routes
 - an embedded Liquify frontend rendered by the `/` route
@@ -13,6 +15,8 @@ This is a runnable Routed application for Cloudflare Workers. It uses:
 - reauthenticated password changes at `/settings/password`, including the
   forced session invalidation that follows a credential change
 - one-time API-key issuance and metadata management at `/settings/api-keys`
+- an explicit password reauthentication flow when service-key mutations age
+  past the sensitive-action window
 - an API-key protected `/service/account` endpoint for non-browser clients
 - active-session listing and revoke-other-sessions controls at
   `/settings/sessions`
@@ -138,12 +142,21 @@ dart run routed_cli:routed deploy \
   --entry package:routed_cloudflare_auth_example/app.dart \
   --cloudflare-factory environment \
   --d1 AUTH_DB=routed-cloudflare-auth-example:YOUR_DATABASE_ID \
+  --durable-object RATE_LIMIT_STORE=CloudflareRateLimitStoreObject \
   --keep-vars
 ```
 
-The CLI builds the Worker and delegates the final upload to Wrangler. Set
+The CLI builds the Worker, registers the Durable Object class, adds the
+SQLite migration, and delegates the final upload to Wrangler. Set
 `AUTH_ORIGIN`, `SESSION_KEY`, and the social-provider values through Wrangler
 variables/secrets as shown above.
+
+The example uses 16 deterministic Durable Object shards. This keeps rate-limit
+state shared across Worker isolates without putting every client address in a
+single hot object. It is designed for the Workers Free plan; Durable Objects
+and SQLite-backed Durable Objects are available there, but requests and SQLite
+reads/writes are metered. See Cloudflare's [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/)
+for the current allowance and limits.
 
 `CloudflareD1AuthStore.open` applies the current typed schema migrations on
 the first Worker initialization. No handwritten SQL migration file is
@@ -296,10 +309,14 @@ dart run routed_cli:routed deploy \
   --entry package:routed_cloudflare_auth_example/app.dart \
   --cloudflare-factory environment \
   --d1 AUTH_DB=routed-cloudflare-auth-example:YOUR_DATABASE_ID \
+  --durable-object RATE_LIMIT_STORE=CloudflareRateLimitStoreObject \
   --dry-run
 ```
 
-The example intentionally wires an explicit, currently empty
-`RateLimitService`. The repository does not yet ship a durable Cloudflare
-rate-limit backend, so do not expose this example to untrusted public traffic
-without adding one and configuring policies for the auth routes.
+The Worker uses Routed's built-in `RateLimitService` and
+`CacheRateLimiterBackend` through the `RoutedAuthRateLimiter` adapter. Its
+sliding-window policy allows 30 auth operations per IP per minute and fails
+closed if the cache backend cannot evaluate a request. The Cloudflare Worker
+uses the shared SQLite Durable Object repository described above; local and
+test composition uses an in-memory `ArrayStore`. The D1 auth store is not used
+as an implicit rate-limit backend.

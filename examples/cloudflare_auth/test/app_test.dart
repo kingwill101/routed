@@ -381,6 +381,18 @@ void main() {
     final staleDashboard = await client.get('/dashboard');
     staleDashboard.assertStatus(HttpStatus.found);
     expect(staleDashboard.headerValue('location'), '/login');
+
+    final staleAccount = await client.get('/account');
+    staleAccount.assertStatus(HttpStatus.unauthorized);
+    expect(staleAccount.json()['authenticated'], isFalse);
+
+    final staleLogin = await client.get('/login');
+    staleLogin.assertStatus(HttpStatus.ok);
+    expect(staleLogin.body, contains('<form action="/login"'));
+
+    final staleSignup = await client.get('/signup');
+    staleSignup.assertStatus(HttpStatus.ok);
+    expect(staleSignup.body, contains('<form action="/signup"'));
   });
 
   test('returns a safe message for invalid browser credentials', () async {

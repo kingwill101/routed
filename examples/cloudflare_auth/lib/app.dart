@@ -25,14 +25,34 @@ Future<Engine> createCloudflareEngine(CloudflareEnvironment environment) async {
     environment.d1('AUTH_DB'),
     schema: const CloudflareD1AuthSchema(tablePrefix: _authTablePrefix),
   );
+  final rateLimitService = localDevelopment
+      ? null
+      : createRateLimitService(
+          repository: RepositoryImpl(
+            CloudflareDurableObjectStore(
+              namespace: environment.durableObjectNamespace('RATE_LIMIT_STORE'),
+              objectPrefix: 'routed-auth-rate-limit',
+              shardCount: 16,
+            ),
+            'routed-auth-rate-limit',
+            '',
+          ),
+        );
   return createEngine(
     store: store,
     apiKeyStore: store.apiKeys,
     origin: origin,
     sessionKey: sessionKey,
     socialProviders: _cloudflareSocialProviders(environment, origin),
+    rateLimitService: rateLimitService,
     localDevelopment: localDevelopment,
   );
+}
+
+/// Durable Object class registered by the Worker entrypoint.
+final class CloudflareRateLimitStoreObject
+    extends CloudflareDurableObjectStoreObject {
+  CloudflareRateLimitStoreObject(super.state, super.env);
 }
 
 /// Builds the application around any durable [AuthStore].
@@ -46,6 +66,7 @@ Future<Engine> createEngine({
   required Uri origin,
   required String sessionKey,
   Iterable<AuthProvider> socialProviders = const [],
+  RateLimitService? rateLimitService,
   bool localDevelopment = false,
   bool initialize = true,
 }) async {
@@ -55,6 +76,7 @@ Future<Engine> createEngine({
     origin: origin,
     sessionKey: sessionKey,
     socialProviders: socialProviders,
+    rateLimitService: rateLimitService,
     localDevelopment: localDevelopment,
   ).buildEngine();
 
@@ -100,7 +122,7 @@ void registerRoutes(Engine engine, {String storeLabel = 'cloudflare_d1'}) {
   });
 
   engine.get('/login', (context) async {
-    if (SessionAuth.current(context) != null) {
+    if (await _authManager(context).resolveSession(context) != null) {
       return context.redirect('/dashboard');
     }
     return _authPage(context, login: true);
@@ -108,7 +130,7 @@ void registerRoutes(Engine engine, {String storeLabel = 'cloudflare_d1'}) {
   engine.post('/login', (context) => _credentialsForm(context, login: true));
 
   engine.get('/signup', (context) async {
-    if (SessionAuth.current(context) != null) {
+    if (await _authManager(context).resolveSession(context) != null) {
       return context.redirect('/dashboard');
     }
     return _authPage(context, login: false);
@@ -120,17 +142,18 @@ void registerRoutes(Engine engine, {String storeLabel = 'cloudflare_d1'}) {
   engine.get('/dashboard', (context) async {
     final manager = _authManager(context);
     final session = await manager.resolveSession(context);
-    final sessions = session == null
-        ? const <AuthSessionInfo>[]
-        : await manager.listSessions(context);
+    if (session == null) {
+      return context.redirect('/login');
+    }
+    final sessions = await manager.listSessions(context);
     return _renderEmbeddedPage(context, 'dashboard.liquid', <String, dynamic>{
       'csrf_token': manager.csrfToken(context),
-      'email': session?.user.email ?? '',
-      'name': session?.user.name ?? '',
-      'user_id': session?.user.id ?? '',
-      'session_strategy': session?.strategy?.name ?? 'session',
+      'email': session.user.email ?? '',
+      'name': session.user.name ?? '',
+      'user_id': session.user.id,
+      'session_strategy': session.strategy?.name ?? 'session',
       'session_expires':
-          session?.expiresAt?.toUtc().toIso8601String() ?? 'browser session',
+          session.expiresAt?.toUtc().toIso8601String() ?? 'browser session',
       'sessions': sessions.map((value) => value.toJson()).toList(),
     });
   }, middlewares: [_browserAuthenticationGuard()]);
@@ -175,6 +198,11 @@ void registerRoutes(Engine engine, {String storeLabel = 'cloudflare_d1'}) {
     _revokeApiKey,
     middlewares: [_browserAuthenticationGuard()],
   );
+  engine.post(
+    '/settings/reauthenticate',
+    _reauthenticate,
+    middlewares: [_browserAuthenticationGuard()],
+  );
   engine.get(
     '/settings/sessions',
     _sessionsPage,
@@ -196,12 +224,17 @@ void registerRoutes(Engine engine, {String storeLabel = 'cloudflare_d1'}) {
 
   engine.get(
     '/account',
-    (context) {
-      final principal = SessionAuth.current(context);
+    (context) async {
+      final session = await _authManager(context).resolveSession(context);
+      if (session == null) {
+        return context.json(<String, Object?>{
+          'authenticated': false,
+        }, statusCode: HttpStatus.unauthorized);
+      }
       return context.json(<String, Object?>{
         'authenticated': true,
-        'userId': principal?.id,
-        'email': principal?.attributes['email'],
+        'userId': session.user.id,
+        'email': session.user.email,
       });
     },
     middlewares: [
@@ -372,6 +405,7 @@ Future<Response> _apiKeysPage(
   String? error,
   String? issuedKey,
   String? issuedName,
+  bool reauthenticationRequired = false,
   int statusCode = HttpStatus.ok,
 }) async {
   final manager = _authManager(context);
@@ -387,6 +421,9 @@ Future<Response> _apiKeysPage(
     'key_count': keys.length,
     'issued_key': issuedKey,
     'issued_name': issuedName,
+    'reauthentication_required': reauthenticationRequired,
+    'reauthenticated':
+        context.request.queryParameters['reauthenticated'] == '1',
     'error':
         error ??
         (plugin == null
@@ -413,6 +450,7 @@ Future<Response> _createApiKey(EngineContext context) async {
     return _apiKeysPage(context, statusCode: HttpStatus.notFound);
   }
   try {
+    await manager.requireRecentAuthentication(context);
     final issued = await plugin.issue(
       userId: session.user.id,
       name: payload['name']?.toString() ?? '',
@@ -427,6 +465,7 @@ Future<Response> _createApiKey(EngineContext context) async {
     return _apiKeysPage(
       context,
       error: _friendlyAuthError(error.code),
+      reauthenticationRequired: error.code == 'recent_authentication_required',
       statusCode: HttpStatus.badRequest,
     );
   } catch (_) {
@@ -472,6 +511,7 @@ Future<Response> _rotateApiKey(EngineContext context) async {
     return _apiKeysPage(
       context,
       error: _friendlyAuthError(error.code),
+      reauthenticationRequired: error.code == 'recent_authentication_required',
       statusCode: HttpStatus.badRequest,
     );
   } catch (_) {
@@ -512,12 +552,51 @@ Future<Response> _revokeApiKey(EngineContext context) async {
     return _apiKeysPage(
       context,
       error: _friendlyAuthError(error.code),
+      reauthenticationRequired: error.code == 'recent_authentication_required',
       statusCode: HttpStatus.badRequest,
     );
   } catch (_) {
     return _apiKeysPage(
       context,
       error: 'We could not revoke that service key. Please try again.',
+      statusCode: HttpStatus.badRequest,
+    );
+  }
+}
+
+Future<Response> _reauthenticate(EngineContext context) async {
+  final manager = _authManager(context);
+  final payload = await context.formCache;
+  final browserError = manager.validateBrowserRequest(context);
+  if (browserError != null || !manager.validateCsrf(context, payload)) {
+    return _apiKeysPage(
+      context,
+      error: _friendlyAuthError(browserError ?? 'invalid_csrf'),
+      reauthenticationRequired: true,
+      statusCode: HttpStatus.forbidden,
+    );
+  }
+  final session = await manager.resolveSession(context);
+  if (session == null) return context.redirect('/login');
+  try {
+    await manager.reauthenticateWithPassword(
+      context,
+      identifier: session.user.email,
+      currentPassword: payload['password']?.toString() ?? '',
+    );
+    return await context.redirect('/settings/api-keys?reauthenticated=1');
+  } on AuthFlowException catch (error) {
+    return _apiKeysPage(
+      context,
+      error: _friendlyAuthError(error.code),
+      reauthenticationRequired: true,
+      statusCode: HttpStatus.badRequest,
+    );
+  } catch (_) {
+    return _apiKeysPage(
+      context,
+      error: 'We could not verify your password. Please try again.',
+      reauthenticationRequired: true,
       statusCode: HttpStatus.badRequest,
     );
   }
@@ -941,6 +1020,10 @@ String _friendlyAuthError(String code) {
       return 'Choose a shorter password.';
     case 'invalid_current_password':
       return 'The current password is not correct.';
+    case 'reauthentication_required':
+      return 'The current password is not correct.';
+    case 'recent_authentication_required':
+      return 'Reauthenticate before changing service credentials.';
     case 'password_change_failed':
       return 'We could not change your password. Please try again.';
     case 'account_locked':

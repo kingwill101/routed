@@ -449,7 +449,23 @@ const cloudflareAuthEmbeddedViews = <String, String>{
           <code>{{ issued_key | escape }}</code>
         </section>
       {% endif %}
+      {% if reauthenticated %}<div class="success" role="status">Fresh authentication verified. You can now change service credentials.</div>{% endif %}
       {% if error %}<div class="alert" role="alert">{{ error | escape }}</div>{% endif %}
+      {% if reauthentication_required %}
+        <section class="panel" style="margin-bottom: 1rem;">
+          <div class="section-label">Security check</div>
+          <h2>Reauthenticate to continue.</h2>
+          <p>Your session is still active, but changing service credentials requires a recent password check.</p>
+          <form action="/settings/reauthenticate" method="post">
+            <input type="hidden" name="_csrf" value="{{ csrf_token | escape }}">
+            <div class="field">
+              <label for="reauth-password">Current password</label>
+              <input id="reauth-password" name="password" type="password" autocomplete="current-password" required autofocus>
+            </div>
+            <button class="primary form-submit" type="submit">Verify and continue</button>
+          </form>
+        </section>
+      {% endif %}
       <section class="dashboard-panels">
         <div class="panel">
           <div class="section-label">Create a key</div>

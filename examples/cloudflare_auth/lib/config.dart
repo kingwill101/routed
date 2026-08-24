@@ -44,6 +44,7 @@ AppConfig config({
   required Uri origin,
   required String sessionKey,
   Iterable<AuthProvider> socialProviders = const [],
+  RateLimitService? rateLimitService,
   bool localDevelopment = false,
 }) {
   if (sessionKey.trim().isEmpty) {
@@ -54,11 +55,11 @@ AppConfig config({
     );
   }
 
-  // The example keeps the rate-limit service explicitly wired, even though
-  // this repository does not yet provide a durable Cloudflare rate-limit
-  // backend. Add policies and a D1/KV-backed backend before exposing this
-  // example to untrusted public traffic.
-  final rateLimitService = RateLimitService(const []);
+  final configuredRateLimitService =
+      rateLimitService ??
+      (localDevelopment
+          ? RateLimitService(const [])
+          : createRateLimitService());
   final authProviders = <AuthProvider>[
     CredentialsProvider(),
     ...socialProviders,
@@ -72,7 +73,7 @@ AppConfig config({
           providers: authProviders,
           plugins: [apiKeys],
           trustedOrigins: [origin],
-          rateLimiter: RoutedAuthRateLimiter(rateLimitService),
+          rateLimiter: RoutedAuthRateLimiter(configuredRateLimitService),
         )
       : AuthDeploymentPresets.secureSessionProduction<EngineContext>(
           store: store,
@@ -83,7 +84,7 @@ AppConfig config({
             proxyPolicy: const AuthProxyPolicy.direct(),
           ),
           lifecycleDelivery: const AuthLifecycleDelivery.disabled(),
-          rateLimiter: RoutedAuthRateLimiter(rateLimitService),
+          rateLimiter: RoutedAuthRateLimiter(configuredRateLimitService),
           requireVerifiedEmail: false,
           // This example does not configure an email delivery provider. Add
           // one and switch this to `AuthAccountPolicy.production` before
@@ -125,9 +126,44 @@ AppConfig config({
           ),
         ),
       ),
-      RoutedRateLimitProvider(RateLimitConfig(service: rateLimitService)),
+      RoutedRateLimitProvider(
+        RateLimitConfig(service: configuredRateLimitService),
+      ),
       EmbeddedViewsProvider(),
       deployment.serviceProvider(),
     ],
+  );
+}
+
+/// Creates the application's built-in rate-limit service.
+///
+/// A host can supply a durable [Repository] here. The Cloudflare Worker uses
+/// the SQLite-backed Durable Object store, while the default remains useful
+/// for local and test composition.
+RateLimitService createRateLimitService({Repository? repository}) {
+  final backend = CacheRateLimiterBackend(
+    repository:
+        repository ??
+        RepositoryImpl(ArrayStore(), 'routed-auth-rate-limit', ''),
+  );
+  return RateLimitService(
+    compileRateLimitPolicies(
+      specs: const [
+        RateLimitPolicySpec(
+          name: 'auth-ip',
+          match: '/auth/**',
+          method: null,
+          strategy: RateLimitStrategy.slidingWindow,
+          capacity: 30,
+          interval: Duration.zero,
+          window: Duration(minutes: 1),
+          period: Duration.zero,
+          burstMultiplier: null,
+          key: RateLimitKeySpec.ip(),
+        ),
+      ],
+      backend: backend,
+      defaultFailover: RateLimitFailoverMode.block,
+    ),
   );
 }
