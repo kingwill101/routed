@@ -2,6 +2,8 @@ import 'package:routed/routed.dart';
 
 void main() {
   // Importing package:routed registers official providers.
-  assert(officialProvidersRegistered);
-  print('routed batteries barrel OK (core + adapters + server_*)');
+  assert(
+    officialProvidersRegistered,
+    'The routed facade did not register its official providers.',
+  );
 }

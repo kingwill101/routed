@@ -22,4 +22,4 @@ list such as
 configuration is supplied through typed provider constructors before startup;
 there is no YAML or dotted-key configuration surface.
 
-For the slim engine only, depend on [`routed_core`](../routed_core).
+For the slim engine only, depend directly on `package:routed_core`.

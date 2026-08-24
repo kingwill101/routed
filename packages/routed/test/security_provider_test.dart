@@ -14,7 +14,6 @@ void main() {
           RoutedSecurityConfig(
             trustedProxies: TrustedProxyConfig(
               enabled: true,
-              forwardClientIp: true,
               proxies: ['127.0.0.1/32'],
               headers: ['X-Forwarded-For'],
             ),
@@ -85,7 +84,7 @@ void main() {
         ...Engine.defaultProviders,
         RoutedSecurityProvider(
           RoutedSecurityConfig(
-            cors: CorsConfig(
+            cors: const CorsConfig(
               enabled: true,
               allowedOrigins: ['https://app.example'],
               allowedMethods: ['GET'],

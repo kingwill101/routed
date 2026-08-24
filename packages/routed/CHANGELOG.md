@@ -1,3 +1,8 @@
+## Unreleased
+
+- Adopted `very_good_analysis` and completed public API documentation for the
+  batteries-included facade.
+
 ## 0.5.0
 
 - **Breaking:** Consolidate provider and registry imports on
