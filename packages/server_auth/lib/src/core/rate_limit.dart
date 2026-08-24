@@ -31,6 +31,9 @@ enum AuthRateLimitAction {
   /// A credentials or email sign-in attempt.
   signIn,
 
+  /// A password verification that refreshes a sensitive-action proof.
+  reauthentication,
+
   /// A new credentials registration attempt.
   register,
 

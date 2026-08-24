@@ -1,5 +1,9 @@
 ## Unreleased
 
+- Add a session-bound password reauthentication endpoint and manager API for
+  refreshing sensitive-action proofs without replacing the current session.
+  Reauthentication is rate-limited, supported for session and JWT strategies,
+  and exposed through the typed auth client.
 - Fall back to the encrypted framework session for the browser-bound OAuth
   state when a host drops the auxiliary state cookie during a cross-site
   redirect. The durable OAuth challenge and one-time consumption rules remain

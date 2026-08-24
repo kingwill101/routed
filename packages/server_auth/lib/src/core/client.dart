@@ -1739,6 +1739,19 @@ class AuthClientCore {
     transport.clearCsrfToken();
   }
 
+  /// Verifies the current user's password and refreshes the short-lived
+  /// sensitive-action proof without replacing the current session.
+  Future<void> reauthenticate({
+    String? identifier,
+    required String currentPassword,
+  }) async {
+    await _mutatingRequest(
+      'POST',
+      const AuthRoutePath('/reauthenticate'),
+      <String, dynamic>{'identifier': ?identifier, 'password': currentPassword},
+    );
+  }
+
   /// Reauthenticates the current user and requests an email-change message.
   Future<void> requestEmailChange({
     required String newEmail,

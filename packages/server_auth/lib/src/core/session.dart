@@ -19,14 +19,29 @@ DateTime? parseAuthSessionIssuedAt(String? value) {
 }
 
 /// Session refresh action derived from issued-at metadata.
-enum AuthSessionRefreshAction { initialize, refresh, keep }
+enum AuthSessionRefreshAction {
+  /// Initializes missing issued-at metadata.
+  initialize,
+
+  /// Refreshes metadata that has reached its update threshold.
+  refresh,
+
+  /// Keeps issued-at metadata that is still within its update interval.
+  keep,
+}
 
 /// Serializes issued-at timestamps for auth session metadata.
+///
+/// Converts [issuedAt] to UTC before producing an ISO-8601 string.
 String serializeAuthSessionIssuedAt(DateTime issuedAt) {
   return issuedAt.toUtc().toIso8601String();
 }
 
-/// Returns true when a session should be refreshed based on [updateAge].
+/// Returns whether a session has reached its refresh threshold.
+///
+/// The comparison is inclusive: a session refreshes when elapsed time is
+/// greater than or equal to [updateAge]. Both [issuedAt] and [now] are
+/// compared in UTC; no validation is performed on a negative duration.
 bool shouldRefreshAuthSession(
   DateTime issuedAt,
   Duration updateAge, {
@@ -36,8 +51,12 @@ bool shouldRefreshAuthSession(
   return current.difference(issuedAt.toUtc()) >= updateAge;
 }
 
-/// Decides whether auth session issued-at metadata should be initialized,
-/// refreshed, or left unchanged.
+/// Decides how auth session issued-at metadata should be updated.
+///
+/// A null, empty, or malformed [issuedAtValue] selects
+/// [AuthSessionRefreshAction.initialize]. Valid values select
+/// [AuthSessionRefreshAction.refresh] when [updateAge] has elapsed and
+/// [AuthSessionRefreshAction.keep] otherwise.
 AuthSessionRefreshAction authSessionRefreshAction({
   required String? issuedAtValue,
   required Duration updateAge,
@@ -52,7 +71,11 @@ AuthSessionRefreshAction authSessionRefreshAction({
       : AuthSessionRefreshAction.keep;
 }
 
-/// Applies issued-at refresh semantics with adapter hooks for write/touch.
+/// Applies issued-at refresh semantics through write and touch callbacks.
+///
+/// Returns without invoking a callback when [updateAge] is null. Initialization
+/// and refresh write the current UTC time; refresh also invokes [touchSession]
+/// when supplied.
 void syncAuthSessionRefresh({
   required String? issuedAtValue,
   required Duration? updateAge,
@@ -85,7 +108,11 @@ void syncAuthSessionRefresh({
   }
 }
 
-/// Resolves auth session expiry from explicit or runtime max-age settings.
+/// Resolves an auth session expiry from explicit or cookie max-age settings.
+///
+/// [sessionMaxAge] takes precedence, including non-positive values. When it is
+/// absent, only a positive [sessionOptionsMaxAgeSeconds] produces an expiry;
+/// otherwise the result is null. The optional [now] is used as supplied.
 DateTime? resolveAuthSessionExpiry({
   Duration? sessionMaxAge,
   int? sessionOptionsMaxAgeSeconds,
@@ -102,7 +129,9 @@ DateTime? resolveAuthSessionExpiry({
   return current.add(Duration(seconds: maxAge));
 }
 
-/// Resolves positive session max-age seconds from a duration.
+/// Returns positive whole seconds represented by [sessionMaxAge].
+///
+/// Returns null for null, zero, negative, and sub-second durations.
 int? resolveAuthSessionMaxAgeSeconds(Duration? sessionMaxAge) {
   if (sessionMaxAge == null) {
     return null;
@@ -114,7 +143,10 @@ int? resolveAuthSessionMaxAgeSeconds(Duration? sessionMaxAge) {
   return seconds;
 }
 
-/// Builds an HTTP-only remember-token cookie.
+/// Builds a remember-token cookie with the supplied lifetime and attributes.
+///
+/// Preserves [token] as the cookie value. [domain] is omitted when null or
+/// empty, and [secure] is set only when true. [httpOnly] defaults to true.
 Cookie buildRememberTokenCookie(
   String cookieName,
   String token, {
@@ -141,7 +173,9 @@ Cookie buildRememberTokenCookie(
   return cookie;
 }
 
-/// Builds an expired remember-token cookie for logout/invalidations.
+/// Builds an expired remember-token cookie for logout or invalidation.
+///
+/// The value is empty, the expiry is the Unix epoch, and `maxAge` is zero.
 Cookie buildExpiredRememberTokenCookie(
   String cookieName, {
   String path = '/',
@@ -167,15 +201,21 @@ Cookie buildExpiredRememberTokenCookie(
 /// Persistence contract for long-lived "remember me" tokens.
 ///
 /// Implementations must treat [token] as a secret: persist only a digest and
-/// compare the digest during [read] and [remove]. Never log or expose the raw
-/// token from a persistence adapter.
+/// compare the digest during [read], [consume], and [remove]. Never log or
+/// expose the raw token from a persistence adapter.
 abstract class RememberTokenStore {
+  /// Saves [principal] for the raw [token] until [expiresAt].
+  ///
+  /// Implementations must hash [token] before persistence and should ignore or
+  /// reject records that are already expired.
   FutureOr<void> save(
     String token,
     AuthPrincipal principal,
     DateTime expiresAt,
   );
 
+  /// Reads the principal for [token], or returns null when it is unknown or
+  /// expired.
   FutureOr<AuthPrincipal?> read(String token);
 
   /// Atomically consumes [token] for one request and invalidates it.
@@ -185,10 +225,17 @@ abstract class RememberTokenStore {
   /// read-then-remove implementation is not replay-safe under concurrency.
   FutureOr<AuthPrincipal?> consume(String token);
 
+  /// Removes [token] without exposing whether it was present.
   FutureOr<void> remove(String token);
 }
 
+/// Bounded, process-local storage for remember-me tokens.
 class InMemoryRememberTokenStore implements RememberTokenStore {
+  /// Creates a store with an optional clock and positive [maxEntries] limit.
+  ///
+  /// Throws an [ArgumentError] when [maxEntries] is less than one. Expired
+  /// records are pruned during reads and writes, and the oldest record is
+  /// evicted when the limit is reached.
   InMemoryRememberTokenStore({
     DateTime Function()? clock,
     this.maxEntries = 1024,
@@ -203,11 +250,15 @@ class InMemoryRememberTokenStore implements RememberTokenStore {
 
   /// Maximum number of remember-me tokens retained by this local store.
   ///
-  /// Expired records are removed on writes and lookups. If the store is full,
-  /// the oldest record is evicted. Durable stores should enforce equivalent
-  /// expiry and capacity policies in persistence.
+  /// Expired records are removed during [save], [read], and [consume]. If the
+  /// store is full, the oldest record is evicted. Durable stores should
+  /// enforce equivalent expiry and capacity policies in persistence.
   final int maxEntries;
 
+  /// Stores a digest of [token] and a defensive copy of [principal].
+  ///
+  /// Blank tokens or principal IDs throw an [ArgumentError]. Already-expired
+  /// records are ignored.
   @override
   Future<void> save(
     String token,
@@ -240,6 +291,7 @@ class InMemoryRememberTokenStore implements RememberTokenStore {
     );
   }
 
+  /// Returns the stored principal for [token], or null when unavailable.
   @override
   Future<AuthPrincipal?> read(String token) async {
     if (token.trim().isEmpty) return null;
@@ -251,6 +303,7 @@ class InMemoryRememberTokenStore implements RememberTokenStore {
     return record.principal;
   }
 
+  /// Returns and removes the principal for [token] exactly once.
   @override
   Future<AuthPrincipal?> consume(String token) async {
     if (token.trim().isEmpty) return null;
@@ -263,6 +316,7 @@ class InMemoryRememberTokenStore implements RememberTokenStore {
     return record.principal;
   }
 
+  /// Removes [token] from the store when it is present.
   @override
   Future<void> remove(String token) async {
     if (token.trim().isEmpty) return;
@@ -289,29 +343,36 @@ class _RememberRecord {
 
 /// Adapter used by [RememberSessionAuthRuntime] to read/write framework state.
 abstract class AuthSessionRuntimeAdapter<TContext> {
+  /// Reads a cached principal attribute from [context].
   AuthPrincipal? readPrincipalAttribute(TContext context, String attributeKey);
 
+  /// Writes or clears a cached principal attribute on [context].
   void writePrincipalAttribute(
     TContext context,
     String attributeKey,
     AuthPrincipal? principal,
   );
 
+  /// Reads the serialized principal stored in the framework session.
   Map<String, dynamic>? readSessionPrincipal(
     TContext context,
     String sessionKey,
   );
 
+  /// Writes or clears the serialized principal in the framework session.
   void writeSessionPrincipal(
     TContext context,
     String sessionKey,
     Map<String, dynamic>? principalJson,
   );
 
+  /// Returns cookies received with the request.
   Iterable<Cookie> requestCookies(TContext context);
 
+  /// Adds [cookie] to the response.
   void setResponseCookie(TContext context, Cookie cookie);
 
+  /// Builds a remember cookie using the framework's cookie policy.
   Cookie buildRememberCookie(
     TContext context,
     String cookieName,
@@ -319,15 +380,20 @@ abstract class AuthSessionRuntimeAdapter<TContext> {
     DateTime expiresAt,
   );
 
+  /// Builds an expired remember cookie using the framework's cookie policy.
   Cookie buildExpiredRememberCookie(TContext context, String cookieName);
 }
 
-/// Framework-agnostic remember-me + session principal runtime.
+/// Framework-agnostic remember-me and session-principal runtime.
 ///
 /// Framework adapters are responsible for providing a concrete
 /// [AuthSessionRuntimeAdapter] that maps framework request/session/cookie
 /// semantics to this runtime.
 class RememberSessionAuthRuntime<TContext> {
+  /// Creates a runtime with framework [adapter] and remember-token settings.
+  ///
+  /// Uses [InMemoryRememberTokenStore] when [rememberStore] is omitted. Throws
+  /// an [ArgumentError] when [defaultRememberDuration] is not positive.
   RememberSessionAuthRuntime({
     required this.adapter,
     RememberTokenStore? rememberStore,
@@ -351,16 +417,39 @@ class RememberSessionAuthRuntime<TContext> {
     }
   }
 
+  /// Adapter that maps framework request, session, and response state.
   final AuthSessionRuntimeAdapter<TContext> adapter;
+
+  /// Store used for hashed remember-me tokens.
   final RememberTokenStore rememberStore;
+
+  /// Name of the remember-me cookie.
   final String rememberCookieName;
+
+  /// Lifetime assigned to rotated remember tokens during hydration.
   final Duration defaultRememberDuration;
+
+  /// Session key containing the serialized principal.
   final String sessionPrincipalKey;
+
+  /// Request attribute key containing the cached principal.
   final String principalAttributeKey;
+
+  /// Generates raw remember tokens before they are persisted by the store.
   final String Function() tokenGenerator;
+
+  /// Optional callback that rotates the framework session before login.
   final void Function(TContext context)? regenerateSession;
+
   final DateTime Function() _clock;
 
+  /// Logs in [principal] and stores it in the session and request context.
+  ///
+  /// When [rotateSession] is true, the runtime invokes [regenerateSession]
+  /// before writing state. [rememberMe] saves a one-time-rotated token using
+  /// [rememberDuration] or [defaultRememberDuration]; a non-positive duration
+  /// throws an [ArgumentError]. A non-remembered rotating login revokes any
+  /// existing remember cookie.
   Future<void> login(
     TContext context,
     AuthPrincipal principal, {
@@ -434,6 +523,10 @@ class RememberSessionAuthRuntime<TContext> {
     );
   }
 
+  /// Clears session and request principal state and expires the remember cookie.
+  ///
+  /// If the request contains a remember token, it is removed from
+  /// [rememberStore] before the expired cookie is added to the response.
   Future<void> logout(TContext context) async {
     adapter.writeSessionPrincipal(context, sessionPrincipalKey, null);
     adapter.writePrincipalAttribute(context, principalAttributeKey, null);
@@ -448,6 +541,10 @@ class RememberSessionAuthRuntime<TContext> {
     );
   }
 
+  /// Returns the cached or session-backed principal for [context].
+  ///
+  /// A cached request attribute takes precedence. A serialized session
+  /// principal is decoded and cached; absent data returns null.
   AuthPrincipal? current(TContext context) {
     final cached = adapter.readPrincipalAttribute(
       context,
@@ -467,12 +564,13 @@ class RememberSessionAuthRuntime<TContext> {
     return principal;
   }
 
-  /// Hydrates auth principal from session or remember-token cookie.
+  /// Hydrates the auth principal from session or remember-token state.
   ///
-  /// - If session principal exists, request attribute is refreshed.
-  /// - If remember-token cookie is valid, session principal is restored and the
-  ///   remember token is rotated.
-  /// - If remember-token cookie is invalid/expired, it is revoked.
+  /// An existing session principal only refreshes the request attribute. When
+  /// no session principal exists, [RememberTokenStore.consume] atomically consumes a
+  /// request token; a valid token is replaced with a new token using
+  /// [defaultRememberDuration], while an invalid or expired token is removed and
+  /// its cookie expired. This prevents concurrent replay of a remembered login.
   Future<void> hydrate(TContext context) async {
     final sessionData = adapter.readSessionPrincipal(
       context,

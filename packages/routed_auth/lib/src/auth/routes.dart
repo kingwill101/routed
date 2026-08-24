@@ -69,6 +69,8 @@ import 'package:routed_sessions/routed_sessions.dart';
 /// - `POST /register/{provider}` registers new credentials.
 /// - `GET /callback/{provider}` completes OAuth/email flows.
 /// - `POST /signout` signs the user out.
+/// - `POST /reauthenticate` refreshes the current user's sensitive-action
+///   proof without replacing the session.
 /// - `POST /password-reset/request` requests a reset message when configured.
 /// - `POST /password-reset/confirm` consumes a reset token.
 /// - `POST /password/change` reauthenticates and changes a password.
@@ -179,6 +181,10 @@ class AuthRoutes {
         auth.get(authCallbackProviderRoute.template, _callback);
         auth.post(authCallbackProviderRoute.template, _callback);
         auth.post(const AuthRoutePath('/signout').template, _signOut);
+        auth.post(
+          const AuthRoutePath('/reauthenticate').template,
+          _reauthenticate,
+        );
         if (manager.options.passwordResetSender != null) {
           auth.post(
             const AuthRoutePath('/password-reset/request').template,
@@ -804,6 +810,27 @@ class AuthRoutes {
       ctx.response.cookies.add(expiredJwtCookie);
     }
     return ctx.json({'ok': true});
+  }
+
+  Future<Response> _reauthenticate(EngineContext ctx) async {
+    final browserError = manager.validateBrowserRequest(ctx);
+    if (browserError != null) return _errorResponse(ctx, browserError);
+    final payload = await _payload(ctx);
+    if (!manager.validateCsrf(ctx, payload)) {
+      return ctx.json({
+        'error': 'invalid_csrf',
+      }, statusCode: HttpStatus.forbidden);
+    }
+    try {
+      await manager.reauthenticateWithPassword(
+        ctx,
+        identifier: payload['identifier']?.toString(),
+        currentPassword: payload['password']?.toString() ?? '',
+      );
+      return ctx.json({'ok': true});
+    } on AuthFlowException catch (error) {
+      return _flowErrorResponse(ctx, error);
+    }
   }
 
   Future<Response> _passwordResetRequest(EngineContext ctx) async {

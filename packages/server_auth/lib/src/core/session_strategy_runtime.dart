@@ -10,6 +10,7 @@ import 'session.dart';
 
 /// Result of updating an auth session for a selected strategy.
 class AuthSessionUpdateResolution {
+  /// Creates a strategy update result with an optional JWT cookie.
   const AuthSessionUpdateResolution({required this.session, this.jwtCookie});
 
   /// Updated auth session payload.
@@ -21,6 +22,7 @@ class AuthSessionUpdateResolution {
 
 /// Result of resolving an auth session for a selected strategy.
 class AuthSessionResolution {
+  /// Creates a session resolution; omitted fields represent no result.
   const AuthSessionResolution({this.session, this.refreshCookie});
 
   /// Resolved auth session; `null` when no session is available.
@@ -32,13 +34,19 @@ class AuthSessionResolution {
 
 /// Result of resolving sign-out behavior for a selected strategy.
 class AuthSignOutResolution {
+  /// Creates a sign-out result with an optional expired JWT cookie.
   const AuthSignOutResolution({this.expiredJwtCookie});
 
   /// Expired JWT cookie to attach for JWT strategy sign-out.
   final Cookie? expiredJwtCookie;
 }
 
-/// Resolves `updateSession` behavior for auth session strategies.
+/// Resolves `updateSession` behavior for an auth session strategy.
+///
+/// The session branch invokes [applySessionMaxAge], persists the principal,
+/// writes issued-at metadata, and resolves expiry. The JWT branch ignores
+/// session callbacks and delegates issuance to
+/// [issueAuthJwtSessionWithCallbacks]. Callback and strategy errors propagate.
 ///
 /// Session strategy uses callback hooks for framework-specific session writes.
 ///
@@ -89,7 +97,12 @@ resolveAuthSessionUpdateForStrategyWithCallbacks<TContext>({
   }
 }
 
-/// Resolves `resolveSession` behavior for auth session strategies.
+/// Resolves `resolveSession` behavior for an auth session strategy.
+///
+/// The session branch returns an empty resolution when no principal is read;
+/// otherwise it applies max-age and refresh hooks. The JWT branch verifies and
+/// optionally refreshes the token, writes payload attributes, and returns a
+/// refresh cookie when one was issued. Callback and token errors propagate.
 ///
 /// Session strategy uses callback hooks for framework-specific principal/session
 /// IO and session refresh touch semantics.
@@ -179,11 +192,12 @@ resolveAuthSessionForStrategyWithCallbacks<TContext>({
   }
 }
 
-/// Resolves sign-out behavior for auth session strategies.
+/// Resolves sign-out behavior for an auth session strategy.
 ///
-/// Session strategy executes [logoutSession].
-///
-/// JWT strategy returns an expired JWT cookie that callers can attach.
+/// The session strategy awaits [logoutSession] when supplied and returns no
+/// cookie. The JWT strategy does not invoke that callback; it returns an
+/// expired cookie named [jwtCookieName] using [jwtCookiePath], secure by
+/// default, with a lax SameSite policy and max-age zero.
 Future<AuthSignOutResolution> resolveAuthSignOutForStrategy({
   required AuthSessionStrategy strategy,
   required String jwtCookieName,

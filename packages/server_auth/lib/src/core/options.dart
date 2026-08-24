@@ -22,13 +22,25 @@ import 'runtime_posture.dart';
 import 'store.dart';
 
 /// Declares whether an auth store is durable across process restarts.
-enum AuthStoreMode { durable, ephemeral }
+enum AuthStoreMode {
+  /// Stores survive process restarts and support production posture.
+  durable,
+
+  /// Stores are intentionally process-local for development or tests.
+  ephemeral,
+}
 
 /// Framework-agnostic auth runtime options.
 ///
 /// Framework integrations map these options onto routing and session
 /// infrastructure. Persistence is always supplied through [store].
 class AuthOptions<TContext> {
+  /// Creates and validates framework-neutral authentication options.
+  ///
+  /// Ephemeral storage derives local-development posture; durable storage
+  /// derives production posture and requires a matching [productionBoundary],
+  /// strict browser and cookie policies, a [rateLimiter], and valid lifecycle
+  /// settings. [providers] and namespace collections are defensively frozen.
   AuthOptions({
     required List<AuthProvider> providers,
     required this.store,
@@ -306,6 +318,10 @@ class AuthOptions<TContext> {
   }
 
   /// Revalidates every guarantee required for production boot.
+  ///
+  /// Throws when [runtimeMode] is not production or when the production
+  /// boundary, browser policy, cookies, limiter, plugins, or JWT settings are
+  /// unsafe.
   void requireProductionBoot() {
     if (runtimeMode != AuthRuntimeMode.production) {
       throw StateError(
@@ -316,7 +332,9 @@ class AuthOptions<TContext> {
     _validateRuntimePosture();
   }
 
-  /// Ensures a framework adapter and its options use the same posture.
+  /// Ensures the adapter and options use the same runtime posture.
+  ///
+  /// Production expectations also run [requireProductionBoot].
   void requireRuntimeMode(AuthRuntimeMode expected) {
     if (runtimeMode != expected) {
       throw StateError(
@@ -364,6 +382,14 @@ class AuthOptions<TContext> {
     }
   }
 
+  /// Returns validated options with the supplied values replaced.
+  ///
+  /// The replacement reconstructs the full object, freezing providers and
+  /// namespace collections and rerunning posture checks. Plugins are retained
+  /// as supplied. Nullable values use null-coalescing semantics,
+  /// so passing `null` preserves an existing nullable value rather than
+  /// clearing it. A replacement [store] does not automatically change
+  /// [storeMode] here; use [resolveAuthOptions] when deriving mode is needed.
   AuthOptions<TContext> copyWith({
     List<AuthProvider>? providers,
     AuthStore? store,
@@ -608,11 +634,14 @@ void _validateProductionJwt(JwtSessionOptions options) {
   }
 }
 
-/// Resolves final auth runtime options by combining base [options] with
-/// framework overrides and explicitly supplied provider additions.
+/// Resolves final options by merging framework overrides into [options].
 ///
 /// This helper keeps option merge behavior consistent across framework
-/// integrations (for example Routed and Shelf adapters).
+/// integrations, such as Routed and Shelf adapters.
+/// Providers merge by ID. Existing option-level HTTP clients, session ages,
+/// and strategies take precedence over helper arguments. A replacement [store]
+/// derives [AuthStoreMode.ephemeral] for [InMemoryAuthStore] and durable mode
+/// for other stores.
 AuthOptions<TContext> resolveAuthOptions<TContext>({
   required AuthOptions<TContext> options,
   Iterable<AuthProvider> configuredProviders = const <AuthProvider>[],

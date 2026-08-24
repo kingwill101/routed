@@ -397,6 +397,87 @@ void main() {
     },
   );
 
+  test(
+    'reauthentication refreshes the sensitive-action proof without replacing the session',
+    () async {
+      final store = InMemoryAuthStore();
+      final hasher = Argon2idPasswordHasher(
+        iterations: 1,
+        memoryKiB: 8,
+        derivedKeyLength: 16,
+      );
+      final issuedAt = DateTime.now().toUtc();
+      await store.credentials.register(
+        AuthUser(id: 'reauth-user', email: 'reauth@example.com'),
+        AuthPasswordCredential(
+          id: 'reauth-credential',
+          userId: 'reauth-user',
+          identifier: 'reauth@example.com',
+          passwordHash: hasher.hash('correct-password'),
+          createdAt: issuedAt,
+          updatedAt: issuedAt,
+        ),
+      );
+      var clock = issuedAt;
+      final manager = AuthManager(
+        AuthOptions<EngineContext>(
+          store: store,
+          storeMode: AuthStoreMode.ephemeral,
+          providers: [CredentialsProvider()],
+          passwordHasher: hasher,
+          enforceCsrf: false,
+        ),
+        clock: () => clock,
+      );
+      final engine = _authEngine(manager);
+      engine.post('/sensitive', (ctx) async {
+        try {
+          await manager.requireRecentAuthentication(ctx);
+          return ctx.json({'ok': true});
+        } on AuthFlowException catch (error) {
+          return ctx.json({
+            'error': error.code,
+          }, statusCode: HttpStatus.forbidden);
+        }
+      });
+      await engine.initialize();
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(() async {
+        await client.close();
+        await engine.close();
+      });
+
+      final signIn = await client.postJson('/auth/signin/credentials', {
+        'email': 'reauth@example.com',
+        'password': 'correct-password',
+      });
+      signIn.assertStatus(HttpStatus.ok);
+
+      clock = issuedAt.add(const Duration(minutes: 6));
+      final stale = await client.postJson('/sensitive', const {});
+      stale.assertStatus(HttpStatus.forbidden);
+      expect(stale.json()['error'], 'recent_authentication_required');
+
+      final wrongPassword = await client.postJson('/auth/reauthenticate', {
+        'identifier': 'reauth@example.com',
+        'password': 'wrong-password',
+      });
+      wrongPassword.assertStatus(HttpStatus.unauthorized);
+      expect(wrongPassword.json()['error'], 'reauthentication_required');
+
+      final reauthenticated = await client.postJson('/auth/reauthenticate', {
+        'identifier': 'reauth@example.com',
+        'password': 'correct-password',
+      });
+      reauthenticated.assertStatus(HttpStatus.ok);
+      expect(reauthenticated.json()['ok'], isTrue);
+
+      final sensitive = await client.postJson('/sensitive', const {});
+      sensitive.assertStatus(HttpStatus.ok);
+      expect(sensitive.json()['ok'], isTrue);
+    },
+  );
+
   test('GET sign-in for credentials is rejected', () async {
     final manager = AuthManager(
       AuthOptions<EngineContext>(
@@ -578,9 +659,7 @@ void main() {
     start.assertStatus(HttpStatus.movedTemporarily);
     final stateCookie = (start.headers[HttpHeaders.setCookieHeader] ?? [])
         .map(Cookie.fromSetCookieValue)
-        .firstWhere(
-          (cookie) => cookie.name.startsWith('routed_oauth_state_'),
-        );
+        .firstWhere((cookie) => cookie.name.startsWith('routed_oauth_state_'));
     expect(stateCookie.secure, isTrue);
     expect(stateCookie.sameSite, SameSite.none);
   });

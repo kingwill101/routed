@@ -4,18 +4,27 @@ import 'browser.dart';
 
 /// Comprehensive browser-request validation result.
 class BrowserValidationResult {
+  /// Creates a successful result with no error code.
   const BrowserValidationResult.valid() : valid = true, errorCode = null;
 
+  /// Creates a failed result with the stable [errorCode].
   const BrowserValidationResult.invalid(this.errorCode) : valid = false;
 
+  /// Whether the request passed browser protection.
   final bool valid;
+
+  /// Stable failure code, or null for a valid result.
   final String? errorCode;
 
+  /// Whether this result represents a successful validation.
   bool get isValid => valid;
 }
 
 /// Typed cookie security configuration for auth cookies.
 class AuthCookiePolicy {
+  /// Creates cookie settings with secure, HTTP-only, lax-SameSite defaults.
+  ///
+  /// [development] is a convenient alternative that relaxes only [secure].
   const AuthCookiePolicy({
     this.httpOnly = true,
     this.secure = true,
@@ -44,6 +53,9 @@ class AuthCookiePolicy {
   final int? maxAge;
 
   /// Returns a copy with selected fields replaced.
+  ///
+  /// Set [clearDomain] or [clearMaxAge] to null out the corresponding
+  /// nullable field; omitting them preserves the existing value.
   AuthCookiePolicy copyWith({
     bool? httpOnly,
     bool? secure,
@@ -81,11 +93,17 @@ class AuthCookiePolicy {
 ///
 /// This validator combines multiple defense layers:
 /// - Origin header validation
-/// - Fetch Metadata checks (Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest)
+/// - Fetch Metadata site checks; mode and destination headers are observed
+///   but do not currently affect the decision
 /// - Referrer header validation as fallback
 /// - Trusted-origin policy enforcement
 /// - Content-Type validation for state-changing requests
 class AuthBrowserProtectionValidator {
+  /// Creates a validator from browser [options] and cookie policy settings.
+  ///
+  /// [cookiePolicy] is carried as configuration for adapters but is not
+  /// consulted by [validate]. The default allowed MIME types are JSON,
+  /// URL-encoded forms, and multipart forms.
   const AuthBrowserProtectionValidator({
     required this.options,
     this.cookiePolicy = AuthCookiePolicy.production,
@@ -105,11 +123,15 @@ class AuthBrowserProtectionValidator {
   /// Allowed content types for state-changing requests.
   final Set<String> allowedContentTypes;
 
-  /// Validates a browser request and returns the result.
+  /// Validates a browser request and returns the first failed check.
   ///
-  /// [requestUri] is the URI of the incoming request.
-  /// [headers] provides access to request headers.
-  /// [method] is the HTTP method (GET, POST, etc.).
+  /// Disabled protection returns valid. Otherwise method, Origin, Fetch
+  /// Metadata, optional Referrer fallback, and Content-Type checks run in that
+  /// order. Method comparison is case-insensitive; Content-Type is checked
+  /// only for methods other than GET and HEAD.
+  ///
+  /// [requestUri] is the URI of the incoming request, [headers] provides its
+  /// headers, and [method] is the HTTP method.
   BrowserValidationResult validate({
     required Uri requestUri,
     required HttpHeaders headers,
@@ -169,6 +191,11 @@ class AuthBrowserProtectionValidator {
   }
 
   /// Validates Fetch Metadata headers.
+  ///
+  /// Missing metadata is allowed for non-browser clients. Same-origin and
+  /// same-site requests pass; cross-site and cross-origin requests require an
+  /// explicitly allowed Origin. Fetch mode and destination are read but do not
+  /// currently affect the decision.
   BrowserValidationResult _validateFetchMetadata(
     HttpHeaders headers,
     Uri requestUri,
@@ -215,6 +242,9 @@ class AuthBrowserProtectionValidator {
   }
 
   /// Validates the Referer header as a fallback for missing Origin.
+  ///
+  /// Malformed or absent referrers pass. A mismatch is rejected only when
+  /// [AuthBrowserProtectionOptions.enforceReferrer] is enabled.
   BrowserValidationResult _validateReferrer(
     HttpHeaders headers,
     Uri requestUri,
@@ -252,6 +282,10 @@ class AuthBrowserProtectionValidator {
   }
 
   /// Validates Content-Type for state-changing requests.
+  ///
+  /// Parameters are stripped and the MIME type is lowercased. Values in
+  /// [allowedContentTypes] are not normalized by this class, so callers should
+  /// provide lowercase values.
   BrowserValidationResult _validateContentType(HttpHeaders headers) {
     if (!options.requireContentType) {
       return const BrowserValidationResult.valid();

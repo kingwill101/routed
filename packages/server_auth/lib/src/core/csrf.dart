@@ -1,6 +1,8 @@
 import 'tokens.dart' show constantTimeStringEquals;
 
 /// Returns an existing CSRF token or generates one when missing.
+///
+/// Null and empty values invoke [generateToken].
 String resolveCsrfToken({
   required String? existingToken,
   required String Function() generateToken,
@@ -11,7 +13,11 @@ String resolveCsrfToken({
   return generateToken();
 }
 
-/// Validates a CSRF token from header/form values.
+/// Validates a CSRF token from header and form values.
+///
+/// Returns true immediately when [enforce] is false. Otherwise a non-empty
+/// [expectedToken] is required, and [headerToken] takes precedence over
+/// [formToken] even when the header value is empty. Comparison is constant-time.
 bool validateCsrfToken({
   required String? expectedToken,
   String? headerToken,

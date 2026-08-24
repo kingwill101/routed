@@ -1,5 +1,7 @@
 ## Unreleased
 
+- Add the `reauthentication` rate-limit action and typed client method for
+  refreshing a current session's sensitive-action proof.
 - Mirror only the short-lived OAuth state into the framework session when a
   durable challenge store is configured, so adapters can validate the browser
   binding even if the separate state cookie is not returned by a host. Remove
@@ -16,7 +18,8 @@
 - Add compact framework-session principal projection so provider profile
   metadata cannot overflow browser-backed session cookies during sign-in.
 - Bound the direct email, display-name, and avatar claims included in compact
-  framework-session principals, not only provider-profile fallback attributes.
+  framework-session principals by UTF-8 byte size, not only provider-profile
+  fallback attributes, so multibyte values cannot overflow browser cookies.
 
 ## 0.2.0 - 2026-08-20
 

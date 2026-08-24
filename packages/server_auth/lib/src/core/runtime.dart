@@ -12,6 +12,12 @@ import 'store.dart';
 /// framework integration. Persistence is taken from [AuthOptions.store]
 /// unless an explicit store is supplied.
 class AuthRuntime<TContext> {
+  /// Composes one store, the configured plugins, and provider inventory.
+  ///
+  /// An explicit [store] overrides [AuthOptions.store]. Constructor [plugins]
+  /// are appended after option plugins. Callback stores are rejected, and
+  /// production options validate their full posture before the registry is
+  /// frozen.
   AuthRuntime({
     required this.options,
     AuthStore? store,
@@ -70,6 +76,7 @@ class AuthRuntime<TContext> {
     registry.freeze();
   }
 
+  /// Options used to construct this runtime.
   final AuthOptions<TContext> options;
 
   /// Typed domain stores used by auth plugins.
@@ -98,8 +105,14 @@ class AuthRuntime<TContext> {
     }
   }
 
+  /// Returns the registered plugin with [id], or null when it is absent.
+  ///
+  /// Registry lookup trims the identifier before matching it.
   AuthServerPlugin<TContext>? plugin(String id) => registry.find(id);
 
+  /// Whether a plugin with [id] is registered in this runtime.
+  ///
+  /// Registry lookup trims the identifier before matching it.
   bool hasPlugin(String id) => registry.contains(id);
 }
 

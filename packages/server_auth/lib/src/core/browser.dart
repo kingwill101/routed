@@ -1,5 +1,9 @@
 /// Typed browser-request protections shared by framework adapters.
 final class AuthBrowserProtectionOptions {
+  /// Creates browser-request protections with the supplied policy values.
+  ///
+  /// The lists and set are retained as supplied. No origins or methods are
+  /// canonicalized by this constructor.
   const AuthBrowserProtectionOptions({
     this.enabled = true,
     this.allowedOrigins = const <String>[],
@@ -12,6 +16,9 @@ final class AuthBrowserProtectionOptions {
   });
 
   /// Strict browser policy for a production auth runtime.
+  ///
+  /// Enables Origin, Fetch Metadata, Referer fallback, and Content-Type
+  /// checks, and makes [trustedOrigins] unmodifiable.
   AuthBrowserProtectionOptions.production({
     required Iterable<String> trustedOrigins,
   }) : enabled = true,
@@ -24,6 +31,9 @@ final class AuthBrowserProtectionOptions {
        requireContentType = true;
 
   /// Relaxed browser policy for explicitly local development.
+  ///
+  /// This policy leaves origin and content-type requirements disabled while
+  /// retaining the default Fetch Metadata setting.
   static const AuthBrowserProtectionOptions localDevelopment =
       AuthBrowserProtectionOptions();
 
@@ -61,6 +71,10 @@ final class AuthBrowserProtectionOptions {
   /// Whether to require Content-Type header on state-changing requests.
   final bool requireContentType;
 
+  /// Returns a shallow policy copy with supplied values replaced.
+  ///
+  /// The copied lists and set are retained as supplied; origins and methods
+  /// are not canonicalized.
   AuthBrowserProtectionOptions copyWith({
     bool? enabled,
     List<String>? allowedOrigins,

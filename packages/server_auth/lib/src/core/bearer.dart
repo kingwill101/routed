@@ -1,7 +1,9 @@
 /// Extracts a bearer token from an authorization header value.
 ///
 /// Returns `null` when [headerValue] is empty, does not match [prefix], or the
-/// extracted token is empty.
+/// extracted token is empty. Matching is prefix-based; the token is trimmed,
+/// and only the prefix comparison becomes case-insensitive when requested.
+/// An empty [prefix] treats the entire trimmed header as the token.
 String? extractBearerToken(
   String? headerValue, {
   String prefix = 'Bearer ',
@@ -33,7 +35,9 @@ String? extractBearerToken(
   return token.isEmpty ? null : token;
 }
 
-/// Builds a `WWW-Authenticate` header value for Bearer challenges.
+/// Builds a `WWW-Authenticate` header value for a Bearer challenge.
+///
+/// Empty parameters are omitted, and quotes and backslashes are escaped.
 String buildBearerAuthenticateHeader({
   String? realm,
   String? error,
@@ -57,7 +61,11 @@ String buildBearerAuthenticateHeader({
   return 'Bearer ${params.join(', ')}';
 }
 
-/// Resolves a token from bearer header first, then cookie entries by name.
+/// Resolves a token from the bearer header before cookie entries by name.
+///
+/// Cookie names use exact matching even when header prefix matching is
+/// case-insensitive. The first matching cookie wins; an empty value returns
+/// null without searching later cookies.
 String? resolveBearerOrCookieToken({
   required String? authorizationHeader,
   required String bearerPrefix,

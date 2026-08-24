@@ -4,11 +4,16 @@ import 'models.dart' show AuthPrincipal;
 
 /// Result for a guard evaluation.
 class GuardResult<TResponse> {
+  /// Creates an allowed result without a response.
   const GuardResult.allow() : allowed = true, response = null;
 
+  /// Creates a denied result with an optional [response].
   const GuardResult.deny([this.response]) : allowed = false;
 
+  /// Whether the guard allows the request.
   final bool allowed;
+
+  /// Response attached to a denial, if one was produced.
   final TResponse? response;
 }
 
@@ -25,6 +30,9 @@ typedef GuardDeniedFactory<TContext, TResponse> =
     TResponse Function(TContext context);
 
 /// Returns a guard that requires a principal to be present.
+///
+/// A missing principal is denied using [onDenied], while a resolved principal
+/// is allowed. The denial factory is not called for authenticated requests.
 AuthGuard<TContext, TResponse> requireAuthenticatedGuard<TContext, TResponse>({
   required AuthPrincipalResolver<TContext> principalResolver,
   GuardDeniedFactory<TContext, TResponse>? onDenied,
@@ -39,6 +47,11 @@ AuthGuard<TContext, TResponse> requireAuthenticatedGuard<TContext, TResponse>({
 }
 
 /// Returns a guard that validates [roles] against the resolved principal.
+///
+/// Roles are trimmed and blank values are dropped. Guests use
+/// [onUnauthenticated], authenticated users without a matching role use
+/// [onForbidden], and an empty normalized role list allows any authenticated
+/// principal.
 AuthGuard<TContext, TResponse> requireRolesGuard<TContext, TResponse>(
   Iterable<String> roles, {
   required AuthPrincipalResolver<TContext> principalResolver,
@@ -77,6 +90,10 @@ class AuthGuardRegistry<TContext, TResponse> {
       <String, AuthGuard<TContext, TResponse>>{};
 
   /// Registers [handler] under [name].
+  ///
+  /// Names are trimmed and blank names throw. With the default
+  /// [overrideExisting] value, an existing handler is replaced; `false` keeps
+  /// the existing handler.
   void register(
     String name,
     AuthGuard<TContext, TResponse> handler, {
@@ -126,8 +143,10 @@ void syncManagedGuards<TContext, TResponse>(
 
 /// Builds and synchronizes managed guard registrations from [definitions].
 ///
-/// Guard names are normalized by trimming whitespace. Definitions that produce
-/// `null` guards are skipped.
+/// Guard names are trimmed and definitions producing `null` are skipped. Each
+/// built guard is registered unconditionally, so it replaces existing entries.
+/// [preserve] may keep a stale registry entry while removing its name from
+/// [managed].
 Set<String>
 syncManagedGuardDefinitions<TContext, TResponse, TDefinition extends Object>(
   AuthGuardRegistry<TContext, TResponse> registry,
@@ -165,12 +184,14 @@ syncManagedGuardDefinitions<TContext, TResponse, TDefinition extends Object>(
 
 /// Framework-agnostic guard evaluation service.
 class AuthGuardService<TContext, TResponse> {
+  /// Creates a service using [registry] or a new registry when omitted.
   AuthGuardService({AuthGuardRegistry<TContext, TResponse>? registry})
     : registry = registry ?? AuthGuardRegistry<TContext, TResponse>();
 
   /// Backing registry for guard callbacks.
   final AuthGuardRegistry<TContext, TResponse> registry;
 
+  /// Registers [handler] under [name] using the registry override rules.
   void register(
     String name,
     AuthGuard<TContext, TResponse> handler, {
@@ -179,14 +200,15 @@ class AuthGuardService<TContext, TResponse> {
     registry.register(name, handler, overrideExisting: overrideExisting);
   }
 
+  /// Removes [name] when it is registered.
   void unregister(String name) {
     registry.unregister(name);
   }
 
   /// Returns the first denied response across [guardNames], if any.
   ///
-  /// When a guard denies without attaching a response, [onDenied] is used to
-  /// materialize one.
+  /// Unknown names are skipped. Guards run in input order and stop at the first
+  /// denial. When that result has no response, [onDenied] materializes one.
   Future<TResponse?> firstDenied(
     Iterable<String> guardNames,
     TContext context, {

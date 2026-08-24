@@ -26,10 +26,16 @@ final class AuthLifecycleDelivery<TContext> {
   /// Explicitly disables every optional lifecycle delivery capability.
   const AuthLifecycleDelivery.disabled() : this();
 
+  /// Callback delivering password-reset tokens, when enabled.
   final AuthPasswordResetSender<TContext>? passwordReset;
+
+  /// Callback delivering email-change tokens, when enabled.
   final AuthEmailChangeSender<TContext>? emailChange;
+
+  /// Callback delivering account-deletion tokens, when enabled.
   final AuthAccountDeletionSender<TContext>? accountDeletion;
 
+  /// Whether at least one lifecycle delivery callback is configured.
   bool get hasAny =>
       passwordReset != null || emailChange != null || accountDeletion != null;
 }
@@ -57,10 +63,16 @@ class AuthDeployment<TContext> {
     }
   }
 
+  /// Runtime options consumed by the framework adapter.
   final AuthOptions<TContext> options;
+
+  /// Typed adapter configuration for JWT, sessions, gates, and guards.
   final AuthConfig configuration;
+
+  /// Proxy-trust policy applied by the framework boundary.
   final AuthProxyPolicy proxyPolicy;
 
+  /// Whether this deployment requires durable persistence.
   bool get requiresDurableStore =>
       options.runtimeMode == AuthRuntimeMode.production;
 }
@@ -75,5 +87,6 @@ final class AuthApiKeyDeployment<TContext> extends AuthDeployment<TContext> {
     required this.apiKeys,
   }) : super.custom();
 
+  /// API-key plugin retained for middleware wiring.
   final AuthApiKeyPlugin<TContext> apiKeys;
 }

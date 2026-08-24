@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 const Set<String> _sensitiveAttributeNames = <String>{
   'apikey',
   'authorization',
@@ -219,10 +221,10 @@ class AuthUser {
   }
 
   Map<String, dynamic> _compactStandardPrincipalAttributes() {
-    final fallbackEmail = _compactAttribute('email', maxLength: 320);
-    final compactEmail = _compactValue(email, maxLength: 320);
-    final compactName = _compactValue(name, maxLength: 256);
-    final compactImage = _compactValue(image, maxLength: 2048);
+    final fallbackEmail = _compactAttribute('email', maxBytes: 320);
+    final compactEmail = _compactValue(email, maxBytes: 320);
+    final compactName = _compactValue(name, maxBytes: 256);
+    final compactImage = _compactValue(image, maxBytes: 2048);
     return {
       if (compactEmail != null) 'email': compactEmail,
       if (compactEmail == null && email == null && fallbackEmail != null)
@@ -233,16 +235,22 @@ class AuthUser {
     };
   }
 
-  String? _compactValue(String? value, {required int maxLength}) {
-    if (value == null || value.trim().isEmpty || value.length > maxLength) {
+  String? _compactValue(String? value, {required int maxBytes}) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+    if (utf8.encode(value).length > maxBytes) {
       return null;
     }
     return value;
   }
 
-  String? _compactAttribute(String key, {required int maxLength}) {
+  String? _compactAttribute(String key, {required int maxBytes}) {
     final value = attributes[key];
-    if (value is! String || value.trim().isEmpty || value.length > maxLength) {
+    if (value is! String || value.trim().isEmpty) {
+      return null;
+    }
+    if (utf8.encode(value).length > maxBytes) {
       return null;
     }
     return value;

@@ -29,6 +29,13 @@ import 'store.dart';
 /// the application.
 abstract final class AuthDeploymentPresets {
   /// Ephemeral HTTP-friendly settings for local development and tests.
+  ///
+  /// Uses an in-memory store, local-development posture, direct proxy policy,
+  /// and a development cookie policy with `secure: false`. [trustedOrigins]
+  /// accepts HTTP or HTTPS origins, which are lowercased, deduplicated, and
+  /// stripped of default ports before storage. Origins with credentials,
+  /// paths, queries, or fragments throw an [ArgumentError]. Lifecycle delivery
+  /// defaults to disabled, and [providers] and [plugins] remain caller-supplied.
   static AuthDeployment<TContext> localDevelopment<TContext>({
     required Iterable<AuthProvider> providers,
     Iterable<AuthServerPlugin<TContext>> plugins = const [],
@@ -68,6 +75,12 @@ abstract final class AuthDeploymentPresets {
   }
 
   /// HTTPS cookie and durable server-session settings for production apps.
+  ///
+  /// Requires a durable [store], HTTPS origins in [boundary], a
+  /// [lifecycleDelivery], and [rateLimiter]. Both session ages must be
+  /// positive, with [sessionUpdateAge] shorter than [sessionMaxAge]. The result
+  /// enforces production browser protection, secure cookies, CSRF, and the
+  /// supplied account, password, role, policy, and callback settings.
   static AuthDeployment<TContext> secureSessionProduction<TContext>({
     required AuthStore store,
     required Iterable<AuthProvider> providers,
@@ -127,6 +140,12 @@ abstract final class AuthDeploymentPresets {
   }
 
   /// Durable JWT issuance and verification settings for API deployments.
+  ///
+  /// Requires a durable [store], HTTPS [boundary], non-empty [audience], and
+  /// an HTTPS [issuer]. [algorithm] must be HS256, HS384, or HS512, with a
+  /// UTF-8 [jwtSecret] of at least 32, 48, or 64 bytes respectively. [tokenMaxAge]
+  /// must be positive. JWT cookies are secure; [exposeJwtTokenInSessionResponse]
+  /// explicitly opts into including the raw token in session responses.
   static AuthDeployment<TContext> jwtApiProduction<TContext>({
     required AuthStore store,
     required Iterable<AuthProvider> providers,
@@ -224,6 +243,12 @@ abstract final class AuthDeploymentPresets {
   }
 
   /// Durable session management plus API-key authentication for services.
+  ///
+  /// Requires durable [store] and [apiKeyStore] implementations; an in-memory
+  /// API-key store is rejected. The API-key plugin is prepended to [plugins].
+  /// [allowSessionExchange] controls whether API-key requests may exchange
+  /// into sessions, while key and session lifetimes are validated before
+  /// production options are built.
   static AuthApiKeyDeployment<TContext> serviceApiKeyProduction<TContext>({
     required AuthStore store,
     required AuthApiKeyStore apiKeyStore,

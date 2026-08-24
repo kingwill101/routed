@@ -76,6 +76,13 @@ void main() {
               '_csrf': 'csrf-2',
             });
             return http.Response('{}', 200);
+          case '/auth/reauthenticate':
+            expect(body, {
+              'identifier': 'new@example.com',
+              'password': 'new-password',
+              '_csrf': 'csrf-3',
+            });
+            return http.Response('{}', 200);
           case '/auth/account/delete':
             expect(body, {
               'currentPassword': 'new-password',
@@ -108,6 +115,10 @@ void main() {
       identifier: 'new@example.com',
       currentPassword: 'current-password',
       newPassword: 'new-password',
+    );
+    await passwords.reauthenticate(
+      identifier: 'new@example.com',
+      currentPassword: 'new-password',
     );
     await accounts.delete(currentPassword: 'new-password');
 

@@ -2,7 +2,13 @@ import 'dart:io';
 
 /// Declares whether auth is running with production guarantees or an
 /// explicitly relaxed local-development posture.
-enum AuthRuntimeMode { production, localDevelopment }
+enum AuthRuntimeMode {
+  /// Enforces durable storage and production browser, cookie, and proxy rules.
+  production,
+
+  /// Explicitly relaxed posture intended for local development and tests.
+  localDevelopment,
+}
 
 /// Explicit policy for forwarded client-address headers at an auth boundary.
 ///
@@ -10,6 +16,7 @@ enum AuthRuntimeMode { production, localDevelopment }
 /// [AuthProxyPolicy.trusted]. Routed applies this decision to its engine
 /// configuration instead of inferring trust from request headers.
 final class AuthProxyPolicy {
+  /// Creates a policy that trusts no forwarded headers or client IP values.
   const AuthProxyPolicy.direct()
     : trustsForwardedHeaders = false,
       forwardClientIp = false,
@@ -17,6 +24,11 @@ final class AuthProxyPolicy {
       headers = const <String>[],
       platformHeader = null;
 
+  /// Creates a policy that trusts forwarded data from explicit [proxies].
+  ///
+  /// At least one valid proxy address or CIDR network and one valid [headers]
+  /// entry are required. Values are trimmed and stored in unmodifiable lists;
+  /// `/0` networks are rejected. [platformHeader] is optional.
   AuthProxyPolicy.trusted({
     required Iterable<String> proxies,
     this.forwardClientIp = true,
@@ -59,6 +71,10 @@ final class AuthProxyPolicy {
   /// Optional platform-specific connecting-IP header.
   final String? platformHeader;
 
+  /// Returns whether every policy field matches [other].
+  ///
+  /// Comparison is order-sensitive for [proxies] and [headers], rather than
+  /// treating either list as a set.
   bool equivalentTo(AuthProxyPolicy other) {
     return trustsForwardedHeaders == other.trustsForwardedHeaders &&
         forwardClientIp == other.forwardClientIp &&
@@ -70,6 +86,10 @@ final class AuthProxyPolicy {
 
 /// Browser and network boundary required by production auth options.
 final class AuthProductionBoundary {
+  /// Creates a production boundary from exact HTTPS [trustedOrigins].
+  ///
+  /// Origins are normalized and deduplicated. Proxy trust is supplied
+  /// separately through [proxyPolicy], and at least one origin is required.
   AuthProductionBoundary({
     required Iterable<Uri> trustedOrigins,
     required this.proxyPolicy,
@@ -92,6 +112,11 @@ final class AuthProductionBoundary {
   final AuthProxyPolicy proxyPolicy;
 }
 
+/// Normalizes an HTTP or HTTPS [origin] for boundary comparisons.
+///
+/// Rejects credentials, paths other than `/`, queries, fragments, and empty
+/// hosts. Scheme and host are lowercased and default ports are omitted. Throws
+/// [ArgumentError] when the origin is invalid or violates [requireHttps].
 String normalizeAuthOrigin(Uri origin, {required bool requireHttps}) {
   final scheme = origin.scheme.toLowerCase();
   if ((scheme != 'http' && scheme != 'https') ||

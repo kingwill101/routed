@@ -65,6 +65,18 @@ void main() {
     expect(principal.attributes, isEmpty);
   });
 
+  test('session principals bound profile claims by UTF-8 bytes', () {
+    final user = AuthUser(
+      id: 'user-1',
+      email: 'é' * 200,
+      name: '名' * 100,
+      image: '🦋' * 600,
+      attributes: {'email': 'fallback@example.com'},
+    );
+
+    expect(user.toSessionPrincipal().attributes, isEmpty);
+  });
+
   test('user deserialization tolerates hostile types and nested secrets', () {
     final user = AuthUser.fromJson({
       'id': 'user-1',

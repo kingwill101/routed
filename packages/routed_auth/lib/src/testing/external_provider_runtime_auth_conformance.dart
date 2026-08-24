@@ -113,10 +113,24 @@ Future<void> verifyAuthExternalProviderRuntimeConformance({
     'OIDC start did not issue the host session cookie.',
   );
 
+  // A missing auxiliary state cookie is intentionally supported by the
+  // framework-session fallback. To test browser binding, use the framework
+  // cookie from a genuinely different browser session instead.
+  final otherBrowser = await _startOidc(send);
+  final otherSessionCookie = _cookieNamed(
+    otherBrowser.cookieHeader,
+    authExternalProviderRuntimeCookieName,
+  );
+  _check(
+    otherSessionCookie != null,
+    'oidc.start.other-browser-cookie',
+    'The second OIDC browser did not issue the host session cookie.',
+  );
+
   final crossBrowser = await _finishOidc(
     send,
     start: primary,
-    cookie: sessionOnlyCookie!,
+    cookie: otherSessionCookie!,
     state: primary.state,
     variant: 'verified',
   );

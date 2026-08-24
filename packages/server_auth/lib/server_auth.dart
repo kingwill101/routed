@@ -1,3 +1,8 @@
+/// Framework-agnostic authentication APIs, including sessions, tokens, and
+/// identity providers.
+///
+/// Import this library to configure authentication runtimes or use the
+/// session, authorization, and provider abstractions re-exported from it.
 library;
 
 export 'src/core/core.dart';

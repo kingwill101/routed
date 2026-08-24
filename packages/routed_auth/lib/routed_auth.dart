@@ -1,3 +1,7 @@
+/// Routed authentication middleware, guards, providers, and session helpers.
+///
+/// This library re-exports the framework-agnostic APIs from `server_auth` and
+/// adapts them to `EngineContext` request and response lifecycles.
 library;
 
 import 'package:routed_auth/src/auth/provider.dart' show AuthServiceProvider;
@@ -40,7 +44,10 @@ export 'src/crypto/crypto.dart'
         constantTimeEqualsBytes,
         hexFromBytes;
 
-/// Ensures the Routed auth provider ID is available in the global registry.
+/// Ensures the Routed auth provider ID is available in [registry].
+///
+/// Uses [ProviderRegistry.instance] when [registry] is omitted; a supplied
+/// registry is updated independently of the global registry.
 void ensureRoutedAuthProviderRegistered([ProviderRegistry? registry]) {
   final target = registry ?? ProviderRegistry.instance;
   if (!target.has('routed.auth')) {

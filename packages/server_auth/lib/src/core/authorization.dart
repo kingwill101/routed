@@ -5,6 +5,11 @@ import 'models.dart';
 
 /// Role-based ability definition.
 class RbacAbility {
+  /// Creates an ability from the required [roles].
+  ///
+  /// A null principal is allowed only when [allowGuest] is true. An
+  /// authenticated principal is allowed when [roles] is empty; otherwise
+  /// [any] selects whether one or every role must match.
   const RbacAbility({
     required this.roles,
     this.any = false,
@@ -49,6 +54,7 @@ class RbacAbility {
 
 /// RBAC configuration options.
 class RbacOptions {
+  /// Creates options from an ability-name-to-rule map.
   const RbacOptions({this.abilities = const <String, RbacAbility>{}});
 
   /// Ability -> role mapping.
@@ -59,10 +65,23 @@ class RbacOptions {
 }
 
 /// Available policy actions.
-enum PolicyAction { view, create, update, delete }
+enum PolicyAction {
+  /// Evaluates access to an existing resource using a payload of `T`.
+  view,
+
+  /// Evaluates creation access without a resource payload.
+  create,
+
+  /// Evaluates modification access using a payload of `T`.
+  update,
+
+  /// Evaluates deletion access using a payload of `T`.
+  delete,
+}
 
 /// Resource policy contract.
 abstract class Policy<T extends Object> {
+  /// Creates a policy contract for resources of type `T`.
   const Policy();
 
   /// Whether the principal can view a resource.
@@ -80,6 +99,10 @@ abstract class Policy<T extends Object> {
 
 /// Binds a policy to an ability prefix.
 class PolicyBinding<T extends Object> {
+  /// Binds [policy] to abilities beginning with [abilityPrefix].
+  ///
+  /// Unless [actions] is supplied, view, create, update, and delete abilities
+  /// are registered.
   const PolicyBinding({
     required this.policy,
     required this.abilityPrefix,
@@ -103,6 +126,7 @@ class PolicyBinding<T extends Object> {
 
 /// Policy registration options.
 class PolicyOptions {
+  /// Creates options from [bindings].
   const PolicyOptions({this.bindings = const <PolicyBinding>[]});
 
   /// Policy bindings to register.
@@ -120,6 +144,10 @@ AuthGateCallback<TContext> rbacGate<TContext>(RbacAbility ability) {
 }
 
 /// Registers RBAC abilities into [registry].
+///
+/// Ability names are trimmed and blank names are skipped. Duplicate names are
+/// delegated to [AuthGateRegistry.register] and therefore throw. Returns the
+/// normalized names that were successfully registered.
 Set<String> registerRbacAbilities<TContext>(
   AuthGateRegistry<TContext> registry,
   Map<String, RbacAbility> abilities,
@@ -137,6 +165,10 @@ Set<String> registerRbacAbilities<TContext>(
 }
 
 /// Registers RBAC abilities without overriding unmanaged entries.
+///
+/// Blank names are skipped. Existing names are replaced only when listed in
+/// [managed]; unmanaged duplicates remain unchanged. Returns normalized names
+/// registered by this call.
 Set<String> registerRbacAbilitiesSafely<TContext>(
   AuthGateRegistry<TContext> registry,
   Map<String, RbacAbility> abilities, {
@@ -160,6 +192,9 @@ Set<String> registerRbacAbilitiesSafely<TContext>(
 }
 
 /// Synchronizes [managed] with [nextManaged], unregistering stale abilities.
+///
+/// Stale registrations are removed from [registry], and the caller-owned
+/// [managed] set is cleared and updated in place.
 void syncManagedGateAbilities<TContext>(
   AuthGateRegistry<TContext> registry, {
   required Set<String> managed,
@@ -175,8 +210,10 @@ void syncManagedGateAbilities<TContext>(
 
 /// Builds and synchronizes managed gate registrations from [definitions].
 ///
-/// Ability names are normalized by trimming whitespace. Definitions that
-/// produce `null` callbacks are skipped.
+/// Ability names are trimmed; blank names and definitions whose [buildGate]
+/// result is `null` are skipped. Managed entries are replaced while unmanaged
+/// duplicates are preserved. Returns and updates [managed] with normalized
+/// successful registrations.
 Set<String> syncManagedGateDefinitions<TContext, TDefinition extends Object>(
   AuthGateRegistry<TContext> registry,
   Map<String, TDefinition> definitions, {
@@ -214,6 +251,9 @@ Set<String> syncManagedGateDefinitions<TContext, TDefinition extends Object>(
 }
 
 /// Registers RBAC abilities and synchronizes the managed ability set.
+///
+/// An empty [abilities] map removes every previously managed registration.
+/// The caller-owned [managed] set is updated in place.
 Set<String> syncManagedRbacAbilities<TContext>(
   AuthGateRegistry<TContext> registry,
   Map<String, RbacAbility> abilities, {
@@ -235,6 +275,9 @@ Set<String> syncManagedRbacAbilities<TContext>(
 }
 
 /// Registers policy abilities and synchronizes the managed ability set.
+///
+/// An empty [bindings] list removes every previously managed registration.
+/// The caller-owned [managed] set is updated in place.
 Set<String> syncManagedPolicyBindings<TContext>(
   AuthGateRegistry<TContext> registry,
   List<PolicyBinding> bindings, {
@@ -256,6 +299,10 @@ Set<String> syncManagedPolicyBindings<TContext>(
 }
 
 /// Builds a gate callback for a specific policy action.
+///
+/// [PolicyAction.create] ignores the payload. View, update, and delete return
+/// `false` when the payload is not a `T`; policy results may be synchronous or
+/// asynchronous.
 AuthGateCallback<TContext> policyGate<TContext, T extends Object>(
   Policy<T> policy,
   PolicyAction action,
@@ -286,6 +333,10 @@ AuthGateCallback<TContext> policyGate<TContext, T extends Object>(
 }
 
 /// Registers policy abilities into [registry].
+///
+/// Each non-empty trimmed prefix produces abilities named `$prefix.$action`.
+/// Duplicate names are delegated to the registry and throw. Returns names
+/// successfully registered by this call.
 Set<String> registerPolicyBindings<TContext>(
   AuthGateRegistry<TContext> registry,
   List<PolicyBinding> bindings,
@@ -298,6 +349,9 @@ Set<String> registerPolicyBindings<TContext>(
 }
 
 /// Registers policy abilities without overriding unmanaged entries.
+///
+/// Empty trimmed prefixes are skipped. Managed duplicate names are replaced;
+/// unmanaged duplicates remain unchanged. Returns normalized names registered.
 Set<String> registerPolicyBindingsSafely<TContext>(
   AuthGateRegistry<TContext> registry,
   List<PolicyBinding> bindings, {

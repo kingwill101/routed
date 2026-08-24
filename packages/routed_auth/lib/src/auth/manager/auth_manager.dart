@@ -122,6 +122,11 @@ String _normalizeOneTimeEmail(String email) {
   }
 }
 
+const String _authSessionReauthenticatedAtKey =
+    '__routed.auth.reauthenticated_at';
+const String _authRequestReauthenticatedAtKey =
+    '__routed.auth.reauthenticated_at.request';
+
 /// High-level auth coordinator for routed.
 class AuthManager {
   AuthManager(
@@ -950,6 +955,55 @@ class AuthManager {
     await _requireAccountUnlinkProof(ctx, session.user);
   }
 
+  /// Verifies the current user's password and records a short-lived,
+  /// session-bound proof for sensitive actions.
+  ///
+  /// This does not rotate or replace the authenticated session. Session
+  /// strategy stores the proof in the signed framework session; JWT strategy
+  /// reissues the token so its authentication time is current. Both strategies
+  /// also remember the proof on the current request for callers that perform a
+  /// sensitive operation immediately after reauthentication.
+  Future<void> reauthenticateWithPassword(
+    EngineContext ctx, {
+    String? identifier,
+    required String currentPassword,
+  }) async {
+    final session = await resolveSession(ctx);
+    if (session == null) throw AuthFlowException('not_authenticated');
+    final user = session.user;
+    await enforceRateLimitForProviderId(
+      ctx,
+      'credentials',
+      action: AuthRateLimitAction.reauthentication,
+      identifier: user.id,
+    );
+    final credential = await findAuthCredentialForUser(store, user.id);
+    final suppliedIdentifier = identifier?.trim();
+    final resolvedIdentifier =
+        suppliedIdentifier == null || suppliedIdentifier.isEmpty
+        ? credential?.identifier ?? user.email ?? ''
+        : suppliedIdentifier;
+    await requireAuthPasswordForUser(
+      store: store,
+      passwordHasher: options.passwordHasher,
+      passwordPolicy: options.passwordPolicy,
+      userId: user.id,
+      identifier: resolvedIdentifier,
+      password: currentPassword,
+    );
+
+    final authenticatedAt = _clock().toUtc();
+    ctx.set(_authRequestReauthenticatedAtKey, authenticatedAt);
+    if (options.sessionStrategy == AuthSessionStrategy.session) {
+      ctx.setSession(
+        _authSessionReauthenticatedAtKey,
+        serializeAuthSessionIssuedAt(authenticatedAt),
+      );
+    } else {
+      await updateSession(ctx, user.toPrincipal());
+    }
+  }
+
   /// Reauthenticates and tombstones the current account.
   ///
   /// Plugin-owned namespaces are deleted before the core transaction.
@@ -1390,16 +1444,38 @@ class AuthManager {
 
     final policy = options.accountPolicy;
     final hasStepUp = await hasValidTwoFactorStepUp(ctx);
-    DateTime? authenticatedAt;
+    DateTime? authenticatedAt = ctx.get<DateTime>(
+      _authRequestReauthenticatedAtKey,
+    );
     switch (options.sessionStrategy) {
       case AuthSessionStrategy.session:
-        authenticatedAt = (await _resolveStoredSession(ctx))?.createdAt;
+        final createdAt = (await _resolveStoredSession(ctx))?.createdAt;
+        final rawReauthenticatedAt = ctx.getSession<String>(
+          _authSessionReauthenticatedAtKey,
+        );
+        final reauthenticatedAt = rawReauthenticatedAt == null
+            ? null
+            : DateTime.tryParse(rawReauthenticatedAt)?.toUtc();
+        if (authenticatedAt == null ||
+            (reauthenticatedAt != null &&
+                reauthenticatedAt.isAfter(authenticatedAt))) {
+          authenticatedAt = reauthenticatedAt;
+        }
+        if (authenticatedAt == null ||
+            (createdAt != null && createdAt.isAfter(authenticatedAt))) {
+          authenticatedAt = createdAt;
+        }
         break;
       case AuthSessionStrategy.jwt:
         final claims = ctx.get<Map<String, dynamic>>(jwtClaimsAttribute);
-        authenticatedAt = claims == null
+        final jwtAuthenticatedAt = claims == null
             ? null
             : jwtAuthenticationTimeUtc(claims);
+        if (authenticatedAt == null ||
+            (jwtAuthenticatedAt != null &&
+                jwtAuthenticatedAt.isAfter(authenticatedAt))) {
+          authenticatedAt = jwtAuthenticatedAt;
+        }
         break;
     }
     if (policy.allowsSensitiveAction(
@@ -1521,6 +1597,9 @@ class AuthManager {
       await store.sessions.revoke(hashOpaqueToken(ctx.sessionId));
     }
     await sessionAuth.logout(ctx);
+    if (ctx.hasSession) {
+      ctx.removeSession(_authSessionReauthenticatedAtKey);
+    }
     await runtime.registry.emitAuthenticationLifecycleEvent(
       AuthAuthenticationLifecycleEvent<EngineContext>(
         type: AuthAuthenticationLifecycleEventType.signedOut,
@@ -1698,6 +1777,7 @@ class AuthManager {
         ctx.session.options.setMaxAge(maximumAge.inSeconds);
       }
       await sessionAuth.login(ctx, user.toSessionPrincipal());
+      ctx.removeSession(_authSessionReauthenticatedAtKey);
       _setSessionIssuedAt(ctx, DateTime.now().toUtc());
       sessionExpiresAt = _sessionExpiry(ctx);
       await _persistStoredSession(

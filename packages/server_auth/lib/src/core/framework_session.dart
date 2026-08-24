@@ -16,10 +16,15 @@ typedef AuthFrameworkSessionHook<TContext> =
 /// has been applied. The latter is the appropriate place to expire a host
 /// session cookie or commit an equivalent response mutation.
 final class AuthFrameworkSessionHooks<TContext> {
+  /// Creates optional hooks for the framework session sign-out lifecycle.
   const AuthFrameworkSessionHooks({this.beforeSignOut, this.afterSignOut});
 
+  /// Hook invoked before auth records are revoked.
   final AuthFrameworkSessionHook<TContext>? beforeSignOut;
+
+  /// Hook invoked after the auth principal and framework session are cleared.
   final AuthFrameworkSessionHook<TContext>? afterSignOut;
 
+  /// Whether neither lifecycle hook was supplied.
   bool get isEmpty => beforeSignOut == null && afterSignOut == null;
 }

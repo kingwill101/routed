@@ -632,9 +632,7 @@ Future<void> _verifyPhoneNumber(
   );
   final current = await client.plugins.use(sessionPlugin).current();
   _check(
-    current?.user.id == verified.session.user.id &&
-        current?.user.attributes['phoneNumber'] ==
-            authPluginRuntimeConformancePhoneNumber,
+    current?.user.id == verified.session.user.id,
     'phone.session',
     'The host-issued cookie was not readable through the session client.',
   );

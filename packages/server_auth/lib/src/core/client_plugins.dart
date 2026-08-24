@@ -507,6 +507,14 @@ final class AuthPasswordClient {
     newPassword: newPassword,
   );
 
+  Future<void> reauthenticate({
+    String? identifier,
+    required String currentPassword,
+  }) => _core.reauthenticate(
+    identifier: identifier,
+    currentPassword: currentPassword,
+  );
+
   Future<void> requestEmailChange({
     required String newEmail,
     required String currentPassword,
