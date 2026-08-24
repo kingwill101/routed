@@ -195,7 +195,6 @@ void main() {
       },
       host: InternetAddress.loopbackIPv4,
       backlog: 128,
-      v6Only: false,
       shared: true,
     );
 
@@ -219,7 +218,7 @@ void main() {
         final webSocket = await WebSocketTransformer.upgrade(request);
         webSocket.listen(
           (message) => webSocket.add('echo:$message'),
-          onDone: () => webSocket.close(),
+          onDone: webSocket.close,
           cancelOnError: false,
         );
         return;
@@ -252,7 +251,7 @@ void main() {
           final webSocket = await WebSocketTransformer.upgrade(request);
           webSocket.listen(
             (message) => webSocket.add('echo:$message'),
-            onDone: () => webSocket.close(),
+            onDone: webSocket.close,
             cancelOnError: false,
           );
           return;

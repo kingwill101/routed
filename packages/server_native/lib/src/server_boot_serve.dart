@@ -110,7 +110,7 @@ Future<void> serveSecureNative(
 /// Similar to `http_multi_server`, this runs one handler behind several bind
 /// addresses. The only per-listener difference is host/port binding.
 ///
-/// {@macro server_native_multi_bind_example}
+/// Each bind in [binds] receives requests from the same [handler].
 Future<void> serveNativeMulti(
   BridgeHttpHandler handler, {
   required List<NativeServerBind> binds,
@@ -130,7 +130,6 @@ Future<void> serveNativeMulti(
   final runtime = BridgeHttpRuntime(handler);
   final internalShutdown = Completer<void>();
   if (shutdownSignal != null) {
-    // ignore: discarded_futures
     shutdownSignal.whenComplete(() {
       if (!internalShutdown.isCompleted) {
         internalShutdown.complete();
@@ -164,7 +163,6 @@ Future<void> serveNativeMulti(
     );
     futures.add(future);
     // Any listener completion (error or normal) should stop all listeners.
-    // ignore: discarded_futures
     future.whenComplete(() {
       if (!internalShutdown.isCompleted) {
         internalShutdown.complete();
@@ -177,7 +175,7 @@ Future<void> serveNativeMulti(
 
 /// Boots one logical handler across multiple Rust-native TLS listeners.
 ///
-/// {@macro server_native_multi_bind_example}
+/// Each bind in [binds] receives requests from the same TLS-enabled [handler].
 Future<void> serveSecureNativeMulti(
   BridgeHttpHandler handler, {
   required List<NativeServerBind> binds,
@@ -214,7 +212,6 @@ Future<void> serveSecureNativeMulti(
   final runtime = BridgeHttpRuntime(handler);
   final internalShutdown = Completer<void>();
   if (shutdownSignal != null) {
-    // ignore: discarded_futures
     shutdownSignal.whenComplete(() {
       if (!internalShutdown.isCompleted) {
         internalShutdown.complete();
@@ -251,7 +248,6 @@ Future<void> serveSecureNativeMulti(
     );
     futures.add(future);
     // Any listener completion (error or normal) should stop all listeners.
-    // ignore: discarded_futures
     future.whenComplete(() {
       if (!internalShutdown.isCompleted) {
         internalShutdown.complete();
@@ -270,7 +266,8 @@ Future<void> serveSecureNativeMulti(
 /// `HttpRequest`/`HttpResponse` compatibility.
 /// Set [nativeCallback] to `false` to use bridge socket transport.
 ///
-/// {@macro server_native_serve_http_handler_example}
+/// The handler receives a `dart:io`-compatible request and must close its
+/// response when processing is complete.
 Future<void> serveNativeHttp(
   BridgeHttpHandler handler, {
   Object host = '127.0.0.1',
@@ -316,7 +313,8 @@ Future<void> serveNativeHttp(
 /// `HttpRequest`/`HttpResponse` compatibility.
 /// Set [nativeCallback] to `false` to use bridge socket transport.
 ///
-/// {@macro server_native_serve_http_handler_example}
+/// The handler receives a `dart:io`-compatible request and must close its
+/// response when processing is complete.
 Future<void> serveSecureNativeHttp(
   BridgeHttpHandler handler, {
   Object address = 'localhost',
@@ -378,7 +376,7 @@ Future<void> serveSecureNativeHttp(
 /// Boots the Rust-native transport and dispatches requests directly to [handler]
 /// without `HttpRequest`/`HttpResponse` wrapper allocation.
 ///
-/// {@macro server_native_direct_handler_example}
+/// The direct [handler] returns a [NativeDirectResponse] for each request.
 Future<void> serveNativeDirect(
   NativeDirectHandler handler, {
   Object host = '127.0.0.1',
@@ -429,7 +427,7 @@ Future<void> serveNativeDirect(
 /// Boots the Rust-native TLS transport and dispatches requests directly to
 /// [handler] without `HttpRequest`/`HttpResponse` wrapper allocation.
 ///
-/// {@macro server_native_direct_handler_example}
+/// The direct [handler] returns a [NativeDirectResponse] for each request.
 Future<void> serveSecureNativeDirect(
   NativeDirectHandler handler, {
   Object address = 'localhost',

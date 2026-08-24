@@ -2,6 +2,7 @@ part of 'bridge_runtime.dart';
 
 /// `HttpRequest` adapter backed by a [BridgeRequestFrame] and body stream.
 final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
+  /// Creates an `HttpRequest` adapter for a bridge request frame.
   BridgeHttpRequest({
     required BridgeRequestFrame frame,
     required this.response,
@@ -144,10 +145,12 @@ final class BridgeHttpRequest extends Stream<Uint8List> implements HttpRequest {
     );
   }
 
+  /// Detaches the response socket for protocol upgrades or raw writes.
   Future<Socket> detachSocket({bool writeHeaders = true}) {
     return response.detachSocket(writeHeaders: writeHeaders);
   }
 
+  /// Upgrades this request to a client response handler.
   Future<HttpClientResponse> upgrade(Future<void> Function(Socket p1) handler) {
     throw UnsupportedError('upgrade is not supported by bridge requests');
   }

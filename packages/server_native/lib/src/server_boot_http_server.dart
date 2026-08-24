@@ -337,7 +337,7 @@ final class NativeHttpServer extends StreamView<HttpRequest>
   HttpConnectionsInfo connectionsInfo() => _connectionCounters.snapshot();
 
   @override
-  Future close({bool force = false}) async {
+  Future<void> close({bool force = false}) async {
     if (_closed) {
       return _stopped.future;
     }

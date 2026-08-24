@@ -1,11 +1,13 @@
 part of 'bridge_runtime.dart';
 
+/// Handles a bridge-backed `HttpRequest`.
 typedef BridgeHttpHandler = FutureOr<void> Function(BridgeHttpRequest request);
 
 /// Handles bridge request frames with a `dart:io`-style [HttpRequest] handler.
 ///
 /// {@macro server_native_bridge_runtime_example}
 final class BridgeHttpRuntime {
+  /// Creates a runtime that dispatches requests to `handler`.
   BridgeHttpRuntime(this._handler);
 
   final FutureOr<void> Function(BridgeHttpRequest request) _handler;

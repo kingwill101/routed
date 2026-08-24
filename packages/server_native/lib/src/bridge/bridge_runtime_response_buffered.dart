@@ -2,6 +2,7 @@ part of 'bridge_runtime.dart';
 
 /// Buffered `HttpResponse` adapter for single-frame bridge responses.
 final class BridgeHttpResponse implements HttpResponse {
+  /// Creates a buffered response for a single bridge request frame.
   BridgeHttpResponse({
     required String requestMethod,
     required BridgeConnectionInfo connectionInfo,
@@ -276,6 +277,7 @@ final class BridgeHttpResponse implements HttpResponse {
         status == HttpStatus.notModified;
   }
 
+  /// Appends this response's flattened headers to the supplied lists.
   void appendFlattenedHeaders(
     List<String> headerNames,
     List<String> headerValues,
@@ -290,12 +292,14 @@ final class BridgeHttpResponse implements HttpResponse {
     _writeFlattenedHeaders(headerNames, headerValues, originalLength);
   }
 
+  /// The number of flattened header and cookie pairs in this response.
   int get flattenedHeaderCount {
     final headerCount = _headers?.flattenedHeaderPairCount ?? 0;
     final cookieCount = _cookies?.length ?? 0;
     return headerCount + cookieCount;
   }
 
+  /// Writes this response's flattened headers into pre-sized lists.
   void writeFlattenedHeaders(
     List<String> headerNames,
     List<String> headerValues,

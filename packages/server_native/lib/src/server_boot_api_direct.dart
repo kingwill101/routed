@@ -2,7 +2,8 @@ part of 'server_boot.dart';
 
 /// Request delivered to a direct FFI handler without `HttpRequest` wrapping.
 ///
-/// {@macro server_native_transport_overview}
+/// The direct API uses the Rust transport's compact request/response frames
+/// and does not allocate `dart:io` request or response wrappers.
 ///
 /// This request view avoids allocating `dart:io` HTTP wrappers and is useful
 /// when handlers only need method/uri/header/body primitives.
@@ -141,7 +142,7 @@ final class NativeDirectRequest {
 
 /// Response returned by [NativeDirectHandler].
 ///
-/// {@macro server_native_direct_handler_example}
+/// A direct handler returns a [NativeDirectResponse] for each request.
 final class NativeDirectResponse {
   /// Creates an in-memory bytes response.
   NativeDirectResponse.bytes({
@@ -155,9 +156,9 @@ final class NativeDirectResponse {
 
   /// Creates a streaming response.
   NativeDirectResponse.stream({
+    required this.body,
     this.status = HttpStatus.ok,
     List<MapEntry<String, String>> headers = const <MapEntry<String, String>>[],
-    required this.body,
   }) : headers = List<MapEntry<String, String>>.of(headers),
        bodyBytes = null,
        encodedBridgePayload = null;

@@ -6,10 +6,10 @@ import 'dart:typed_data';
 
 import 'package:contextual/contextual.dart' as contextual;
 import 'package:routed_core/routed_core.dart';
+import 'package:routed_io/routed_io.dart';
 import 'package:routed_logging/routed_logging.dart';
 import 'package:server_native/server_native.dart';
 import 'package:server_native/src/native/server_native_transport.dart';
-import 'package:routed_io/routed_io.dart';
 
 final class _BenchmarkOptions {
   _BenchmarkOptions({
@@ -673,7 +673,7 @@ Future<List<int>> _runLoad(
           final res = await req.close();
           if (res.statusCode != HttpStatus.ok) {
             throw StateError(
-              'Unexpected status code ${res.statusCode} for ${uri.toString()}',
+              'Unexpected status code ${res.statusCode} for $uri',
             );
           }
           final body = await utf8.decodeStream(res);
@@ -756,7 +756,6 @@ Future<_RunningServer> _startDartIoDirectServer(
   final server = await HttpServer.bind(host, port);
 
   final done = Completer<void>();
-  // ignore: discarded_futures
   server
       .listen((request) async {
         if (request.uri.path != '/bench') {
@@ -778,7 +777,6 @@ Future<_RunningServer> _startDartIoDirectServer(
         }
       });
 
-  // ignore: discarded_futures
   shutdown.future.whenComplete(() async {
     await server.close(force: true);
     if (!done.isCompleted) {
@@ -832,7 +830,6 @@ Future<_RunningServer> _startFfiNativeCallbackServer(
     port: port,
     echo: false,
     http3: false,
-    nativeCallback: true,
     shutdownSignal: shutdown.future,
   );
   final baseUri = Uri.parse('http://$host:$port');
@@ -926,7 +923,6 @@ Future<_RunningServer> _startFfiNativeDirectServer(
     benchmarkMode: benchmarkModeStaticNativeDirect,
   );
   final done = Completer<void>();
-  // ignore: discarded_futures
   shutdown.future.whenComplete(() {
     proxy.close();
     if (!done.isCompleted) {
@@ -958,7 +954,6 @@ Future<_RunningServer> _startFfiNativeDirectShapeServer(
     benchmarkMode: benchmarkModeStaticServerNativeDirectShape,
   );
   final done = Completer<void>();
-  // ignore: discarded_futures
   shutdown.future.whenComplete(() {
     proxy.close();
     if (!done.isCompleted) {

@@ -24,7 +24,6 @@ Future<HttpServer> _bindHttpServer(_Backend backend) {
         InternetAddress.loopbackIPv4,
         0,
         http3: false,
-        nativeCallback: true,
       );
   }
 }
@@ -34,7 +33,6 @@ Future<HttpServer> _startHttpServer(
   Future<void> Function(HttpRequest request) handler,
 ) async {
   final server = await _bindHttpServer(backend);
-  // ignore: discarded_futures
   server.listen((request) async {
     await handler(request);
   });
@@ -47,7 +45,6 @@ Future<relic.RelicServer> _startRelicServer(
 ) async {
   final server = relic.RelicServer(
     () async => IOAdapter(await _bindHttpServer(backend)),
-    noOfIsolates: 1,
   );
   await server.mountAndStart(handler);
   return server;
@@ -65,7 +62,7 @@ Future<(int statusCode, String body)?> _runInvalidTransferEncoding(
 ) async {
   final server = await _startHttpServer(
     backend,
-    (request) => _respondOk(request),
+    _respondOk,
   );
   final client = HttpClient();
   try {
@@ -210,7 +207,7 @@ Future<Object> _runWebSocketPingInterval(_Backend backend) async {
     final message = await clientWebSocket.first.timeout(
       const Duration(seconds: 3),
     );
-    return message;
+    return message as Object;
   } catch (error) {
     return error.runtimeType.toString();
   } finally {
@@ -224,7 +221,7 @@ Future<Object> _runWebSocketPingInterval(_Backend backend) async {
 Future<String> _runBadHostRaw(_Backend backend) async {
   final server = await _startHttpServer(
     backend,
-    (request) => _respondOk(request),
+    _respondOk,
   );
   final socket = await Socket.connect('127.0.0.1', server.port);
   try {
@@ -249,7 +246,7 @@ Future<String> _runBadHostRaw(_Backend backend) async {
 Future<String> _runSoftInvalidHostRaw(_Backend backend) async {
   final server = await _startHttpServer(
     backend,
-    (request) => _respondOk(request),
+    _respondOk,
   );
   final socket = await Socket.connect('127.0.0.1', server.port);
   try {

@@ -1,1 +1,42 @@
-include: package:lints/recommended.yaml
+include: package:very_good_analysis/analysis_options.yaml
+
+analyzer:
+  # Generated prebuilt manifests are validated by their generator and should
+  # not be edited to satisfy source-level documentation lints.
+  exclude:
+    - lib/src/generated/**
+
+linter:
+  rules:
+    # server_native maintains dart:io-compatible method shapes and low-level
+    # transport/compatibility harnesses. Keep VGA's documentation and strict
+    # type checks, while avoiding style rewrites that can obscure those APIs.
+    always_put_required_named_parameters_first: false
+    avoid_catches_without_on_clauses: false
+    avoid_private_typedef_functions: false
+    avoid_redundant_argument_values: false
+    avoid_slow_async_io: false
+    avoid_setters_without_getters: false
+    cancel_subscriptions: false
+    cascade_invocations: false
+    combinators_ordering: false
+    discarded_futures: false
+    directives_ordering: false
+    document_ignores: false
+    lines_longer_than_80_chars: false
+    noop_primitive_operations: false
+    parameter_assignments: false
+    prefer_const_constructors: false
+    prefer_constructors_over_static_methods: false
+    prefer_foreach: false
+    sort_constructors_first: false
+    sort_pub_dependencies: false
+    unnecessary_breaks: false
+    unnecessary_ignore: false
+    unnecessary_lambdas: false
+    unnecessary_null_checks: false
+    unnecessary_parenthesis: false
+    unawaited_futures: false
+    use_late_for_private_fields_and_variables: false
+    use_raw_strings: false
+    use_setters_to_change_properties: false

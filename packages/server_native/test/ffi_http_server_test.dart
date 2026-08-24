@@ -90,7 +90,6 @@ void main() {
 
       server.serverHeader = 'routed-ffi-test';
       server.defaultResponseHeaders.set('x-default', '1');
-      // ignore: discarded_futures
       server.listen((request) async {
         request.response.write('ok');
         await request.response.close();
@@ -118,11 +117,9 @@ void main() {
         InternetAddress.loopbackIPv4,
         0,
         http3: false,
-        nativeCallback: true,
       );
       addTearDown(() => server.close(force: true));
 
-      // ignore: discarded_futures
       server.listen((request) async {
         final body = await utf8.decoder.bind(request).join();
         request.response
@@ -154,17 +151,15 @@ void main() {
         InternetAddress.loopbackIPv4,
         0,
         http3: false,
-        nativeCallback: true,
       );
       addTearDown(() => server.close(force: true));
 
-      // ignore: discarded_futures
       server.listen((request) async {
         if (request.uri.path == '/ws') {
           final socket = await WebSocketTransformer.upgrade(request);
           socket.listen(
             (message) => socket.add('echo:$message'),
-            onDone: () => socket.close(),
+            onDone: socket.close,
             cancelOnError: false,
           );
           return;
@@ -195,11 +190,9 @@ void main() {
         InternetAddress.loopbackIPv4,
         0,
         http3: false,
-        nativeCallback: true,
       );
       addTearDown(() => server.close(force: true));
 
-      // ignore: discarded_futures
       server.listen((request) async {
         if (request.uri.path != '/hijack') {
           request.response.statusCode = HttpStatus.notFound;
@@ -243,11 +236,9 @@ void main() {
         InternetAddress.loopbackIPv4,
         0,
         http3: false,
-        nativeCallback: true,
       );
       addTearDown(() => server.close(force: true));
 
-      // ignore: discarded_futures
       server.listen((request) async {
         if (request.uri.path != '/detached-stream') {
           request.response.statusCode = HttpStatus.notFound;
@@ -289,7 +280,6 @@ void main() {
     final server = await NativeHttpServer.bind('localhost', 0, http3: false);
     addTearDown(() => server.close(force: true));
 
-    // ignore: discarded_futures
     server.listen((request) async {
       request.response.write('ok');
       await request.response.close();
@@ -326,12 +316,10 @@ void main() {
         InternetAddress.loopbackIPv4,
         0,
         http3: false,
-        nativeCallback: true,
       );
       addTearDown(() => server.close(force: true));
 
       var handlerInvoked = false;
-      // ignore: discarded_futures
       server.listen((request) async {
         handlerInvoked = true;
         request.response.statusCode = HttpStatus.ok;
@@ -370,7 +358,6 @@ void main() {
     addTearDown(() => server.close(force: true));
 
     final gate = Completer<void>();
-    // ignore: discarded_futures
     server.listen((request) async {
       await gate.future;
       request.response.write('ok');
@@ -410,7 +397,6 @@ void main() {
         HttpHeaders.serverHeader,
         'default-server',
       );
-      // ignore: discarded_futures
       server.listen((request) async {
         request.response.write('ok');
         await request.response.close();
@@ -452,7 +438,6 @@ void main() {
       );
       addTearDown(() => server.close(force: true));
 
-      // ignore: discarded_futures
       server.listen((request) async {
         request.response.write('ok');
         await request.response.close();
@@ -488,7 +473,6 @@ void main() {
       );
       addTearDown(() => server.close(force: true));
 
-      // ignore: discarded_futures
       server.listen((request) async {
         request.response.write(request.requestedUri.toString());
         await request.response.close();
@@ -517,7 +501,6 @@ void main() {
     );
     addTearDown(() => server.close(force: true));
 
-    // ignore: discarded_futures
     server.listen((request) async {
       if (request.uri.path == '/destroy') {
         request.session.destroy();
@@ -585,7 +568,6 @@ void main() {
     addTearDown(() => server.close(force: true));
     server.sessionTimeout = 1;
 
-    // ignore: discarded_futures
     server.listen((request) async {
       request.response.write('${request.session.id}|${request.session.isNew}');
       await request.response.close();
@@ -637,7 +619,6 @@ void main() {
         } catch (_) {}
       });
 
-      // ignore: discarded_futures
       server.listen((request) async {
         request.response.write('ok');
         await request.response.close();
@@ -666,7 +647,6 @@ void main() {
         InternetAddress.loopbackIPv4,
         0,
         http3: false,
-        nativeCallback: true,
       );
       final clientA = HttpClient();
       final clientB = HttpClient();
@@ -678,7 +658,6 @@ void main() {
         } catch (_) {}
       });
 
-      // ignore: discarded_futures
       server.listen((request) async {
         request.response.write('ok');
         await request.response.close();
@@ -713,7 +692,6 @@ void main() {
       256,
       'server native payload line',
     ).join('\n');
-    // ignore: discarded_futures
     server.listen((request) async {
       request.response.write(payload);
       await request.response.close();

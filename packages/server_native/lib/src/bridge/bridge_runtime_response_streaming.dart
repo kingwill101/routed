@@ -2,6 +2,7 @@ part of 'bridge_runtime.dart';
 
 /// Streaming `HttpResponse` adapter for chunked bridge responses.
 final class BridgeStreamingHttpResponse implements HttpResponse {
+  /// Creates a response adapter that emits headers and body chunks separately.
   BridgeStreamingHttpResponse({
     required this.onStart,
     required this.onChunk,
@@ -12,7 +13,10 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
        _onDetachedSocket = onDetachedSocket,
        _isHeadRequest = _equalsAsciiIgnoreCase(requestMethod, 'HEAD');
 
+  /// Handles the response-start frame emitted before body chunks.
   final Future<void> Function(BridgeResponseFrame frame) onStart;
+
+  /// Handles each response body chunk emitted by the adapter.
   final Future<void> Function(Uint8List chunkBytes) onChunk;
 
   _BridgeHttpHeaders? _headers;
@@ -34,6 +38,7 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   final void Function(BridgeDetachedSocket detachedSocket)? _onDetachedSocket;
   final bool _isHeadRequest;
 
+  /// Whether the response has been closed.
   bool get isClosed => _closed;
 
   /// Enables gzip auto-compression based on request/response negotiation.
@@ -211,7 +216,7 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
                 _done.complete();
               }
             })
-            .catchError((error, stack) {
+            .catchError((Object error, StackTrace stack) {
               if (!_done.isCompleted) {
                 _done.completeError(error, stack);
               }
@@ -294,8 +299,8 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
 
   void _enqueueWrite(Future<void> Function() action) {
     _pendingWrite = _pendingWrite.then((_) => action()).catchError((
-      error,
-      stack,
+      Object error,
+      StackTrace stack,
     ) {
       if (!_done.isCompleted) {
         _done.completeError(error, stack);

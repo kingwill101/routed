@@ -21,7 +21,7 @@ enum _Backend {
 
 Future<HttpServer> _bindServer(
   _Backend backend,
-  dynamic address,
+  Object address,
   int port, {
   int backlog = 0,
   bool v6Only = false,
@@ -44,7 +44,6 @@ Future<HttpServer> _bindServer(
         v6Only: v6Only,
         shared: shared,
         http3: false,
-        nativeCallback: true,
       );
   }
 }
@@ -223,7 +222,7 @@ Future<bool> _headCloseCompletesWithContentLengthError(_Backend backend) async {
             completion.complete(null);
           }
         })
-        .catchError((error) {
+        .catchError((Object error) {
           if (!completion.isCompleted) {
             completion.complete(error);
           }
@@ -397,7 +396,7 @@ void main() {
           );
           final sub = server.listen((request) async {
             request.response.contentLength = 0;
-            request.response.done.catchError((error) {
+            request.response.done.catchError((Object error) {
               if (!doneError.isCompleted) {
                 doneError.complete(error);
               }
@@ -450,7 +449,7 @@ void main() {
           );
           final sub = server.listen((request) async {
             request.response.contentLength = 5;
-            request.response.done.catchError((error) {
+            request.response.done.catchError((Object error) {
               if (!doneError.isCompleted) {
                 doneError.complete(error);
               }

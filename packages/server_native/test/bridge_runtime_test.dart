@@ -126,7 +126,6 @@ void main() {
         scheme: '',
         authority: '',
         path: '',
-        query: '',
         protocol: '',
       ).encodePayload();
 
@@ -386,11 +385,9 @@ void main() {
       final response = await runtime.handleFrame(
         _requestFrame(
           method: 'POST',
-          scheme: 'http',
           authority: 'localhost',
           path: '/echo',
           query: 'q=1',
-          protocol: '1.1',
           headers: const <MapEntry<String, String>>[
             MapEntry('x-test', 'bridge'),
             MapEntry(HttpHeaders.contentTypeHeader, 'text/plain'),
@@ -420,7 +417,7 @@ void main() {
       final runtime = BridgeHttpRuntime(engine.handleRequest);
 
       final response = await runtime.handleFrame(
-        _requestFrame(method: 'GET', path: '/cookies'),
+        _requestFrame(path: '/cookies'),
       );
 
       expect(response.status, HttpStatus.ok);
@@ -435,7 +432,7 @@ void main() {
     test('preserves not-found behavior', () async {
       final runtime = BridgeHttpRuntime(Engine().handleRequest);
       final response = await runtime.handleFrame(
-        _requestFrame(method: 'GET', path: '/missing'),
+        _requestFrame(path: '/missing'),
       );
 
       expect(response.status, HttpStatus.notFound);
@@ -445,13 +442,13 @@ void main() {
     test('preserves redirect status and location', () async {
       final engine = Engine()
         ..get('/redirect', (ctx) async {
-          ctx.response.redirect('/target', status: HttpStatus.found);
+          ctx.response.redirect('/target');
           return ctx.response;
         });
       final runtime = BridgeHttpRuntime(engine.handleRequest);
 
       final response = await runtime.handleFrame(
-        _requestFrame(method: 'GET', path: '/redirect'),
+        _requestFrame(path: '/redirect'),
       );
 
       expect(response.status, HttpStatus.found);
@@ -468,7 +465,7 @@ void main() {
       final runtime = BridgeHttpRuntime(engine.handleRequest);
 
       final response = await runtime.handleFrame(
-        _requestFrame(method: 'GET', path: '/boom'),
+        _requestFrame(path: '/boom'),
       );
 
       expect(response.status, HttpStatus.internalServerError);

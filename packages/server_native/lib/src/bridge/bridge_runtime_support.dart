@@ -2,12 +2,14 @@ part of 'bridge_runtime.dart';
 
 /// Basic connection info exposed by bridge-backed request/response adapters.
 final class BridgeConnectionInfo implements HttpConnectionInfo {
+  /// Creates connection metadata exposed by a bridge-backed request.
   const BridgeConnectionInfo({
     required this.remoteAddress,
     required this.remotePort,
     required this.localPort,
   });
 
+  /// Creates connection metadata from the host information in [frame].
   factory BridgeConnectionInfo.fromRequestFrame(BridgeRequestFrame frame) {
     final hostHeader = _bridgeHeaderValue(frame, HttpHeaders.hostHeader);
     final authority = _splitBridgeAuthority(
@@ -54,6 +56,7 @@ final class BridgeSession extends MapBase<dynamic, dynamic>
 
   Map<String, dynamic>? _data;
 
+  /// The inactivity duration associated with this in-memory session.
   Duration timeout = const Duration(minutes: 20);
 
   @override

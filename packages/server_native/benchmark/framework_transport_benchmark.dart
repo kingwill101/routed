@@ -286,10 +286,7 @@ Future<_RunningServer> _startRoutedIo() async {
       return ctx.response;
     });
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-  final subscription = server.listen((request) {
-    // ignore: discarded_futures
-    engine.handleRequest(request);
-  });
+  final subscription = server.listen(engine.handleRequest);
   final baseUri = Uri.parse('http://127.0.0.1:${server.port}');
   return _RunningServer(
     baseUri: baseUri,
@@ -315,10 +312,7 @@ Future<_RunningServer> _startRoutedNative({
     http3: false,
     nativeCallback: nativeCallback,
   );
-  final subscription = server.listen((request) {
-    // ignore: discarded_futures
-    engine.handleRequest(request);
-  });
+  final subscription = server.listen(engine.handleRequest);
   final baseUri = Uri.parse('http://127.0.0.1:${server.port}');
   return _RunningServer(
     baseUri: baseUri,
@@ -335,7 +329,7 @@ Future<_RunningServer> _startRelicIo() async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   await app.run(() => IOAdapter(server));
   final baseUri = Uri.parse('http://127.0.0.1:${server.port}');
-  return _RunningServer(baseUri: baseUri, close: () => app.close());
+  return _RunningServer(baseUri: baseUri, close: app.close);
 }
 
 Future<_RunningServer> _startRelicNative({required bool nativeCallback}) async {
@@ -348,7 +342,7 @@ Future<_RunningServer> _startRelicNative({required bool nativeCallback}) async {
   );
   await app.run(() => IOAdapter(server));
   final baseUri = Uri.parse('http://127.0.0.1:${server.port}');
-  return _RunningServer(baseUri: baseUri, close: () => app.close());
+  return _RunningServer(baseUri: baseUri, close: app.close);
 }
 
 relic.RelicApp _buildRelicApp() {

@@ -731,7 +731,7 @@ void main() {
   test('serveNative preserves redirect status and location headers', () async {
     final engine = Engine()
       ..get('/redirect', (ctx) async {
-        ctx.response.redirect('/target', status: HttpStatus.found);
+        ctx.response.redirect('/target');
         return ctx.response;
       });
 
@@ -1029,8 +1029,6 @@ void main() {
         engine.handleRequest,
         address: '127.0.0.1',
         port: 0,
-        certificatePath: null,
-        keyPath: null,
       ),
       throwsArgumentError,
     );

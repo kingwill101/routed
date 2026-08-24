@@ -98,7 +98,7 @@ Future<_BridgeBinding> _bindBridgeServer() async {
     backendHost: InternetAddress.loopbackIPv4.address,
     backendPort: server.port,
     backendPath: null,
-    dispose: () => server.close(),
+    dispose: server.close,
   );
 }
 

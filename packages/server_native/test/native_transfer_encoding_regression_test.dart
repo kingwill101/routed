@@ -4,11 +4,9 @@ import 'dart:io';
 import 'package:server_native/server_native.dart';
 import 'package:test/test.dart';
 
-typedef _BindServer = Future<HttpServer> Function();
-
 Future<(int statusCode, List<String>? transferEncoding)?>
 _runTransferEncodingProbe(
-  _BindServer bindServer,
+  Future<HttpServer> Function() bindServer,
   String transferEncodingValue,
 ) async {
   final server = await bindServer();
@@ -66,7 +64,6 @@ _runNativeTransferEncodingProbe(String transferEncodingValue) {
       InternetAddress.loopbackIPv4,
       0,
       http3: false,
-      nativeCallback: true,
     ),
     transferEncodingValue,
   );

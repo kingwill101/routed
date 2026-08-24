@@ -2,6 +2,7 @@ part of 'bridge_runtime.dart';
 
 /// Socket pair used to bridge upgraded protocol bytes over FFI frames.
 final class BridgeDetachedSocket {
+  /// Creates a socket pair for a detached bridge connection.
   BridgeDetachedSocket({
     required this.applicationSocket,
     required this.bridgeSocket,
@@ -137,7 +138,7 @@ Future<_DetachedHttpResponsePreface> _readDetachedHttpResponsePreface(
 
     final bytes = builder.toBytes();
     if (bytes.length > _manualDetachedPrefaceMaxBytes) {
-      throw FormatException(
+      throw const FormatException(
         'detached HTTP preface exceeds $_manualDetachedPrefaceMaxBytes bytes',
       );
     }

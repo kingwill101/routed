@@ -39,9 +39,9 @@ Future<void> _serveWithNativeProxy({
   required bool requestClientCertificate,
   required bool http2,
   required bool http3,
-  bool nativeDirectCallback = false,
   required _BridgeHandleFrame handleFrame,
   required _BridgeHandleStream handleStream,
+  bool nativeDirectCallback = false,
   _BridgeHandlePayload? handlePayload,
   void Function()? onEcho,
   Future<void>? shutdownSignal,
@@ -88,9 +88,9 @@ Future<_RunningProxy> _startNativeProxy({
   required bool requestClientCertificate,
   required bool http2,
   required bool http3,
-  bool nativeDirectCallback = false,
   required _BridgeHandleFrame handleFrame,
   required _BridgeHandleStream handleStream,
+  bool nativeDirectCallback = false,
   _BridgeHandlePayload? handlePayload,
   void Function()? onEcho,
   Future<void>? shutdownSignal,
@@ -285,14 +285,10 @@ Future<_RunningProxy> _startNativeProxy({
     );
   }
   if (shutdownSignal != null) {
-    // ignore: discarded_futures
     shutdownSignal.whenComplete(stopAll);
   }
 
-  bridgeSubscription?.onDone(() {
-    // ignore: discarded_futures
-    stopAll();
-  });
+  bridgeSubscription?.onDone(stopAll);
 
   return _RunningProxy(
     host: host,

@@ -217,8 +217,6 @@ NativeProxyServer _startNativeDirectProxy({
               }
               await removeNativeDirectStream(
                 streamState: streamState,
-                closeDetachedSocket: true,
-                closeTrackedRequest: true,
               );
             }
           }());
@@ -260,8 +258,6 @@ NativeProxyServer _startNativeDirectProxy({
             if (streamState.requestEnded) {
               await removeNativeDirectStream(
                 streamState: streamState,
-                closeDetachedSocket: true,
-                closeTrackedRequest: true,
               );
             }
           }
@@ -274,8 +270,6 @@ NativeProxyServer _startNativeDirectProxy({
           if (streamState.requestEnded && streamState.detachedSocket == null) {
             await removeNativeDirectStream(
               streamState: streamState,
-              closeDetachedSocket: true,
-              closeTrackedRequest: true,
             );
           }
         } finally {
@@ -284,8 +278,6 @@ NativeProxyServer _startNativeDirectProxy({
               streamState.detachedSocket == null) {
             await removeNativeDirectStream(
               streamState: streamState,
-              closeDetachedSocket: true,
-              closeTrackedRequest: true,
             );
           }
         }
@@ -316,8 +308,6 @@ NativeProxyServer _startNativeDirectProxy({
             unawaited(
               removeNativeDirectStream(
                 streamState: streamState,
-                closeDetachedSocket: true,
-                closeTrackedRequest: true,
               ),
             );
           }
@@ -337,8 +327,6 @@ NativeProxyServer _startNativeDirectProxy({
           unawaited(
             removeNativeDirectStream(
               streamState: streamState,
-              closeDetachedSocket: true,
-              closeTrackedRequest: true,
             ),
           );
         }
@@ -358,8 +346,6 @@ NativeProxyServer _startNativeDirectProxy({
             unawaited(
               removeNativeDirectStream(
                 streamState: streamState,
-                closeDetachedSocket: true,
-                closeTrackedRequest: true,
               ),
             );
             return;
@@ -377,8 +363,6 @@ NativeProxyServer _startNativeDirectProxy({
           unawaited(
             removeNativeDirectStream(
               streamState: streamState,
-              closeDetachedSocket: true,
-              closeTrackedRequest: true,
             ),
           );
           return;
@@ -434,7 +418,6 @@ NativeProxyServer _startNativeDirectProxy({
     tlsCertPath: tlsCertPath,
     tlsKeyPath: tlsKeyPath,
     tlsCertPassword: tlsCertPassword,
-    directRequestCallback: null,
   );
   proxyRef = proxy;
 

@@ -35,7 +35,6 @@ Future<void> main(List<String> args) async {
       _httpHandler,
       host: config.host,
       port: config.port,
-      echo: true,
       http3: config.http3,
     );
     return;
@@ -45,7 +44,6 @@ Future<void> main(List<String> args) async {
     _directHandler,
     host: config.host,
     port: config.port,
-    echo: true,
     http3: config.http3,
   );
 }
@@ -191,9 +189,9 @@ Future<_BodyStats> _collectBodyStats(Stream<Uint8List> stream) async {
 int _cpuBurn({required int iterations, required int seed}) {
   var x = seed ^ 0x9e3779b9;
   for (var i = 0; i < iterations; i++) {
-    x ^= (x << 13);
-    x ^= (x >>> 17);
-    x ^= (x << 5);
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
     x = (x + i) & 0x7fffffff;
   }
   return x;

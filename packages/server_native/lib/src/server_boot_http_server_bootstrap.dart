@@ -113,7 +113,6 @@ Future<NativeHttpServer> _nativeHttpServerBindSecure(
   int port, {
   required String certificatePath,
   required String keyPath,
-  String? certificatePassword,
   required int backlog,
   required bool v6Only,
   required bool requestClientCertificate,
@@ -121,6 +120,7 @@ Future<NativeHttpServer> _nativeHttpServerBindSecure(
   required bool http2,
   required bool http3,
   required bool nativeCallback,
+  String? certificatePassword,
   Future<void>? shutdownSignal,
 }) async {
   final normalizedAddress = _normalizeBindHost(address, 'address');
@@ -183,7 +183,6 @@ Future<NativeHttpServer> _nativeHttpServerLoopbackSecure(
   int port, {
   required String certificatePath,
   required String keyPath,
-  String? certificatePassword,
   required int backlog,
   required bool v6Only,
   required bool requestClientCertificate,
@@ -191,6 +190,7 @@ Future<NativeHttpServer> _nativeHttpServerLoopbackSecure(
   required bool http2,
   required bool http3,
   required bool nativeCallback,
+  String? certificatePassword,
   Future<void>? shutdownSignal,
 }) async {
   return _startNativeLoopbackHttpServer(
@@ -220,9 +220,6 @@ Future<NativeHttpServer> _nativeHttpServerLoopbackSecure(
 Future<NativeHttpServer> _startNativeLoopbackHttpServer({
   required int port,
   required bool secure,
-  String? certificatePath,
-  String? keyPath,
-  String? certificatePassword,
   required int backlog,
   required bool v6Only,
   required bool requestClientCertificate,
@@ -230,6 +227,9 @@ Future<NativeHttpServer> _startNativeLoopbackHttpServer({
   required bool http2,
   required bool http3,
   required bool nativeCallback,
+  String? certificatePath,
+  String? keyPath,
+  String? certificatePassword,
   Future<void>? shutdownSignal,
 }) async {
   final supportsV4 = await _supportsIPv4;
@@ -274,9 +274,6 @@ Future<NativeHttpServer> _startNativeLoopbackHttpServer({
 Future<NativeHttpServer> _startNativeHttpServer({
   required List<NativeServerBind> binds,
   required bool secure,
-  String? certificatePath,
-  String? keyPath,
-  String? certificatePassword,
   required int backlog,
   required bool v6Only,
   required bool requestClientCertificate,
@@ -284,6 +281,9 @@ Future<NativeHttpServer> _startNativeHttpServer({
   required bool http2,
   required bool http3,
   required bool nativeCallback,
+  String? certificatePath,
+  String? keyPath,
+  String? certificatePassword,
   Future<void>? shutdownSignal,
 }) async {
   if (binds.isEmpty) {
@@ -313,7 +313,6 @@ Future<NativeHttpServer> _startNativeHttpServer({
 
   final internalShutdown = Completer<void>();
   if (shutdownSignal != null) {
-    // ignore: discarded_futures
     shutdownSignal.whenComplete(() {
       if (!internalShutdown.isCompleted) {
         internalShutdown.complete();
@@ -359,7 +358,6 @@ Future<NativeHttpServer> _startNativeHttpServer({
         server._registerSharedPort(running.port);
       }
       server._runningBindingCount++;
-      // ignore: discarded_futures
       running.done.whenComplete(() {
         if (!internalShutdown.isCompleted) {
           internalShutdown.complete();

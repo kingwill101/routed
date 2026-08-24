@@ -4,16 +4,27 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 import 'package:server_native/src/ffi.g.dart';
 
+/// Selects a TCP backend for the native proxy.
 const int bridgeBackendKindTcp = 0;
+
+/// Selects a Unix-domain-socket backend for the native proxy.
 const int bridgeBackendKindUnix = 1;
+
+/// Disables benchmark-specific transport behavior.
 const int benchmarkModeNone = 0;
+
+/// Selects the static native direct benchmark mode.
 const int benchmarkModeStaticNativeDirect = 1;
+
+/// Selects the static `server_native` direct-shape benchmark mode.
 const int benchmarkModeStaticServerNativeDirectShape = 2;
 
+/// Deprecated alias for [benchmarkModeStaticServerNativeDirectShape].
 @Deprecated('Use benchmarkModeStaticServerNativeDirectShape')
 const int benchmarkModeStaticRoutedFfiDirectShape =
     benchmarkModeStaticServerNativeDirectShape;
 
+/// Receives a direct request frame from the native transport.
 typedef NativeDirectRequestCallback =
     void Function(int requestId, Uint8List payload);
 
@@ -30,6 +41,7 @@ _retainedDirectRequestCallbacks =
 
 /// One direct request frame polled from the Rust transport queue.
 final class NativeDirectRequestFrame {
+  /// Creates a direct request frame.
   const NativeDirectRequestFrame({
     required this.requestId,
     required this.payload,
@@ -221,6 +233,7 @@ final class NativeProxyServer {
     // and makes shutdown safe.
   }
 
+  /// Pushes a response frame for a previously received direct request.
   bool pushDirectResponseFrame(int requestId, Uint8List responsePayload) {
     if (_closed) {
       return false;
@@ -240,6 +253,7 @@ final class NativeProxyServer {
     }
   }
 
+  /// Completes a direct request using the one-shot response alias.
   bool completeDirectRequest(int requestId, Uint8List responsePayload) {
     // Backward-compatible alias for one-shot response mode.
     return pushDirectResponseFrame(requestId, responsePayload);

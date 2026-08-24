@@ -6,6 +6,7 @@ part of 'bridge_runtime.dart';
 ///
 /// {@macro server_native_bridge_request_example}
 final class BridgeRequestFrame {
+  /// Creates a request frame from materialized headers and body bytes.
   BridgeRequestFrame({
     required this.method,
     required this.scheme,
@@ -18,6 +19,104 @@ final class BridgeRequestFrame {
   }) : _headers = headers,
        _headerNames = null,
        _headerValues = null;
+
+  /// Decodes a single request payload frame.
+  factory BridgeRequestFrame.decodePayload(Uint8List payload) {
+    final reader = _BridgeFrameReader(payload);
+    final version = reader.readUint8();
+    if (!_isSupportedBridgeProtocolVersion(version)) {
+      throw FormatException('unsupported bridge protocol version: $version');
+    }
+    final frameType = reader.readUint8();
+    if (!_isRequestFrameType(frameType)) {
+      throw FormatException('invalid bridge request frame type: $frameType');
+    }
+    final tokenizedNames = _isTokenizedRequestFrameType(frameType);
+
+    final method = _normalizeHttpMethod(reader.readString());
+    final scheme = reader.readString();
+    final authority = reader.readString();
+    final path = reader.readString();
+    final query = reader.readString();
+    final protocol = reader.readString();
+    final headerCount = reader.readUint32();
+    final headerNames = List<String>.filled(
+      headerCount,
+      '',
+      growable: false,
+    );
+    final headerValues = List<String>.filled(
+      headerCount,
+      '',
+      growable: false,
+    );
+    for (var i = 0; i < headerCount; i++) {
+      headerNames[i] = _readHeaderName(reader, tokenized: tokenizedNames);
+      headerValues[i] = reader.readString();
+    }
+    final bodyBytes = reader.readBytes();
+    reader.ensureDone();
+    return BridgeRequestFrame._decoded(
+      method: method.isEmpty ? 'GET' : method,
+      scheme: scheme.isEmpty ? 'http' : scheme,
+      authority: authority.isEmpty ? '127.0.0.1' : authority,
+      path: path.isEmpty ? '/' : path,
+      query: query,
+      protocol: protocol.isEmpty ? '1.1' : protocol,
+      headerNames: headerNames,
+      headerValues: headerValues,
+      bodyBytes: bodyBytes,
+    );
+  }
+
+  /// Decodes a request-start payload.
+  factory BridgeRequestFrame.decodeStartPayload(Uint8List payload) {
+    final reader = _BridgeFrameReader(payload);
+    final version = reader.readUint8();
+    if (!_isSupportedBridgeProtocolVersion(version)) {
+      throw FormatException('unsupported bridge protocol version: $version');
+    }
+    final frameType = reader.readUint8();
+    if (!_isRequestStartFrameType(frameType)) {
+      throw FormatException(
+        'invalid bridge request start frame type: $frameType',
+      );
+    }
+    final tokenizedNames = _isTokenizedRequestStartFrameType(frameType);
+    final method = _normalizeHttpMethod(reader.readString());
+    final scheme = reader.readString();
+    final authority = reader.readString();
+    final path = reader.readString();
+    final query = reader.readString();
+    final protocol = reader.readString();
+    final headerCount = reader.readUint32();
+    final headerNames = List<String>.filled(
+      headerCount,
+      '',
+      growable: false,
+    );
+    final headerValues = List<String>.filled(
+      headerCount,
+      '',
+      growable: false,
+    );
+    for (var i = 0; i < headerCount; i++) {
+      headerNames[i] = _readHeaderName(reader, tokenized: tokenizedNames);
+      headerValues[i] = reader.readString();
+    }
+    reader.ensureDone();
+    return BridgeRequestFrame._decoded(
+      method: method.isEmpty ? 'GET' : method,
+      scheme: scheme.isEmpty ? 'http' : scheme,
+      authority: authority.isEmpty ? '127.0.0.1' : authority,
+      path: path.isEmpty ? '/' : path,
+      query: query,
+      protocol: protocol.isEmpty ? '1.1' : protocol,
+      headerNames: headerNames,
+      headerValues: headerValues,
+      bodyBytes: Uint8List(0),
+    );
+  }
 
   BridgeRequestFrame._decoded({
     required this.method,
@@ -33,12 +132,25 @@ final class BridgeRequestFrame {
        _headerNames = headerNames,
        _headerValues = headerValues;
 
+  /// The normalized HTTP request method.
   final String method;
+
+  /// The request URI scheme.
   final String scheme;
+
+  /// The request authority, including a host and optional port.
   final String authority;
+
+  /// The request path component.
   final String path;
+
+  /// The request query component without a leading question mark.
   final String query;
+
+  /// The HTTP protocol version reported by the transport.
   final String protocol;
+
+  /// The complete request body for a single-frame request.
   final Uint8List bodyBytes;
   List<MapEntry<String, String>>? _headers;
   final List<String>? _headerNames;
@@ -148,47 +260,6 @@ final class BridgeRequestFrame {
     return writer.takeBytes();
   }
 
-  /// Decodes a single request payload frame.
-  factory BridgeRequestFrame.decodePayload(Uint8List payload) {
-    final reader = _BridgeFrameReader(payload);
-    final version = reader.readUint8();
-    if (!_isSupportedBridgeProtocolVersion(version)) {
-      throw FormatException('unsupported bridge protocol version: $version');
-    }
-    final frameType = reader.readUint8();
-    if (!_isRequestFrameType(frameType)) {
-      throw FormatException('invalid bridge request frame type: $frameType');
-    }
-    final tokenizedNames = _isTokenizedRequestFrameType(frameType);
-
-    final method = _normalizeHttpMethod(reader.readString());
-    final scheme = reader.readString();
-    final authority = reader.readString();
-    final path = reader.readString();
-    final query = reader.readString();
-    final protocol = reader.readString();
-    final headerCount = reader.readUint32();
-    final headerNames = List<String>.filled(headerCount, '', growable: false);
-    final headerValues = List<String>.filled(headerCount, '', growable: false);
-    for (var i = 0; i < headerCount; i++) {
-      headerNames[i] = _readHeaderName(reader, tokenized: tokenizedNames);
-      headerValues[i] = reader.readString();
-    }
-    final bodyBytes = reader.readBytes();
-    reader.ensureDone();
-    return BridgeRequestFrame._decoded(
-      method: method.isEmpty ? 'GET' : method,
-      scheme: scheme.isEmpty ? 'http' : scheme,
-      authority: authority.isEmpty ? '127.0.0.1' : authority,
-      path: path.isEmpty ? '/' : path,
-      query: query,
-      protocol: protocol.isEmpty ? '1.1' : protocol,
-      headerNames: headerNames,
-      headerValues: headerValues,
-      bodyBytes: bodyBytes,
-    );
-  }
-
   /// Encodes the request-start payload used for streamed request bodies.
   Uint8List encodeStartPayload() {
     final writer = _BridgeFrameWriter();
@@ -210,47 +281,6 @@ final class BridgeRequestFrame {
       writer.writeString(headerValueAt(i));
     }
     return writer.takeBytes();
-  }
-
-  /// Decodes a request-start payload.
-  factory BridgeRequestFrame.decodeStartPayload(Uint8List payload) {
-    final reader = _BridgeFrameReader(payload);
-    final version = reader.readUint8();
-    if (!_isSupportedBridgeProtocolVersion(version)) {
-      throw FormatException('unsupported bridge protocol version: $version');
-    }
-    final frameType = reader.readUint8();
-    if (!_isRequestStartFrameType(frameType)) {
-      throw FormatException(
-        'invalid bridge request start frame type: $frameType',
-      );
-    }
-    final tokenizedNames = _isTokenizedRequestStartFrameType(frameType);
-    final method = _normalizeHttpMethod(reader.readString());
-    final scheme = reader.readString();
-    final authority = reader.readString();
-    final path = reader.readString();
-    final query = reader.readString();
-    final protocol = reader.readString();
-    final headerCount = reader.readUint32();
-    final headerNames = List<String>.filled(headerCount, '', growable: false);
-    final headerValues = List<String>.filled(headerCount, '', growable: false);
-    for (var i = 0; i < headerCount; i++) {
-      headerNames[i] = _readHeaderName(reader, tokenized: tokenizedNames);
-      headerValues[i] = reader.readString();
-    }
-    reader.ensureDone();
-    return BridgeRequestFrame._decoded(
-      method: method.isEmpty ? 'GET' : method,
-      scheme: scheme.isEmpty ? 'http' : scheme,
-      authority: authority.isEmpty ? '127.0.0.1' : authority,
-      path: path.isEmpty ? '/' : path,
-      query: query,
-      protocol: protocol.isEmpty ? '1.1' : protocol,
-      headerNames: headerNames,
-      headerValues: headerValues,
-      bodyBytes: Uint8List(0),
-    );
   }
 
   /// Encodes one request chunk payload.

@@ -86,7 +86,7 @@ Future<void> main(List<String> args) async {
   stdout.writeln('  Platform: $platform');
   stdout.writeln('  Artifact: $filename');
   stdout.writeln('  Target:   ${outDir.path}');
-  stdout.writeln('');
+  stdout.writeln();
 
   try {
     await _downloadAndExtract(

@@ -6,6 +6,7 @@ part of 'bridge_runtime.dart';
 ///
 /// {@macro server_native_bridge_response_example}
 final class BridgeResponseFrame {
+  /// Creates a response frame from materialized headers and body bytes.
   BridgeResponseFrame({
     required this.status,
     required List<MapEntry<String, String>> headers,
@@ -14,6 +15,85 @@ final class BridgeResponseFrame {
   }) : _headers = headers,
        _headerNames = null,
        _headerValues = null;
+
+  /// Decodes a single response payload frame.
+  factory BridgeResponseFrame.decodePayload(Uint8List payload) {
+    final reader = _BridgeFrameReader(payload);
+    final version = reader.readUint8();
+    if (!_isSupportedBridgeProtocolVersion(version)) {
+      throw FormatException('unsupported bridge protocol version: $version');
+    }
+    final frameType = reader.readUint8();
+    if (!_isResponseFrameType(frameType)) {
+      throw FormatException('invalid bridge response frame type: $frameType');
+    }
+    final tokenizedNames = _isTokenizedResponseFrameType(frameType);
+    final status = reader.readUint16();
+    final headerCount = reader.readUint32();
+    final headerNames = List<String>.filled(
+      headerCount,
+      '',
+      growable: false,
+    );
+    final headerValues = List<String>.filled(
+      headerCount,
+      '',
+      growable: false,
+    );
+    for (var i = 0; i < headerCount; i++) {
+      headerNames[i] = _readHeaderName(reader, tokenized: tokenizedNames);
+      headerValues[i] = reader.readString();
+    }
+    final bodyBytes = reader.readBytes();
+    reader.ensureDone();
+    return BridgeResponseFrame._decoded(
+      status: status,
+      headerNames: headerNames,
+      headerValues: headerValues,
+      bodyBytes: bodyBytes,
+      detachedSocket: null,
+    );
+  }
+
+  /// Decodes a response-start payload.
+  factory BridgeResponseFrame.decodeStartPayload(Uint8List payload) {
+    final reader = _BridgeFrameReader(payload);
+    final version = reader.readUint8();
+    if (!_isSupportedBridgeProtocolVersion(version)) {
+      throw FormatException('unsupported bridge protocol version: $version');
+    }
+    final frameType = reader.readUint8();
+    if (!_isResponseStartFrameType(frameType)) {
+      throw FormatException(
+        'invalid bridge response start frame type: $frameType',
+      );
+    }
+    final tokenizedNames = _isTokenizedResponseStartFrameType(frameType);
+    final status = reader.readUint16();
+    final headerCount = reader.readUint32();
+    final headerNames = List<String>.filled(
+      headerCount,
+      '',
+      growable: false,
+    );
+    final headerValues = List<String>.filled(
+      headerCount,
+      '',
+      growable: false,
+    );
+    for (var i = 0; i < headerCount; i++) {
+      headerNames[i] = _readHeaderName(reader, tokenized: tokenizedNames);
+      headerValues[i] = reader.readString();
+    }
+    reader.ensureDone();
+    return BridgeResponseFrame._decoded(
+      status: status,
+      headerNames: headerNames,
+      headerValues: headerValues,
+      bodyBytes: Uint8List(0),
+      detachedSocket: null,
+    );
+  }
 
   BridgeResponseFrame._decoded({
     required this.status,
@@ -50,8 +130,13 @@ final class BridgeResponseFrame {
     );
   }
 
+  /// The HTTP response status code.
   final int status;
+
+  /// The complete response body for a single-frame response.
   final Uint8List bodyBytes;
+
+  /// The detached socket, when the response upgraded the connection.
   final BridgeDetachedSocket? detachedSocket;
   List<MapEntry<String, String>>? _headers;
   final List<String>? _headerNames;
@@ -151,37 +236,6 @@ final class BridgeResponseFrame {
     return writer.takeBytes();
   }
 
-  /// Decodes a single response payload frame.
-  factory BridgeResponseFrame.decodePayload(Uint8List payload) {
-    final reader = _BridgeFrameReader(payload);
-    final version = reader.readUint8();
-    if (!_isSupportedBridgeProtocolVersion(version)) {
-      throw FormatException('unsupported bridge protocol version: $version');
-    }
-    final frameType = reader.readUint8();
-    if (!_isResponseFrameType(frameType)) {
-      throw FormatException('invalid bridge response frame type: $frameType');
-    }
-    final tokenizedNames = _isTokenizedResponseFrameType(frameType);
-    final status = reader.readUint16();
-    final headerCount = reader.readUint32();
-    final headerNames = List<String>.filled(headerCount, '', growable: false);
-    final headerValues = List<String>.filled(headerCount, '', growable: false);
-    for (var i = 0; i < headerCount; i++) {
-      headerNames[i] = _readHeaderName(reader, tokenized: tokenizedNames);
-      headerValues[i] = reader.readString();
-    }
-    final bodyBytes = reader.readBytes();
-    reader.ensureDone();
-    return BridgeResponseFrame._decoded(
-      status: status,
-      headerNames: headerNames,
-      headerValues: headerValues,
-      bodyBytes: bodyBytes,
-      detachedSocket: null,
-    );
-  }
-
   /// Encodes a response-start payload (streaming response mode).
   Uint8List encodeStartPayload() {
     final writer = _BridgeFrameWriter();
@@ -198,38 +252,6 @@ final class BridgeResponseFrame {
       writer.writeString(headerValueAt(i));
     }
     return writer.takeBytes();
-  }
-
-  /// Decodes a response-start payload.
-  factory BridgeResponseFrame.decodeStartPayload(Uint8List payload) {
-    final reader = _BridgeFrameReader(payload);
-    final version = reader.readUint8();
-    if (!_isSupportedBridgeProtocolVersion(version)) {
-      throw FormatException('unsupported bridge protocol version: $version');
-    }
-    final frameType = reader.readUint8();
-    if (!_isResponseStartFrameType(frameType)) {
-      throw FormatException(
-        'invalid bridge response start frame type: $frameType',
-      );
-    }
-    final tokenizedNames = _isTokenizedResponseStartFrameType(frameType);
-    final status = reader.readUint16();
-    final headerCount = reader.readUint32();
-    final headerNames = List<String>.filled(headerCount, '', growable: false);
-    final headerValues = List<String>.filled(headerCount, '', growable: false);
-    for (var i = 0; i < headerCount; i++) {
-      headerNames[i] = _readHeaderName(reader, tokenized: tokenizedNames);
-      headerValues[i] = reader.readString();
-    }
-    reader.ensureDone();
-    return BridgeResponseFrame._decoded(
-      status: status,
-      headerNames: headerNames,
-      headerValues: headerValues,
-      bodyBytes: Uint8List(0),
-      detachedSocket: null,
-    );
   }
 
   /// Encodes one response chunk payload.

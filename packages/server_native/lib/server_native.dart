@@ -1,18 +1,16 @@
-library;
-
 /// Native Rust-backed HTTP server APIs for Dart.
 ///
 /// This library is the public entrypoint for `server_native`.
 /// It is intended to be a drop-in server bootstrap replacement for
 /// `dart:io` `HttpServer` usage: keep existing request/response handlers and
-/// swap `HttpServer.bind(...)` with [NativeHttpServer.bind].
+/// swap `HttpServer.bind(...)` with `NativeHttpServer.bind`.
 /// It exposes:
 ///
-/// - `HttpServer`-style APIs via [NativeHttpServer].
-/// - callback-style APIs via [serveNativeHttp] and [serveSecureNativeHttp].
-/// - direct request/response callback APIs via [serveNativeDirect] and
-///   [serveSecureNativeDirect].
-/// - multi-bind helpers via [NativeMultiServer] and [serveNativeMulti].
+/// - `HttpServer`-style APIs via `NativeHttpServer`.
+/// - callback-style APIs via `serveNativeHttp` and `serveSecureNativeHttp`.
+/// - direct request/response callback APIs via `serveNativeDirect` and
+///   `serveSecureNativeDirect`.
+/// - multi-bind helpers via `NativeMultiServer` and `serveNativeMulti`.
 ///
 /// The API surface is designed so you can start from a familiar
 /// `dart:io HttpServer` model and selectively move to lower-overhead
@@ -215,14 +213,21 @@ library;
 /// ```
 /// {@endtemplate}
 
+library;
+
+/// ABI version helper for the linked native transport asset.
+///
+/// Useful for compatibility checks in diagnostics or test assertions.
+export 'src/native/server_native_transport.dart' show transportAbiVersion;
+
 /// Core server boot APIs and server abstractions.
 ///
 /// Includes:
 ///
-/// - [NativeHttpServer] for stream-based `HttpServer` handling.
-/// - [NativeMultiServer] and [NativeServerBind] for multi-bind boot helpers.
-/// - [serveNativeHttp]/[serveSecureNativeHttp] for callback-style request handling.
-/// - [serveNativeDirect]/[serveSecureNativeDirect] for direct low-overhead handlers.
+/// - `NativeHttpServer` for stream-based `HttpServer` handling.
+/// - `NativeMultiServer` and `NativeServerBind` for multi-bind boot helpers.
+/// - `serveNativeHttp` and `serveSecureNativeHttp` for callback-style request handling.
+/// - `serveNativeDirect` and `serveSecureNativeDirect` for direct low-overhead handlers.
 ///
 /// {@macro server_native_quick_start}
 /// {@macro server_native_http_callback_example}
@@ -234,22 +239,17 @@ library;
 /// {@macro server_native_graceful_shutdown_example}
 export 'src/server_boot.dart'
     show
-        NativeHttpServer,
-        NativeMultiServer,
-        NativeServerBind,
         NativeDirectHandler,
         NativeDirectRequest,
         NativeDirectResponse,
+        NativeHttpServer,
+        NativeMultiServer,
+        NativeServerBind,
         serveNative,
-        serveNativeMulti,
-        serveNativeHttp,
         serveNativeDirect,
+        serveNativeHttp,
+        serveNativeMulti,
         serveSecureNative,
-        serveSecureNativeMulti,
+        serveSecureNativeDirect,
         serveSecureNativeHttp,
-        serveSecureNativeDirect;
-
-/// ABI version helper for the linked native transport asset.
-///
-/// Useful for compatibility checks in diagnostics or test assertions.
-export 'src/native/server_native_transport.dart' show transportAbiVersion;
+        serveSecureNativeMulti;

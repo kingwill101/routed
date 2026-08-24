@@ -101,7 +101,7 @@ Future<void> main(List<String> args) async {
       await _applyPatch(
         framework: framework,
         checkoutDir: checkoutDir,
-        patchFile: File(p.join(patchesRoot, framework.patchFile!)),
+        patchFile: File(p.join(patchesRoot, framework.patchFile)),
         serverNativePath: p.normalize(packageRoot),
       );
     } else {
@@ -154,7 +154,7 @@ Future<void> main(List<String> args) async {
     final outputFile = File(
       p.isAbsolute(options.jsonOutput!)
           ? options.jsonOutput!
-          : p.join(repoRoot.path, options.jsonOutput!),
+          : p.join(repoRoot.path, options.jsonOutput),
     );
     await outputFile.parent.create(recursive: true);
     final jsonPayload = {
@@ -281,7 +281,7 @@ Future<void> _writeRootOverride({
   required String serverNativePath,
 }) async {
   final overrides = File(p.join(checkoutDir.path, 'pubspec_overrides.yaml'));
-  final normalizedPath = serverNativePath.replaceAll('\\', '/');
+  final normalizedPath = serverNativePath.replaceAll(r'\', '/');
   final contents =
       '''
 dependency_overrides:
@@ -354,7 +354,7 @@ Future<void> _applyPatch({
   }
 
   final rawPatch = await patchFile.readAsString();
-  final normalizedPath = serverNativePath.replaceAll('\\\\', '/');
+  final normalizedPath = serverNativePath.replaceAll(r'\\', '/');
   final patchBody = rawPatch.replaceAll(
     '__SERVER_NATIVE_PATH__',
     normalizedPath,
@@ -699,8 +699,8 @@ Future<void> _runChecked(
   String executable,
   List<String> args, {
   required String workingDirectory,
-  Map<String, String>? environment,
   required String label,
+  Map<String, String>? environment,
 }) async {
   final result = await _run(
     executable,
@@ -765,12 +765,6 @@ Env passed to tests:
 }
 
 class _FrameworkConfig {
-  final String name;
-  final String gitUrl;
-  final String branch;
-  final String? patchFile;
-  final List<String>? workspaceTestPackages;
-
   const _FrameworkConfig({
     required this.name,
     required this.gitUrl,
@@ -778,6 +772,11 @@ class _FrameworkConfig {
     required this.patchFile,
     this.workspaceTestPackages,
   });
+  final String name;
+  final String gitUrl;
+  final String branch;
+  final String? patchFile;
+  final List<String>? workspaceTestPackages;
 }
 
 enum _CompatMode { io, native }
@@ -787,15 +786,6 @@ extension on _CompatMode {
 }
 
 class _CliOptions {
-  final String workspaceRoot;
-  final Set<String> frameworks;
-  final List<_CompatMode> modes;
-  final bool fresh;
-  final bool skipTests;
-  final bool failFast;
-  final String? jsonOutput;
-  final bool showHelp;
-
   const _CliOptions({
     required this.workspaceRoot,
     required this.frameworks,
@@ -806,6 +796,14 @@ class _CliOptions {
     required this.jsonOutput,
     required this.showHelp,
   });
+  final String workspaceRoot;
+  final Set<String> frameworks;
+  final List<_CompatMode> modes;
+  final bool fresh;
+  final bool skipTests;
+  final bool failFast;
+  final String? jsonOutput;
+  final bool showHelp;
 
   static _CliOptions parse(List<String> args) {
     var workspaceRoot = '.dart_tool/server_native/framework_compat';
@@ -858,13 +856,10 @@ class _CliOptions {
           modes
             ..clear()
             ..addAll([_CompatMode.io, _CompatMode.native]);
-          break;
         case 'io':
           modes.add(_CompatMode.io);
-          break;
         case 'native':
           modes.add(_CompatMode.native);
-          break;
         default:
           throw ArgumentError('Unknown mode: $token');
       }
@@ -888,14 +883,6 @@ class _CliOptions {
 }
 
 class _CommandResult {
-  final String framework;
-  final String mode;
-  final String commandName;
-  final String command;
-  final String workingDirectory;
-  final int exitCode;
-  final int durationMs;
-
   const _CommandResult({
     required this.framework,
     required this.mode,
@@ -905,6 +892,13 @@ class _CommandResult {
     required this.exitCode,
     required this.durationMs,
   });
+  final String framework;
+  final String mode;
+  final String commandName;
+  final String command;
+  final String workingDirectory;
+  final int exitCode;
+  final int durationMs;
 
   Map<String, Object> toJson() => {
     'framework': framework,

@@ -5,7 +5,8 @@ part of 'server_boot.dart';
 /// Use this with [serveNativeMulti] and [serveSecureNativeMulti] to expose one
 /// logical server runtime on multiple host/port listeners.
 ///
-/// {@macro server_native_multi_bind_example}
+/// Each bind can use a different host while sharing the handler and transport
+/// configuration.
 final class NativeServerBind {
   /// Creates a bind configuration.
   const NativeServerBind({this.host = '127.0.0.1', this.port = 0});
@@ -25,7 +26,8 @@ final class NativeServerBind {
 /// - `'localhost'`: bind both loopback interfaces when available.
 /// - `'any'`: bind `InternetAddress.anyIPv6` when supported, else IPv4.
 ///
-/// {@macro server_native_transport_overview}
+/// The helper creates native listeners and dispatches requests through the
+/// configured Rust transport.
 final class NativeMultiServer {
   /// Boots server_native transport on all available loopback interfaces.
   ///
