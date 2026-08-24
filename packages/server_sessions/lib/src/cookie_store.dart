@@ -2,23 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'options.dart';
-import 'secure_cookie.dart';
-import 'session.dart';
-import 'store.dart';
+import 'package:server_sessions/src/options.dart';
+import 'package:server_sessions/src/secure_cookie.dart';
+import 'package:server_sessions/src/session.dart';
+import 'package:server_sessions/src/store.dart';
 
 /// A [SessionStore] implementation that stores the complete session in a
 /// protected client cookie.
 class CookieStore implements SessionStore {
-  /// Primary codec used when encoding new payloads.
-  final SecureCookie _primaryCodec;
-
-  /// Fallback codecs accepted when decoding legacy cookies.
-  final List<SecureCookie> _fallbackCodecs;
-
-  /// Default options for sessions created by this store.
-  final SessionOptions defaultOptions;
-
   /// Creates a cookie-backed store using [codecs].
   ///
   /// The first codec encodes new cookies; later codecs are accepted as
@@ -36,13 +27,20 @@ class CookieStore implements SessionStore {
        defaultOptions =
            defaultOptions ??
            SessionOptions(
-             path: '/',
-             domain: null,
              maxAge: 86400,
              secure: true,
              httpOnly: true,
              sameSite: SameSite.lax,
            );
+
+  /// Primary codec used when encoding new payloads.
+  final SecureCookie _primaryCodec;
+
+  /// Fallback codecs accepted when decoding legacy cookies.
+  final List<SecureCookie> _fallbackCodecs;
+
+  /// Default options for sessions created by this store.
+  final SessionOptions defaultOptions;
 
   /// Decodes the request cookie into a session or returns a new session.
   ///
@@ -50,7 +48,7 @@ class CookieStore implements SessionStore {
   /// malformed, or invalid cookies are treated as new sessions.
   @override
   Future<Session> read(SessionRequest request, String name) async {
-    Cookie cookie = request.cookies.firstWhere(
+    var cookie = request.cookies.firstWhere(
       (c) => c.name == name,
       orElse: () => Cookie(name, ''),
     );
@@ -80,8 +78,9 @@ class CookieStore implements SessionStore {
     var value = cookie.value;
     try {
       value = Uri.decodeComponent(value);
-    } catch (_) {
-      // Value was not URI-encoded; continue with original payload for legacy cookies.
+    } on Object {
+      // Value was not URI-encoded; continue with the original payload for
+      // legacy cookies.
     }
     // Unwind the codec chain in the same order it was applied during encoding.
     for (final codec in _decodeCodecs) {
@@ -95,15 +94,14 @@ class CookieStore implements SessionStore {
           // Fallback for single-codec or legacy payloads.
           value = jsonEncode(decoded);
         }
-      } catch (e) {
+      } on Object {
         // Try the next codec in the chain
         continue;
       }
     }
 
     try {
-      final Map<String, dynamic> data =
-          jsonDecode(value) as Map<String, dynamic>;
+      final data = jsonDecode(value) as Map<String, dynamic>;
       final session = Session(
         name: name,
         options: defaultOptions.clone(),
@@ -117,7 +115,7 @@ class CookieStore implements SessionStore {
       if (data['destroyed'] == true) session.destroy();
 
       return session;
-    } catch (e) {
+    } on Object {
       return Session(name: name, options: defaultOptions.clone());
     }
   }

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'session.dart';
+import 'package:server_sessions/src/session.dart';
 
 /// Request contract used by session stores.
 abstract class SessionRequest {
@@ -15,6 +15,9 @@ abstract class SessionRequest {
 }
 
 /// Response contract used by session stores.
+// A response adapter is intentionally a one-member contract so hosts can
+// implement only cookie emission without depending on a larger response API.
+// ignore: one_member_abstracts
 abstract class SessionResponse {
   /// Adds a response cookie named [name] with [value] and the supplied
   /// attributes.

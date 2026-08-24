@@ -13,7 +13,7 @@ class _InMemoryRepository implements contracts.Repository {
   Future<dynamic> get(String key) async => entries[key];
 
   @override
-  Future<bool> put(String key, value, [Duration? ttl]) async {
+  Future<bool> put(String key, dynamic value, [Duration? ttl]) async {
     entries[key] = value;
     return true;
   }
@@ -25,25 +25,26 @@ class _InMemoryRepository implements contracts.Repository {
   }
 
   @override
-  Future<dynamic> pull(key, [defaultValue]) => throw UnimplementedError();
-
-  @override
-  Future<bool> add(String key, value, [Duration? ttl]) =>
+  Future<dynamic> pull(dynamic key, [dynamic defaultValue]) =>
       throw UnimplementedError();
 
   @override
-  Future<dynamic> increment(String key, [value = 1]) =>
+  Future<bool> add(String key, dynamic value, [Duration? ttl]) =>
       throw UnimplementedError();
 
   @override
-  Future<dynamic> decrement(String key, [value = 1]) =>
+  Future<dynamic> increment(String key, [dynamic value = 1]) =>
       throw UnimplementedError();
 
   @override
-  Future<bool> forever(String key, value) => throw UnimplementedError();
+  Future<dynamic> decrement(String key, [dynamic value = 1]) =>
+      throw UnimplementedError();
 
   @override
-  Future<dynamic> remember(String key, ttl, Function callback) =>
+  Future<bool> forever(String key, dynamic value) => throw UnimplementedError();
+
+  @override
+  Future<dynamic> remember(String key, dynamic ttl, Function callback) =>
       throw UnimplementedError();
 
   @override

@@ -13,7 +13,7 @@ void main() {
 
   Future<void> setUpEngine() async {
     store = MemorySessionStore(
-      codecs: [SecureCookie(useEncryption: false)],
+      codecs: [SecureCookie()],
       defaultOptions: SessionOptions(),
     );
     engine = Engine()..addGlobalMiddleware(sessionMiddleware(store));
@@ -59,10 +59,15 @@ void main() {
     test(
       'default Routed session cookies use safe browser attributes',
       () async {
-        final defaultEngine = Engine(
-          providers: [...Engine.defaultProviders, RoutedSessionsProvider()],
-        )..addGlobalMiddleware(sessionMiddleware());
-        defaultEngine.get('/cookie', (ctx) => ctx.string('ok'));
+        final defaultEngine =
+            Engine(
+                providers: [
+                  ...Engine.defaultProviders,
+                  RoutedSessionsProvider(),
+                ],
+              )
+              ..addGlobalMiddleware(sessionMiddleware())
+              ..get('/cookie', (ctx) => ctx.string('ok'));
         await defaultEngine.initialize();
         addTearDown(defaultEngine.close);
 

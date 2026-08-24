@@ -1,39 +1,20 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Cookie;
 import 'dart:math';
 
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
-import 'options.dart';
-import 'secure_cookie.dart';
-import 'session.dart';
-import 'store.dart';
+import 'package:server_sessions/src/options.dart';
+import 'package:server_sessions/src/secure_cookie.dart';
+import 'package:server_sessions/src/session.dart';
+import 'package:server_sessions/src/store.dart';
 
 /// Stores session values in files and keeps only the session ID in the cookie.
 ///
 /// This implementation is minimal and should be hardened for production
 /// deployments, including its storage directory and file permissions.
 class FilesystemStore implements SessionStore {
-  /// Directory where session files will be stored.
-  final String storageDir;
-
-  /// List of codecs used to encode and decode session data.
-  final List<SecureCookie> codecs;
-
-  /// Default options for the session.
-  final SessionOptions defaultOptions;
-
-  /// Whether to prune expired session files when this store is constructed.
-  final bool pruneOnStartup;
-
-  /// Lottery configuration for opportunistic pruning, such as `2/100`.
-  final List<int>? lottery;
-
-  /// File system used to manage session files.
-  final file.FileSystem fileSystem;
-
-  final Random _random = Random.secure();
-
   /// Creates a file-backed store and ensures [storageDir] exists.
   ///
   /// The first [codecs] entry protects new cookies. [lottery] may configure
@@ -65,9 +46,29 @@ class FilesystemStore implements SessionStore {
     }
     if (pruneOnStartup) {
       // Best-effort cleanup of expired sessions
-      _pruneExpiredFiles();
+      unawaited(_pruneExpiredFiles());
     }
   }
+
+  /// Directory where session files will be stored.
+  final String storageDir;
+
+  /// List of codecs used to encode and decode session data.
+  final List<SecureCookie> codecs;
+
+  /// Default options for the session.
+  final SessionOptions defaultOptions;
+
+  /// Whether to prune expired session files when this store is constructed.
+  final bool pruneOnStartup;
+
+  /// Lottery configuration for opportunistic pruning, such as `2/100`.
+  final List<int>? lottery;
+
+  /// File system used to manage session files.
+  final file.FileSystem fileSystem;
+
+  final Random _random = Random.secure();
 
   /// Reads the cookie ID and loads its values from `session_<id>`.
   ///
@@ -95,15 +96,16 @@ class FilesystemStore implements SessionStore {
         final data = codec.decode(name, cookie.value);
         final sid = data['id'] as String?;
         if (sid != null) {
-          session.id = sid;
-          session.isNew = false;
+          session
+            ..id = sid
+            ..isNew = false;
           final loaded = await _loadFromFile(sid);
           if (loaded != null) {
             session.values.addAll(loaded);
           }
           break;
         }
-      } catch (_) {
+      } on Object catch (_) {
         // continue trying other codecs
       }
     }
@@ -140,8 +142,8 @@ class FilesystemStore implements SessionStore {
         session.name,
         '',
         maxAge: -1,
-        path: session.options.path ?? "/",
-        domain: session.options.domain ?? "",
+        path: session.options.path ?? '/',
+        domain: session.options.domain ?? '',
       );
       return;
     }
@@ -160,8 +162,8 @@ class FilesystemStore implements SessionStore {
     response.setCookie(
       session.name,
       encoded,
-      path: session.options.path ?? "/",
-      domain: session.options.domain ?? "",
+      path: session.options.path ?? '/',
+      domain: session.options.domain ?? '',
       maxAge: session.options.maxAge,
       secure: session.options.secure ?? false,
       httpOnly: session.options.httpOnly ?? true,
@@ -187,8 +189,8 @@ class FilesystemStore implements SessionStore {
   Future<Map<String, dynamic>?> _loadFromFile(String sid) async {
     final filePath = fileSystem.path.join(storageDir, 'session_$sid');
     final file = fileSystem.file(filePath);
-    if (!await file.exists()) return null;
-    final contents = await file.readAsString();
+    if (!file.existsSync()) return null;
+    final contents = file.readAsStringSync();
 
     return jsonDecode(contents) as Map<String, dynamic>;
   }
@@ -198,8 +200,8 @@ class FilesystemStore implements SessionStore {
     if (sid == null || sid.isEmpty) return;
     final filePath = fileSystem.path.join(storageDir, 'session_$sid');
     final file = fileSystem.file(filePath);
-    if (await file.exists()) {
-      await file.delete();
+    if (file.existsSync()) {
+      file.deleteSync();
     }
   }
 
@@ -214,12 +216,12 @@ class FilesystemStore implements SessionStore {
       if (entity is file.File &&
           fileSystem.path.basename(entity.path).startsWith('session_')) {
         try {
-          final stat = await entity.stat();
+          final stat = entity.statSync();
           final ageSeconds = DateTime.now().difference(stat.modified).inSeconds;
           if (ageSeconds > maxAge) {
-            await entity.delete();
+            entity.deleteSync();
           }
-        } catch (_) {
+        } on Object catch (_) {
           // Ignore file that might disappear mid-scan or other IO errors.
         }
       }
@@ -242,7 +244,8 @@ class FilesystemStore implements SessionStore {
   }
 
   /// Generates a random session ID for new sessions.
-  /// A real implementation should produce a cryptographically secure random string.
+  /// A production implementation should use a cryptographically secure random
+  /// string.
   String _generateSessionId() {
     final rand = Random.secure();
     final bytes = List<int>.generate(16, (_) => rand.nextInt(256));

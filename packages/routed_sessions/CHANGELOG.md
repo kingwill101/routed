@@ -3,6 +3,9 @@
 - Hardened default Routed session cookies with `Secure`, `HttpOnly`, and
   `SameSite=Lax`; local HTTP deployments must explicitly opt out with
   `secure: false`.
+- Migrated the adapter to `very_good_analysis` and completed public Dartdoc
+  coverage for the session context helpers, middleware, configuration, and
+  provider APIs.
 
 ## 0.2.0
 

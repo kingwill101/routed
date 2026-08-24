@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'options.dart';
-import 'secure_cookie.dart';
-import 'session.dart';
-import 'store.dart';
+import 'package:server_sessions/src/options.dart';
+import 'package:server_sessions/src/secure_cookie.dart';
+import 'package:server_sessions/src/session.dart';
+import 'package:server_sessions/src/store.dart';
 
 class _MemorySession {
   _MemorySession(this.payload, this.expiresAt);
@@ -15,7 +15,8 @@ class _MemorySession {
 
 /// In-memory, process-local session store mirroring Laravel's `array` driver.
 class MemorySessionStore implements SessionStore {
-  /// Creates an in-memory store using [codecs], [defaultOptions], and [lifetime].
+  /// Creates an in-memory store using [codecs], [defaultOptions], and
+  /// [lifetime].
   ///
   /// The store keeps serialized sessions only in this process and uses a
   /// signed and encrypted codec when [codecs] is empty.
@@ -37,7 +38,8 @@ class MemorySessionStore implements SessionStore {
   /// Cloned defaults applied to sessions created by this store.
   final SessionOptions defaultOptions;
 
-  /// Server-side lifetime used when session options omit [SessionOptions.maxAge].
+  /// Server-side lifetime used when session options omit
+  /// [SessionOptions.maxAge].
   final Duration lifetime;
 
   SessionOptions _cloneOptions() => defaultOptions.clone();
@@ -60,17 +62,19 @@ class MemorySessionStore implements SessionStore {
 
     final stored = _sessions[sessionId];
     if (stored == null) {
-      final session = Session(name: name, options: options)..id = sessionId;
-      session.isNew = false;
+      final session = Session(name: name, options: options)
+        ..id = sessionId
+        ..isNew = false;
       return session;
     }
 
     try {
       final session = Session.deserialize(stored.payload)..isNew = false;
       return session;
-    } catch (_) {
-      final session = Session(name: name, options: options)..id = sessionId;
-      session.isNew = false;
+    } on Object {
+      final session = Session(name: name, options: options)
+        ..id = sessionId
+        ..isNew = false;
       return session;
     }
   }
@@ -152,7 +156,7 @@ class MemorySessionStore implements SessionStore {
         if (payload.containsKey('id')) {
           return payload['id'] as String?;
         }
-      } catch (_) {
+      } on Object catch (_) {
         // try next codec
       }
     }

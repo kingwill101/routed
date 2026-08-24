@@ -6,19 +6,18 @@ import 'package:server_sessions/server_sessions.dart';
 import 'package:test/test.dart';
 
 class _FakeRequest implements SessionRequest {
+  _FakeRequest(this.cookies);
   @override
   final List<Cookie> cookies;
 
   final Map<String, String> headers = const {};
-
-  _FakeRequest(this.cookies);
 
   @override
   String header(String name) => headers[name] ?? '';
 }
 
 class _FakeResponse implements SessionResponse {
-  final List<(String, String, SetCookieParams)> cookies = [];
+  final List<(String, String, _SetCookieParams)> cookies = [];
 
   @override
   void setCookie(
@@ -34,31 +33,38 @@ class _FakeResponse implements SessionResponse {
     cookies.add((
       name,
       value.toString(),
-      SetCookieParams(maxAge, path, domain, secure, httpOnly, sameSite),
+      _SetCookieParams(
+        maxAge: maxAge,
+        path: path,
+        domain: domain,
+        secure: secure,
+        httpOnly: httpOnly,
+        sameSite: sameSite,
+      ),
     ));
   }
 
-  (String, String, SetCookieParams)? last(String name) {
+  (String, String, _SetCookieParams)? last(String name) {
     final matches = cookies.where((c) => c.$1 == name).toList();
     return matches.isEmpty ? null : matches.last;
   }
 }
 
-class SetCookieParams {
+class _SetCookieParams {
+  const _SetCookieParams({
+    required this.maxAge,
+    required this.path,
+    required this.domain,
+    required this.secure,
+    required this.httpOnly,
+    required this.sameSite,
+  });
   final int? maxAge;
   final String path;
   final String domain;
   final bool secure;
   final bool httpOnly;
   final SameSite? sameSite;
-  const SetCookieParams(
-    this.maxAge,
-    this.path,
-    this.domain,
-    this.secure,
-    this.httpOnly,
-    this.sameSite,
-  );
 }
 
 class _FakeRepository implements contracts.Repository {
@@ -110,14 +116,13 @@ class _FakeRepository implements contracts.Repository {
   }
 
   @override
-  Future<bool> forever(String key, dynamic value) =>
-      put(key, value, null);
+  Future<bool> forever(String key, dynamic value) => put(key, value);
 
   @override
   Future<dynamic> remember(String key, dynamic ttl, Function callback) async {
     final value = entries[key];
     if (value != null) return value;
-    final result = await callback();
+    final result = await Function.apply(callback, const []);
     await put(key, result, ttl is Duration ? ttl : null);
     return result;
   }
@@ -130,8 +135,8 @@ class _FakeRepository implements contracts.Repository {
   Future<dynamic> rememberForever(String key, Function callback) async {
     final value = entries[key];
     if (value != null) return value;
-    final result = await callback();
-    await put(key, result, null);
+    final result = await Function.apply(callback, const []);
+    await put(key, result);
     return result;
   }
 
@@ -173,8 +178,11 @@ void main() {
       session.destroy();
       expect(session.previousId, persistedId);
       await store.write(_FakeRequest([]), response, session);
-      expect(repo.entries, isNot(contains('session:$persistedId')),
-          reason: 'server-side record referenced by the old cookie must go');
+      expect(
+        repo.entries,
+        isNot(contains('session:$persistedId')),
+        reason: 'server-side record referenced by the old cookie must go',
+      );
     });
 
     test('regenerate invalidates the old cache record on write', () async {
@@ -190,8 +198,7 @@ void main() {
       final session = Session(
         name: 'sid',
         options: SessionOptions(maxAge: 600),
-      );
-      session.setValue('role', 'user');
+      )..setValue('role', 'user');
       await store.write(_FakeRequest([]), response, session);
       final oldId = session.id;
       expect(repo.entries, contains('session:$oldId'));
@@ -212,12 +219,18 @@ void main() {
 
       final first = await store.read(_FakeRequest([]), 'sid');
       first.destroy(); // previously mutated the shared defaultOptions
-      expect(store.defaultOptions.maxAge, originalMaxAge,
-          reason: 'destroy must not propagate maxAge=0 to the store default');
+      expect(
+        store.defaultOptions.maxAge,
+        originalMaxAge,
+        reason: 'destroy must not propagate maxAge=0 to the store default',
+      );
 
       final second = await store.read(_FakeRequest([]), 'sid');
-      expect(second.options.maxAge, originalMaxAge,
-          reason: 'new sessions must start from a pristine clone');
+      expect(
+        second.options.maxAge,
+        originalMaxAge,
+        reason: 'new sessions must start from a pristine clone',
+      );
     });
   });
 
@@ -232,16 +245,19 @@ void main() {
       );
       final response = _FakeResponse();
 
-      final session = Session(name: 'fsid', options: SessionOptions());
-      session.setValue('user', 'alice');
+      final session = Session(name: 'fsid', options: SessionOptions())
+        ..setValue('user', 'alice');
       await store.write(_FakeRequest([]), response, session);
       final sid = session.id;
 
       // The session file must exist (previously the delete branch always ran
       // because maxAge null folded to 0 which was treated as deletion).
       final file = fs.file('/sessions/session_$sid');
-      expect(await file.exists(), isTrue,
-          reason: 'a default (non-expiring) session must be persisted');
+      expect(
+        file.existsSync(),
+        isTrue,
+        reason: 'a default (non-expiring) session must be persisted',
+      );
       expect(response.last('fsid')?.$3.maxAge, isNull);
     });
 
@@ -258,42 +274,46 @@ void main() {
       final session = Session(
         name: 'fsid',
         options: SessionOptions(maxAge: 0),
-      );
-      session.setValue('user', 'bob');
+      )..setValue('user', 'bob');
       await store.write(_FakeRequest([]), response, session);
       expect(
-        await fs.file('/sessions/session_${session.id}').exists(),
+        fs.file('/sessions/session_${session.id}').existsSync(),
         isTrue,
       );
     });
 
-    test('deleted sessions produce a cookie with the configured domain',
-        () async {
-      final fs = MemoryFileSystem();
-      final store = FilesystemStore(
-        storageDir: '/sessions',
-        codecs: _codecs(),
-        defaultOptions: SessionOptions(),
-        fileSystem: fs,
-      );
-      final response = _FakeResponse();
+    test(
+      'deleted sessions produce a cookie with the configured domain',
+      () async {
+        final fs = MemoryFileSystem();
+        final store = FilesystemStore(
+          storageDir: '/sessions',
+          codecs: _codecs(),
+          defaultOptions: SessionOptions(),
+          fileSystem: fs,
+        );
+        final response = _FakeResponse();
 
-      final session = Session(
-        name: 'fsid',
-        options: SessionOptions(domain: 'example.com'),
-      );
-      await store.write(_FakeRequest([]), response, session);
-      final sid = session.id;
+        final session = Session(
+          name: 'fsid',
+          options: SessionOptions(domain: 'example.com'),
+        );
+        await store.write(_FakeRequest([]), response, session);
+        final sid = session.id;
 
-      session.destroy();
-      await store.write(_FakeRequest([]), response, session);
+        session.destroy();
+        await store.write(_FakeRequest([]), response, session);
 
-      final cookie = response.last('fsid')!;
-      expect(cookie.$3.maxAge, lessThan(0));
-      expect(cookie.$3.domain, 'example.com',
-          reason: 'deletion cookie must carry the same domain as creation');
-      expect(await fs.file('/sessions/session_$sid').exists(), isFalse);
-    });
+        final cookie = response.last('fsid')!;
+        expect(cookie.$3.maxAge, lessThan(0));
+        expect(
+          cookie.$3.domain,
+          'example.com',
+          reason: 'deletion cookie must carry the same domain as creation',
+        );
+        expect(fs.file('/sessions/session_$sid').existsSync(), isFalse);
+      },
+    );
 
     test('regenerate invalidates the old file', () async {
       final fs = MemoryFileSystem();
@@ -305,39 +325,46 @@ void main() {
       );
       final response = _FakeResponse();
 
-      final session = Session(name: 'fsid', options: SessionOptions());
-      session.setValue('user', 'carol');
+      final session = Session(name: 'fsid', options: SessionOptions())
+        ..setValue('user', 'carol');
       await store.write(_FakeRequest([]), response, session);
       final oldId = session.id;
-      expect(await fs.file('/sessions/session_$oldId').exists(), isTrue);
+      expect(fs.file('/sessions/session_$oldId').existsSync(), isTrue);
 
       session.regenerate();
       await store.write(_FakeRequest([]), response, session);
-      expect(await fs.file('/sessions/session_$oldId').exists(), isFalse,
-          reason: 'old cookie must no longer resolve after regeneration');
-      expect(await fs.file('/sessions/session_${session.id}').exists(), isTrue);
+      expect(
+        fs.file('/sessions/session_$oldId').existsSync(),
+        isFalse,
+        reason: 'old cookie must no longer resolve after regeneration',
+      );
+      expect(fs.file('/sessions/session_${session.id}').existsSync(), isTrue);
     });
   });
 
   group('SecureCookie binds payloads to the cookie name', () {
-    test('a value protected under one name is rejected under another',
-        () async {
-      final codec = SecureCookie(
-        key: SecureCookie.generateKey(),
-        useEncryption: true,
-        useSigning: true,
-      );
-      final encoded = codec.encode('session_a', {'id': 'secret'});
-      expect(() => codec.decode('session_b', encoded), throwsA(anything),
-          reason: 'payload must not be accepted under a different cookie name');
-      expect(codec.decode('session_a', encoded), {'id': 'secret'});
-    });
+    test(
+      'a value protected under one name is rejected under another',
+      () async {
+        final codec = SecureCookie(
+          key: SecureCookie.generateKey(),
+          useEncryption: true,
+          useSigning: true,
+        );
+        final encoded = codec.encode('session_a', {'id': 'secret'});
+        expect(
+          () => codec.decode('session_b', encoded),
+          throwsA(anything),
+          reason: 'payload must not be accepted under a different cookie name',
+        );
+        expect(codec.decode('session_a', encoded), {'id': 'secret'});
+      },
+    );
 
     test('HMAC-only mode also binds the name', () async {
       final codec = SecureCookie(
         key: SecureCookie.generateKey(),
         useSigning: true,
-        useEncryption: false,
       );
       final encoded = codec.encode('a', {'id': 'x'});
       expect(() => codec.decode('b', encoded), throwsA(anything));
@@ -348,7 +375,6 @@ void main() {
       final codec = SecureCookie(
         key: SecureCookie.generateKey(),
         useEncryption: true,
-        useSigning: false,
       );
       final encoded = codec.encode('alpha', {'id': 'y'});
       expect(() => codec.decode('beta', encoded), throwsA(anything));

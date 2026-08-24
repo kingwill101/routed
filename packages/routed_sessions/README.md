@@ -50,7 +50,7 @@ void main() async {
 }
 ```
 
-See [`example/sessions_example.dart`](example/sessions_example.dart).
+See the runnable session example in the package's `example/` directory.
 
 ## Testing
 

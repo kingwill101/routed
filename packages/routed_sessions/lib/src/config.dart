@@ -9,49 +9,13 @@ import 'package:server_sessions/server_sessions.dart';
 /// Use [SessionConfig.cookie] or [SessionConfig.file] for common store
 /// configurations, or provide a custom [SessionStore].
 class SessionConfig implements ValidatableConfiguration {
-  /// The name of the session cookie. Defaults to 'routed_session'.
-  final String cookieName;
-
-  /// The session store implementation.
-  final SessionStore store;
-
-  /// The maximum age of the session. Defaults to 1 hour.
-  final Duration maxAge;
-
-  /// The path for which the cookie is valid. Defaults to '/'.
-  final String path;
-
-  /// Whether the cookie should only be sent over HTTPS. Defaults to `true`.
-  final bool secure;
-
-  /// Whether the cookie should be marked as HttpOnly, preventing client-side JavaScript access. Defaults to `true`.
-  final bool httpOnly;
-
-  /// Base cookie options applied when constructing sessions.
-  final SessionOptions defaultOptions;
-
-  /// Whether the cookie should expire when the browser closes.
-  final bool expireOnClose;
-
-  /// SameSite configuration derived from options.
-  final SameSite? sameSite;
-
-  /// Partitioned cookie flag.
-  final bool? partitioned;
-
-  /// Codecs used when encoding/decoding cookies.
-  final List<SecureCookie> codecs;
-
-  /// Lottery configuration surfaced for tooling/tests.
-  final List<int>? lottery;
-
   /// Creates session middleware configuration for [store].
   ///
   /// [defaultOptions] overrides options derived from [path], [maxAge], and
   /// the cookie security flags.
   SessionConfig({
-    this.cookieName = 'routed_session',
     required this.store,
+    this.cookieName = 'routed_session',
     this.maxAge = const Duration(hours: 1),
     this.path = '/',
     this.secure = true,
@@ -92,7 +56,6 @@ class SessionConfig implements ValidatableConfiguration {
     final resolvedSessionOptions =
         options ??
         SessionOptions(
-          path: '/',
           maxAge: expireOnClose ? null : maxAge.inSeconds,
           secure: true,
           httpOnly: true,
@@ -122,8 +85,8 @@ class SessionConfig implements ValidatableConfiguration {
   /// [codecs] is omitted. [storagePath] identifies the session directory.
   factory SessionConfig.file({
     required String appKey,
-    List<SecureCookie>? codecs,
     required String storagePath,
+    List<SecureCookie>? codecs,
     String cookieName = 'routed_session',
     Duration maxAge = const Duration(hours: 1),
     bool expireOnClose = false,
@@ -137,7 +100,6 @@ class SessionConfig implements ValidatableConfiguration {
     final resolvedSessionOptions =
         options ??
         SessionOptions(
-          path: '/',
           maxAge: expireOnClose ? null : maxAge.inSeconds,
           secure: true,
           httpOnly: true,
@@ -164,15 +126,53 @@ class SessionConfig implements ValidatableConfiguration {
     );
   }
 
+  /// The name of the session cookie. Defaults to 'routed_session'.
+  final String cookieName;
+
+  /// The session store implementation.
+  final SessionStore store;
+
+  /// The maximum age of the session. Defaults to 1 hour.
+  final Duration maxAge;
+
+  /// The path for which the cookie is valid. Defaults to '/'.
+  final String path;
+
+  /// Whether the cookie should only be sent over HTTPS. Defaults to `true`.
+  final bool secure;
+
+  /// Whether the cookie is marked as HttpOnly, preventing client-side
+  /// JavaScript access. Defaults to `true`.
+  final bool httpOnly;
+
+  /// Base cookie options applied when constructing sessions.
+  final SessionOptions defaultOptions;
+
+  /// Whether the cookie should expire when the browser closes.
+  final bool expireOnClose;
+
+  /// SameSite configuration derived from options.
+  final SameSite? sameSite;
+
+  /// Partitioned cookie flag.
+  final bool? partitioned;
+
+  /// Codecs used when encoding/decoding cookies.
+  final List<SecureCookie> codecs;
+
+  /// Lottery configuration surfaced for tooling/tests.
+  final List<int>? lottery;
+
   /// Validates the cookie name, path, and non-negative [maxAge].
   @override
   void validate(ConfigValidationContext context) {
-    context.require(
-      cookieName.trim().isNotEmpty,
-      'cookieName',
-      'must not be empty',
-    );
-    context.require(path.trim().isNotEmpty, 'path', 'must not be empty');
-    context.require(maxAge >= Duration.zero, 'maxAge', 'must not be negative');
+    context
+      ..require(
+        cookieName.trim().isNotEmpty,
+        'cookieName',
+        'must not be empty',
+      )
+      ..require(path.trim().isNotEmpty, 'path', 'must not be empty')
+      ..require(maxAge >= Duration.zero, 'maxAge', 'must not be negative');
   }
 }

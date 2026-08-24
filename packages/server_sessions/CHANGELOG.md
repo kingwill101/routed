@@ -1,3 +1,8 @@
+## Unreleased
+
+- Migrated the package to `very_good_analysis` and completed public Dartdoc
+  coverage across the session runtime, stores, cookie protection, and contracts.
+
 ## 0.1.1
 
 - Aligned session configuration and contract dependencies with the current

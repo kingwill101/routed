@@ -50,9 +50,10 @@ void main() {
               return ctx.string('ok');
             })
             ..get('/flash-multiple', (ctx) {
-              ctx.flash('First message');
-              ctx.flash('Second message');
-              ctx.flash('Error occurred', 'error');
+              ctx
+                ..flash('First message')
+                ..flash('Second message')
+                ..flash('Error occurred', 'error');
               return ctx.string('ok');
             })
             ..get('/has-flash', (ctx) {
@@ -89,18 +90,20 @@ void main() {
 
       // Check flashes exist
       final hasRes = await withCookie(client, '/has-flash', flashRes);
-      hasRes.assertStatus(200);
-      hasRes.assertJsonPath('has', true);
+      hasRes
+        ..assertStatus(200)
+        ..assertJsonPath('has', true);
 
       // Retrieve them
       final getRes = await withCookie(client, '/get-flash', flashRes);
       getRes.assertStatus(200);
-      final getBody = jsonDecode(getRes.body);
+      final getBody = jsonDecode(getRes.body) as Map<String, dynamic>;
       expect(getBody['messages'], ['Hello!']);
     });
 
     test(
-      'getFlashMessages() retrieval removes flashes from session in same request',
+      'getFlashMessages() retrieval removes flashes from the session '
+      'in the same request',
       () async {
         // This test uses a single request to flash + retrieve, avoiding
         // cookie propagation issues with CookieStore.
@@ -116,7 +119,7 @@ void main() {
 
         final res = await client.get('/flash-and-check');
         res.assertStatus(200);
-        final body = jsonDecode(res.body);
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
         expect(body['messages'], ['Temp message']);
       },
     );
@@ -130,7 +133,7 @@ void main() {
       );
       catRes.assertStatus(200);
       // Should be [['message', 'Hello!']]
-      final body = jsonDecode(catRes.body);
+      final body = jsonDecode(catRes.body) as Map<String, dynamic>;
       expect(body['messages'], [
         ['message', 'Hello!'],
       ]);
@@ -141,7 +144,7 @@ void main() {
       // Get all without category filter
       final getRes = await withCookie(client, '/get-flash', flashRes);
       getRes.assertStatus(200);
-      final body = jsonDecode(getRes.body);
+      final body = jsonDecode(getRes.body) as Map<String, dynamic>;
       expect(body['messages'], [
         'First message',
         'Second message',
@@ -153,7 +156,7 @@ void main() {
       final flashRes = await client.get('/flash-multiple');
       final getRes = await withCookie(client, '/get-flash-filtered', flashRes);
       getRes.assertStatus(200);
-      final body = jsonDecode(getRes.body);
+      final body = jsonDecode(getRes.body) as Map<String, dynamic>;
       expect(body['messages'], ['Error occurred']);
     });
 
@@ -165,7 +168,7 @@ void main() {
         flashRes,
       );
       getRes.assertStatus(200);
-      final body = jsonDecode(getRes.body);
+      final body = jsonDecode(getRes.body) as Map<String, dynamic>;
       expect(body['messages'], [
         ['error', 'Error occurred'],
       ]);
@@ -174,8 +177,9 @@ void main() {
     test('hasFlashMessages() returns false when no flashes', () async {
       // Don't flash anything first — just check
       final hasRes = await client.get('/has-flash');
-      hasRes.assertStatus(200);
-      hasRes.assertJsonPath('has', false);
+      hasRes
+        ..assertStatus(200)
+        ..assertJsonPath('has', false);
     });
   });
 }

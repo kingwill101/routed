@@ -11,7 +11,8 @@ Directory _resolveLibDir() {
     }
   }
   throw StateError(
-    'Unable to locate server_sessions lib directory from ${Directory.current.path}',
+    'Unable to locate server_sessions lib directory from '
+    '${Directory.current.path}',
   );
 }
 

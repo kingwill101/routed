@@ -1,12 +1,12 @@
 import 'package:file/file.dart' as fs;
 import 'package:server_contracts/server_contracts.dart' show Repository;
 
-import 'cache_store.dart';
-import 'cookie_store.dart';
-import 'filesystem_store.dart';
-import 'memory_store.dart';
-import 'options.dart';
-import 'secure_cookie.dart';
+import 'package:server_sessions/src/cache_store.dart';
+import 'package:server_sessions/src/cookie_store.dart';
+import 'package:server_sessions/src/filesystem_store.dart';
+import 'package:server_sessions/src/memory_store.dart';
+import 'package:server_sessions/src/options.dart';
+import 'package:server_sessions/src/secure_cookie.dart';
 
 /// Framework-agnostic factory for composing session store runtimes.
 ///
@@ -78,5 +78,6 @@ class SessionRuntimeFactory {
   }
 }
 
-/// Shared [SessionRuntimeFactory] for adapters that prefer function-style access.
+/// Shared [SessionRuntimeFactory] for adapters that prefer function-style
+/// access.
 const SessionRuntimeFactory sessionRuntimeFactory = SessionRuntimeFactory();

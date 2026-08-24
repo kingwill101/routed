@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:server_contracts/server_contracts.dart' as contracts;
-import 'options.dart';
-import 'session.dart';
-import 'secure_cookie.dart';
-import 'store.dart';
+import 'package:server_sessions/src/options.dart';
+import 'package:server_sessions/src/secure_cookie.dart';
+import 'package:server_sessions/src/session.dart';
+import 'package:server_sessions/src/store.dart';
 
 /// Stores session payloads in a cache repository while persisting only a
 /// lightweight identifier in the client cookie.
@@ -68,13 +68,14 @@ class CacheSessionStore implements SessionStore {
     if (stored is String && stored.isNotEmpty) {
       try {
         return Session.deserialize(stored)..isNew = false;
-      } catch (_) {
+      } on Object catch (_) {
         // Fall through to new session if payload is corrupted.
       }
     }
 
-    final session = Session(name: name, options: options)..id = sessionId;
-    session.isNew = false;
+    final session = Session(name: name, options: options)
+      ..id = sessionId
+      ..isNew = false;
     return session;
   }
 
@@ -172,10 +173,10 @@ class CacheSessionStore implements SessionStore {
             if (parsed is Map<String, dynamic> && parsed['id'] is String) {
               return parsed['id'] as String;
             }
-          } catch (_) {}
+          } on Object catch (_) {}
         }
       }
-    } catch (_) {
+    } on Object catch (_) {
       // ignore malformed payload
     }
     return null;
@@ -187,7 +188,7 @@ class CacheSessionStore implements SessionStore {
       try {
         final result = codec.decode(name, decoded);
         return Map<String, dynamic>.from(result);
-      } catch (_) {
+      } on Object catch (_) {
         // Try next codec
       }
     }

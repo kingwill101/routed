@@ -58,12 +58,11 @@ Engine testEngine({
         engine.middlewares.add(sessionMiddleware(store));
         // Rebuild middleware stacks if needed
         try {
-          // ignore: avoid_dynamic_calls
           (engine as dynamic)._rebuildMiddlewareStacks();
-        } catch (_) {}
+        } on Object catch (_) {}
       }
     }
-  } catch (_) {}
+  } on Object catch (_) {}
 
   return engine;
 }

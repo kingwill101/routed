@@ -6,14 +6,13 @@ library;
 
 import 'dart:io';
 
-import 'src/config.dart';
-
-export 'src/config.dart';
-
 import 'package:routed_core/routed_core.dart';
+import 'package:routed_sessions/src/config.dart';
 import 'package:server_sessions/server_sessions.dart';
 
 export 'package:server_sessions/server_sessions.dart';
+
+export 'src/config.dart';
 
 /// Context key used by [sessionMiddleware] to store the current session.
 const sessionKey = ContextKey<Session>('routed.session');
@@ -37,7 +36,7 @@ extension SessionEngineContext on EngineContext {
   T? getSession<T>(String key) {
     try {
       return session.getValue<T>(key);
-    } catch (_) {
+    } on Object catch (_) {
       return null;
     }
   }
@@ -46,7 +45,7 @@ extension SessionEngineContext on EngineContext {
   void setSession(String key, dynamic value) {
     try {
       session.setValue(key, value);
-    } catch (_) {}
+    } on Object catch (_) {}
   }
 
   /// Removes the value stored under [key].
@@ -79,7 +78,7 @@ extension SessionEngineContext on EngineContext {
       }
       list.add({'message': message, 'category': category});
       session.values['_flash'] = list;
-    } catch (_) {}
+    } on Object catch (_) {}
   }
 
   /// Whether the current session contains flash messages.
@@ -87,7 +86,7 @@ extension SessionEngineContext on EngineContext {
     try {
       final flashes = session.values['_flash'] as List?;
       return flashes != null && flashes.isNotEmpty;
-    } catch (_) {
+    } on Object catch (_) {
       return false;
     }
   }
@@ -104,7 +103,7 @@ extension SessionEngineContext on EngineContext {
     try {
       final flashes = session.values['_flash'];
       if (flashes is! List || flashes.isEmpty) return [];
-      var source = flashes
+      final source = flashes
           .map((e) => Map<String, String>.from(e as Map))
           .toList();
       session.values.remove('_flash');
@@ -117,8 +116,8 @@ extension SessionEngineContext on EngineContext {
       if (withCategories) {
         return filtered.map((m) => [m['category'], m['message']]).toList();
       }
-      return filtered.map((m) => m['message'] as String).toList();
-    } catch (_) {
+      return filtered.map((m) => m['message']!).toList();
+    } on Object catch (_) {
       return [];
     }
   }
@@ -131,7 +130,7 @@ class _EngineSessionRequest implements SessionRequest {
   List<Cookie> get cookies {
     try {
       return ctx.request.cookies;
-    } catch (_) {
+    } on Object catch (_) {
       return const [];
     }
   }
@@ -142,7 +141,7 @@ class _EngineSessionRequest implements SessionRequest {
       final v = (ctx.request.headers as dynamic).value(name);
       if (v is String && v.isNotEmpty) return v;
       if (v is List && v.isNotEmpty) return v.first.toString();
-    } catch (_) {}
+    } on Object catch (_) {}
     try {
       final map = ctx.request.headers as Map<String, List<String>>;
       final values = map[name];
@@ -153,12 +152,12 @@ class _EngineSessionRequest implements SessionRequest {
           return entry.value.first;
         }
       }
-    } catch (_) {}
+    } on Object catch (_) {}
     try {
       final headers = ctx.request.headers;
       final v = headers.value(name);
       if (v != null) return v;
-    } catch (_) {}
+    } on Object catch (_) {}
     return '';
   }
 }
@@ -188,12 +187,12 @@ class _EngineSessionResponse implements SessionResponse {
         httpOnly: httpOnly,
         sameSite: sameSite,
       );
-    } catch (_) {
+    } on Object catch (_) {
       try {
         final sb = StringBuffer('$name=$value; Path=$path');
         if (maxAge != null) sb.write('; Max-Age=$maxAge');
         ctx.response.headers.set(HttpHeaders.setCookieHeader, sb.toString());
-      } catch (_) {}
+      } on Object catch (_) {}
     }
   }
 }
@@ -206,8 +205,8 @@ class _EngineSessionResponse implements SessionResponse {
 Middleware sessionMiddleware([SessionStore? store]) {
   return (EngineContext ctx, Next next) async {
     SessionConfig? config;
-    SessionStore? effectiveStore = store;
-    String cookieName = 'routed_session';
+    var effectiveStore = store;
+    var cookieName = 'routed_session';
 
     final container = ctx.container;
     if (container.has<SessionConfig>()) {
@@ -220,9 +219,9 @@ Middleware sessionMiddleware([SessionStore? store]) {
     }
 
     if (effectiveStore == null) {
-      // No explicit store — fall back to cookie store derived from config or default
-      final SessionOptions opts = SessionOptions(
-        path: '/',
+      // No explicit store: fall back to a cookie store derived from config or
+      // the default.
+      final opts = SessionOptions(
         secure: true,
         httpOnly: true,
         sameSite: SameSite.lax,
@@ -243,13 +242,12 @@ Middleware sessionMiddleware([SessionStore? store]) {
     Session session;
     try {
       session = await resolvedStore.read(req, cookieName);
-    } catch (_) {
+    } on Object catch (_) {
       session = Session(
         name: cookieName,
         options: resolvedStore is CookieStore
             ? resolvedStore.defaultOptions
             : SessionOptions(
-                path: '/',
                 secure: true,
                 httpOnly: true,
                 sameSite: SameSite.lax,
@@ -261,7 +259,7 @@ Middleware sessionMiddleware([SessionStore? store]) {
     final result = await next();
     try {
       await resolvedStore.write(req, res, session);
-    } catch (_) {}
+    } on Object catch (_) {}
     return result;
   };
 }
@@ -269,7 +267,8 @@ Middleware sessionMiddleware([SessionStore? store]) {
 /// Registers [SessionConfig] and its [SessionStore] with a Routed container.
 class RoutedSessionsProvider extends ServiceProvider
     with ProvidesTypedConfiguration<SessionConfig> {
-  /// Creates a provider, defaulting to an in-memory store with protected cookies.
+  /// Creates a provider, defaulting to an in-memory store with protected
+  /// cookies.
   RoutedSessionsProvider([SessionConfig? configuration])
     : configuration =
           configuration ??
@@ -277,14 +276,12 @@ class RoutedSessionsProvider extends ServiceProvider
             store: MemorySessionStore(
               codecs: [SecureCookie(useEncryption: true, useSigning: true)],
               defaultOptions: SessionOptions(
-                path: '/',
                 secure: true,
                 httpOnly: true,
                 sameSite: SameSite.lax,
               ),
             ),
             defaultOptions: SessionOptions(
-              path: '/',
               secure: true,
               httpOnly: true,
               sameSite: SameSite.lax,
@@ -299,8 +296,9 @@ class RoutedSessionsProvider extends ServiceProvider
   @override
   void register(Container container) {
     final store = configuration.store;
-    container.instance<SessionConfig>(configuration);
-    container.singleton<SessionStore>((_) async => store);
+    container
+      ..instance<SessionConfig>(configuration)
+      ..singleton<SessionStore>((_) async => store);
   }
 
   /// Completes provider startup; session registration requires no boot work.

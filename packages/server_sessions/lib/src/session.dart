@@ -1,10 +1,25 @@
 import 'dart:convert';
 import 'dart:math';
 
-import 'options.dart';
+import 'package:server_sessions/src/options.dart';
 
 /// Represents a session with a unique ID and associated data.
 class Session {
+  /// Creates a session with the supplied cookie [name] and [options].
+  ///
+  /// Generates an identifier and timestamps when [id], [createdAt], or
+  /// [lastAccessed] is omitted.
+  Session({
+    required this.name,
+    required this.options,
+    String? id,
+    Map<String, dynamic>? values,
+    DateTime? createdAt,
+    DateTime? lastAccessed,
+  }) : _id = id ?? _generateId(),
+       values = values ?? {},
+       _createdAt = createdAt ?? DateTime.now(),
+       _lastAccessed = lastAccessed ?? DateTime.now();
   String _id;
 
   /// The previously persisted ID, retained until the backend store has had a
@@ -34,22 +49,6 @@ class Session {
 
   bool _isNew = true;
 
-  /// Creates a session with the supplied cookie [name] and [options].
-  ///
-  /// Generates an identifier and timestamps when [id], [createdAt], or
-  /// [lastAccessed] is omitted.
-  Session({
-    String? id,
-    required this.name,
-    required this.options,
-    Map<String, dynamic>? values,
-    DateTime? createdAt,
-    DateTime? lastAccessed,
-  }) : _id = id ?? _generateId(),
-       values = values ?? {},
-       _createdAt = createdAt ?? DateTime.now(),
-       _lastAccessed = lastAccessed ?? DateTime.now();
-
   /// Serializes this session to a JSON string.
   String serialize() => jsonEncode(toMap());
 
@@ -57,8 +56,10 @@ class Session {
   ///
   /// Throws a [FormatException] or a [TypeError] when [data] does not contain
   /// the session representation produced by [serialize].
+  // The static API is retained for compatibility with existing stores.
+  // ignore: prefer_constructors_over_static_methods
   static Session deserialize(String data) {
-    final Map<String, dynamic> map = jsonDecode(data) as Map<String, dynamic>;
+    final map = jsonDecode(data) as Map<String, dynamic>;
     return Session(
         id: map['id'] as String?,
         name: map['name'] as String,
@@ -77,7 +78,7 @@ class Session {
   static String _generateId() {
     final random = Random.secure();
     final values = List<int>.generate(32, (i) => random.nextInt(256));
-    return values.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
+    return values.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
   /// Updates the last-accessed time and marks this session as no longer new.
@@ -89,7 +90,7 @@ class Session {
   /// Marks the session as destroyed and clears all values.
   ///
   /// The current persisted ID is retained in [previousId] so the backend store
-  /// can delete the original record when [SessionStore.write] runs; otherwise
+  /// can delete the original record when `SessionStore.write` runs; otherwise
   /// the old cookie
   /// would keep resolving to an orphaned session until it expires.
   void destroy() {
@@ -104,7 +105,7 @@ class Session {
   /// Regenerates the session ID while maintaining the session data.
   ///
   /// The ID that was active before regeneration is recorded in [previousId] so
-  /// the next [SessionStore.write] can invalidate the record referenced by the
+  /// the next `SessionStore.write` can invalidate the record referenced by the
   /// old cookie.
   void regenerate() {
     _previousId = _id;

@@ -10,17 +10,10 @@ import 'package:pointycastle/block/modes/gcm.dart';
 
 /// Protects cookie payloads with HMAC signing, AES encryption, or both.
 ///
-/// HMAC prevents tampering, AES provides confidentiality, and [SecurityMode.both]
-/// combines the protections. Cookie names are authenticated as part of the
-/// payload protection.
+/// HMAC prevents tampering, AES provides confidentiality, and
+/// [SecurityMode.both] combines the protections. Cookie names are
+/// authenticated as part of the payload protection.
 class SecureCookie {
-  final List<int>? _hmacKey;
-  final Uint8List? _aesKey;
-  final SecurityMode _mode;
-
-  /// Private constructor for SecureCookie.
-  SecureCookie._(this._hmacKey, this._aesKey, this._mode);
-
   /// Creates a cookie protector with the supplied key and security mode.
   ///
   /// [key] may be a base64 string (optionally prefixed with `base64:`) or a
@@ -69,6 +62,12 @@ class SecureCookie {
     return SecureCookie._(hmacKey, aesKey, effectiveMode);
   }
 
+  /// Private constructor for SecureCookie.
+  SecureCookie._(this._hmacKey, this._aesKey, this._mode);
+  final List<int>? _hmacKey;
+  final Uint8List? _aesKey;
+  final SecurityMode _mode;
+
   static List<int> _generateKeyFromEnv() {
     final appKey = Platform.environment['APP_KEY'];
     if (appKey != null && appKey.isNotEmpty) {
@@ -79,7 +78,7 @@ class SecureCookie {
 
   /// Generates a base64-prefixed, cryptographically random key.
   ///
-  /// The result is suitable for passing as [SecureCookie.key].
+  /// The result is suitable for passing as the `SecureCookie` `key` argument.
   static String generateKey() {
     return 'base64:${base64.encode(_generateRandomKeyBytes())}';
   }

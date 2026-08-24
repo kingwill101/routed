@@ -2,8 +2,34 @@
 
 import 'dart:io';
 
+import 'package:server_sessions/src/session.dart' show Session;
+
 /// Cookie attributes and lifetime defaults applied to a [Session].
 class SessionOptions {
+  /// Creates cookie options with the supplied attributes.
+  SessionOptions({
+    this.path = '/',
+    this.domain,
+    int? maxAge,
+    this.secure,
+    this.httpOnly,
+    this.partitioned,
+    this.sameSite,
+  }) : _maxAge = maxAge;
+
+  /// Creates options from a map produced by [toJson].
+  factory SessionOptions.fromJson(Map<String, dynamic> json) => SessionOptions(
+    path: json['path'] as String?,
+    domain: json['domain'] as String?,
+    maxAge: json['maxAge'] as int?,
+    secure: json['secure'] as bool?,
+    httpOnly: json['httpOnly'] as bool?,
+    partitioned: json['partitioned'] as bool?,
+    sameSite: (json['sameSite'] as String?) != null
+        ? SameSite.values.firstWhere((e) => e.name == json['sameSite'])
+        : null,
+  );
+
   /// The cookie path, defaulting to `/`.
   final String? path;
 
@@ -33,17 +59,6 @@ class SessionOptions {
   /// The configured cookie lifetime in seconds.
   int? get maxAge => _maxAge;
 
-  /// Creates cookie options with the supplied attributes.
-  SessionOptions({
-    this.path = '/',
-    this.domain,
-    int? maxAge,
-    this.secure,
-    this.httpOnly,
-    this.partitioned,
-    this.sameSite,
-  }) : _maxAge = maxAge;
-
   /// Creates a copy with the supplied non-null values replaced.
   SessionOptions copyWith({
     String? path,
@@ -66,6 +81,8 @@ class SessionOptions {
   }
 
   /// Updates the cookie lifetime to [value] seconds.
+  // The method is retained as part of the public session-store contract.
+  // ignore: use_setters_to_change_properties
   void setMaxAge(int? value) {
     _maxAge = value;
   }
@@ -80,19 +97,6 @@ class SessionOptions {
     'partitioned': partitioned,
     'sameSite': sameSite?.name,
   };
-
-  /// Creates options from a map produced by [toJson].
-  factory SessionOptions.fromJson(Map<String, dynamic> json) => SessionOptions(
-    path: json['path'] as String?,
-    domain: json['domain'] as String?,
-    maxAge: json['maxAge'] as int?,
-    secure: json['secure'] as bool?,
-    httpOnly: json['httpOnly'] as bool?,
-    partitioned: json['partitioned'] as bool?,
-    sameSite: (json['sameSite'] as String?) != null
-        ? SameSite.values.firstWhere((e) => e.name == json['sameSite'])
-        : null,
-  );
 
   /// Creates a copy that preserves every configured option.
   SessionOptions clone() => SessionOptions(

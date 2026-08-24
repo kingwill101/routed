@@ -15,7 +15,7 @@ class _InMemoryRepository implements contracts.Repository {
   Future<dynamic> get(String key) async => entries[key];
 
   @override
-  Future<bool> put(String key, value, [Duration? ttl]) async {
+  Future<bool> put(String key, dynamic value, [Duration? ttl]) async {
     entries[key] = value;
     return true;
   }
@@ -27,32 +27,32 @@ class _InMemoryRepository implements contracts.Repository {
   }
 
   @override
-  Future<dynamic> pull(key, [defaultValue]) {
+  Future<dynamic> pull(dynamic key, [dynamic defaultValue]) {
     throw UnimplementedError();
   }
 
   @override
-  Future<bool> add(String key, value, [Duration? ttl]) {
+  Future<bool> add(String key, dynamic value, [Duration? ttl]) {
     throw UnimplementedError();
   }
 
   @override
-  Future<dynamic> increment(String key, [value = 1]) {
+  Future<dynamic> increment(String key, [dynamic value = 1]) {
     throw UnimplementedError();
   }
 
   @override
-  Future<dynamic> decrement(String key, [value = 1]) {
+  Future<dynamic> decrement(String key, [dynamic value = 1]) {
     throw UnimplementedError();
   }
 
   @override
-  Future<bool> forever(String key, value) {
+  Future<bool> forever(String key, dynamic value) {
     throw UnimplementedError();
   }
 
   @override
-  Future<dynamic> remember(String key, ttl, Function callback) {
+  Future<dynamic> remember(String key, dynamic ttl, Function callback) {
     throw UnimplementedError();
   }
 
@@ -73,13 +73,12 @@ class _InMemoryRepository implements contracts.Repository {
 }
 
 class _MockRequest implements SessionRequest {
+  _MockRequest({List<Cookie>? cookies, Map<String, String>? headers})
+    : cookies = cookies ?? [],
+      _headers = headers ?? {};
   @override
   final List<Cookie> cookies;
   final Map<String, String> _headers;
-
-  _MockRequest({List<Cookie>? cookies, Map<String, String>? headers})
-      : cookies = cookies ?? [],
-        _headers = headers ?? {};
 
   @override
   String header(String name) => _headers[name] ?? '';
@@ -103,10 +102,11 @@ class _MockResponse implements SessionResponse {
   }) {
     final c = Cookie(name, value.toString());
     if (maxAge != null) c.maxAge = maxAge;
-    c.path = path;
-    c.domain = domain;
-    c.secure = secure;
-    c.httpOnly = httpOnly;
+    c
+      ..path = path
+      ..domain = domain
+      ..secure = secure
+      ..httpOnly = httpOnly;
     if (sameSite != null) c.sameSite = sameSite;
     cookies[name] = c;
   }
@@ -121,19 +121,19 @@ void main() {
   group('Session model', () {
     test('serializes, deserializes, and converts values', () {
       final options = SessionOptions(path: '/app', maxAge: 60);
-      final createdAt = DateTime.utc(2024, 1, 1);
+      final createdAt = DateTime.utc(2024);
       final accessedAt = DateTime.utc(2024, 1, 2);
-      final session = Session(
-        id: 'session-id',
-        name: 'session',
-        options: options,
-        values: {'count': 3},
-        createdAt: createdAt,
-        lastAccessed: accessedAt,
-      );
-      session.isNew = false;
-
-      session.setValue('name', 'routed');
+      final session =
+          Session(
+              id: 'session-id',
+              name: 'session',
+              options: options,
+              values: {'count': 3},
+              createdAt: createdAt,
+              lastAccessed: accessedAt,
+            )
+            ..isNew = false
+            ..setValue('name', 'routed');
       expect(session.getValue<int>('count'), equals(3));
       expect(session.getValue<String>('count'), equals('3'));
       expect(session.getValue<int>('missing'), isNull);
@@ -170,8 +170,7 @@ void main() {
         httpOnly: false,
         partitioned: true,
         sameSite: SameSite.strict,
-      );
-      options.setMaxAge(240);
+      )..setMaxAge(240);
 
       final json = options.toJson();
       final restored = SessionOptions.fromJson(json);
@@ -245,8 +244,10 @@ void main() {
       // Write
       final writeReq = _MockRequest();
       final writeRes = _MockResponse();
-      final session = Session(name: 'mem', options: SessionOptions(maxAge: 5));
-      session.setValue('foo', 'bar');
+      final session = Session(
+        name: 'mem',
+        options: SessionOptions(maxAge: 5),
+      )..setValue('foo', 'bar');
       await store.write(writeReq, writeRes, session);
       final cookie = writeRes.cookie('mem');
       expect(cookie, isNotNull);
@@ -280,8 +281,10 @@ void main() {
       );
 
       // Write
-      final session = Session(name: 'cache', options: SessionOptions(maxAge: 10));
-      session.setValue('token', 'abc');
+      final session = Session(
+        name: 'cache',
+        options: SessionOptions(maxAge: 10),
+      )..setValue('token', 'abc');
       final writeReq = _MockRequest();
       final writeRes = _MockResponse();
       await store.write(writeReq, writeRes, session);
@@ -321,13 +324,17 @@ void main() {
         defaultOptions: SessionOptions(maxAge: 10),
       );
 
-      final session = Session(name: 'cache', options: SessionOptions(maxAge: 10));
+      final session = Session(
+        name: 'cache',
+        options: SessionOptions(maxAge: 10),
+      );
       final req = _MockRequest();
       final res = _MockResponse();
       await store.write(req, res, session);
 
-      session.destroy();
-      session.id = 'dead-session';
+      session
+        ..destroy()
+        ..id = 'dead-session';
       repo.entries['session:dead-session'] = 'payload';
 
       final destroyRes = _MockResponse();
@@ -365,11 +372,10 @@ void main() {
       final writeRes = _MockResponse();
       final session = Session(
         name: 'file',
-        options: SessionOptions(maxAge: 10, path: '/'),
-      );
-      session.setValue('user', 'alice');
+        options: SessionOptions(maxAge: 10),
+      )..setValue('user', 'alice');
       await store.write(writeReq, writeRes, session);
-      expect(await oldFile.exists(), isFalse);
+      expect(oldFile.existsSync(), isFalse);
 
       final cookie = writeRes.cookie('file');
       expect(cookie, isNotNull);
@@ -398,7 +404,7 @@ void main() {
       final writeRes = _MockResponse();
       final session = Session(
         name: 'file',
-        options: SessionOptions(maxAge: -1, path: '/'),
+        options: SessionOptions(maxAge: -1),
       );
       await store.write(writeReq, writeRes, session);
       final cookie = writeRes.cookie('file');

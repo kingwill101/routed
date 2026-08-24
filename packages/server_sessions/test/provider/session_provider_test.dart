@@ -12,7 +12,7 @@ class _InMemoryRepository implements contracts.Repository {
   Future<dynamic> get(String key) async => entries[key];
 
   @override
-  Future<bool> put(String key, value, [Duration? ttl]) async {
+  Future<bool> put(String key, dynamic value, [Duration? ttl]) async {
     entries[key] = value;
     return true;
   }
@@ -24,25 +24,26 @@ class _InMemoryRepository implements contracts.Repository {
   }
 
   @override
-  Future<dynamic> pull(key, [defaultValue]) => throw UnimplementedError();
-
-  @override
-  Future<bool> add(String key, value, [Duration? ttl]) =>
+  Future<dynamic> pull(dynamic key, [dynamic defaultValue]) =>
       throw UnimplementedError();
 
   @override
-  Future<dynamic> increment(String key, [value = 1]) =>
+  Future<bool> add(String key, dynamic value, [Duration? ttl]) =>
       throw UnimplementedError();
 
   @override
-  Future<dynamic> decrement(String key, [value = 1]) =>
+  Future<dynamic> increment(String key, [dynamic value = 1]) =>
       throw UnimplementedError();
 
   @override
-  Future<bool> forever(String key, value) => throw UnimplementedError();
+  Future<dynamic> decrement(String key, [dynamic value = 1]) =>
+      throw UnimplementedError();
 
   @override
-  Future<dynamic> remember(String key, ttl, Function callback) =>
+  Future<bool> forever(String key, dynamic value) => throw UnimplementedError();
+
+  @override
+  Future<dynamic> remember(String key, dynamic ttl, Function callback) =>
       throw UnimplementedError();
 
   @override
@@ -58,9 +59,9 @@ class _InMemoryRepository implements contracts.Repository {
 }
 
 class _MockRequest implements SessionRequest {
+  _MockRequest({List<Cookie>? cookies}) : cookies = cookies ?? [];
   @override
   final List<Cookie> cookies;
-  _MockRequest({List<Cookie>? cookies}) : cookies = cookies ?? [];
   @override
   String header(String name) => '';
 }
@@ -80,10 +81,11 @@ class _MockResponse implements SessionResponse {
   }) {
     final c = Cookie(name, value.toString());
     if (maxAge != null) c.maxAge = maxAge;
-    c.path = path;
-    c.domain = domain;
-    c.secure = secure;
-    c.httpOnly = httpOnly;
+    c
+      ..path = path
+      ..domain = domain
+      ..secure = secure
+      ..httpOnly = httpOnly;
     if (sameSite != null) c.sameSite = sameSite;
     cookies[name] = c;
   }
@@ -125,13 +127,17 @@ void main() {
       final store = factory.file(
         codecs: [codec],
         storagePath: temp.path,
-        defaultOptions: SessionOptions(path: '/app', secure: true, maxAge: 3600),
+        defaultOptions: SessionOptions(
+          path: '/app',
+          secure: true,
+          maxAge: 3600,
+        ),
         lottery: const [1, 2],
         fileSystem: fs,
       );
 
       expect(store, isA<FilesystemStore>());
-      String normalizePath(String value) => value.replaceAll('\\', '/');
+      String normalizePath(String value) => value.replaceAll(r'\', '/');
       expect(normalizePath(store.storageDir), equals(normalizePath(temp.path)));
       expect(store.lottery, equals([1, 2]));
       expect(store.defaultOptions.path, equals('/app'));
@@ -145,7 +151,6 @@ void main() {
         repository: repo,
         codecs: [SecureCookie(key: SecureCookie.generateKey())],
         defaultOptions: SessionOptions(
-          path: '/',
           sameSite: SameSite.none,
           maxAge: 3600,
         ),
@@ -224,8 +229,8 @@ void main() {
 
       final req1 = _MockRequest();
       final res1 = _MockResponse();
-      final s1 = Session(name: 'file', options: SessionOptions(maxAge: 3600, path: '/'));
-      s1.setValue('user', 'alice');
+      final s1 = Session(name: 'file', options: SessionOptions(maxAge: 3600))
+        ..setValue('user', 'alice');
       await store.write(req1, res1, s1);
 
       final cookie1 = res1.cookies['file']!;
@@ -234,8 +239,8 @@ void main() {
       expect(loaded.values['user'], equals('alice'));
 
       // Different session should be isolated
-      final s2 = Session(name: 'file', options: SessionOptions(maxAge: 3600, path: '/'));
-      s2.setValue('user', 'bob');
+      final s2 = Session(name: 'file', options: SessionOptions(maxAge: 3600))
+        ..setValue('user', 'bob');
       final req3 = _MockRequest();
       final res3 = _MockResponse();
       await store.write(req3, res3, s2);
@@ -271,9 +276,18 @@ void main() {
 
       final payload = {'test': 'value', 'num': 42};
 
-      expect(hmac.decode('s', hmac.encode('s', payload))['test'], equals('value'));
-      expect(aes.decode('s', aes.encode('s', payload))['test'], equals('value'));
-      expect(both.decode('s', both.encode('s', payload))['test'], equals('value'));
+      expect(
+        hmac.decode('s', hmac.encode('s', payload))['test'],
+        equals('value'),
+      );
+      expect(
+        aes.decode('s', aes.encode('s', payload))['test'],
+        equals('value'),
+      );
+      expect(
+        both.decode('s', both.encode('s', payload))['test'],
+        equals('value'),
+      );
     });
 
     test('session regenerates and destroys correctly', () {
