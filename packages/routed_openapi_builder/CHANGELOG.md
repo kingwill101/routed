@@ -2,6 +2,8 @@
 
 - Completed public Dartdoc coverage and enabled the `public_member_api_docs`
   analyzer lint.
+- Documented the public builder and factory contracts with build-runner
+  configuration and generated-output examples.
 
 ## 0.1.0
 
