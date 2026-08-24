@@ -5,26 +5,40 @@ import 'package:server_cache/src/array_lock.dart';
 import 'package:server_cache/src/taggable_store.dart';
 import 'package:server_contracts/server_contracts.dart';
 
-/// A store that uses an in-memory array to store cache data.
+/// An isolate-local cache store backed by Dart maps.
+///
+/// Values are volatile and are not shared between isolates or processes.
+/// With [serializesValues] enabled, values are encoded as JSON, so they must
+/// be supported by `jsonEncode` and are returned as decoded JSON values.
 class ArrayStore extends TaggableStore implements Store, LockProvider {
-  /// Creates an [ArrayStore] instance.
+  /// Creates an in-memory store.
   ///
-  /// If [serializesValues] is true, values will be serialized before storing.
+  /// If [serializesValues] is `true`, values are JSON-encoded before storage.
   // The positional option is retained for source compatibility with existing
   // store construction code.
   // ignore: avoid_positional_boolean_parameters
   ArrayStore([this.serializesValues = false]);
 
-  /// A map to store the cache data.
+  /// The raw cache entries keyed by cache key.
+  ///
+  /// This map is exposed for compatibility and for the companion
+  /// [ArrayLock]. Applications should prefer the [Store] methods so that TTL
+  /// handling remains consistent.
   final Map<String, dynamic> storage = {};
 
-  /// A map to store the locks.
+  /// The raw lock entries keyed by lock name.
+  ///
+  /// This state is process-local and should not be treated as a durable or
+  /// security boundary.
   final Map<String, dynamic> locks = {};
 
-  /// Whether to serialize values before storing them.
+  /// Whether values are JSON-encoded before they are stored.
   final bool serializesValues;
 
-  /// Retrieves all keys from the store.
+  /// Retrieves keys currently present in the in-memory map.
+  ///
+  /// Expired entries are not eagerly removed by enumeration, so a key can be
+  /// returned here even though [get] will treat its value as missing.
   ///
   /// Returns a list of all keys.
   @override
@@ -32,9 +46,10 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
     return storage.keys.toList();
   }
 
-  /// Retrieves an item from the store by [key].
+  /// Retrieves an item from the store by [key], applying its TTL.
   ///
-  /// Returns the item if found, or null if not found or expired.
+  /// Returns `null` if the key is missing, expired, or contains a stored null.
+  /// Expired entries are removed lazily.
   @override
   Future<dynamic> get(String key) async {
     if (!storage.containsKey(key)) {
@@ -61,9 +76,10 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
     return serializesValues ? _deserialize(value as String) : value;
   }
 
-  /// Stores an item in the store with a time-to-live of [seconds].
+  /// Stores an item with a time-to-live of [seconds].
   ///
-  /// Returns true if the item was successfully stored.
+  /// A non-positive TTL means that the item does not expire. Existing values
+  /// are overwritten. Returns `true` after the map has been updated.
   @override
   Future<bool> put(String key, dynamic value, int seconds) async {
     storage[key] = {
@@ -73,7 +89,7 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
     return true;
   }
 
-  /// Stores an item in the store only if [key] is absent or expired.
+  /// Stores an item only if [key] is absent or expired.
   ///
   /// The existence check and the write happen in the same synchronous block,
   /// so within a single isolate concurrent callers cannot both report success.
@@ -99,7 +115,7 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
     return true;
   }
 
-  /// Stores multiple items in the store with a time-to-live of [seconds].
+  /// Stores multiple items with the same time-to-live of [seconds].
   ///
   /// Returns true if all items were successfully stored.
   @override
@@ -110,9 +126,10 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
     return true;
   }
 
-  /// Increments the value of an item in the store by [value].
+  /// Increments the numeric value stored at [key] by [value].
   ///
-  /// Returns the new value.
+  /// Missing values start at zero. The existing remaining TTL is preserved;
+  /// a non-numeric stored value causes a conversion error.
   @override
   Future<dynamic> increment(String key, [int value = 1]) async {
     final item = storage[key] as Map<Object?, Object?>?;
@@ -130,7 +147,7 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
     return newValue;
   }
 
-  /// Decrements the value of an item in the store by [value].
+  /// Decrements the numeric value stored at [key] by [value].
   ///
   /// Returns the new value.
   @override
@@ -138,7 +155,7 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
     return increment(key, -value);
   }
 
-  /// Stores an item in the store indefinitely.
+  /// Stores [value] at [key] without an expiration time.
   ///
   /// Returns true if the item was successfully stored.
   @override
@@ -146,7 +163,7 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
     return put(key, value, 0);
   }
 
-  /// Removes an item from the store by [key].
+  /// Removes the entry at [key].
   ///
   /// Returns true if the item was successfully removed.
   @override
@@ -155,7 +172,7 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
     return true;
   }
 
-  /// Clears all items from the store.
+  /// Removes all cache entries and all in-memory lock entries.
   ///
   /// Returns true if the store was successfully cleared.
   @override
@@ -164,7 +181,7 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
     return true;
   }
 
-  /// Gets the prefix for the store.
+  /// Gets the key prefix used by this store.
   ///
   /// Returns an empty string.
   @override
@@ -172,15 +189,19 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
     return '';
   }
 
-  /// Acquires a lock with the given [name].
+  /// Creates an isolate-local lock with the given [name].
   ///
-  /// Returns a [Lock] instance.
+  /// The returned lock shares this store's in-memory lock map and does not
+  /// coordinate with other isolates or processes.
   @override
   Future<Lock> lock(String name, [int seconds = 0, String? owner]) async {
     return ArrayLock(this, name, seconds, owner);
   }
 
-  /// Restores a lock with the given [name] and [owner].
+  /// Recreates a lock handle for [name] and [owner].
+  ///
+  /// This restores the handle only; it does not make an absent lock entry
+  /// valid or durable.
   ///
   /// Returns a [Lock] instance.
   @override
@@ -188,31 +209,31 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
     return lock(name, 0, owner);
   }
 
-  /// Calculates the expiration timestamp for a given duration in [seconds].
+  /// Calculates the expiration timestamp for [seconds].
   double _calculateExpiration(int seconds) {
     return _toTimestamp(seconds);
   }
 
-  /// Converts a duration in [seconds] to a timestamp.
+  /// Converts [seconds] to a Unix timestamp in seconds.
   double _toTimestamp(int seconds) {
     return seconds > 0
         ? (DateTime.now().millisecondsSinceEpoch / 1000) + seconds
         : 0;
   }
 
-  /// Serializes a value to a JSON string.
+  /// Encodes a value as JSON for serialized stores.
   String _serialize(dynamic value) {
     return jsonEncode(value);
   }
 
-  /// Deserializes a JSON string to a value.
+  /// Decodes a JSON value from a serialized entry.
   dynamic _deserialize(String value) {
     return jsonDecode(value);
   }
 
-  /// Retrieves multiple items from the store by their [keys].
+  /// Retrieves multiple items from the store by [keys].
   ///
-  /// Returns a map of key-value pairs.
+  /// Missing, expired, and stored-null values are represented by `null`.
   @override
   Future<Map<String, dynamic>> many(List<String> keys) async {
     final results = <String, dynamic>{};

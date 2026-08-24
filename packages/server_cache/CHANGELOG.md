@@ -2,6 +2,8 @@
 
 - Completed public Dartdoc coverage and enabled the `public_member_api_docs`
   analyzer lint.
+- Clarified the package-level cache workflow, typed store factories, and
+  in-memory locking and storage behavior.
 
 ## 0.2.0
 

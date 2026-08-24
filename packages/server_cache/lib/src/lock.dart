@@ -4,47 +4,52 @@ import 'dart:math';
 import 'package:server_contracts/server_contracts.dart' as lock_contract;
 import 'package:server_contracts/server_contracts.dart';
 
-/// An abstract class representing a lock mechanism.
-/// This class implements the [lock_contract.Lock] interface.
+/// Shared lock behavior for cache-backed lock implementations.
+///
+/// The lock contract is cooperative: [ownerId] identifies the caller but is
+/// not a cryptographic credential. Concrete stores decide whether ownership
+/// and acquisition are atomic across isolates or processes.
 abstract class CacheLock implements lock_contract.Lock {
-  /// Constructs a [CacheLock] instance with the given [name] and [seconds].
-  /// If [owner] is not provided, a random string is generated as the owner ID.
+  /// Creates a lock named [name] with a lease of [seconds].
+  ///
+  /// A non-positive lease is interpreted by each backend according to its
+  /// store contract. If [owner] is omitted, a per-instance owner identifier is
+  /// generated. The generated identifier is for coordination only, not
+  /// authentication.
   CacheLock(this.name, this.seconds, [String? owner])
     : ownerId = owner ?? _generateRandomString();
 
-  /// The name of the lock.
+  /// The backend key or name used to identify the lock.
   final String name;
 
-  /// The duration in seconds for which the lock will be held.
+  /// The requested lease duration in seconds.
   final int seconds;
 
-  /// The unique identifier for the owner of the lock.
+  /// The cooperative owner identifier used for release checks.
   final String ownerId;
 
-  /// The duration in milliseconds to sleep between attempts to acquire the
-  /// lock.
+  /// The delay in milliseconds between [block] acquisition attempts.
+  ///
+  /// This is mutable so callers can tune polling for a backend, but a very
+  /// small value can create unnecessary load.
   int sleepMilliseconds = 250;
 
-  /// Acquires the lock.
+  /// Attempts to acquire the lock.
   ///
   /// Returns `true` if the lock is successfully acquired, otherwise `false`.
   @override
   Future<bool> acquire();
 
-  /// Releases the lock.
+  /// Releases the lock when the backend recognizes this owner.
   ///
   /// Returns `true` if the lock is successfully released, otherwise `false`.
   @override
   Future<bool> release();
 
-  /// Acquires the lock and executes the given [callback] if provided.
+  /// Acquires the lock and optionally executes [callback] while holding it.
   ///
-  /// If the lock is acquired and [callback] is provided, the [callback] is
-  /// executed.
-  /// The lock is released after the [callback] is executed.
-  ///
-  /// Returns the result of the [callback] if it is executed, otherwise the
-  /// result of [acquire].
+  /// The lock is released when [callback] completes or throws. Returns the
+  /// callback result, or the acquisition result when no callback is supplied.
   @override
   Future<dynamic> get([Function? callback]) async {
     final result = await acquire();
@@ -60,17 +65,12 @@ abstract class CacheLock implements lock_contract.Lock {
     return result;
   }
 
-  /// Blocks until the lock is acquired or the specified [seconds] timeout is
-  /// reached.
+  /// Polls until the lock is acquired or the [seconds] timeout is reached.
   ///
-  /// If the lock is acquired and [callback] is provided, the [callback] is
-  /// executed.
-  /// The lock is released after the [callback] is executed.
-  ///
-  /// Throws [LockTimeoutException] if the lock cannot be acquired within the
-  /// specified [seconds].
-  ///
-  /// Returns the result of the [callback] if it is executed, otherwise `true`.
+  /// If [callback] is supplied, it runs while the lock is held and the lock is
+  /// released when it completes or throws. Throws [LockTimeoutException] if
+  /// acquisition does not succeed before the timeout. Returns the callback
+  /// result, or `true` when no callback is supplied.
   @override
   Future<dynamic> block(int seconds, [Function? callback]) async {
     final starting = DateTime.now().millisecondsSinceEpoch;
@@ -97,19 +97,19 @@ abstract class CacheLock implements lock_contract.Lock {
     return true;
   }
 
-  /// Returns the owner ID of the lock.
+  /// Returns this lock instance's owner identifier.
   @override
   String owner() {
     return ownerId;
   }
 
-  /// Retrieves the current owner of the lock.
+  /// Retrieves the owner identifier recorded by the backend.
   ///
   /// Returns the owner ID if the lock is currently held, otherwise `null`.
   @override
   Future<String?> getCurrentOwner();
 
-  /// Checks if the lock is owned by the current process.
+  /// Checks whether the backend owner matches [ownerId].
   ///
   /// Returns `true` if the lock is owned by the current process, otherwise
   /// `false`.
@@ -118,8 +118,9 @@ abstract class CacheLock implements lock_contract.Lock {
     return (await getCurrentOwner()) == ownerId;
   }
 
-  /// Sets the duration in milliseconds to sleep between attempts to acquire
-  /// the lock.
+  /// Sets the delay between blocked acquisition attempts.
+  ///
+  /// The value is used by [block] and is measured in milliseconds.
   // The method form is part of the public cache-lock API and is retained for
   // source compatibility with existing callers.
   // ignore: use_setters_to_change_properties
