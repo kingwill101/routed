@@ -5,6 +5,7 @@ import 'package:contextual/contextual.dart';
 
 /// Writes log output to stderr instead of stdout.
 class StderrLogDriver extends LogDriver {
+  /// Creates a driver that writes entries to stderr.
   StderrLogDriver() : super('stderr');
 
   @override
@@ -15,6 +16,7 @@ class StderrLogDriver extends LogDriver {
 
 /// Drops all log messages. Useful for null/blackhole channels.
 class NullLogDriver extends LogDriver {
+  /// Creates a driver that discards entries.
   NullLogDriver() : super('null');
 
   @override
@@ -23,8 +25,13 @@ class NullLogDriver extends LogDriver {
 
 /// Persists logs to a single file without rotation.
 ///
-/// Uses [PlainTextLogFormatter] by default to avoid ANSI color codes in file output.
+/// Uses [PlainTextLogFormatter] by default to avoid ANSI color codes in file
+/// output.
 class SingleFileLogDriver extends LogDriver {
+  /// Creates a driver that appends formatted entries to [path].
+  ///
+  /// Creates parent directories as needed. When [formatter] is omitted,
+  /// [PlainTextLogFormatter] is used.
   SingleFileLogDriver(String path, {LogMessageFormatter? formatter})
     : _file = File(path),
       _formatter = formatter ?? PlainTextLogFormatter(),

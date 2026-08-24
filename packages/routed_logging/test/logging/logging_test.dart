@@ -21,13 +21,13 @@ void main() {
     });
 
     test('attaches request context to logger', () async {
-      final engine = testEngine();
-      engine.get('/hello', (ctx) async {
-        final engineFromContainer = await ctx.container.make<Engine>();
-        expect(identical(engineFromContainer, ctx.engine), isTrue);
-        ctx.logger.info('handler invoked');
-        return ctx.string('ok');
-      });
+      final engine = testEngine()
+        ..get('/hello', (ctx) async {
+          final engineFromContainer = await ctx.container.make<Engine>();
+          expect(identical(engineFromContainer, ctx.engine), isTrue);
+          ctx.logger.info('handler invoked');
+          return ctx.string('ok');
+        });
 
       client = TestClient(RoutedRequestHandler(engine));
       final response = await client!.get('/hello');
@@ -45,10 +45,10 @@ void main() {
     });
 
     test('logs unhandled errors through contextual logger', () async {
-      final engine = testEngine();
-      engine.get('/boom', (ctx) async {
-        throw StateError('boom');
-      });
+      final engine = testEngine()
+        ..get('/boom', (ctx) async {
+          throw StateError('boom');
+        });
 
       client = TestClient(RoutedRequestHandler(engine));
       final response = await client!.get('/boom');
@@ -77,16 +77,16 @@ class _CapturingLoggerFactory {
     final logger = contextual.Logger()
       ..withContext({
         for (final entry in captured.entries) entry.key: entry.value,
+      })
+      ..setListener((entry) {
+        messages.add(
+          _LogEntry(
+            entry.record.level,
+            entry.record.message,
+            entry.record.context.all(),
+          ),
+        );
       });
-    logger.setListener((entry) {
-      messages.add(
-        _LogEntry(
-          entry.record.level,
-          entry.record.message,
-          entry.record.context.all(),
-        ),
-      );
-    });
     return logger;
   }
 }

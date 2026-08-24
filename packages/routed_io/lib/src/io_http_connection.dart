@@ -2,17 +2,19 @@ import 'dart:io';
 
 import 'package:routed_core/routed_core.dart';
 
-import 'io_portable.dart';
-import 'io_request_adapter.dart';
-import 'io_response_adapter.dart';
+import 'package:routed_io/src/io_portable.dart';
+import 'package:routed_io/src/io_request_adapter.dart';
+import 'package:routed_io/src/io_response_adapter.dart';
 
 /// One `dart:io` HTTP exchange: holds both [HttpRequest] and [HttpResponse].
 ///
-/// Exposes host-agnostic [HttpConnection] adapters for [Engine.handleConnection]
-/// while keeping raw `dart:io` types available for advanced use.
+/// Exposes host-agnostic [HttpConnection] adapters for
+/// [Engine.handleConnection] while keeping raw `dart:io` types available for
+/// advanced use.
 ///
 /// For the value-style edge see [toPortableRequest] / [dispatchIoExchange].
 final class IoHttpConnection {
+  /// Creates a connection backed by [httpRequest].
   IoHttpConnection(this.httpRequest)
     : requestAdapter = IoRequestAdapter(httpRequest),
       responseAdapter = IoResponseAdapter(
@@ -36,6 +38,6 @@ final class IoHttpConnection {
   HttpConnection get connection =>
       HttpConnection(requestAdapter, responseAdapter);
 
-  /// Snapshot as a host-agnostic [PortableRequest] (shares the body stream).
+  /// Creates a host-agnostic [PortableRequest] that shares the body stream.
   PortableRequest toPortableRequest() => portableRequestFromIo(httpRequest);
 }

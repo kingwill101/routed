@@ -24,10 +24,8 @@ void main() {
 
     test('typed channel definitions validate references before boot', () {
       final config = LoggingConfig(
-        defaultChannel: 'stack',
         channels: {
           'stack': StackLoggingChannelConfig(
-            name: 'stack',
             channels: const ['stdout'],
           ),
           'stdout': const StdoutLoggingChannelConfig(),
@@ -42,10 +40,8 @@ void main() {
 
     test('typed channel definitions reject missing references', () {
       final config = LoggingConfig(
-        defaultChannel: 'stack',
         channels: {
           'stack': StackLoggingChannelConfig(
-            name: 'stack',
             channels: const ['missing'],
           ),
         },
@@ -65,7 +61,7 @@ void main() {
 
     test('respects logging.enabled false', () async {
       final engine = testEngine(loggingConfig: LoggingConfig(enabled: false));
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
       engine.get('/ping', (ctx) => ctx.string('pong'));
       await engine.initialize();
 
@@ -78,7 +74,7 @@ void main() {
 
     test('errors_only logs only failures', () async {
       final engine = testEngine(loggingConfig: LoggingConfig(errorsOnly: true));
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
       engine
         ..get('/ok', (ctx) => ctx.string('ok'))
         ..get('/boom', (ctx) => throw StateError('boom'));
@@ -102,7 +98,7 @@ void main() {
       final engine = testEngine(
         loggingConfig: LoggingConfig(level: contextual.Level.debug),
       );
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
       engine.get('/ping', (ctx) => ctx.string('pong'));
       await engine.initialize();
 
@@ -118,7 +114,7 @@ void main() {
 
     test('logging configuration is fixed for the engine lifetime', () async {
       final engine = testEngine(loggingConfig: LoggingConfig(enabled: false));
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
       engine.get('/ping', (ctx) => ctx.string('pong'));
       await engine.initialize();
 
@@ -132,7 +128,7 @@ void main() {
       final engine = testEngine(
         loggingConfig: LoggingConfig(level: contextual.Level.debug),
       );
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
       engine.get('/ping', (ctx) => ctx.string('pong'));
       await engine.initialize();
 
@@ -156,7 +152,7 @@ void main() {
           requestHeaders: ['X-Correlation-ID'],
         ),
       );
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
       engine.get('/ping', (ctx) => ctx.string('pong'));
       await engine.initialize();
 
@@ -184,17 +180,16 @@ void main() {
           defaultChannel: 'custom',
           channels: {
             'custom': CustomLoggingChannelConfig(
-              name: 'custom',
               driver: 'capture',
             ),
           },
         ),
       );
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
 
       final registry = engine.container.get<LogDriverRegistry>();
       final capture = _BufferLogDriver();
-      registry.register('capture', (ctx) => capture, override: true);
+      registry.register('capture', (ctx) => capture);
 
       engine.get('/ping', (ctx) => ctx.string('pong'));
       await engine.initialize();
@@ -220,17 +215,16 @@ class _CapturingLoggerFactory {
     final logger = contextual.Logger()
       ..withContext({
         for (final entry in captured.entries) entry.key: entry.value,
+      })
+      ..setListener((entry) {
+        messages.add(
+          _LogEntry(
+            entry.record.level,
+            entry.record.message,
+            entry.record.context.all(),
+          ),
+        );
       });
-
-    logger.setListener((entry) {
-      messages.add(
-        _LogEntry(
-          entry.record.level,
-          entry.record.message,
-          entry.record.context.all(),
-        ),
-      );
-    });
 
     return logger;
   }

@@ -1,8 +1,6 @@
 import 'dart:async';
 
 import 'package:contextual/contextual.dart' as contextual;
-import 'package:routed_core/src/container/container.dart';
-import 'package:routed_core/src/context/context.dart';
 import 'package:routed_core/routed_core.dart'
     show
         ConsoleLoggingChannelConfig,
@@ -20,20 +18,25 @@ import 'package:routed_core/routed_core.dart'
         StderrLoggingChannelConfig,
         StdoutLoggingChannelConfig,
         WebhookLoggingChannelConfig;
+import 'package:routed_core/src/container/container.dart';
+import 'package:routed_core/src/context/context.dart';
 import 'package:routed_core/src/engine/middleware_registry.dart';
+import 'package:routed_core/src/provider/provider.dart';
+import 'package:routed_core/src/provider/typed_provider.dart';
+import 'package:routed_core/src/router/types.dart';
 import 'package:routed_logging/src/logging/channel_drivers.dart';
 import 'package:routed_logging/src/logging/context.dart';
 import 'package:routed_logging/src/logging/driver_registry.dart';
 import 'package:routed_logging/src/logging/logger.dart';
-import 'package:routed_core/src/provider/provider.dart';
-import 'package:routed_core/src/provider/typed_provider.dart';
-import 'package:routed_core/src/router/types.dart';
 
+/// Configures request logging and logging channel drivers for an engine.
 class LoggingServiceProvider extends ServiceProvider
     with ProvidesTypedConfiguration<LoggingConfig> {
+  /// Creates a logging provider with optional typed [configuration].
   LoggingServiceProvider([LoggingConfig? configuration])
     : configuration = configuration ?? LoggingConfig();
 
+  /// The typed logging configuration applied during engine boot.
   @override
   final LoggingConfig configuration;
 
@@ -45,6 +48,7 @@ class LoggingServiceProvider extends ServiceProvider
   bool _includeStackTraces = false;
   StreamSubscription<RoutingErrorEvent>? _errorSubscription;
 
+  /// Whether request stack traces are included in log output by default.
   static bool includeStackTraces = false;
 
   static const _startedAtKey = 'routed.logging.started_at';
@@ -53,8 +57,10 @@ class LoggingServiceProvider extends ServiceProvider
   void register(Container container) {
     _ensureDriverRegistry(container);
     if (container.has<MiddlewareRegistry>()) {
-      final registry = container.get<MiddlewareRegistry>();
-      registry.register('routed.logging.http', (_) => _loggingMiddleware);
+      container.get<MiddlewareRegistry>().register(
+        'routed.logging.http',
+        (_) => _loggingMiddleware,
+      );
     }
   }
 
@@ -117,7 +123,7 @@ class LoggingServiceProvider extends ServiceProvider
     if (!container.has<EventManager>()) {
       return;
     }
-    _errorSubscription?.cancel();
+    unawaited(_errorSubscription?.cancel() ?? Future<void>.value());
     _errorSubscription = container
         .get<EventManager>()
         .listen<RoutingErrorEvent>((event) {

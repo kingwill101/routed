@@ -1,3 +1,4 @@
+/// Logging providers, request context, and driver registration for Routed.
 library;
 
 export 'package:routed_core/routed_core.dart'

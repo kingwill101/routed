@@ -1,3 +1,8 @@
+## Unreleased
+
+- Adopt `very_good_analysis` and complete Dartdoc for the public IO transport
+  APIs.
+
 ## 0.1.1
 
 - Verify native `dart:io` request handling against the public Routed auth

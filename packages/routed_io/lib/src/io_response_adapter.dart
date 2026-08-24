@@ -4,6 +4,7 @@ import 'package:routed_core/routed_core.dart';
 
 /// [ResponseAdapter] backed by `dart:io` [HttpResponse].
 final class IoResponseAdapter implements ResponseAdapter, NativeRequestHandle {
+  /// Creates a response adapter backed by [httpResponse].
   IoResponseAdapter(this.httpResponse, {this.httpRequest});
 
   /// Underlying `dart:io` response.

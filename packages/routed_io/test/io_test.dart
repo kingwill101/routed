@@ -1,5 +1,5 @@
-import 'package:test/test.dart';
 import 'package:routed_io/routed_io.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('RoutedIO', () {

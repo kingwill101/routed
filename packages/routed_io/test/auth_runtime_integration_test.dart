@@ -11,7 +11,6 @@ void main() {
     await engine.initialize();
     final handle = await serveIo(
       engine,
-      host: '127.0.0.1',
       port: 0,
       echo: false,
     );
@@ -41,13 +40,11 @@ void main() {
     await engineWithoutTwoFactor.initialize();
     final handle = await serveIo(
       engine,
-      host: '127.0.0.1',
       port: 0,
       echo: false,
     );
     final handleWithoutTwoFactor = await serveIo(
       engineWithoutTwoFactor,
-      host: '127.0.0.1',
       port: 0,
       echo: false,
     );
@@ -82,13 +79,11 @@ void main() {
     await jwtEngine.initialize();
     final sessionHandle = await serveIo(
       sessionEngine,
-      host: '127.0.0.1',
       port: 0,
       echo: false,
     );
     final jwtHandle = await serveIo(
       jwtEngine,
-      host: '127.0.0.1',
       port: 0,
       echo: false,
     );

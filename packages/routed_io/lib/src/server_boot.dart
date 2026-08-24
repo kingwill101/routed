@@ -1,12 +1,12 @@
 import 'package:routed_core/routed_core.dart';
 
-import 'io_server_transport.dart';
+import 'package:routed_io/src/io_server_transport.dart';
 
 /// Boots a Routed [engine] using the `dart:io` HTTP server transport.
 ///
-/// Prefer this over [Engine.serve] for new code so bind/listen lives outside
+/// Prefer this over `Engine.serve` for new code so bind/listen lives outside
 /// `routed_core`. Default: native [Engine.handleConnection] fast path.
-/// Set [portableEdge] to use [dispatchIoExchange] / [Engine.handlePortable].
+/// Set [portableEdge] to use `dispatchIoExchange` / `Engine.handlePortable`.
 ///
 /// Returns a [ServerHandle] that can close the listener.
 Future<ServerHandle> serveIo(
@@ -22,7 +22,7 @@ Future<ServerHandle> serveIo(
   if (echo) {
     try {
       engine.printRoutes();
-    } catch (_) {}
+    } on Object catch (_) {}
   }
 
   final transport = IoServerTransport(echo: echo, portableEdge: portableEdge);
@@ -34,7 +34,7 @@ Future<ServerHandle> serveIo(
 
 /// Boots a Routed [engine] using the `dart:io` HTTPS server transport.
 ///
-/// TLS bind still delegates to [Engine.serveSecure] until TLS options are
+/// TLS bind still delegates to `Engine.serveSecure` until TLS options are
 /// folded into [IoServerTransport].
 Future<void> serveSecureIo(
   Engine engine, {

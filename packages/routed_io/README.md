@@ -5,7 +5,8 @@
 Kept separate from **`routed_core`** so non-`dart:io` hosts (Node, Workers)
 use their own packages against the same core contracts.
 
-See [portable-host-architecture.md](../../docs/portable-host-architecture.md).
+See the repository's
+[portable host architecture guide](https://github.com/kingwill101/routed/blob/master/docs/portable-host-architecture.md).
 
 ## Paths
 

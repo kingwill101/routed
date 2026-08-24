@@ -1,3 +1,7 @@
+## Unreleased
+
+- Adopted `very_good_analysis` and completed public API documentation.
+
 ## 0.2.0
 
 - **Breaking:** Remove driver documentation callbacks and string-based

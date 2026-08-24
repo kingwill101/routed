@@ -5,8 +5,8 @@ import 'package:routed_core/routed_core.dart';
 /// Maps a `dart:io` [HttpRequest] into a core [PortableRequest].
 ///
 /// The body stream is the live [HttpRequest] (single-consumer). Prefer this
-/// when using [Engine.handlePortable] / [dispatchIoExchange]. For websockets
-/// and zero-copy native handling, use [IoHttpConnection] +
+/// when using `Engine.handlePortable` / `dispatchIoExchange`. For websockets
+/// and zero-copy native handling, use `IoHttpConnection` +
 /// [Engine.handleConnection] instead.
 PortableRequest portableRequestFromIo(HttpRequest httpRequest) {
   final headers = PortableHeaders();
@@ -47,10 +47,10 @@ Future<void> writePortableResponseToIo(
   await target.close();
 }
 
-/// Runs [engine.handlePortable] for one `dart:io` exchange.
+/// Runs `Engine.handlePortable` for one `dart:io` exchange.
 ///
-/// Value edge (buffers the response via [RecordingResponseAdapter]). Use for
-/// parity with Node/Workers-style hosts. Live [IoServerTransport] still uses
+/// Value edge (buffers the response via `RecordingResponseAdapter`). Use for
+/// parity with Node/Workers-style hosts. Live `IoServerTransport` still uses
 /// the native [Engine.handleConnection] fast path by default so websockets and
 /// progressive writes keep working.
 Future<void> dispatchIoExchange(Engine engine, HttpRequest httpRequest) async {

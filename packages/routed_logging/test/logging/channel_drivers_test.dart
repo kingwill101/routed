@@ -91,7 +91,8 @@ void main() {
         ansiPattern.hasMatch(content),
         isFalse,
         reason:
-            'File log should not contain ANSI escape codes.\nContent:\n$content',
+            'File log should not contain ANSI escape codes.\n'
+            'Content:\n$content',
       );
 
       // Verify the actual messages are still present
@@ -104,7 +105,7 @@ void main() {
     test('uses PlainTextLogFormatter by default', () async {
       final driver = SingleFileLogDriver(logFilePath);
 
-      final time = DateTime(2026, 1, 18, 12, 0, 0);
+      final time = DateTime(2026, 1, 18, 12);
       final ctx = Context({'request_id': 'abc123'});
       final entry = LogEntry(
         LogRecord(

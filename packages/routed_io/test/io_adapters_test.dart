@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -23,8 +24,7 @@ void main() {
       Uri.parse('http://127.0.0.1:$port/hello?x=1'),
     );
     request.headers.set('x-test', 'yes');
-    // ignore: unawaited_futures
-    request.close();
+    unawaited(request.close());
 
     await seen;
 
@@ -42,14 +42,14 @@ void main() {
   });
 
   test('Engine.handleConnection accepts IoHttpConnection', () async {
-    final engine = Engine(providers: Engine.defaultProviders);
-    engine.get('/ping', (ctx) => ctx.string('pong'));
-    engine.get('/native', (ctx) {
-      final request = ctx.request;
-      // This deliberately checks native identity so request-size wrapping
-      // cannot make the request look like a portable request.
-      return ctx.string('${request.hasNativeHttpRequest}:${request.method}');
-    });
+    final engine = Engine(providers: Engine.defaultProviders)
+      ..get('/ping', (ctx) => ctx.string('pong'))
+      ..get('/native', (ctx) {
+        final request = ctx.request;
+        // This deliberately checks native identity so request-size wrapping
+        // cannot make the request look like a portable request.
+        return ctx.string('${request.hasNativeHttpRequest}:${request.method}');
+      });
     await engine.initialize();
     addTearDown(engine.close);
 
@@ -58,8 +58,7 @@ void main() {
 
     server.listen((req) {
       final conn = IoHttpConnection(req);
-      // ignore: unawaited_futures
-      engine.handleConnection(conn.connection);
+      unawaited(engine.handleConnection(conn.connection));
     });
 
     final client = HttpClient();
@@ -86,11 +85,13 @@ void main() {
     final seen = server.first;
     final client = HttpClient();
     addTearDown(client.close);
-    // ignore: unawaited_futures
-    client.getUrl(Uri.parse('http://127.0.0.1:${server.port}/z?q=1')).then((r) {
-      r.headers.set('x-io', 'yes');
-      return r.close();
-    });
+    unawaited(() async {
+      final request = await client.getUrl(
+        Uri.parse('http://127.0.0.1:${server.port}/z?q=1'),
+      );
+      request.headers.set('x-io', 'yes');
+      await request.close();
+    }());
 
     final httpRequest = await seen;
     final portable = portableRequestFromIo(httpRequest);
@@ -108,8 +109,8 @@ void main() {
   });
 
   test('dispatchIoExchange serves via handlePortable', () async {
-    final engine = Engine(providers: Engine.defaultProviders);
-    engine.get('/ping', (ctx) => ctx.string('pong'));
+    final engine = Engine(providers: Engine.defaultProviders)
+      ..get('/ping', (ctx) => ctx.string('pong'));
     await engine.initialize();
     addTearDown(engine.close);
 
@@ -117,8 +118,7 @@ void main() {
     addTearDown(() => server.close(force: true));
 
     server.listen((req) {
-      // ignore: unawaited_futures
-      dispatchIoExchange(engine, req);
+      unawaited(dispatchIoExchange(engine, req));
     });
 
     final client = HttpClient();
@@ -132,14 +132,14 @@ void main() {
   });
 
   test('IoServerTransport portableEdge serves routes', () async {
-    final engine = Engine(providers: Engine.defaultProviders);
-    engine.get('/ok', (ctx) => ctx.string('edge'));
+    final engine = Engine(providers: Engine.defaultProviders)
+      ..get('/ok', (ctx) => ctx.string('edge'));
     await engine.initialize();
     addTearDown(engine.close);
 
     final handle = await const IoServerTransport(
       portableEdge: true,
-    ).serve(engine, const ServerOptions(host: '127.0.0.1', port: 0));
+    ).serve(engine, const ServerOptions(port: 0));
     addTearDown(() => handle.close(force: true));
 
     final client = HttpClient();
