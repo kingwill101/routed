@@ -31,6 +31,11 @@ class CloudflareD1AuthStore
         AuthUserDeletionCoordinatorHost,
         AuthOAuthAccountMutationStore,
         AuthAuthenticationMethodTopologyStore {
+  /// Creates a store over the host-neutral D1 [database] binding.
+  ///
+  /// The constructor does not run migrations; call [open] or [migrate] before
+  /// serving requests. Capacity limits must be positive. [clock] is useful for
+  /// deterministic tests and defaults to [DateTime.now].
   CloudflareD1AuthStore(
     CloudflareD1Database database, {
     this.schema = const CloudflareD1AuthSchema(),
@@ -205,13 +210,29 @@ class CloudflareD1AuthStore
   final CloudflareD1Database _database;
   late final _D1 _sql;
   final DateTime Function() _clock;
+
+  /// Schema and table prefix used by this store.
   final CloudflareD1AuthSchema schema;
+
+  /// Retention period for managed-SCIM idempotency records.
   final Duration scimReplayTtl;
+
+  /// Retention period for anonymous-account mutation receipts.
   final Duration anonymousReplayTtl;
+
+  /// Maximum number of anonymous mutation receipts retained.
   final int anonymousMaxReceipts;
+
+  /// Maximum number of active API-key records retained by this domain.
   final int apiKeyMaxRecords;
+
+  /// Maximum number of WebAuthn challenge records retained.
   final int webAuthnChallengeMaxRecords;
+
+  /// Maximum number of WebAuthn authenticator records retained.
   final int webAuthnAuthenticatorMaxRecords;
+
+  /// Maximum number of phone verification records retained.
   final int phoneNumberMaxVerifications;
 
   /// Namespaces written by previously deployed external authentication
@@ -222,15 +243,24 @@ class CloudflareD1AuthStore
   bool _authenticationMethodTopologyBound = false;
   bool _authenticationMethodInventoryAuthoritative = false;
 
+  /// Coordinates atomic deletion of core and contributed user data.
   @override
   AuthUserDeletionCoordinator get userDeletionCoordinator =>
       _deletionCoordinator;
 
+  /// Binds plugin contributors used to build user-deletion plans.
+  ///
+  /// The topology is immutable after binding; duplicate or non-normalized
+  /// namespaces are rejected by the coordinator.
   @override
   void bindUserDeletionPlanContributors(
     Iterable<AuthUserDeletionPlanContributor> contributors,
   ) => _deletionCoordinator.bind(contributors);
 
+  /// Binds the complete authentication-method inventory used by safe removal.
+  ///
+  /// Removal operations fail closed until this inventory is authoritative.
+  /// Calling this method more than once throws a [StateError].
   @override
   void bindAuthenticationMethodInventory(
     Iterable<AuthAuthenticationMethodInventoryContributor> contributors,
@@ -290,6 +320,10 @@ class CloudflareD1AuthStore
     _authenticationMethodTopologyBound = true;
   }
 
+  /// Unlinks an OAuth account only when another authentication method remains.
+  ///
+  /// Returns an atomicity, not-found, or last-method result when the inventory
+  /// is incomplete, the target is absent, or removal would lock the user out.
   @override
   Future<AuthAuthenticationMethodMutationResult> unlinkOAuthAccountIfSafe({
     required String userId,
@@ -418,6 +452,10 @@ class CloudflareD1AuthStore
         : AuthAuthenticationMethodMutationResult.notFound;
   }
 
+  /// Removes a phone identity only when another authentication method remains.
+  ///
+  /// Returns a fail-closed mutation result when the inventory cannot prove the
+  /// removal is safe.
   @override
   Future<AuthAuthenticationMethodMutationResult> removePhoneNumberIfSafe(
     AuthPhoneNumberRemovalCommand command,
@@ -572,6 +610,10 @@ class CloudflareD1AuthStore
   String get _anonymousGuards => schema.table('anonymous_mutation_guards');
   String get _anonymousReceipts => schema.table('anonymous_mutation_receipts');
 
+  /// Creates an anonymous account with idempotent replay protection.
+  ///
+  /// The command's operation identity and user identity are stored as digests;
+  /// repeated requests replay the original result or report a mismatch.
   @override
   Future<AuthAnonymousMutationResult> createAnonymousAccount(
     AuthAnonymousCreateAccountCommand command,
@@ -685,6 +727,7 @@ class CloudflareD1AuthStore
     throw StateError('D1 anonymous account creation was not committed.');
   }
 
+  /// Deletes an anonymous account using its idempotent operation identity.
   @override
   Future<AuthAnonymousMutationResult> deleteAnonymousAccount(
     AuthAnonymousDeleteAccountCommand command,
@@ -694,6 +737,7 @@ class CloudflareD1AuthStore
     anonymousUserId: command.userId,
   );
 
+  /// Completes an anonymous-account upgrade as one guarded D1 mutation.
   @override
   Future<AuthAnonymousMutationResult> completeAnonymousAccountUpgrade(
     AuthAnonymousCompleteUpgradeCommand command,
@@ -867,14 +911,20 @@ class CloudflareD1AuthStore
   String _usernameMutationKey(String operation, Iterable<String> values) =>
       '$operation:${hashOpaqueToken(values.join('\u0000'))}';
 
+  /// Finds a password credential by its normalized username.
   @override
   Future<AuthPasswordCredential?> findByUsername(String username) =>
       _usernameCredentials.findByUsername(username);
 
+  /// Finds the username credential belonging to [userId], if present.
   @override
   Future<AuthPasswordCredential?> findUsernameForUser(String userId) =>
       _usernameCredentials.findUsernameForUser(userId);
 
+  /// Registers a username and its credential atomically.
+  ///
+  /// Conflicting user, email, or credential identifiers return a conflict
+  /// result rather than partially creating records.
   @override
   Future<AuthUsernameMutationResult> registerUsername(
     AuthUsernameRegistrationCommand command,
@@ -977,6 +1027,10 @@ class CloudflareD1AuthStore
         await findByUsername(credential.identifier) != null;
   }
 
+  /// Changes a username when the expected current value still matches.
+  ///
+  /// Concurrent changes and uniqueness conflicts are reported in the returned
+  /// mutation result.
   @override
   Future<AuthUsernameMutationResult> changeUsername(
     AuthUsernameChangeCommand command,
@@ -1140,6 +1194,10 @@ class CloudflareD1AuthStore
     );
   }
 
+  /// Removes a username credential only when another method remains.
+  ///
+  /// The mutation is guarded by the bound authentication-method inventory and
+  /// is fail closed when that inventory is incomplete.
   @override
   Future<AuthAuthenticationMethodMutationResult> removeUsernameIfSafe(
     AuthUsernameRemovalCommand command,
@@ -1327,26 +1385,47 @@ class CloudflareD1AuthStore
         : AuthAuthenticationMethodMutationResult.lastAuthenticationMethod;
   }
 
+  /// User records persisted in the configured D1 schema.
   @override
   late final AuthUserStore users;
+
+  /// Password and username credentials persisted in D1.
   @override
   late final AuthCredentialStore credentials;
+
+  /// OAuth provider accounts persisted in D1.
   @override
   late final AuthAccountStore accounts;
+
+  /// Session records persisted in D1.
   @override
   late final AuthSessionStore sessions;
+
+  /// OAuth state and challenge records persisted in D1.
   @override
   late final AuthOAuthChallengeStore oauthChallenges;
+
+  /// Password-reset token records persisted in D1.
   @override
   late final AuthPasswordResetTokenStore passwordResetTokens;
+
+  /// Per-user JWT version records used for token invalidation.
   @override
   late final AuthJwtVersionStore jwtVersions;
+
+  /// Verification-token records persisted in D1.
   @override
   late final AuthVerificationTokenStore verificationTokens;
+
+  /// Email-change token records persisted in D1.
   @override
   late final AuthEmailChangeTokenStore emailChangeTokens;
+
+  /// Device-authorization records persisted in D1.
   @override
   late final AuthDeviceAuthorizationStore deviceAuthorizations;
+
+  /// Email OTP records persisted in D1.
   @override
   late final AuthEmailOtpStore emailOtps;
 
@@ -1369,29 +1448,36 @@ class CloudflareD1AuthStore
 
   /// Digest-only managed-SCIM connection persistence in this D1 domain.
   late final CloudflareD1ScimConnectionStore scimConnectionStore;
+
+  /// The email OTP store exposed through the backend capability interface.
   @override
   AuthEmailOtpStore get emailOtpStore => emailOtps;
 
+  /// Issues a phone verification code through the D1 phone store.
   @override
   Future<AuthPhoneNumberIssueResult> issuePhoneNumberCode(
     AuthPhoneNumberIssueCodeCommand command,
   ) => phoneNumbers.issuePhoneNumberCode(command);
 
+  /// Verifies a phone code through the D1 phone store.
   @override
   Future<AuthPhoneNumberVerifyResult> verifyPhoneNumberCode(
     AuthPhoneNumberVerifyCodeCommand command,
   ) => phoneNumbers.verifyPhoneNumberCode(command);
 
+  /// Finds the identity associated with [phoneNumber].
   @override
   Future<AuthPhoneNumberIdentity?> findPhoneNumberIdentity(
     String phoneNumber,
   ) => phoneNumbers.findPhoneNumberIdentity(phoneNumber);
 
+  /// Finds the phone identity associated with [userId].
   @override
   Future<AuthPhoneNumberIdentity?> findPhoneNumberIdentityForUser(
     String userId,
   ) => phoneNumbers.findPhoneNumberIdentityForUser(userId);
 
+  /// Stores or replaces a digest-only magic-link record.
   @override
   Future<void> issueMagicLink(AuthMagicLinkIssueCommand command) async {
     final record = command.record;
@@ -1415,6 +1501,10 @@ class CloudflareD1AuthStore
     );
   }
 
+  /// Atomically consumes a magic link and creates or verifies its user.
+  ///
+  /// Invalid, expired, already-consumed, or unavailable users are represented
+  /// by the returned [AuthMagicLinkConsumeResult].
   @override
   Future<AuthMagicLinkConsumeResult> consumeMagicLink(
     AuthMagicLinkConsumeCommand command,
@@ -1507,10 +1597,12 @@ class CloudflareD1AuthStore
     );
   }
 
+  /// Stores an email OTP for later digest verification.
   @override
   Future<void> issueEmailOtp(AuthEmailOtpIssueCommand command) =>
       Future.sync(() => emailOtps.save(command.otp));
 
+  /// Verifies an email OTP digest and consumes the matching OTP.
   @override
   Future<AuthEmailOtpVerificationResult> verifyEmailOtp(
     AuthEmailOtpVerifyCommand command,
@@ -1523,6 +1615,7 @@ class CloudflareD1AuthStore
     ),
   );
 
+  /// Signs in, and optionally creates, a user using an email OTP.
   @override
   Future<AuthEmailOtpUserTransitionResult> signInWithEmailOtp(
     AuthEmailOtpSignInCommand command,
@@ -1534,6 +1627,7 @@ class CloudflareD1AuthStore
     candidate: command.disableSignUp ? null : command.candidate,
   );
 
+  /// Verifies the email address of an existing user using an OTP.
   @override
   Future<AuthEmailOtpUserTransitionResult> verifyUserEmailWithOtp(
     AuthEmailOtpVerifyUserCommand command,
@@ -1664,12 +1758,15 @@ class CloudflareD1AuthStore
   /// Digest-only, bounded API-key persistence in this D1 domain.
   late final CloudflareD1AuthApiKeyStore apiKeys;
 
+  /// Bounded WebAuthn challenge persistence in this D1 domain.
   @override
   late final CloudflareD1WebAuthnChallengeStore webAuthnChallenges;
 
+  /// Bounded WebAuthn authenticator persistence in this D1 domain.
   @override
   late final CloudflareD1WebAuthnAuthenticatorStore webAuthnAuthenticators;
 
+  /// Creates the deletion plan for this store's WebAuthn records.
   @override
   AuthUserDeletionPlan createWebAuthnDeletionPlan({
     required AuthUserDeletionDomain domain,
@@ -1700,7 +1797,10 @@ class CloudflareD1AuthStore
     );
   }
 
-  /// Applies all pending schema migrations.
+  /// Applies all pending schema migrations to this store's database.
+  ///
+  /// Migrations are versioned and safe to call repeatedly. The operation may
+  /// throw a [StateError] when the D1 binding reports a failed statement.
   Future<void> migrate() => schema.migrate(_database);
 }
 
@@ -1711,7 +1811,10 @@ String _anonymousCreateFingerprint(AuthAnonymousCreateAccountCommand command) =>
 final class CloudflareD1UserDeletionDomain implements AuthUserDeletionDomain {
   CloudflareD1UserDeletionDomain._(this.database, this.schema);
 
+  /// The D1 binding used for deletion batches.
   final CloudflareD1Database database;
+
+  /// The schema whose tables are included in the deletion domain.
   final CloudflareD1AuthSchema schema;
 }
 
@@ -1721,18 +1824,30 @@ final class CloudflareD1UserDeletionDomain implements AuthUserDeletionDomain {
 /// placeholders. The coordinator replaces it with its token/user guard and
 /// appends the guard parameters before preparing the batch.
 final class CloudflareD1UserDeletionStatement {
+  /// Creates a guarded deletion statement.
+  ///
+  /// [sql] must contain one trailing `{{guard}}` marker and no semicolon.
+  /// [parameters] supplies values for placeholders before that marker.
+  /// Throws an [ArgumentError] for malformed SQL.
   CloudflareD1UserDeletionStatement({
     required String sql,
     Iterable<Object?> parameters = const [],
   }) : sql = _validateGuardedSql(sql),
        parameters = List<Object?>.unmodifiable(parameters);
 
+  /// SQL containing the coordinator's `{{guard}}` placeholder.
   final String sql;
+
+  /// Values bound to the statement before the coordinator guard values.
   final List<Object?> parameters;
 }
 
 /// Immutable plugin-owned D1 deletion plan.
 final class CloudflareD1UserDeletionPlan implements AuthUserDeletionPlan {
+  /// Creates a plugin-owned deletion plan for [userId] and [namespace].
+  ///
+  /// Statements are copied into an unmodifiable list. The namespace and user
+  /// ID must be non-empty; namespaces are normalized to lowercase.
   CloudflareD1UserDeletionPlan({
     required this.domain,
     required String userId,
@@ -1744,15 +1859,19 @@ final class CloudflareD1UserDeletionPlan implements AuthUserDeletionPlan {
          statements,
        );
 
+  /// Deletion domain that owns the plan's statements.
   @override
   final CloudflareD1UserDeletionDomain domain;
 
+  /// User whose records the plan removes.
   @override
   final String userId;
 
+  /// Normalized plugin namespace represented by the plan.
   @override
   final String namespace;
 
+  /// Guarded statements that remove this namespace's user data.
   final List<CloudflareD1UserDeletionStatement> statements;
 }
 
@@ -1786,9 +1905,11 @@ final class CloudflareD1UserDeletionCoordinator
   bool _historicalUserDataNamespacesBound = false;
   bool _bound = false;
 
+  /// The D1 deletion domain accepted by this coordinator.
   @override
   final CloudflareD1UserDeletionDomain domain;
 
+  /// Binds the active plugin deletion contributors exactly once.
   void bind(Iterable<AuthUserDeletionPlanContributor> contributors) {
     if (_bound) {
       throw StateError('Auth deletion contributors are already bound.');
@@ -1811,6 +1932,10 @@ final class CloudflareD1UserDeletionCoordinator
     _bound = true;
   }
 
+  /// Records namespaces from removed plugins that still own user data.
+  ///
+  /// Deletion fails closed when a historical namespace has no active
+  /// contributor. This method must run after [bind].
   @override
   void bindHistoricalUserDeletionNamespaces(Iterable<String> namespaces) {
     if (!_bound) {
@@ -1827,11 +1952,13 @@ final class CloudflareD1UserDeletionCoordinator
     _historicalUserDataNamespacesBound = true;
   }
 
+  /// Namespaces that must be represented by a deletion plan.
   @override
   Set<String> get requiredUserDeletionNamespaces => Set<String>.unmodifiable({
     for (final contributor in _contributors) contributor.userDataNamespace,
   });
 
+  /// Builds the bound contributors' deletion plans for [user].
   @override
   Future<List<AuthUserDeletionPlan>> plansForUser(AuthUser user) async =>
       _plansForBoundUser(user);
@@ -1844,12 +1971,19 @@ final class CloudflareD1UserDeletionCoordinator
     ]);
   }
 
+  /// Deletes [userId] and its planned data in one guarded D1 batch.
+  ///
+  /// Returns `false` when the user does not exist. Throws when the deletion
+  /// topology is unbound, incomplete, or contains an invalid plan.
   @override
   Future<bool> deleteUser(
     String userId, {
     Iterable<AuthUserDeletionPlan>? plans,
   }) => _delete(userId: userId, plans: plans, confirmationToken: null);
 
+  /// Deletes a user after validating a confirmation token.
+  ///
+  /// Returns `false` for an empty, invalid, expired, or already-used token.
   @override
   Future<bool> confirmAndDeleteUser({
     required String userId,
@@ -2174,12 +2308,18 @@ final class CloudflareD1WebAuthnChallengeStore
   );
 
   final _D1 _sql;
+
+  /// Schema used to resolve this store's table.
   final CloudflareD1AuthSchema schema;
   final DateTime Function() _clock;
+
+  /// Maximum number of challenge records retained.
   final int maxRecords;
 
+  /// The table name used for challenge records.
   String get table => schema.table('webauthn_challenges');
 
+  /// Persists a challenge until it expires, subject to [maxRecords].
   @override
   Future<void> save(AuthWebAuthnChallenge challenge) async {
     _validateD1WebAuthnChallenge(challenge);
@@ -2223,6 +2363,10 @@ final class CloudflareD1WebAuthnChallengeStore
     }
   }
 
+  /// Atomically consumes a matching, unexpired WebAuthn challenge.
+  ///
+  /// Returns `null` when the digest, ceremony, relying party, origin, or
+  /// optional user binding does not match.
   @override
   Future<AuthWebAuthnChallenge?> consume({
     required String challengeHash,
@@ -2265,6 +2409,7 @@ final class CloudflareD1WebAuthnChallengeStore
     return row == null ? null : _decodeD1WebAuthnChallenge(row);
   }
 
+  /// Deletes all challenges currently owned by [userId].
   @override
   Future<void> deleteForUser(String userId) async {
     await _sql.run('DELETE FROM $table WHERE user_id = ?', [
@@ -2287,13 +2432,19 @@ final class CloudflareD1WebAuthnAuthenticatorStore
   );
 
   final _D1 _sql;
+
+  /// Schema used to resolve this store's table.
   final CloudflareD1AuthSchema schema;
   final DateTime Function() _clock;
+
+  /// Maximum number of authenticator records retained.
   final int maxRecords;
   final CloudflareD1AuthStore _root;
 
+  /// The table name used for authenticator records.
   String get table => schema.table('webauthn_authenticators');
 
+  /// Finds a passkey by its credential identifier.
   @override
   Future<WebAuthnAuthenticator?> findByCredentialId(String credentialId) =>
       _sql.first('SELECT * FROM $table WHERE credential_id = ?', [
@@ -2304,6 +2455,7 @@ final class CloudflareD1WebAuthnAuthenticatorStore
         ),
       ], _decodeD1WebAuthnAuthenticator);
 
+  /// Lists a user's passkeys in deterministic creation order.
   @override
   Future<List<WebAuthnAuthenticator>> listForUser(String userId) => _sql.all(
     'SELECT * FROM $table WHERE user_id = ? ORDER BY created_at, credential_id',
@@ -2311,6 +2463,7 @@ final class CloudflareD1WebAuthnAuthenticatorStore
     _decodeD1WebAuthnAuthenticator,
   );
 
+  /// Creates a passkey, enforcing the store capacity and deletion receipts.
   @override
   Future<WebAuthnAuthenticator> create(
     WebAuthnAuthenticator authenticator,
@@ -2340,6 +2493,9 @@ final class CloudflareD1WebAuthnAuthenticatorStore
     return authenticator;
   }
 
+  /// Advances a passkey counter only when [expectedCounter] still matches.
+  ///
+  /// Returns `null` for stale, decreasing, or out-of-range counters.
   @override
   Future<WebAuthnAuthenticator?> updateUsage({
     required String credentialId,
@@ -2376,6 +2532,7 @@ final class CloudflareD1WebAuthnAuthenticatorStore
     );
   }
 
+  /// Deletes one passkey belonging to [userId].
   @override
   Future<bool> deleteForUser(String userId, String credentialId) async {
     final result = await _sql
@@ -2390,6 +2547,7 @@ final class CloudflareD1WebAuthnAuthenticatorStore
     return (result.meta?.changes ?? 0) == 1;
   }
 
+  /// Renames a passkey and returns its updated record, if it exists.
   @override
   Future<WebAuthnAuthenticator?> renameForUser(
     String userId,
@@ -2410,6 +2568,7 @@ final class CloudflareD1WebAuthnAuthenticatorStore
     _decodeD1WebAuthnAuthenticator,
   );
 
+  /// Removes a passkey only when another authentication method remains.
   @override
   Future<AuthAuthenticationMethodMutationResult> removeCredentialIfSafe(
     AuthWebAuthnCredentialRemovalCommand command,
@@ -2547,14 +2706,22 @@ final class CloudflareD1AuthApiKeyStore
   );
 
   final _D1 _sql;
+
+  /// Schema used to resolve this store's table.
   final CloudflareD1AuthSchema schema;
+
+  /// Deletion domain shared with the root auth store.
   final CloudflareD1UserDeletionDomain domain;
   final DateTime Function() _clock;
+
+  /// Maximum number of API-key records retained.
   final int maxRecords;
   final CloudflareD1AuthStore _root;
 
+  /// The table name used for API-key records.
   String get table => schema.table('api_keys');
 
+  /// Creates the guarded deletion plan for [user]'s API keys.
   @override
   AuthUserDeletionPlan createDeletionPlan({
     required AuthUserDeletionDomain domain,
@@ -2577,6 +2744,7 @@ final class CloudflareD1AuthApiKeyStore
     );
   }
 
+  /// Persists an API key record while enforcing [maxRecords].
   @override
   Future<AuthApiKeyRecord> create(AuthApiKeyRecord record) async {
     _validateD1ApiKeyRecord(record);
@@ -2605,6 +2773,7 @@ final class CloudflareD1AuthApiKeyStore
     return record;
   }
 
+  /// Finds an API key by its opaque identifier.
   @override
   Future<AuthApiKeyRecord?> findById(String id) => _sql.first(
     'SELECT * FROM $table WHERE id = ?',
@@ -2612,6 +2781,7 @@ final class CloudflareD1AuthApiKeyStore
     _decodeApiKeyRecord,
   );
 
+  /// Lists a user's API keys in creation order.
   @override
   Future<List<AuthApiKeyRecord>> listForUser(String userId) => _sql.all(
     'SELECT * FROM $table WHERE user_id = ? ORDER BY created_at, id',
@@ -2619,6 +2789,9 @@ final class CloudflareD1AuthApiKeyStore
     _decodeApiKeyRecord,
   );
 
+  /// Updates usage metadata when an API key is still active.
+  ///
+  /// Returns `null` for unknown, revoked, or expired keys.
   @override
   Future<AuthApiKeyRecord?> touchIfActive(String id, DateTime lastUsedAt) =>
       _sql.first(
@@ -2635,6 +2808,7 @@ final class CloudflareD1AuthApiKeyStore
         _decodeApiKeyRecord,
       );
 
+  /// Revokes one API key owned by [userId].
   @override
   Future<AuthApiKeyRecord?> revokeForUser(
     String userId,
@@ -2656,6 +2830,7 @@ final class CloudflareD1AuthApiKeyStore
     );
   }
 
+  /// Revokes all keys owned by [userId] and returns the affected count.
   @override
   Future<int> revokeAllForUser(String userId, {DateTime? revokedAt}) async {
     final current = (revokedAt ?? _clock()).toUtc();
@@ -2671,6 +2846,10 @@ final class CloudflareD1AuthApiKeyStore
     return result.meta?.changes ?? 0;
   }
 
+  /// Atomically replaces one active API key with [replacement].
+  ///
+  /// Returns `null` when the current key is unavailable or the replacement
+  /// would violate ownership, lifetime, or capacity constraints.
   @override
   Future<AuthApiKeyRecord?> rotateForUser({
     required String userId,
@@ -2751,6 +2930,7 @@ final class CloudflareD1AuthApiKeyStore
     return replacement;
   }
 
+  /// Deletes all API keys owned by [userId].
   @override
   Future<void> deleteForUser(String userId) async {
     await _sql.run('DELETE FROM $table WHERE user_id = ?', [
@@ -2758,6 +2938,7 @@ final class CloudflareD1AuthApiKeyStore
     ]);
   }
 
+  /// Revokes a primary API key only when another method remains.
   @override
   Future<AuthAuthenticationMethodMutationResult> revokePrimaryKeyIfSafe(
     AuthApiKeyPrimaryRevocationCommand command,
@@ -2907,14 +3088,21 @@ final class CloudflareD1OAuthClientStore
   CloudflareD1OAuthClientStore._(this._sql, this.schema, this.domain);
 
   final _D1 _sql;
+
+  /// Schema used to resolve OAuth tables.
   final CloudflareD1AuthSchema schema;
+
+  /// Deletion domain shared with the root auth store.
   final CloudflareD1UserDeletionDomain domain;
 
+  /// The table name used for OAuth clients.
   String get table => schema.table('oauth_clients');
 
+  /// Deletion domain required by OAuth provider persistence.
   @override
   AuthUserDeletionDomain get oauthProviderPersistenceDomain => domain;
 
+  /// Finds an OAuth client by [clientId].
   @override
   Future<OAuthClient?> findById(String clientId) => _sql.first(
     'SELECT * FROM $table WHERE client_id = ?',
@@ -2922,6 +3110,7 @@ final class CloudflareD1OAuthClientStore
     _decodeOAuthClient,
   );
 
+  /// Lists all OAuth clients in client-ID order.
   @override
   Future<List<OAuthClient>> listAll() => _sql.all(
     'SELECT * FROM $table ORDER BY client_id',
@@ -2929,6 +3118,7 @@ final class CloudflareD1OAuthClientStore
     _decodeOAuthClient,
   );
 
+  /// Persists an OAuth client and its hashed secret.
   @override
   Future<OAuthClient> create(OAuthClient client) async {
     _validateOAuthClient(client);
@@ -2947,6 +3137,10 @@ final class CloudflareD1OAuthClientStore
     return client;
   }
 
+  /// Updates an existing OAuth client.
+  ///
+  /// Throws a [StateError] when the client does not exist or the D1 write
+  /// fails validation.
   @override
   Future<OAuthClient> update(OAuthClient client) async {
     _validateOAuthClient(client);
@@ -2964,6 +3158,7 @@ final class CloudflareD1OAuthClientStore
     return client;
   }
 
+  /// Deletes an OAuth client and its authorization artifacts.
   @override
   Future<void> delete(String clientId) async {
     final id = clientId.trim();
@@ -2986,6 +3181,7 @@ final class CloudflareD1OAuthClientStore
     ]);
   }
 
+  /// Verifies [secret] against the stored hash for [clientId].
   @override
   Future<bool> validateSecret(String clientId, String secret) async {
     if (secret.isEmpty) return false;
@@ -3009,12 +3205,18 @@ final class CloudflareD1OAuthAuthorizationCodeStore
   );
 
   final _D1 _sql;
+
+  /// Schema used to resolve the authorization-code table.
   final CloudflareD1AuthSchema schema;
+
+  /// Deletion domain shared with the root auth store.
   final CloudflareD1UserDeletionDomain domain;
   final DateTime Function() clock;
 
+  /// The table name used for authorization codes.
   String get table => schema.table('oauth_authorization_codes');
 
+  /// Persists a digest-only OAuth authorization code.
   @override
   Future<OAuthAuthorizationCode> create(OAuthAuthorizationCode code) async {
     _validateD1OAuthAuthorizationCode(code);
@@ -3033,6 +3235,10 @@ final class CloudflareD1OAuthAuthorizationCodeStore
     return code;
   }
 
+  /// Atomically consumes and validates an authorization code.
+  ///
+  /// Returns `null` when the code is expired, already consumed, or does not
+  /// match the client, redirect URI, or PKCE verifier.
   @override
   Future<OAuthAuthorizationCode?> consume({
     required String codeHash,
@@ -3067,6 +3273,7 @@ final class CloudflareD1OAuthAuthorizationCodeStore
         : null;
   }
 
+  /// Deletes expired authorization codes and returns the affected count.
   @override
   Future<int> deleteExpired({DateTime? now}) async => _oauthChanges(
     await _sql.run('DELETE FROM $table WHERE expires_at <= ?', [
@@ -3074,6 +3281,7 @@ final class CloudflareD1OAuthAuthorizationCodeStore
     ]),
   );
 
+  /// Deletes authorization codes belonging to [userId].
   @override
   Future<void> deleteForUser(String userId) async {
     await _sql.run('DELETE FROM $table WHERE user_id = ?', [userId.trim()]);
@@ -3090,12 +3298,18 @@ final class CloudflareD1OAuthAccessTokenStore implements OAuthAccessTokenStore {
   );
 
   final _D1 _sql;
+
+  /// Schema used to resolve the access-token table.
   final CloudflareD1AuthSchema schema;
+
+  /// Deletion domain shared with the root auth store.
   final CloudflareD1UserDeletionDomain domain;
   final DateTime Function() clock;
 
+  /// The table name used for access and refresh tokens.
   String get table => schema.table('oauth_access_tokens');
 
+  /// Persists a digest-only OAuth access token.
   @override
   Future<void> save(OAuthAccessToken token) async {
     _validateD1OAuthAccessToken(token);
@@ -3113,12 +3327,14 @@ final class CloudflareD1OAuthAccessTokenStore implements OAuthAccessTokenStore {
     }
   }
 
+  /// Finds an access token by hashing [token] before lookup.
   @override
   Future<OAuthAccessToken?> findByToken(String token) {
     if (token.trim().isEmpty) return Future.value(null);
     return _findByDigest('token_hash', hashOpaqueToken(token));
   }
 
+  /// Finds an access token by hashing [refreshToken] before lookup.
   @override
   Future<OAuthAccessToken?> findByRefreshToken(String refreshToken) {
     if (refreshToken.trim().isEmpty) return Future.value(null);
@@ -3130,6 +3346,10 @@ final class CloudflareD1OAuthAccessTokenStore implements OAuthAccessTokenStore {
         digest,
       ], _decodeOAuthAccessToken);
 
+  /// Atomically rotates a refresh token and updates its use count.
+  ///
+  /// Returns `null` when the expected digest, owner, expiry, or use limit does
+  /// not match.
   @override
   Future<OAuthAccessToken?> rotateRefreshToken({
     required String refreshToken,
@@ -3187,6 +3407,7 @@ final class CloudflareD1OAuthAccessTokenStore implements OAuthAccessTokenStore {
     }
   }
 
+  /// Revokes the access token represented by [token].
   @override
   Future<void> revoke(String token) async {
     if (token.trim().isEmpty) return;
@@ -3195,16 +3416,19 @@ final class CloudflareD1OAuthAccessTokenStore implements OAuthAccessTokenStore {
     ]);
   }
 
+  /// Revokes all access tokens belonging to [userId].
   @override
   Future<int> revokeAllForUser(String userId) async => _oauthChanges(
     await _sql.run('DELETE FROM $table WHERE user_id = ?', [userId.trim()]),
   );
 
+  /// Revokes all access tokens belonging to [clientId].
   @override
   Future<int> revokeAllForClient(String clientId) async => _oauthChanges(
     await _sql.run('DELETE FROM $table WHERE client_id = ?', [clientId.trim()]),
   );
 
+  /// Deletes tokens whose access and refresh lifetimes have both expired.
   @override
   Future<int> deleteExpired({DateTime? now}) async {
     final current = _date((now ?? clock()).toUtc());
@@ -3241,21 +3465,32 @@ final class CloudflareD1OAuthAuthorizationCodeExchangeStore
   );
 
   final _D1 _sql;
+
+  /// Schema used to resolve OAuth exchange tables.
   final CloudflareD1AuthSchema schema;
+
+  /// Deletion domain shared with the root auth store.
   final CloudflareD1UserDeletionDomain domain;
 
+  /// Authorization-code store used by [prepare].
   @override
   final CloudflareD1OAuthAuthorizationCodeStore authorizationCodeStore;
 
+  /// Access-token store used by [commit].
   @override
   final CloudflareD1OAuthAccessTokenStore accessTokenStore;
 
+  /// Deletion domain required by OAuth provider persistence.
   @override
   AuthUserDeletionDomain get oauthProviderPersistenceDomain => domain;
 
+  /// Table containing authorization codes.
   String get codes => schema.table('oauth_authorization_codes');
+
+  /// Table containing access and refresh tokens.
   String get tokens => schema.table('oauth_access_tokens');
 
+  /// Creates the guarded deletion plan for OAuth records belonging to [user].
   @override
   AuthUserDeletionPlan createDeletionPlan({
     required AuthUserDeletionDomain domain,
@@ -3282,6 +3517,7 @@ final class CloudflareD1OAuthAuthorizationCodeExchangeStore
     );
   }
 
+  /// Reserves and validates an authorization code for atomic exchange.
   @override
   Future<OAuthAuthorizationCodePreparation> prepare(
     OAuthAuthorizationCodeExchangeRequest request,
@@ -3316,6 +3552,10 @@ final class CloudflareD1OAuthAuthorizationCodeExchangeStore
     return OAuthAuthorizationCodePreparation.ready(code);
   }
 
+  /// Commits a prepared code and token in one D1 batch.
+  ///
+  /// Repeated commits report whether the grant was already committed rather
+  /// than issuing a second access token.
   @override
   Future<OAuthAuthorizationCodeExchangeResult> commit({
     required OAuthAuthorizationCodeExchangeRequest request,
@@ -3403,14 +3643,21 @@ final class CloudflareD1ScimConnectionStore
   }
 
   final _D1 _sql;
+
+  /// Schema used to resolve managed-SCIM tables.
   final CloudflareD1AuthSchema schema;
+
+  /// Deletion domain shared with the root auth store.
   final CloudflareD1UserDeletionDomain domain;
+
+  /// Retention period for idempotency replay records.
   final Duration replayTtl;
 
   String get _connections => schema.table('scim_connections');
   String get _credentials => schema.table('scim_credentials');
   String get _replays => schema.table('scim_replays');
 
+  /// Creates the guarded deletion plan for [user]'s SCIM connections.
   @override
   AuthUserDeletionPlan createDeletionPlan({
     required AuthUserDeletionDomain domain,
@@ -3435,6 +3682,10 @@ final class CloudflareD1ScimConnectionStore
     );
   }
 
+  /// Creates a managed SCIM connection and its initial credential atomically.
+  ///
+  /// Idempotent retries replay the committed result for the same binding and
+  /// operation identity.
   @override
   Future<AuthScimStoredConnectionCreation> createConnection(
     AuthScimCreateConnectionTransaction transaction,
@@ -3510,6 +3761,7 @@ final class CloudflareD1ScimConnectionStore
     );
   }
 
+  /// Lists connections visible in the query's tenant and organization.
   @override
   Future<AuthScimConnectionPage> listConnections(
     AuthScimConnectionCatalogQuery query,
@@ -3541,6 +3793,7 @@ final class CloudflareD1ScimConnectionStore
     );
   }
 
+  /// Finds a connection within [binding]'s tenant and organization.
   @override
   Future<AuthScimManagedConnection?> findConnection(
     AuthScimConnectionBinding binding,
@@ -3552,6 +3805,10 @@ final class CloudflareD1ScimConnectionStore
     _decodeScimConnection,
   );
 
+  /// Updates a connection using optimistic concurrency and scope narrowing.
+  ///
+  /// Returns `null` when the connection no longer exists and throws a conflict
+  /// result when its expected version or binding is stale.
   @override
   Future<AuthScimManagedConnection?> updateConnection(
     AuthScimUpdateConnectionTransaction transaction,
@@ -3618,6 +3875,7 @@ final class CloudflareD1ScimConnectionStore
     return findConnection(binding, next.id);
   }
 
+  /// Disables a connection and revokes its active credentials.
   @override
   Future<AuthScimManagedConnection?> disableConnection(
     AuthScimConnectionBinding binding,
@@ -3662,6 +3920,9 @@ final class CloudflareD1ScimConnectionStore
     return findConnection(binding, id);
   }
 
+  /// Issues a managed SCIM credential for an active connection.
+  ///
+  /// Repeated idempotent requests replay the original credential metadata.
   @override
   Future<AuthScimStoredCredentialIssuance> issueCredential(
     AuthScimIssueCredentialTransaction transaction,
@@ -3750,6 +4011,10 @@ final class CloudflareD1ScimConnectionStore
     );
   }
 
+  /// Rotates a SCIM credential and revokes its predecessor atomically.
+  ///
+  /// Returns `null` when the predecessor is unavailable or the guarded batch
+  /// made no change.
   @override
   Future<AuthScimStoredCredentialIssuance?> rotateCredential(
     AuthScimRotateCredentialTransaction transaction,
@@ -3894,6 +4159,7 @@ final class CloudflareD1ScimConnectionStore
     }
   }
 
+  /// Revokes a credential within a tenant and organization binding.
   @override
   Future<AuthScimCredentialRecord?> revokeCredential(
     AuthScimConnectionBinding binding,
@@ -3932,6 +4198,7 @@ final class CloudflareD1ScimConnectionStore
     );
   }
 
+  /// Lists public credential metadata for a connection.
   @override
   Future<AuthScimCredentialPage> listCredentials(
     AuthScimCredentialCatalogQuery query, {
@@ -3970,6 +4237,10 @@ final class CloudflareD1ScimConnectionStore
     );
   }
 
+  /// Resolves an active credential digest and updates its last-use time.
+  ///
+  /// Returns `null` for malformed, expired, revoked, disabled, or scope-invalid
+  /// credentials.
   @override
   Future<AuthScimConnectionIdentity?> resolveCredentialDigest(
     String digest, {
@@ -4033,6 +4304,7 @@ final class CloudflareD1ScimConnectionStore
     );
   }
 
+  /// Deletes managed SCIM connections owned by [subjectId].
   @override
   Future<void> deleteForSubject(String subjectId) async {
     await _sql.run('DELETE FROM $_connections WHERE subject_id = ?', [
@@ -4040,6 +4312,7 @@ final class CloudflareD1ScimConnectionStore
     ]);
   }
 
+  /// Deletes managed SCIM connections belonging to [tenantId].
   @override
   Future<void> deleteForTenant(String tenantId) async {
     await _sql.run('DELETE FROM $_connections WHERE tenant_id = ?', [
@@ -5226,8 +5499,12 @@ final class CloudflareD1PhoneNumberStore implements AuthPhoneNumberBackend {
   );
 
   final _D1 _sql;
+
+  /// Schema used to resolve phone-authentication tables.
   final CloudflareD1AuthSchema schema;
   final DateTime Function() clock;
+
+  /// Maximum number of active phone verifications retained.
   final int maxVerifications;
 
   String get _verifications => schema.table('phone_verifications');
@@ -5236,6 +5513,7 @@ final class CloudflareD1PhoneNumberStore implements AuthPhoneNumberBackend {
   String get _users => schema.table('users');
   String get _deletionReceipts => schema.table('deletion_receipts');
 
+  /// Stores a bounded, digest-only phone verification challenge.
   @override
   Future<AuthPhoneNumberIssueResult> issuePhoneNumberCode(
     AuthPhoneNumberIssueCodeCommand command,
@@ -5363,6 +5641,7 @@ final class CloudflareD1PhoneNumberStore implements AuthPhoneNumberBackend {
           );
   }
 
+  /// Atomically verifies and consumes a phone verification challenge.
   @override
   Future<AuthPhoneNumberVerifyResult> verifyPhoneNumberCode(
     AuthPhoneNumberVerifyCodeCommand command,
@@ -5574,6 +5853,7 @@ final class CloudflareD1PhoneNumberStore implements AuthPhoneNumberBackend {
     );
   }
 
+  /// Finds the verified identity for [phoneNumber].
   @override
   Future<AuthPhoneNumberIdentity?> findPhoneNumberIdentity(String phoneNumber) {
     final sql = _sql;
@@ -5582,6 +5862,7 @@ final class CloudflareD1PhoneNumberStore implements AuthPhoneNumberBackend {
     ], _decodePhoneIdentity);
   }
 
+  /// Finds the verified phone identity belonging to [userId].
   @override
   Future<AuthPhoneNumberIdentity?> findPhoneNumberIdentityForUser(
     String userId,

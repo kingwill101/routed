@@ -1,29 +1,41 @@
 import 'package:routed_node/cloudflare.dart';
 
-/// One immutable Cloudflare D1 auth schema migration.
+/// Describes one Cloudflare D1 auth schema migration.
 final class CloudflareD1AuthMigration {
+  /// Creates a migration with its schema [version] and SQL [statements].
   const CloudflareD1AuthMigration({
     required this.version,
     required this.statements,
   });
 
+  /// The monotonically increasing schema version recorded after application.
   final int version;
+
+  /// SQL statements applied in order for this migration.
   final List<String> statements;
 }
 
 /// Typed schema configuration for [CloudflareD1AuthStore].
 final class CloudflareD1AuthSchema {
+  /// Creates a schema that prefixes its tables with [tablePrefix].
   const CloudflareD1AuthSchema({this.tablePrefix = 'routed_auth'});
 
   /// Prefix applied to every table owned by this adapter.
   ///
   /// Prefixes make deterministic and live conformance fixtures independently
-  /// disposable without sharing rows. Only ASCII letters, digits, and
-  /// underscores are accepted because SQLite cannot bind identifiers.
+  /// disposable without sharing rows. The prefix must start with an ASCII
+  /// letter and contain only letters, digits, and underscores because SQLite
+  /// cannot bind identifiers.
   final String tablePrefix;
 
+  /// The newest migration version defined by this package.
   static const int currentVersion = 11;
 
+  /// Returns the fully qualified table name for [suffix].
+  ///
+  /// Throws an [ArgumentError] when either the configured prefix or [suffix]
+  /// is not a valid SQL identifier. Identifiers are validated rather than
+  /// bound as parameters because D1 only binds values.
   String table(String suffix) {
     final prefix = tablePrefix.trim();
     final identifier = RegExp(r'^[A-Za-z][A-Za-z0-9_]*$');
@@ -44,6 +56,10 @@ final class CloudflareD1AuthSchema {
     return '${prefix}_$suffix';
   }
 
+  /// The ordered migrations required to bring a database to [currentVersion].
+  ///
+  /// Returns a newly created list on each access. Mutating the list or its
+  /// statement lists does not change future migration results.
   List<CloudflareD1AuthMigration> get migrations => [
     CloudflareD1AuthMigration(version: 1, statements: _versionOne),
     CloudflareD1AuthMigration(version: 2, statements: _versionTwo),
@@ -487,37 +503,75 @@ final class CloudflareD1AuthSchema {
         'Creating D1 auth migration table failed: ${bootstrap.error}',
       );
     }
-    final appliedResult = await database
-        .prepare('SELECT version FROM $migrationTable')
-        .all<int>(decode: (row) => (row['version'] as num).toInt());
-    if (!appliedResult.success) {
-      throw StateError(
-        'Reading D1 auth migrations failed: ${appliedResult.error}',
-      );
-    }
-    final applied = appliedResult.results.toSet();
     for (final migration in migrations) {
-      if (applied.contains(migration.version)) continue;
-      final statements = <CloudflareD1PreparedStatement>[
-        for (final sql in migration.statements) database.prepare(sql),
-        database
-            .prepare(
-              'INSERT OR IGNORE INTO $migrationTable '
-              '(version, applied_at) VALUES (?, ?)',
-            )
-            .bind([
-              migration.version,
-              DateTime.now().toUtc().toIso8601String(),
-            ]),
-      ];
-      final results = await database.batch<Object?>(statements);
-      final failed = results.where((result) => !result.success).firstOrNull;
-      if (failed != null) {
-        throw StateError(
-          'D1 auth migration ${migration.version} failed: ${failed.error}',
-        );
+      Object? lastError;
+      StackTrace? lastStack;
+      for (var attempt = 0; attempt < 3; attempt++) {
+        final applied = await _readAppliedVersions(database, migrationTable);
+        if (applied.contains(migration.version)) break;
+
+        try {
+          final statements = <CloudflareD1PreparedStatement>[
+            for (final sql in migration.statements) database.prepare(sql),
+            database
+                .prepare(
+                  'INSERT OR IGNORE INTO $migrationTable '
+                  '(version, applied_at) VALUES (?, ?)',
+                )
+                .bind([
+                  migration.version,
+                  DateTime.now().toUtc().toIso8601String(),
+                ]),
+          ];
+          final results = await database.batch<Object?>(statements);
+          final failed = results.where((result) => !result.success).firstOrNull;
+          if (failed == null) break;
+          lastError = StateError(
+            'D1 auth migration ${migration.version} failed: ${failed.error}',
+          );
+          lastStack = StackTrace.current;
+        } catch (error, stackTrace) {
+          lastError = error;
+          lastStack = stackTrace;
+        }
+
+        // D1 serializes batches, but two Worker isolates can both observe a
+        // missing version before one of them commits it. A losing batch may
+        // report a duplicate-column/constraint failure even though the
+        // migration has completed successfully. Re-read the marker before
+        // retrying so that startup is safe under concurrent initialization.
+        try {
+          final applied = await _readAppliedVersions(database, migrationTable);
+          if (applied.contains(migration.version)) break;
+        } catch (error, stackTrace) {
+          lastError = error;
+          lastStack = stackTrace;
+        }
+        if (attempt < 2) {
+          await Future<void>.delayed(
+            Duration(milliseconds: 10 * (attempt + 1)),
+          );
+        }
+      }
+
+      final applied = await _readAppliedVersions(database, migrationTable);
+      if (!applied.contains(migration.version) && lastError != null) {
+        Error.throwWithStackTrace(lastError, lastStack ?? StackTrace.current);
       }
     }
+  }
+
+  Future<Set<int>> _readAppliedVersions(
+    CloudflareD1Database database,
+    String migrationTable,
+  ) async {
+    final result = await database
+        .prepare('SELECT version FROM $migrationTable')
+        .all<int>(decode: (row) => (row['version'] as num).toInt());
+    if (!result.success) {
+      throw StateError('Reading D1 auth migrations failed: ${result.error}');
+    }
+    return result.results.toSet();
   }
 
   /// Drops every table owned by this schema prefix.

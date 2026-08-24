@@ -1,3 +1,10 @@
+## Unreleased
+
+- Re-read migration markers and retry transient concurrent-startup failures so
+  multiple Worker isolates do not fail permanently on the same migration.
+- Keep request throttling in the built-in `server_rate_limit` and Routed
+  adapter layers instead of adding a Cloudflare-specific D1 rate-limit schema.
+
 ## 0.1.1
 
 - Keep WebAuthn counter validation within JavaScript's exact integer range so

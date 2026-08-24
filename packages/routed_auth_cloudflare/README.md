@@ -263,15 +263,56 @@ inject a failure at every statement in each consume batch to prove rollback.
 Email delivery and Routed session/cookie issuance remain postcommit host
 boundaries and are not represented as D1 transactions.
 
+Rate limiting remains an application concern. Use Routed's built-in adapter
+with the existing `server_rate_limit` service rather than coupling this D1
+auth adapter to a second persistence schema:
+
+```dart
+final backend = CacheRateLimiterBackend(
+  repository: RepositoryImpl(ArrayStore(), 'rate-limit', ''),
+);
+final service = RateLimitService(
+  compileRateLimitPolicies(
+    specs: const [
+      RateLimitPolicySpec(
+        name: 'auth-ip',
+        match: '/auth/**',
+        method: null,
+        strategy: RateLimitStrategy.slidingWindow,
+        capacity: 30,
+        interval: Duration.zero,
+        window: Duration(minutes: 1),
+        period: Duration.zero,
+        burstMultiplier: null,
+        key: RateLimitKeySpec.ip(),
+      ),
+    ],
+    backend: backend,
+    defaultFailover: RateLimitFailoverMode.block,
+  ),
+);
+
+final deployment = AuthDeploymentPresets.secureSessionProduction<EngineContext>(
+  rateLimiter: RoutedAuthRateLimiter(service),
+  // ... store, providers, and boundary
+);
+```
+
+`ArrayStore` is suitable for tests and a single process/isolate. Applications
+that need a shared limit should provide a shared `Repository` to the same
+built-in `CacheRateLimiterBackend`; this package does not silently turn the D1
+auth store into a rate-limit store.
+
 The independent
 [deployed Worker auth harness](tool/deployed_worker/README.md) verifies Routed's
 session, JWT, plugin, external-provider, and browser-shaped WebAuthn contracts
 inside an already-deployed Cloudflare Worker. It is also opt-in and does not
 create, update, or delete Cloudflare resources.
 
-The full suite was run against a temporary Worker on 2026-08-21. All five
-suites passed, and the Worker plus its conformance secret were deleted after
-the run.
+The full suite was run against a temporary Worker on 2026-08-21. The Worker
+and its conformance secret were deleted after the run. The external-provider
+browser-binding case uses a distinct framework-session cookie; the separate
+auxiliary OAuth state-cookie fallback is covered by Routed's route tests.
 
 Cloudflare D1 exposes atomic statement batches, but not a transaction that can
 span the arbitrary callback required by `AuthAccountDeletionStore`. The
