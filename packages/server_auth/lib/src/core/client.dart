@@ -15,6 +15,7 @@ import 'plugin.dart';
 /// attributes such as `HttpOnly`, `Path`, and `SameSite` are server instructions
 /// and are not sent back as request data.
 class AuthClientCookie {
+  /// Creates a cookie value managed by an [AuthClientCookieStore].
   const AuthClientCookie({
     required this.name,
     required this.value,
@@ -23,14 +24,25 @@ class AuthClientCookie {
     this.secure = false,
   });
 
+  /// Cookie name.
   final String name;
+
+  /// Cookie value.
   final String value;
+
+  /// Absolute expiry supplied by the server, if present.
   final DateTime? expires;
+
+  /// Server-supplied relative lifetime, if present.
   final int? maxAge;
+
+  /// Whether the cookie must only be sent over HTTPS.
   final bool secure;
 
+  /// Whether this cookie instructs the client to remove its stored value.
   bool get isDeletion => (maxAge != null && maxAge! <= 0) || isExpired;
 
+  /// Whether the cookie's absolute expiry has passed.
   bool get isExpired =>
       expires != null && !expires!.isAfter(DateTime.now().toUtc());
 
@@ -93,13 +105,18 @@ class AuthClientCookie {
 /// clients. The default [InMemoryAuthClientCookieStore] is useful for tests and
 /// short-lived clients. It does not write cookies to disk.
 abstract interface class AuthClientCookieStore {
+  /// Loads the cookies currently available to the client.
   FutureOr<Iterable<AuthClientCookie>> load();
 
+  /// Persists or removes [cookie] according to its deletion metadata.
   FutureOr<void> save(AuthClientCookie cookie);
 }
 
 /// A process-local cookie store for tests and short-lived clients.
 class InMemoryAuthClientCookieStore implements AuthClientCookieStore {
+  /// Creates an empty process-local cookie store.
+  InMemoryAuthClientCookieStore();
+
   final Map<String, AuthClientCookie> _cookies = <String, AuthClientCookie>{};
 
   @override
@@ -120,16 +137,23 @@ class InMemoryAuthClientCookieStore implements AuthClientCookieStore {
 
 /// Public provider metadata returned by `/auth/providers`.
 class AuthClientProvider {
+  /// Creates public provider metadata returned by the auth server.
   const AuthClientProvider({
     required this.id,
     required this.name,
     required this.type,
   });
 
+  /// Stable provider identifier used in auth routes.
   final String id;
+
+  /// Human-readable provider name.
   final String name;
+
+  /// Provider category, such as `oauth` or `credentials`.
   final String type;
 
+  /// Decodes provider metadata from a JSON object.
   factory AuthClientProvider.fromJson(Map<String, dynamic> json) {
     final id = json['id']?.toString().trim() ?? '';
     final name = json['name']?.toString().trim() ?? '';
@@ -143,6 +167,7 @@ class AuthClientProvider {
 
 /// The result of an auth callback that may return a session or redirect.
 class AuthClientAuthResult {
+  /// Creates the result of an auth callback.
   const AuthClientAuthResult({
     this.session,
     this.redirectUrl,
@@ -150,21 +175,31 @@ class AuthClientAuthResult {
     this.email,
   });
 
+  /// Session returned directly by the callback, if any.
   final AuthSession? session;
+
+  /// Redirect returned by the callback, if the host requires navigation.
   final Uri? redirectUrl;
+
+  /// Provider-specific status returned without a session.
   final String? status;
+
+  /// Email associated with the callback, when returned by the server.
   final String? email;
 }
 
 /// A successful email sign-in request.
 class AuthClientVerificationSent {
+  /// Creates the result of a successful email sign-in request.
   const AuthClientVerificationSent({required this.email});
 
+  /// Email address to which the verification message was sent.
   final String email;
 }
 
 /// A server-side session returned by the session-management API.
 class AuthClientSession {
+  /// Creates server-side session metadata.
   const AuthClientSession({
     required this.id,
     required this.userId,
@@ -179,18 +214,40 @@ class AuthClientSession {
     this.userAgent,
   });
 
+  /// Public session identifier.
   final String id;
+
+  /// Identifier of the user who owns the session.
   final String userId;
+
+  /// Time at which the session was created.
   final DateTime createdAt;
+
+  /// Time at which the session expires.
   final DateTime expiresAt;
+
+  /// Time at which the session was most recently used.
   final DateTime lastUsedAt;
+
+  /// Time at which the session was revoked, if it was revoked.
   final DateTime? revokedAt;
+
+  /// IP address recorded for the session, when available.
   final String? ipAddress;
+
+  /// User agent recorded for the session, when available.
   final String? userAgent;
+
+  /// Authentication method that created the session.
   final String authenticationMethod;
+
+  /// Whether this is the session represented by the current client cookie.
   final bool isCurrent;
+
+  /// Whether the server considers the session active.
   final bool active;
 
+  /// Decodes session metadata from a JSON object.
   factory AuthClientSession.fromJson(Map<String, dynamic> json) {
     return AuthClientSession(
       id: _requiredString(json, 'id'),
@@ -210,6 +267,7 @@ class AuthClientSession {
 
 /// Public API-key metadata returned by the auth API.
 final class AuthClientApiKey {
+  /// Creates public API-key metadata.
   const AuthClientApiKey({
     required this.id,
     required this.userId,
@@ -224,18 +282,40 @@ final class AuthClientApiKey {
     this.revokedAt,
   });
 
+  /// Public API-key identifier.
   final String id;
+
+  /// Identifier of the user who owns the key.
   final String userId;
+
+  /// Human-readable key name.
   final String name;
+
+  /// Non-secret prefix used to identify the key in logs and interfaces.
   final String keyPrefix;
+
+  /// Permissions granted to the key.
   final List<String> scopes;
+
+  /// Time at which the key was created.
   final DateTime createdAt;
+
+  /// Time at which the key metadata was last changed.
   final DateTime updatedAt;
+
+  /// Time at which the key expires, if configured.
   final DateTime? expiresAt;
+
+  /// Time at which the key was last used, if it has been used.
   final DateTime? lastUsedAt;
+
+  /// Time at which the key was revoked, if it was revoked.
   final DateTime? revokedAt;
+
+  /// Whether the key can currently authenticate.
   final bool active;
 
+  /// Decodes API-key metadata from a JSON object.
   factory AuthClientApiKey.fromJson(Map<String, dynamic> json) {
     final scopes = json['scopes'];
     if (scopes is! List || scopes.any((value) => value is! String)) {
@@ -259,6 +339,7 @@ final class AuthClientApiKey {
 
 /// Device-code response returned by the RFC 8628 authorization endpoint.
 final class AuthClientDeviceAuthorization {
+  /// Creates an RFC 8628 device-authorization response.
   const AuthClientDeviceAuthorization({
     required this.deviceCode,
     required this.userCode,
@@ -269,17 +350,29 @@ final class AuthClientDeviceAuthorization {
     this.receivedAt,
   });
 
+  /// Secret device code used when polling the token endpoint.
   final String deviceCode;
+
+  /// Short code displayed to the user for approval.
   final String userCode;
+
+  /// URI where the user enters [userCode].
   final String verificationUri;
+
+  /// Lifetime of the device authorization.
   final Duration expiresIn;
+
+  /// Minimum delay between token polling requests.
   final Duration interval;
+
+  /// URI containing both the verification URI and user code, if supplied.
   final String? verificationUriComplete;
 
   /// When the client received this response, used to enforce [expiresIn]
   /// locally while polling.
   final DateTime? receivedAt;
 
+  /// Decodes a device-authorization response from JSON.
   factory AuthClientDeviceAuthorization.fromJson(
     Map<String, dynamic> json, {
     DateTime? receivedAt,
@@ -296,7 +389,7 @@ final class AuthClientDeviceAuthorization {
   }
 }
 
-/// Supplies the current time to device-authorization polling.
+/// Supplies the current UTC time to device-authorization polling.
 typedef AuthDeviceAuthorizationClock = DateTime Function();
 
 /// Waits before the next device-token request.
@@ -308,6 +401,7 @@ typedef AuthDeviceAuthorizationShouldContinue =
 
 /// State supplied before each wait in an automatic device-token poll.
 final class AuthDeviceAuthorizationPollingContext {
+  /// Creates the state supplied to a polling continuation callback.
   const AuthDeviceAuthorizationPollingContext({
     required this.attempts,
     required this.interval,
@@ -332,10 +426,16 @@ final class AuthDeviceAuthorizationPollingContext {
 final class AuthDeviceAuthorizationPollingController {
   final Completer<void> _cancelled = Completer<void>();
 
+  /// Creates a controller that is not cancelled.
+  AuthDeviceAuthorizationPollingController();
+
+  /// Whether polling has been cancelled.
   bool get isCancelled => _cancelled.isCompleted;
 
+  /// Completes when [cancel] is called.
   Future<void> get whenCancelled => _cancelled.future;
 
+  /// Cancels the associated polling operation.
   void cancel() {
     if (!_cancelled.isCompleted) _cancelled.complete();
   }
@@ -343,21 +443,32 @@ final class AuthDeviceAuthorizationPollingController {
 
 /// Why automatic device-authorization polling stopped locally.
 enum AuthDeviceAuthorizationPollingStopReason {
+  /// Polling was cancelled through a controller.
   cancelled,
+
+  /// The caller's continuation callback stopped polling.
   stoppedByCaller,
+
+  /// The server's device authorization expired.
   authorizationExpired,
+
+  /// The caller's local deadline was reached.
   deadlineReached,
 }
 
 /// Indicates that automatic polling stopped before receiving a token.
 final class AuthDeviceAuthorizationPollingStoppedException
     implements Exception {
+  /// Creates an exception describing why polling stopped.
   const AuthDeviceAuthorizationPollingStoppedException({
     required this.reason,
     required this.attempts,
   });
 
+  /// Reason that polling stopped.
   final AuthDeviceAuthorizationPollingStopReason reason;
+
+  /// Number of token requests completed before polling stopped.
   final int attempts;
 
   @override
@@ -368,6 +479,7 @@ final class AuthDeviceAuthorizationPollingStoppedException
 
 /// Controls a high-level RFC 8628 device-token polling operation.
 final class AuthDeviceAuthorizationPollingOptions {
+  /// Creates polling options with injectable clock and delay hooks.
   AuthDeviceAuthorizationPollingOptions({
     this.deadline,
     this.controller,
@@ -401,6 +513,7 @@ Future<void> _deviceAuthorizationDelay(Duration delay) =>
 
 /// Access-token response returned after a device has been approved.
 final class AuthClientDeviceAccessToken {
+  /// Creates an OAuth device access-token response.
   const AuthClientDeviceAccessToken({
     required this.accessToken,
     required this.tokenType,
@@ -409,12 +522,22 @@ final class AuthClientDeviceAccessToken {
     this.refreshToken,
   });
 
+  /// Access token issued by the authorization server.
   final String accessToken;
+
+  /// Token scheme used in the authorization header.
   final String tokenType;
+
+  /// Lifetime of the access token.
   final Duration expiresIn;
+
+  /// Scopes granted to the access token.
   final List<String> scopes;
+
+  /// Refresh token, when the authorization server issued one.
   final String? refreshToken;
 
+  /// Decodes an access-token response from JSON.
   factory AuthClientDeviceAccessToken.fromJson(Map<String, dynamic> json) {
     final rawScope = json['scope'];
     final scopes = rawScope is String && rawScope.trim().isNotEmpty
@@ -436,6 +559,7 @@ final class AuthClientDeviceAccessToken {
 /// Base64url fields remain strings so a platform adapter can convert them to
 /// the byte representation required by its WebAuthn binding.
 final class AuthClientWebAuthnRegistrationOptions {
+  /// Creates options for a WebAuthn registration ceremony.
   const AuthClientWebAuthnRegistrationOptions({
     required this.challenge,
     required this.relyingPartyId,
@@ -443,11 +567,19 @@ final class AuthClientWebAuthnRegistrationOptions {
     required this.publicKey,
   });
 
+  /// Base64url-encoded challenge supplied by the server.
   final String challenge;
+
+  /// Relying-party identifier expected by the authenticator.
   final String relyingPartyId;
+
+  /// Base64url-encoded user handle supplied by the server.
   final String userId;
+
+  /// Browser-shaped public-key options for `navigator.credentials.create`.
   final Map<String, dynamic> publicKey;
 
+  /// Decodes registration options from a JSON object.
   factory AuthClientWebAuthnRegistrationOptions.fromJson(
     Map<String, dynamic> json,
   ) {
@@ -471,11 +603,13 @@ final class AuthClientWebAuthnRegistrationOptions {
     );
   }
 
+  /// Returns the browser-shaped options as a mutable JSON map.
   Map<String, dynamic> toJson() => Map<String, dynamic>.from(publicKey);
 }
 
 /// Authentication options returned by the WebAuthn ceremony-start endpoint.
 final class AuthClientWebAuthnAuthenticationOptions {
+  /// Creates options for a WebAuthn authentication ceremony.
   const AuthClientWebAuthnAuthenticationOptions({
     required this.challenge,
     required this.relyingPartyId,
@@ -485,13 +619,25 @@ final class AuthClientWebAuthnAuthenticationOptions {
     this.userId,
   });
 
+  /// Base64url-encoded challenge supplied by the server.
   final String challenge;
+
+  /// Relying-party identifier expected by the authenticator.
   final String relyingPartyId;
+
+  /// Maximum time allowed for the ceremony.
   final Duration timeout;
+
+  /// User-verification policy requested by the server.
   final String userVerification;
+
+  /// Base64url-encoded credentials accepted by a user-bound ceremony.
   final List<String> allowCredentials;
+
+  /// User identifier bound to the ceremony, if known.
   final String? userId;
 
+  /// Decodes authentication options from a JSON object.
   factory AuthClientWebAuthnAuthenticationOptions.fromJson(
     Map<String, dynamic> json, {
     String? userId,
@@ -525,6 +671,7 @@ final class AuthClientWebAuthnAuthenticationOptions {
     );
   }
 
+  /// Encodes the options in the shape expected by the browser API.
   Map<String, dynamic> toJson() => <String, dynamic>{
     'challenge': challenge,
     'rpId': relyingPartyId,
@@ -539,6 +686,7 @@ final class AuthClientWebAuthnAuthenticationOptions {
 
 /// Public metadata for a registered passkey.
 final class AuthClientWebAuthnCredential {
+  /// Creates public metadata for a registered passkey.
   const AuthClientWebAuthnCredential({
     required this.credentialId,
     required this.userId,
@@ -550,15 +698,31 @@ final class AuthClientWebAuthnCredential {
     this.name,
   });
 
+  /// Base64url-encoded credential identifier.
   final String credentialId;
+
+  /// Identifier of the user who registered the passkey.
   final String userId;
+
+  /// Signature counter last reported by the authenticator.
   final int counter;
+
+  /// Stored public key representation, when returned by the server.
   final String? publicKey;
+
+  /// Authenticator transports reported during registration.
   final List<String>? transports;
+
+  /// Time at which the passkey was registered.
   final DateTime? createdAt;
+
+  /// Time at which the passkey was last used.
   final DateTime? lastUsedAt;
+
+  /// User-supplied display name for the passkey.
   final String? name;
 
+  /// Decodes passkey metadata from a JSON object.
   factory AuthClientWebAuthnCredential.fromJson(Map<String, dynamic> json) {
     final rawCounter = json['counter'];
     if (rawCounter is! int || rawCounter < 0) {
@@ -587,11 +751,16 @@ final class AuthClientWebAuthnCredential {
 
 /// The one-time API-key response returned after create or rotate.
 final class AuthClientIssuedApiKey {
+  /// Creates the one-time raw-key response.
   const AuthClientIssuedApiKey({required this.apiKey, required this.key});
 
+  /// Public metadata for the issued key.
   final AuthClientApiKey apiKey;
+
+  /// Raw secret key, returned only during issuance or rotation.
   final String key;
 
+  /// Decodes a one-time API-key response from JSON.
   factory AuthClientIssuedApiKey.fromJson(Map<String, dynamic> json) {
     final key = _requiredString(json, 'apiKey');
     return AuthClientIssuedApiKey(
@@ -603,16 +772,23 @@ final class AuthClientIssuedApiKey {
 
 /// Result returned after a passkey assertion is verified.
 final class AuthClientWebAuthnAuthenticationResult {
+  /// Creates the result of a verified passkey assertion.
   const AuthClientWebAuthnAuthenticationResult({
     required this.user,
     required this.credential,
     required this.session,
   });
 
+  /// User authenticated by the passkey.
   final AuthUser user;
+
+  /// Passkey metadata updated by the verification.
   final AuthClientWebAuthnCredential credential;
+
+  /// Session issued after the assertion was verified.
   final AuthSession session;
 
+  /// Decodes a passkey-authentication response from JSON.
   factory AuthClientWebAuthnAuthenticationResult.fromJson(
     Map<String, dynamic> json,
   ) {
@@ -634,16 +810,23 @@ final class AuthClientWebAuthnAuthenticationResult {
 
 /// TOTP enrollment data returned by a two-factor plugin.
 class AuthClientTwoFactorEnrollment {
+  /// Creates TOTP enrollment data.
   const AuthClientTwoFactorEnrollment({
     required this.secret,
     required this.otpauthUri,
     required this.expiresAt,
   });
 
+  /// Shared secret used to generate TOTP codes.
   final String secret;
+
+  /// `otpauth` URI for authenticator applications.
   final Uri otpauthUri;
+
+  /// Time at which this enrollment expires.
   final DateTime expiresAt;
 
+  /// Decodes TOTP enrollment data from JSON.
   factory AuthClientTwoFactorEnrollment.fromJson(Map<String, dynamic> json) {
     final secret = _requiredString(json, 'secret');
     final rawUri = _requiredString(json, 'otpauthUri');
@@ -661,10 +844,13 @@ class AuthClientTwoFactorEnrollment {
 
 /// Recovery codes returned after two-factor activation or regeneration.
 class AuthClientTwoFactorRecoveryCodes {
+  /// Creates a recovery-code collection.
   const AuthClientTwoFactorRecoveryCodes(this.codes);
 
+  /// One-time recovery codes issued by the server.
   final List<String> codes;
 
+  /// Decodes recovery codes from JSON.
   factory AuthClientTwoFactorRecoveryCodes.fromJson(Map<String, dynamic> json) {
     final values = json['recoveryCodes'];
     if (values is! List || values.any((value) => value is! String)) {
@@ -678,8 +864,10 @@ class AuthClientTwoFactorRecoveryCodes {
 
 /// Result of completing a recent step-up verification.
 class AuthClientTwoFactorStepUp {
+  /// Creates a successful step-up proof result.
   const AuthClientTwoFactorStepUp({required this.expiresAt});
 
+  /// Decodes a step-up proof result from JSON.
   factory AuthClientTwoFactorStepUp.fromJson(Map<String, dynamic> json) {
     final expiresAt = DateTime.tryParse(json['expiresAt']?.toString() ?? '');
     if (json['verified'] != true || expiresAt == null) {
@@ -688,11 +876,13 @@ class AuthClientTwoFactorStepUp {
     return AuthClientTwoFactorStepUp(expiresAt: expiresAt.toUtc());
   }
 
+  /// Time at which the step-up proof expires.
   final DateTime expiresAt;
 }
 
 /// Public two-factor status returned by the auth server.
 class AuthClientTwoFactorStatus {
+  /// Creates public two-factor status.
   const AuthClientTwoFactorStatus({
     required this.enabled,
     required this.recoveryCodesRemaining,
@@ -700,11 +890,19 @@ class AuthClientTwoFactorStatus {
     this.lockedUntil,
   });
 
+  /// Whether two-factor authentication is enabled.
   final bool enabled;
+
+  /// Number of unused recovery codes remaining.
   final int recoveryCodesRemaining;
+
+  /// Enrollment expiry, when enrollment is in progress.
   final DateTime? enrollmentExpiresAt;
+
+  /// Current lockout expiry, when the factor is temporarily locked.
   final DateTime? lockedUntil;
 
+  /// Decodes two-factor status from JSON.
   factory AuthClientTwoFactorStatus.fromJson(Map<String, dynamic> json) {
     final remaining = json['recoveryCodesRemaining'];
     final count = remaining is int ? remaining : int.tryParse('$remaining');
@@ -722,6 +920,7 @@ class AuthClientTwoFactorStatus {
 
 /// An error returned by an auth endpoint.
 class AuthClientException implements Exception {
+  /// Creates a structured error returned by an auth endpoint.
   const AuthClientException({
     required this.statusCode,
     required this.code,
@@ -729,9 +928,16 @@ class AuthClientException implements Exception {
     this.message,
   });
 
+  /// HTTP status code returned by the server.
   final int statusCode;
+
+  /// Stable auth error code returned by the server or transport.
   final String code;
+
+  /// Server-supplied retry delay, when present.
   final Duration? retryAfter;
+
+  /// Optional human-readable server message.
   final String? message;
 
   @override
@@ -743,23 +949,34 @@ class AuthClientException implements Exception {
 
 /// Indicates that credentials were valid but a TOTP challenge is required.
 class AuthClientTwoFactorRequiredException extends AuthClientException {
+  /// Creates an exception for a sign-in that requires a TOTP challenge.
   AuthClientTwoFactorRequiredException({
     required this.challengeToken,
     required this.expiresAt,
   }) : super(statusCode: 202, code: 'two_factor_required');
 
+  /// One-time token used to complete the pending sign-in.
   final String challengeToken;
+
+  /// Time at which the challenge expires.
   final DateTime expiresAt;
 }
 
 /// Raw successful response returned by [AuthClientTransport].
 final class AuthClientResponse {
+  /// Creates a raw HTTP response wrapper.
   const AuthClientResponse(this.statusCode, this.response);
 
+  /// HTTP status code.
   final int statusCode;
+
+  /// Original response from the HTTP client.
   final http.Response response;
 
+  /// Response body text.
   String get body => response.body;
+
+  /// Response headers.
   Map<String, String> get headers => response.headers;
 }
 
@@ -768,6 +985,11 @@ final class AuthClientResponse {
 /// It owns cookies, bearer authentication, CSRF reuse, timeouts, redirect
 /// policy, bounded error parsing, and response-cookie processing.
 class AuthClientTransport {
+  /// Creates a transport for a server-neutral auth client.
+  ///
+  /// [baseUrl] must be an absolute URI. [cookieStore] controls session-cookie
+  /// persistence, while [httpClient] allows applications to provide their own
+  /// HTTP implementation.
   AuthClientTransport({
     required Uri baseUrl,
     String basePath = '/auth',
@@ -789,14 +1011,21 @@ class AuthClientTransport {
   final Uri _baseUrl;
   final String _basePath;
   final http.Client _httpClient;
+
+  /// Cookie store used for request and response cookie processing.
   final AuthClientCookieStore cookieStore;
+
+  /// Maximum time allowed for one HTTP request.
   final Duration timeout;
+
+  /// Maximum response-body size inspected for structured errors.
   final int maximumErrorBodyBytes;
   final Map<String, String> _headers;
   String? _bearerToken;
   String? _apiKey;
   String? _csrfToken;
 
+  /// Replaces the bearer token used for JWT-based requests.
   void setBearerToken(String? token) {
     _bearerToken = token?.trim().isEmpty == true ? null : token?.trim();
   }
@@ -806,8 +1035,10 @@ class AuthClientTransport {
     _apiKey = key?.trim().isEmpty == true ? null : key?.trim();
   }
 
+  /// Clears the cached CSRF token.
   void clearCsrfToken() => _csrfToken = null;
 
+  /// Obtains and caches the server's CSRF token.
   Future<String> getCsrfToken() async {
     final response = await request('GET', const AuthRoutePath('/csrf'));
     final token = _mapBody(response.body)['csrfToken']?.toString().trim() ?? '';
@@ -818,6 +1049,7 @@ class AuthClientTransport {
     return token;
   }
 
+  /// Sends a state-changing request with automatic CSRF recovery.
   Future<AuthClientResponse> mutate(
     String method,
     AuthRoutePath route,
@@ -851,6 +1083,10 @@ class AuthClientTransport {
     }
   }
 
+  /// Sends an HTTP request and processes its response cookies.
+  ///
+  /// Throws [AuthClientException] for responses with a status code of 400 or
+  /// greater.
   Future<AuthClientResponse> request(
     String method,
     AuthRoutePath route, {
@@ -905,6 +1141,7 @@ class AuthClientTransport {
     return result;
   }
 
+  /// Resolves a portable auth route into an absolute request URI.
   Uri endpoint(
     AuthRoutePath route, {
     Map<AuthRouteParameterKey, String> pathParameters =
@@ -970,8 +1207,10 @@ class AuthClientTransport {
 /// CSRF state, timeouts, and response handling remain consistent across the
 /// selected client APIs.
 final class AuthClientPluginContext {
+  /// Creates plugin context backed by [transport].
   const AuthClientPluginContext({required this.transport});
 
+  /// Shared transport used by the installed plugin.
   final AuthClientTransport transport;
 }
 
@@ -981,8 +1220,10 @@ final class AuthClientPluginContext {
 /// provider. Applications install the client plugins they use instead of
 /// receiving every optional auth operation on one client object.
 abstract interface class AuthClientPlugin<TApi extends Object> {
+  /// Stable identifier used to install and retrieve this plugin.
   String get id;
 
+  /// Builds the typed API exposed by this plugin.
   TApi install(AuthClientPluginContext context);
 }
 
@@ -995,6 +1236,7 @@ final class _InstalledAuthClientPlugin {
 
 /// Registry of the client plugins selected for one [AuthClient].
 final class AuthClientPluginRegistry {
+  /// Installs [plugins] against the shared [context].
   AuthClientPluginRegistry({
     required AuthClientPluginContext context,
     Iterable<AuthClientPlugin<dynamic>> plugins =
@@ -1039,8 +1281,10 @@ final class AuthClientPluginRegistry {
     return installed.api as TApi;
   }
 
+  /// Whether a plugin with [id] is installed.
   bool contains(String id) => _installed.containsKey(id.trim());
 
+  /// Identifiers of all installed plugins.
   Iterable<String> get ids => List<String>.unmodifiable(_installed.keys);
 }
 
@@ -1049,8 +1293,10 @@ final class AuthClientPluginRegistry {
 ///
 /// New applications should use [AuthClient] with the client plugins they need.
 class AuthClientCore {
+  /// Creates a core client around an existing [transport].
   AuthClientCore.fromTransport(this.transport);
 
+  /// Creates a core client and its default transport when one is not supplied.
   AuthClientCore({
     required Uri baseUrl,
     String basePath = '/auth',
@@ -1074,9 +1320,13 @@ class AuthClientCore {
              apiKey: apiKey,
            );
 
+  /// Transport shared by all core operations.
   final AuthClientTransport transport;
 
+  /// Cookie store used by [transport].
   AuthClientCookieStore get cookieStore => transport.cookieStore;
+
+  /// Request timeout configured on [transport].
   Duration get timeout => transport.timeout;
 
   /// Replaces the bearer token used for JWT-based auth requests.
@@ -1926,6 +2176,7 @@ class AuthClientCore {
 /// [plugins]. Plugin and provider operations should be accessed through their
 /// typed plugin APIs rather than through one global client surface.
 final class AuthClient {
+  /// Creates a typed auth client with the selected optional [plugins].
   AuthClient({
     required Uri baseUrl,
     String basePath = '/auth',
@@ -1956,20 +2207,28 @@ final class AuthClient {
     );
   }
 
+  /// Transport shared by the host and all installed plugins.
   final AuthClientTransport transport;
 
   /// The explicitly selected optional client APIs.
   late final AuthClientPluginRegistry plugins;
 
+  /// Cookie store used by [transport].
   AuthClientCookieStore get cookieStore => transport.cookieStore;
+
+  /// Request timeout configured on [transport].
   Duration get timeout => transport.timeout;
 
+  /// Replaces the bearer token used for JWT-based requests.
   void setBearerToken(String? token) => transport.setBearerToken(token);
 
+  /// Replaces the API key used for service-client requests.
   void setApiKey(String? key) => transport.setApiKey(key);
 
+  /// Clears the cached CSRF token.
   void clearCsrfToken() => transport.clearCsrfToken();
 
+  /// Obtains and caches the server's CSRF token.
   Future<String> getCsrfToken() => transport.getCsrfToken();
 }
 

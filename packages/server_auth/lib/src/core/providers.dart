@@ -145,9 +145,16 @@ typedef OAuthUserInfoRequest =
 /// Concrete implementations are server plugins. The interface exists only so
 /// framework-neutral helpers do not depend on one host's context type.
 abstract interface class AuthMagicLinkProvider implements AuthProvider {
+  /// Lifetime applied to generated verification tokens.
+  ///
+  /// Implementations should keep this value short enough to limit exposure of
+  /// a delivered one-time token.
   Duration get tokenExpiry;
+
+  /// Optional callback used to generate verification tokens.
   String Function()? get tokenGenerator;
 
+  /// Delivers a verification request to the user.
   FutureOr<void> sendVerification(
     AuthContext context,
     AuthEmailRequest request,
@@ -329,6 +336,7 @@ AuthUser? _usableAuthUser(AuthUser? user) {
 
 /// {@macro server_auth_provider_overview}
 class AuthProvider {
+  /// Creates provider metadata for an authentication mechanism.
   const AuthProvider({
     required this.id,
     required this.name,
@@ -467,6 +475,7 @@ String authEmailCallbackSessionKey(String callbackKey) {
 
 /// OAuth callback session values loaded for a provider.
 class AuthOAuthCallbackSessionValues {
+  /// Creates the session values needed to validate an OAuth callback.
   const AuthOAuthCallbackSessionValues({
     required this.expectedState,
     required this.codeVerifier,
@@ -474,9 +483,16 @@ class AuthOAuthCallbackSessionValues {
     required this.callbackUrl,
   });
 
+  /// State value stored when authorization began.
   final String? expectedState;
+
+  /// PKCE verifier stored when authorization began.
   final String? codeVerifier;
+
+  /// OIDC nonce stored when authorization began.
   final String? nonce;
+
+  /// Callback URL stored for the completed flow.
   final String? callbackUrl;
 }
 
@@ -568,6 +584,7 @@ Map<String, String> buildOAuthAuthorizationParameters<TProfile extends Object>(
 
 /// Prepared OAuth authorization start payload.
 class AuthOAuthAuthorizationStart {
+  /// Creates the authorization parameters and transient values for a flow.
   const AuthOAuthAuthorizationStart({
     required this.state,
     this.nonce,
@@ -576,15 +593,25 @@ class AuthOAuthAuthorizationStart {
     required this.parameters,
   });
 
+  /// State value used to bind the callback to this authorization request.
   final String state;
+
+  /// OIDC nonce generated for the authorization request, when applicable.
   final String? nonce;
+
+  /// PKCE verifier retained by the server, when PKCE is enabled.
   final String? codeVerifier;
+
+  /// PKCE challenge sent to the provider, when PKCE is enabled.
   final String? codeChallenge;
+
+  /// Query parameters for the provider authorization endpoint.
   final Map<String, String> parameters;
 }
 
 /// Result of preparing OAuth authorization and persisted session values.
 class AuthOAuthAuthorizationResolution {
+  /// Creates a resolved authorization start with its callback URI.
   const AuthOAuthAuthorizationResolution({
     required this.state,
     this.nonce,
@@ -594,11 +621,22 @@ class AuthOAuthAuthorizationResolution {
     required this.authorizationUri,
   });
 
+  /// State value persisted for callback validation.
   final String state;
+
+  /// OIDC nonce persisted for callback validation, when applicable.
   final String? nonce;
+
+  /// PKCE verifier persisted for token exchange, when applicable.
   final String? codeVerifier;
+
+  /// PKCE challenge sent to the provider, when applicable.
   final String? codeChallenge;
+
+  /// Query parameters used to build [authorizationUri].
   final Map<String, String> parameters;
+
+  /// Provider authorization URI to which the client should be redirected.
   final Uri authorizationUri;
 }
 
@@ -663,10 +701,7 @@ resolveOAuthAuthorizationStart<TContext, TProfile extends Object>({
   // protection and the PKCE material; the session copy makes the binding
   // resilient when a host/browser drops the auxiliary state cookie during a
   // cross-site redirect.
-  writeSession(
-    authProviderStateSessionKey(stateKey, provider.id),
-    start.state,
-  );
+  writeSession(authProviderStateSessionKey(stateKey, provider.id), start.state);
 
   if (provider.onStateGenerated != null) {
     await Future.sync(
@@ -819,6 +854,7 @@ Future<void> persistAuthVerificationToken({
 
 /// Prepared payload for email verification sign-in flows.
 class AuthEmailVerificationPayload {
+  /// Creates the token and pending-session data for email verification.
   const AuthEmailVerificationPayload({
     required this.token,
     required this.expiresAt,
@@ -827,10 +863,19 @@ class AuthEmailVerificationPayload {
     required this.pendingResult,
   });
 
+  /// Raw token delivered to the user.
   final String token;
+
+  /// Time after which the token is invalid.
   final DateTime expiresAt;
+
+  /// Persisted one-time-token record.
   final AuthMagicLinkRecord record;
+
+  /// Delivery request passed to the email provider.
   final AuthEmailRequest request;
+
+  /// Pending session projection associated with the verification flow.
   final AuthResult pendingResult;
 }
 
@@ -883,9 +928,13 @@ AuthEmailVerificationPayload prepareAuthEmailVerificationPayload({
 
 /// Result of resolving an email sign-in user.
 class AuthEmailUserResolution {
+  /// Creates the result of resolving an email address to a user.
   const AuthEmailUserResolution({required this.user, required this.isNewUser});
 
+  /// User found or created for the email address.
   final AuthUser user;
+
+  /// Whether the user record was created by the resolution.
   final bool isNewUser;
 }
 
@@ -944,14 +993,20 @@ Future<AuthEmailVerificationPayload> startAuthEmailSignIn<TContext>({
 
 /// Result of resolving an email verification callback into sign-in payloads.
 class AuthEmailVerificationSignInResolution {
+  /// Creates the result of completing email verification.
   const AuthEmailVerificationSignInResolution({
     required this.user,
     required this.isNewUser,
     required this.callbackUrl,
   });
 
+  /// User authenticated by the verification token.
   final AuthUser user;
+
+  /// Whether the verification flow created the user.
   final bool isNewUser;
+
+  /// Callback URL saved when the flow began, if one was supplied.
   final String? callbackUrl;
 }
 
@@ -1082,19 +1137,26 @@ Future<Map<String, dynamic>> loadOAuthProfile<TProfile extends Object>(
 
 /// Result of resolving an OAuth-mapped user against persisted identities.
 class AuthOAuthUserResolution {
+  /// Creates the result of resolving an OAuth profile to a user.
   const AuthOAuthUserResolution({
     required this.user,
     required this.isNewUser,
     required this.userUpdated,
   });
 
+  /// User found or created for the provider identity.
   final AuthUser user;
+
+  /// Whether the provider identity created a new user.
   final bool isNewUser;
+
+  /// Whether an existing user profile was updated.
   final bool userUpdated;
 }
 
 /// Result of resolving provider OAuth callback data into auth sign-in payloads.
 class AuthOAuthSignInResolution {
+  /// Creates the result of resolving an OAuth callback into sign-in data.
   const AuthOAuthSignInResolution({
     required this.user,
     required this.isNewUser,
@@ -1103,22 +1165,35 @@ class AuthOAuthSignInResolution {
     required this.profile,
   });
 
+  /// User authenticated by the provider.
   final AuthUser user;
+
+  /// Whether the provider identity created a new user.
   final bool isNewUser;
+
+  /// Whether an existing user profile was updated.
   final bool userUpdated;
+
+  /// Linked provider account persisted for this sign-in.
   final AuthAccount account;
+
+  /// Sanitized provider profile used during resolution.
   final Map<String, dynamic> profile;
 }
 
 /// Result of resolving an OAuth callback into sign-in payloads and callback
 /// redirect metadata.
 class AuthOAuthCallbackSignInResolution {
+  /// Creates the callback result and optional redirect metadata.
   const AuthOAuthCallbackSignInResolution({
     required this.signIn,
     required this.callbackUrl,
   });
 
+  /// Resolved sign-in data.
   final AuthOAuthSignInResolution signIn;
+
+  /// Callback URL saved when authorization began, if one was supplied.
   final String? callbackUrl;
 }
 
@@ -1469,6 +1544,7 @@ resolveOAuthCallbackSignInForProvider<TContext, TProfile extends Object>({
 
 /// {@macro server_auth_oauth_provider}
 class OAuthProvider<TProfile extends Object> extends AuthProvider {
+  /// Creates an OAuth or OIDC provider configuration.
   OAuthProvider({
     required super.id,
     required super.name,
@@ -1622,6 +1698,7 @@ class OAuthProvider<TProfile extends Object> extends AuthProvider {
 
 /// {@macro server_auth_credentials_provider}
 class CredentialsProvider extends AuthProvider {
+  /// Creates a credentials provider with optional custom callbacks.
   CredentialsProvider({
     super.id = 'credentials',
     super.name = 'Credentials',
@@ -1678,6 +1755,7 @@ final class _PasswordAuthenticationMethodInventory
 
 /// Email verification payload shared with provider callbacks.
 class AuthEmailRequest {
+  /// Creates an email verification delivery request.
   AuthEmailRequest({
     required this.email,
     required this.token,
@@ -1702,6 +1780,7 @@ class AuthEmailRequest {
 ///
 /// The relying party represents your application/domain to the authenticator.
 class WebAuthnRelyingParty {
+  /// Creates relying-party metadata for a WebAuthn ceremony.
   const WebAuthnRelyingParty({
     required this.id,
     required this.name,
@@ -1720,6 +1799,7 @@ class WebAuthnRelyingParty {
 
 /// Authenticator device stored for a user.
 class WebAuthnAuthenticator {
+  /// Creates persisted metadata for a WebAuthn authenticator.
   const WebAuthnAuthenticator({
     required this.credentialId,
     required this.publicKey,
@@ -1755,6 +1835,7 @@ class WebAuthnAuthenticator {
   /// Optional friendly name for the authenticator.
   final String? name;
 
+  /// Serializes the authenticator metadata.
   Map<String, dynamic> toJson() => {
     'credential_id': credentialId,
     'public_key': publicKey,
@@ -1766,6 +1847,7 @@ class WebAuthnAuthenticator {
     'name': name,
   };
 
+  /// Creates authenticator metadata from a JSON payload.
   factory WebAuthnAuthenticator.fromJson(Map<String, dynamic> json) {
     final rawCounter = json['counter'];
     final rawTransports = json['transports'];
@@ -1806,6 +1888,7 @@ typedef WebAuthnGetRelyingParty =
 
 /// User info returned by WebAuthn getUserInfo callback.
 class WebAuthnUserInfo {
+  /// Creates the user information returned by a WebAuthn callback.
   const WebAuthnUserInfo({required this.user, required this.exists});
 
   /// The user (new or existing).
@@ -1831,6 +1914,7 @@ class WebAuthnUserInfo {
 /// - [formFields] defines fields shown in the default sign-in form.
 /// {@endtemplate}
 class WebAuthnProvider extends AuthProvider {
+  /// Creates a WebAuthn provider configuration.
   WebAuthnProvider({
     super.id = 'webauthn',
     super.name = 'Passkey',
@@ -1869,6 +1953,7 @@ class WebAuthnProvider extends AuthProvider {
 
 /// Form field configuration for WebAuthn sign-in forms.
 class WebAuthnFormField {
+  /// Creates a form-field definition for a WebAuthn flow.
   const WebAuthnFormField({
     this.label,
     this.required = false,
@@ -1891,6 +1976,7 @@ class WebAuthnFormField {
 
 /// Options for WebAuthn registration ceremonies.
 class WebAuthnRegistrationOptions {
+  /// Creates registration ceremony options.
   const WebAuthnRegistrationOptions({
     this.attestation = 'none',
     this.authenticatorSelection,
@@ -1909,6 +1995,7 @@ class WebAuthnRegistrationOptions {
 
 /// Options for WebAuthn authentication ceremonies.
 class WebAuthnAuthenticationOptions {
+  /// Creates authentication ceremony options.
   const WebAuthnAuthenticationOptions({this.userVerification = 'preferred'});
 
   /// User verification requirement (required, preferred, discouraged).
@@ -1917,6 +2004,7 @@ class WebAuthnAuthenticationOptions {
 
 /// Authenticator selection criteria for registration.
 class WebAuthnAuthenticatorSelection {
+  /// Creates authenticator-selection criteria.
   const WebAuthnAuthenticatorSelection({
     this.authenticatorAttachment,
     this.residentKey = 'preferred',
@@ -1935,6 +2023,7 @@ class WebAuthnAuthenticatorSelection {
 
 /// Result from a custom callback provider's handleCallback method.
 class CallbackResult {
+  /// Creates a callback result with an optional user, redirect, and error.
   const CallbackResult({required this.user, this.redirect, this.error});
 
   /// Successfully authenticated user.
@@ -1963,7 +2052,7 @@ class CallbackResult {
 ///
 /// Implement this mixin on custom providers (like Telegram) that don't follow
 /// standard OAuth or email flows. The [handleCallback] method will be called
-/// by [AuthRoutes] when the callback URL is accessed.
+/// by the auth route dispatcher when the callback URL is accessed.
 ///
 /// ## Example
 ///

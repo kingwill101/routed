@@ -10,15 +10,38 @@ import 'rate_limit.dart';
 import 'store.dart';
 
 /// HTTP method exposed by a portable auth plugin operation.
-enum AuthOperationMethod { get, post, put, patch, delete }
+enum AuthOperationMethod {
+  /// Reads state without changing it.
+  get,
+
+  /// Creates or otherwise submits a state-changing operation.
+  post,
+
+  /// Replaces a resource or operation state.
+  put,
+
+  /// Partially updates a resource or operation state.
+  patch,
+
+  /// Removes a resource or operation state.
+  delete,
+}
 
 /// Where a portable auth endpoint is mounted by a framework host.
-enum AuthEndpointMount { auth, root }
+enum AuthEndpointMount {
+  /// Mounts the route below the configured auth base path.
+  auth,
+
+  /// Mounts the route at the host application's root path.
+  root,
+}
 
 /// A declared key for one dynamic auth route segment.
 final class AuthRouteParameterKey {
+  /// Creates a typed key for a route parameter named [name].
   const AuthRouteParameterKey(this.name);
 
+  /// Name of the route parameter.
   final String name;
 
   @override
@@ -34,12 +57,16 @@ final class AuthRouteParameterKey {
 
 /// A framework-neutral auth route using canonical `{parameter}` segments.
 final class AuthRoutePath {
+  /// Creates a route [template] with its declared placeholder parameters.
   const AuthRoutePath(
     this.template, {
     this.parameters = const <AuthRouteParameterKey>[],
   });
 
+  /// Canonical route template, such as `/users/{userId}`.
   final String template;
+
+  /// Typed keys corresponding exactly to placeholders in [template].
   final List<AuthRouteParameterKey> parameters;
 
   /// Validates this route and returns its canonical template.
@@ -210,17 +237,24 @@ final RegExp _authRoutePlaceholderPattern = RegExp(
 );
 final RegExp _authRouteStaticSegmentPattern = RegExp(r'^[A-Za-z0-9._~-]+$');
 
+/// Typed key for the provider parameter used by built-in provider routes.
 const AuthRouteParameterKey authProviderRouteParameter = AuthRouteParameterKey(
   'provider',
 );
+
+/// Route template for starting provider sign-in.
 const AuthRoutePath authSignInProviderRoute = AuthRoutePath(
   '/signin/{provider}',
   parameters: <AuthRouteParameterKey>[authProviderRouteParameter],
 );
+
+/// Route template for starting provider registration.
 const AuthRoutePath authRegisterProviderRoute = AuthRoutePath(
   '/register/{provider}',
   parameters: <AuthRouteParameterKey>[authProviderRouteParameter],
 );
+
+/// Route template for completing a provider callback.
 const AuthRoutePath authCallbackProviderRoute = AuthRoutePath(
   '/callback/{provider}',
   parameters: <AuthRouteParameterKey>[authProviderRouteParameter],
@@ -228,12 +262,14 @@ const AuthRoutePath authCallbackProviderRoute = AuthRoutePath(
 
 /// Namespaced request data supplied to a portable auth endpoint.
 final class AuthEndpointRequest {
+  /// Creates an empty endpoint request.
   const AuthEndpointRequest.empty()
     : path = const <AuthRouteParameterKey, String>{},
       query = const <String, dynamic>{},
       body = const <String, dynamic>{},
       headers = const <String, String>{};
 
+  /// Creates an endpoint request with immutable path, query, body, and headers.
   AuthEndpointRequest({
     Map<AuthRouteParameterKey, String> path =
         const <AuthRouteParameterKey, String>{},
@@ -247,8 +283,13 @@ final class AuthEndpointRequest {
          headers.map((key, value) => MapEntry(key.toLowerCase(), value)),
        );
 
+  /// Values captured for declared route parameters.
   final Map<AuthRouteParameterKey, String> path;
+
+  /// Query parameters supplied to the endpoint.
   final Map<String, dynamic> query;
+
+  /// Decoded request body supplied to the endpoint.
   final Map<String, dynamic> body;
 
   /// Host-allowlisted headers exposed to portable handlers.
@@ -257,6 +298,7 @@ final class AuthEndpointRequest {
   /// headers. Routed currently forwards only `Authorization`.
   final Map<String, String> headers;
 
+  /// Returns the path value for [key], or throws when it is absent or empty.
   String requirePath(AuthRouteParameterKey key) {
     final value = path[key];
     if (value == null || value.isEmpty) {
@@ -271,11 +313,37 @@ final class AuthEndpointRequest {
 /// [bearer] identifies service-protocol endpoints whose plugin owns token
 /// verification. The framework host forwards the Authorization header but
 /// does not interpret or turn that credential into an application session.
-enum AuthOperationAuthentication { none, session, apiKey, bearer }
+enum AuthOperationAuthentication {
+  /// Does not require an authenticated principal.
+  none,
 
-enum AuthOperationOriginPolicy { none, browser }
+  /// Requires the host's normal authenticated session.
+  session,
 
-enum AuthOperationCsrfPolicy { none, required }
+  /// Requires an API key supplied through the host transport.
+  apiKey,
+
+  /// Requires a bearer credential verified by the plugin.
+  bearer,
+}
+
+/// Origin policy applied before a portable endpoint is invoked.
+enum AuthOperationOriginPolicy {
+  /// Does not require browser-origin validation.
+  none,
+
+  /// Applies the host's browser-origin validation policy.
+  browser,
+}
+
+/// CSRF policy applied before a portable endpoint is invoked.
+enum AuthOperationCsrfPolicy {
+  /// Does not require a CSRF token.
+  none,
+
+  /// Requires the host's configured CSRF validation.
+  required,
+}
 
 /// Whether an auth endpoint observes state or changes it.
 ///
@@ -283,11 +351,14 @@ enum AuthOperationCsrfPolicy { none, required }
 /// This keeps newly-added custom and host-owned endpoints from silently
 /// bypassing persistence and replay-safety review.
 sealed class AuthOperationSemantics {
+  /// Creates endpoint semantics for a concrete read-only or mutation subtype.
   const AuthOperationSemantics();
 
+  /// Creates read-only endpoint semantics.
   const factory AuthOperationSemantics.readOnly() =
       AuthReadOnlyOperationSemantics;
 
+  /// Creates mutation semantics with persistence and replay guarantees.
   const factory AuthOperationSemantics.mutation({
     required AuthMutationPersistence persistence,
     required AuthMutationReplaySafety replaySafety,
@@ -296,6 +367,7 @@ sealed class AuthOperationSemantics {
 
 /// A state-observing endpoint.
 final class AuthReadOnlyOperationSemantics extends AuthOperationSemantics {
+  /// Creates read-only endpoint semantics.
   const AuthReadOnlyOperationSemantics();
 }
 
@@ -315,7 +387,16 @@ enum AuthMutationPersistenceKind {
 }
 
 /// Whether a mutation is committed as one indivisible persistence operation.
-enum AuthMutationAtomicity { atomic, nonAtomic, notApplicable }
+enum AuthMutationAtomicity {
+  /// The mutation is committed as one indivisible operation.
+  atomic,
+
+  /// The mutation can expose intermediate persistence states.
+  nonAtomic,
+
+  /// Atomicity does not apply to this mutation.
+  notApplicable,
+}
 
 /// What a caller can expect when the same mutation is submitted again.
 enum AuthMutationReplaySafety {
@@ -338,12 +419,16 @@ enum AuthMutationReplaySafety {
 /// persistence. Conformance resolves both identifiers against the composed
 /// [AuthPersistenceSchema] declarations.
 final class AuthPersistenceOperationReference {
+  /// Creates a reference to a persistence schema and optional atomic operation.
   const AuthPersistenceOperationReference({
     required this.schemaId,
     this.atomicOperationId,
   });
 
+  /// Identifier of the persistence schema that owns the mutation.
   final String schemaId;
+
+  /// Identifier of the atomic operation within [schemaId], when applicable.
   final String? atomicOperationId;
 }
 
@@ -355,6 +440,7 @@ final class AuthMutationPersistence {
     this.reference,
   });
 
+  /// Creates durable persistence semantics.
   const AuthMutationPersistence.durable({
     required AuthMutationAtomicity atomicity,
     AuthPersistenceOperationReference? reference,
@@ -364,37 +450,49 @@ final class AuthMutationPersistence {
          reference: reference,
        );
 
+  /// Creates session-state persistence semantics.
   const AuthMutationPersistence.session()
     : this._(
         kind: AuthMutationPersistenceKind.session,
         atomicity: AuthMutationAtomicity.notApplicable,
       );
 
+  /// Creates bounded-ephemeral persistence semantics.
   const AuthMutationPersistence.boundedEphemeral()
     : this._(
         kind: AuthMutationPersistenceKind.boundedEphemeral,
         atomicity: AuthMutationAtomicity.notApplicable,
       );
 
+  /// Creates external-state persistence semantics.
   const AuthMutationPersistence.external()
     : this._(
         kind: AuthMutationPersistenceKind.external,
         atomicity: AuthMutationAtomicity.notApplicable,
       );
 
+  /// Persistence boundary that owns the mutation.
   final AuthMutationPersistenceKind kind;
+
+  /// Atomicity guarantee for durable persistence.
   final AuthMutationAtomicity atomicity;
+
+  /// Schema and operation reference for durable persistence, when supplied.
   final AuthPersistenceOperationReference? reference;
 }
 
 /// A state-changing endpoint with explicit persistence and replay behavior.
 final class AuthMutationOperationSemantics extends AuthOperationSemantics {
+  /// Creates mutation semantics with explicit persistence and replay behavior.
   const AuthMutationOperationSemantics({
     required this.persistence,
     required this.replaySafety,
   });
 
+  /// Persistence boundary and atomicity declaration.
   final AuthMutationPersistence persistence;
+
+  /// Replay guarantee for repeated submissions.
   final AuthMutationReplaySafety replaySafety;
 }
 
@@ -404,12 +502,19 @@ final class AuthMutationOperationSemantics extends AuthOperationSemantics {
 /// but integrations such as OpenAPI can use it without depending on a
 /// framework-specific route type.
 abstract interface class AuthOperationContract {
+  /// JSON Schema metadata for the encoded value.
   Map<String, Object?> get schema;
+
+  /// Media type emitted or accepted by the codec.
   String get contentType;
+
+  /// Whether the value is required by the contract.
   bool get required;
 }
 
+/// Encodes and decodes one side of a typed auth operation.
 final class AuthOperationCodec<T> implements AuthOperationContract {
+  /// Creates a codec from [decode] and [encode] callbacks.
   const AuthOperationCodec({
     required this.decode,
     required this.encode,
@@ -418,17 +523,28 @@ final class AuthOperationCodec<T> implements AuthOperationContract {
     this.required = false,
   });
 
+  /// Decodes a JSON object into [T].
   final T Function(Map<String, dynamic> json) decode;
+
+  /// Encodes a [T] value into a JSON-compatible object.
   final Object? Function(T value) encode;
+
+  /// JSON Schema metadata for the encoded value.
   @override
   final Map<String, Object?> schema;
+
+  /// Media type emitted or accepted by the codec.
   @override
   final String contentType;
+
+  /// Whether the value is required by the contract.
   @override
   final bool required;
 }
 
+/// Host context and authenticated state passed to a typed endpoint handler.
 final class AuthOperationInvocation<TContext> {
+  /// Creates the host context supplied to a portable endpoint handler.
   const AuthOperationInvocation({
     required this.context,
     required this.user,
@@ -440,16 +556,32 @@ final class AuthOperationInvocation<TContext> {
     this.sessionControl,
   });
 
+  /// Framework context associated with the request.
   final TContext context;
+
+  /// Authenticated user, or `null` for an anonymous invocation.
   final AuthUser? user;
+
+  /// Namespaced request data supplied to the handler.
   final AuthEndpointRequest request;
+
+  /// Whether the current principal has a verified email address.
   final bool emailVerified;
+
+  /// Active organization selected for this session, when available.
   final String? activeOrganizationId;
+
+  /// Active team selected for this session, when available.
   final String? activeTeamId;
+
+  /// Callback for persisting a changed organization/team selection.
   final FutureOr<void> Function(String? organizationId, String? teamId)?
   writeActiveSelection;
+
+  /// Host-owned session operations available to the handler.
   final AuthServerPluginSessionControl? sessionControl;
 
+  /// Returns a copy carrying [request].
   AuthOperationInvocation<TContext> withRequest(AuthEndpointRequest request) =>
       AuthOperationInvocation<TContext>(
         context: context,
@@ -465,14 +597,20 @@ final class AuthOperationInvocation<TContext> {
 
 /// A framework-neutral redirect returned by an auth plugin endpoint.
 final class AuthEndpointRedirect {
+  /// Creates a redirect response to [location].
   const AuthEndpointRedirect({
     required this.location,
     this.statusCode = 302,
     this.headers = const <String, String>{},
   });
 
+  /// Destination URI for the redirect.
   final Uri location;
+
+  /// HTTP status code used for the redirect.
   final int statusCode;
+
+  /// Additional response headers.
   final Map<String, String> headers;
 }
 
@@ -482,6 +620,7 @@ final class AuthEndpointRedirect {
 /// require another success status, response headers, or an empty body can use
 /// this value without coupling themselves to a framework response class.
 final class AuthEndpointHttpResponse {
+  /// Creates an explicit HTTP response with a valid [statusCode].
   AuthEndpointHttpResponse({
     required this.statusCode,
     this.body,
@@ -496,23 +635,38 @@ final class AuthEndpointHttpResponse {
     }
   }
 
+  /// HTTP status code returned to the client.
   final int statusCode;
+
+  /// Response body, usually a JSON-compatible value.
   final Object? body;
+
+  /// Response headers returned to the client.
   final Map<String, String> headers;
 }
 
 /// Host-owned session operations available to portable plugin endpoints.
 abstract interface class AuthServerPluginSessionControl {
+  /// Session strategy used by the host.
   AuthSessionStrategy get strategy;
+
+  /// Current server-side session identifier, when available.
   String? get currentSessionId;
+
+  /// Clears the current host-owned session.
   FutureOr<void> signOut();
 }
 
 /// Lifecycle phase emitted by the host after it completes an authentication
 /// transition or clears one.
 enum AuthAuthenticationLifecycleEventType {
+  /// A user successfully authenticated.
   authenticationSucceeded,
+
+  /// The current user signed out.
   signedOut,
+
+  /// The current account was deleted.
   accountDeleted,
 }
 
@@ -523,6 +677,7 @@ enum AuthAuthenticationLifecycleEventType {
 /// provider response. OAuth hosts may additionally provide the bounded
 /// provider namespace in [oauthProviderNamespace].
 final class AuthAuthenticationLifecycleEvent<TContext> {
+  /// Creates a lifecycle event delivered to plugin contributors.
   const AuthAuthenticationLifecycleEvent({
     required this.type,
     required this.context,
@@ -531,44 +686,75 @@ final class AuthAuthenticationLifecycleEvent<TContext> {
     this.oauthProviderNamespace,
   });
 
+  /// Lifecycle transition represented by the event.
   final AuthAuthenticationLifecycleEventType type;
+
+  /// Framework context associated with the transition.
   final TContext context;
+
+  /// Session strategy used by the host.
   final AuthSessionStrategy strategy;
+
+  /// Stable authentication-method label, when known.
   final String? authenticationMethod;
+
+  /// Provider namespace associated with an OAuth transition, when known.
   final String? oauthProviderNamespace;
 }
 
 /// Optional plugin contributor notified only after host-owned lifecycle work
 /// has completed.
 abstract interface class AuthAuthenticationLifecycleContributor<TContext> {
+  /// Handles a completed authentication lifecycle transition.
   FutureOr<void> onAuthenticationLifecycleEvent(
     AuthAuthenticationLifecycleEvent<TContext> event,
   );
 }
 
-enum AuthAuthenticationPolicyPhase { beforeSessionIssue, resolveSession }
+/// Authentication boundary at which a policy is evaluated.
+enum AuthAuthenticationPolicyPhase {
+  /// Runs immediately before a session is issued.
+  beforeSessionIssue,
 
+  /// Runs while an existing session is resolved.
+  resolveSession,
+}
+
+/// Context supplied to an authentication policy contributor.
 final class AuthAuthenticationPolicyRequest<TContext> {
+  /// Creates a request for an authentication policy contributor.
   const AuthAuthenticationPolicyRequest({
     required this.context,
     required this.user,
     required this.phase,
   });
 
+  /// Framework context associated with the authentication attempt.
   final TContext context;
+
+  /// User being authenticated.
   final AuthUser user;
+
+  /// Policy phase being evaluated.
   final AuthAuthenticationPolicyPhase phase;
 }
 
 /// Optional plugin contribution consulted at every authentication boundary.
 abstract interface class AuthAuthenticationPolicyContributor<TContext> {
+  /// Enforces application policy for an authentication boundary.
   FutureOr<void> enforceAuthenticationPolicy(
     AuthAuthenticationPolicyRequest<TContext> request,
   );
 }
 
 /// Credential operation at which an application-owned credential policy runs.
-enum AuthCredentialPolicyOperation { signIn, registration }
+enum AuthCredentialPolicyOperation {
+  /// A user is attempting to sign in with credentials.
+  signIn,
+
+  /// A user is registering a new credential.
+  registration,
+}
 
 /// Non-password input supplied to credential policy contributors.
 ///
@@ -577,6 +763,7 @@ enum AuthCredentialPolicyOperation { signIn, registration }
 /// response. The value is supplied only to the policy contributor that needs
 /// it, before the credential provider is invoked.
 final class AuthCredentialPolicyRequest<TContext> {
+  /// Creates a request for a credential policy contributor.
   const AuthCredentialPolicyRequest({
     required this.context,
     required this.provider,
@@ -585,28 +772,48 @@ final class AuthCredentialPolicyRequest<TContext> {
     this.verificationToken,
   });
 
+  /// Framework context associated with the credential operation.
   final TContext context;
+
+  /// Provider handling the credential operation.
   final AuthProvider provider;
+
+  /// Credential operation being evaluated.
   final AuthCredentialPolicyOperation operation;
+
+  /// Normalized credential identifier, when supplied.
   final String? identifier;
+
+  /// Delivery-only verification token, when supplied.
   final String? verificationToken;
 }
 
 /// Optional policy consulted immediately before a credential provider runs.
 abstract interface class AuthCredentialPolicyContributor<TContext> {
+  /// Enforces application policy before credentials are accepted.
   FutureOr<void> enforceCredentialPolicy(
     AuthCredentialPolicyRequest<TContext> request,
   );
 }
 
 /// Password mutation protected by an application-owned password policy.
-enum AuthPasswordPolicyOperation { registration, passwordReset, passwordChange }
+enum AuthPasswordPolicyOperation {
+  /// A password supplied during registration.
+  registration,
+
+  /// A password supplied during password reset.
+  passwordReset,
+
+  /// A password supplied during password change.
+  passwordChange,
+}
 
 /// Request passed to password policy contributors.
 ///
 /// [password] is a secret and exists only for the duration of the policy
 /// call. This type intentionally has no JSON or diagnostic representation.
 final class AuthPasswordPolicyRequest<TContext> {
+  /// Creates a request for a password policy contributor.
   const AuthPasswordPolicyRequest({
     required this.context,
     required this.operation,
@@ -614,14 +821,22 @@ final class AuthPasswordPolicyRequest<TContext> {
     this.user,
   });
 
+  /// Framework context associated with the password operation.
   final TContext context;
+
+  /// Password operation being evaluated.
   final AuthPasswordPolicyOperation operation;
+
+  /// Plaintext password supplied only for the duration of the policy call.
   final String password;
+
+  /// Existing user associated with the operation, when known.
   final AuthUser? user;
 }
 
 /// Optional policy consulted before a new password is accepted.
 abstract interface class AuthPasswordPolicyContributor<TContext> {
+  /// Enforces application policy before a password is accepted.
   FutureOr<void> enforcePasswordPolicy(
     AuthPasswordPolicyRequest<TContext> request,
   );
@@ -630,12 +845,16 @@ abstract interface class AuthPasswordPolicyContributor<TContext> {
 /// Plugin-owned credentials or tokens that must be revoked when a user is
 /// made unavailable without deleting their data.
 abstract interface class AuthUserAccessRevocationContributor {
+  /// Namespace of credentials or tokens revoked by this contributor.
   String get userAccessNamespace;
+
+  /// Revokes this contributor's access records for [userId].
   FutureOr<void> revokeUserAccess(String userId);
 }
 
 /// Optional second-pass composition after every plugin has been registered.
 abstract interface class AuthServerPluginTopologyAware<TContext> {
+  /// Composes this plugin with the complete registered plugin topology.
   void composePluginTopology(Iterable<AuthServerPlugin<TContext>> plugins);
 }
 
@@ -654,12 +873,14 @@ abstract interface class AuthServerPluginTopologyAware<TContext> {
 /// on every [AuthServerPlugin], so external plugins cannot silently omit their
 /// cleanup and account-safety topology.
 final class AuthServerPluginDataContract {
+  /// Creates a declaration of plugin-owned data and removal endpoints.
   const AuthServerPluginDataContract({
     this.authenticationMethodNamespace,
     this.userDataNamespace,
     this.removalEndpointIds = const <String>[],
   });
 
+  /// Creates a declaration for a plugin that owns no user data or methods.
   const AuthServerPluginDataContract.none()
     : authenticationMethodNamespace = null,
       userDataNamespace = null,
@@ -675,6 +896,7 @@ final class AuthServerPluginDataContract {
   final List<String> removalEndpointIds;
 }
 
+/// Handles one OAuth token grant for a host-owned token endpoint.
 typedef AuthOAuthTokenGrantHandler<TContext> =
     FutureOr<Object?> Function(
       AuthOperationInvocation<TContext> invocation,
@@ -683,24 +905,46 @@ typedef AuthOAuthTokenGrantHandler<TContext> =
 
 /// Host for grant handlers sharing a single OAuth token endpoint.
 abstract interface class AuthOAuthTokenEndpointHost<TContext> {
+  /// Registers a handler for [grantType].
   void registerOAuthTokenGrant(
     String grantType,
     AuthOAuthTokenGrantHandler<TContext> handler,
   );
 }
 
+/// Describes and invokes one framework-neutral auth endpoint.
 abstract interface class AuthEndpointDescriptor<TContext> {
+  /// Stable endpoint identifier.
   String get id;
+
+  /// HTTP method used by the endpoint.
   AuthOperationMethod get method;
+
+  /// Canonical route path used by the endpoint.
   AuthRoutePath get path;
+
+  /// Mount location selected by the endpoint.
   AuthEndpointMount get mount;
+
+  /// Persistence and replay semantics declared by the endpoint.
   AuthOperationSemantics get semantics;
+
+  /// Authentication boundary required by the endpoint.
   AuthOperationAuthentication get authentication;
+
+  /// Browser-origin policy required by the endpoint.
   AuthOperationOriginPolicy get originPolicy;
+
+  /// CSRF policy required by the endpoint.
   AuthOperationCsrfPolicy get csrfPolicy;
+
+  /// Rate-limit operation applied by the host, when configured.
   AuthRateLimitOperation? get rateLimitOperation;
+
+  /// Whether the endpoint is available only to server-side callers.
   bool get serverOnly;
 
+  /// Invokes the endpoint with [invocation] and [request].
   FutureOr<Object?> invoke(
     AuthOperationInvocation<TContext> invocation,
     AuthEndpointRequest request,
@@ -716,6 +960,7 @@ abstract interface class AuthEndpointDescriptor<TContext> {
 /// plugins declare the boundary without depending on a session or router
 /// implementation.
 abstract interface class AuthEndpointSecurityDescriptor {
+  /// Whether the host must require recent original authentication.
   bool get requiresRecentAuthentication;
 }
 
@@ -725,7 +970,7 @@ abstract interface class AuthEndpointSecurityDescriptor {
 /// must return a canonical non-secret identifier and must never return a
 /// password, captcha token, bearer credential, or other request secret.
 abstract interface class AuthEndpointRateLimitIdentifierDescriptor {
-  /// Decodes [input], derives an endpoint-specific key, and applies the common
+  /// Decodes [request], derives an endpoint-specific key, and applies the common
   /// limiter-identifier safety boundary.
   ///
   /// Invalid endpoint input produces no identifier. The endpoint invocation
@@ -738,6 +983,7 @@ abstract interface class AuthEndpointRateLimitIdentifierDescriptor {
 typedef AuthEndpointRateLimitIdentifierResolver<TRequest> =
     String? Function(TRequest request);
 
+/// Projects a resolved session payload into an endpoint-specific response.
 typedef AuthEndpointAuthenticationProjector =
     FutureOr<Object?> Function(Map<String, dynamic> sessionPayload);
 
@@ -749,6 +995,7 @@ typedef AuthEndpointAuthenticationProjector =
 /// strategy, run callbacks and lifecycle events, and only then call
 /// [projectResponse] with the host-owned public session payload.
 final class AuthEndpointAuthenticationIntent {
+  /// Creates a host-owned authentication transition intent.
   AuthEndpointAuthenticationIntent({
     required this.user,
     required this.authenticationMethod,
@@ -770,14 +1017,26 @@ final class AuthEndpointAuthenticationIntent {
     }
   }
 
+  /// User verified by the plugin.
   final AuthUser user;
+
+  /// Stable label for the authentication method used.
   final String authenticationMethod;
+
+  /// Provider that verified the user, when applicable.
   final AuthProvider? provider;
+
+  /// Maximum age requested for the resulting authentication.
   final Duration? maximumAge;
+
+  /// Administrator responsible for an impersonated session, when applicable.
   final String? impersonatedBy;
+
+  /// Non-reserved metadata merged into the host session response.
   final Map<String, dynamic> metadata;
   final AuthEndpointAuthenticationProjector? _projectResponse;
 
+  /// Projects the host-owned [sessionPayload] into a public response.
   FutureOr<Object?> projectResponse(Map<String, dynamic> sessionPayload) {
     final projector = _projectResponse;
     if (projector != null) return projector(sessionPayload);
@@ -812,7 +1071,10 @@ Map<String, dynamic> _validateAuthenticationMetadata(
 /// untyped endpoint implementations while allowing typed endpoints to drive
 /// documentation and generated clients.
 abstract interface class AuthEndpointContractDescriptor {
+  /// Codec for decoding the endpoint request.
   AuthOperationContract get requestCodec;
+
+  /// Codec for encoding the endpoint response.
   AuthOperationContract get responseCodec;
 }
 
@@ -822,35 +1084,51 @@ abstract interface class AuthEndpointContractDescriptor {
 /// responses, and protocol-specific error media types without coupling their
 /// implementation to an OpenAPI package.
 final class AuthEndpointResponseContract {
+  /// Creates a documented successful response contract.
   const AuthEndpointResponseContract({
     required this.statusCode,
     required this.description,
     this.contract,
   }) : assert(statusCode >= 100 && statusCode <= 599);
 
+  /// HTTP status code represented by the response.
   final int statusCode;
+
+  /// Human-readable response description.
   final String description;
+
+  /// Optional body contract for the response.
   final AuthOperationContract? contract;
 }
 
 /// Optional complete HTTP response contract for an endpoint.
 abstract interface class AuthEndpointResponseContractDescriptor {
+  /// Response contracts advertised by the endpoint.
   Iterable<AuthEndpointResponseContract> get responseContracts;
 }
 
 /// Host-level failure that happened outside a plugin handler.
-enum AuthEndpointPublicErrorKind { invalidRequest, internalFailure }
+enum AuthEndpointPublicErrorKind {
+  /// The request could not be decoded or validated.
+  invalidRequest,
 
+  /// The host failed while handling an otherwise valid request.
+  internalFailure,
+}
+
+/// Creates a public HTTP response for a host-owned endpoint error.
 typedef AuthEndpointPublicErrorResponseFactory =
     AuthEndpointHttpResponse Function(AuthEndpointPublicErrorKind kind);
 
 /// Optional protocol-specific public errors for failures owned by the host.
 abstract interface class AuthEndpointPublicErrorResponseDescriptor {
+  /// Creates a public response for [kind], when the endpoint supports it.
   AuthEndpointHttpResponse? createPublicErrorResponse(
     AuthEndpointPublicErrorKind kind,
   );
 }
 
+/// Typed endpoint descriptor that owns request decoding and response encoding.
 final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
     implements
         AuthEndpointDescriptor<TContext>,
@@ -859,6 +1137,7 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
         AuthEndpointResponseContractDescriptor,
         AuthEndpointPublicErrorResponseDescriptor,
         AuthEndpointRateLimitIdentifierDescriptor {
+  /// Creates a typed endpoint descriptor.
   const TypedAuthEndpointDescriptor({
     required this.id,
     required this.method,
@@ -879,47 +1158,82 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
     this.mount = AuthEndpointMount.auth,
   });
 
+  /// Stable endpoint identifier.
   @override
   final String id;
+
+  /// HTTP method used by the endpoint.
   @override
   final AuthOperationMethod method;
+
+  /// Canonical route path used by the endpoint.
   @override
   final AuthRoutePath path;
+
+  /// Mount location selected by the endpoint.
   @override
   final AuthEndpointMount mount;
+
+  /// Persistence and replay semantics declared by the endpoint.
   @override
   final AuthOperationSemantics semantics;
+
+  /// Request codec used before [handler] runs.
   @override
   final AuthOperationCodec<TRequest> requestCodec;
+
+  /// Response codec used after [handler] completes.
   @override
   final AuthOperationCodec<TResponse> responseCodec;
+
+  /// Handler invoked with the decoded request.
   final FutureOr<TResponse> Function(
     AuthOperationInvocation<TContext> invocation,
     TRequest request,
   )
   handler;
+
+  /// Authentication boundary required by the endpoint.
   @override
   final AuthOperationAuthentication authentication;
+
+  /// Browser-origin policy required by the endpoint.
   @override
   final AuthOperationOriginPolicy originPolicy;
+
+  /// CSRF policy required by the endpoint.
   @override
   final AuthOperationCsrfPolicy csrfPolicy;
+
+  /// Rate-limit operation applied by the host, when configured.
   @override
   final AuthRateLimitOperation? rateLimitOperation;
+
+  /// Resolves a private rate-limit identifier from a decoded request.
   final AuthEndpointRateLimitIdentifierResolver<TRequest>? rateLimitIdentifier;
+
+  /// Whether recent original authentication is required.
   @override
   final bool requiresRecentAuthentication;
+
+  /// Explicit success responses advertised by the endpoint.
   @override
   final Iterable<AuthEndpointResponseContract> responseContracts;
+
+  /// Optional factory for protocol-specific public errors.
   final AuthEndpointPublicErrorResponseFactory? publicErrorResponse;
+
+  /// Whether the endpoint is available only to server-side callers.
   @override
   final bool serverOnly;
 
+  /// Creates the endpoint's public error response for [kind].
   @override
   AuthEndpointHttpResponse? createPublicErrorResponse(
     AuthEndpointPublicErrorKind kind,
   ) => publicErrorResponse?.call(kind);
 
+  /// Resolves a private limiter identifier from [request].
   @override
   String? resolveRateLimitIdentifier(AuthEndpointRequest request) {
     final resolver = rateLimitIdentifier;
@@ -933,6 +1247,7 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
     }
   }
 
+  /// Decodes, invokes, and encodes one endpoint request.
   @override
   Future<Object?> invoke(
     AuthOperationInvocation<TContext> invocation,
@@ -954,7 +1269,9 @@ final class TypedAuthEndpointDescriptor<TContext, TRequest, TResponse>
       };
 }
 
+/// Contributes runtime routes owned by a server plugin.
 abstract interface class AuthEndpointContributor<TContext> {
+  /// Runtime endpoints contributed by the plugin.
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints;
 }
 
@@ -965,22 +1282,31 @@ abstract interface class AuthEndpointContributor<TContext> {
 /// the host owns their transport behavior and must not mount them through the
 /// generic plugin invocation path.
 abstract interface class AuthHostEndpointContributor<TContext> {
+  /// Host-owned endpoint contracts enabled by the plugin.
   Iterable<AuthEndpointDescriptor<TContext>> get hostEndpoints;
 }
 
+/// Contributes persistence schemas owned by a server plugin.
 abstract interface class AuthPersistenceContributor {
+  /// Persistence schemas declared by the plugin.
   Iterable<AuthPersistenceSchema> get persistenceSchemas;
 }
 
+/// Contributes client operations owned by a server plugin.
 abstract interface class AuthClientOperationContributor {
+  /// Client operations declared by the plugin.
   Iterable<AuthClientOperationDescriptor> get clientOperations;
 }
 
+/// Contributes rate-limit operation metadata owned by a server plugin.
 abstract interface class AuthRateLimitContributor {
+  /// Rate-limit operations declared by the plugin.
   Iterable<AuthRateLimitOperation> get rateLimitOperations;
 }
 
+/// Describes one client-visible operation exposed by an auth plugin.
 final class AuthClientOperationDescriptor {
+  /// Creates a client operation descriptor.
   const AuthClientOperationDescriptor({
     required this.id,
     required this.method,
@@ -989,26 +1315,44 @@ final class AuthClientOperationDescriptor {
     this.mount = AuthEndpointMount.auth,
   });
 
+  /// Stable operation identifier.
   final String id;
+
+  /// HTTP method used by the operation.
   final AuthOperationMethod method;
+
+  /// Canonical route path used by the operation.
   final AuthRoutePath path;
+
+  /// Whether the operation is intended only for server-side callers.
   final bool serverOnly;
+
+  /// Mount location selected by the operation.
   final AuthEndpointMount mount;
 }
 
+/// Describes the persistence topology owned by an auth plugin.
 final class AuthPersistenceSchema {
+  /// Creates a persistence schema descriptor.
   const AuthPersistenceSchema({
     required this.id,
     required this.entities,
     this.atomicOperations = const <AuthAtomicOperationDescriptor>[],
   });
 
+  /// Stable schema identifier.
   final String id;
+
+  /// Entities stored by this schema.
   final List<AuthEntityDescriptor> entities;
+
+  /// Atomic operations supported by this schema.
   final List<AuthAtomicOperationDescriptor> atomicOperations;
 }
 
+/// Describes one persisted entity in an auth plugin schema.
 final class AuthEntityDescriptor {
+  /// Creates an entity descriptor.
   const AuthEntityDescriptor({
     required this.id,
     required this.fields,
@@ -1017,43 +1361,71 @@ final class AuthEntityDescriptor {
     this.indexes = const <List<String>>[],
   });
 
+  /// Stable entity identifier.
   final String id;
+
+  /// Fields persisted for the entity.
   final List<AuthFieldDescriptor> fields;
+
+  /// Relationships to other entities.
   final List<AuthRelationshipDescriptor> relationships;
+
+  /// Sets of fields that must be unique.
   final List<List<String>> uniqueConstraints;
+
+  /// Field sets indexed for lookup.
   final List<List<String>> indexes;
 }
 
+/// Describes one persisted field in an auth plugin schema.
 final class AuthFieldDescriptor {
+  /// Creates a field descriptor with its name and storage kind.
   const AuthFieldDescriptor({required this.name, required this.kind});
 
+  /// Field name.
   final String name;
+
+  /// Storage or schema kind for the field.
   final String kind;
 }
 
+/// Describes a relationship between two persisted plugin entities.
 final class AuthRelationshipDescriptor {
+  /// Creates a relationship descriptor.
   const AuthRelationshipDescriptor({
     required this.field,
     required this.targetEntity,
     this.cascadeDelete = false,
   });
 
+  /// Source field containing the relationship.
   final String field;
+
+  /// Target entity identifier.
   final String targetEntity;
+
+  /// Whether deleting the source cascades to the target.
   final bool cascadeDelete;
 }
 
+/// Describes one atomic persistence operation in a plugin schema.
 final class AuthAtomicOperationDescriptor {
+  /// Creates an atomic operation descriptor.
   const AuthAtomicOperationDescriptor({
     required this.id,
     required this.description,
   });
 
+  /// Stable operation identifier.
   final String id;
+
+  /// Human-readable operation description.
   final String description;
 }
 
+/// Context supplied while configuring a server plugin.
 class AuthServerPluginContext<TContext> {
+  /// Creates plugin configuration context from the host's stores and policies.
   const AuthServerPluginContext({
     required this.store,
     this.authenticationMethods,
@@ -1062,27 +1434,43 @@ class AuthServerPluginContext<TContext> {
     this.sessionStrategy = AuthSessionStrategy.session,
   });
 
+  /// Typed persistence boundary shared by the runtime.
   final AuthStore store;
+
+  /// Authentication-method service shared by the runtime, when available.
   final AuthAuthenticationMethodService? authenticationMethods;
+
+  /// Password hasher selected by the host, when available.
   final PasswordHasher? passwordHasher;
+
+  /// Password policy selected by the host.
   final PasswordPolicy passwordPolicy;
+
+  /// Session strategy selected by the host.
   final AuthSessionStrategy sessionStrategy;
 }
 
+/// Contract implemented by every server plugin.
 abstract interface class AuthServerPlugin<TContext> {
+  /// Stable plugin identifier.
   String get id;
 
+  /// Declares data and destructive routes owned by this plugin.
   AuthServerPluginDataContract get dataContract;
 
+  /// Configures this plugin against the shared runtime context.
   void configure(AuthServerPluginContext<TContext> context);
 }
 
 /// Optional plugin check executed whenever auth boots in production posture.
 abstract interface class AuthProductionPostureContributor {
+  /// Validates that this plugin is safe for production boot.
   void validateProductionPosture();
 }
 
+/// Registry that composes, freezes, and exposes server plugin topology.
 class AuthServerPluginRegistry<TContext> {
+  /// Creates a registry for [store] and the shared authentication services.
   AuthServerPluginRegistry({
     required AuthStore store,
     required AuthAuthenticationMethodService authenticationMethods,
@@ -1115,8 +1503,13 @@ class AuthServerPluginRegistry<TContext> {
   final Set<String> _endpointKeys = <String>{};
   bool _frozen = false;
 
+  /// Whether registration and topology mutation have been frozen.
   bool get isFrozen => _frozen;
 
+  /// Registers and configures [plugin].
+  ///
+  /// Throws a [StateError] when the registry is frozen or the identifier is a
+  /// duplicate.
   void register(AuthServerPlugin<TContext> plugin) {
     if (_frozen) throw StateError('Auth plugin topology is frozen.');
     final id = plugin.id.trim();
@@ -1139,6 +1532,7 @@ class AuthServerPluginRegistry<TContext> {
     );
   }
 
+  /// Finalizes plugin composition and validates the complete topology.
   void freeze() {
     if (_frozen) return;
     final topology = List<AuthServerPlugin<TContext>>.unmodifiable(
@@ -1284,13 +1678,17 @@ class AuthServerPluginRegistry<TContext> {
     }
   }
 
+  /// Returns the registered plugin with [id], or `null` when absent.
   AuthServerPlugin<TContext>? find(String id) => _plugins[id.trim()];
 
+  /// Returns whether a plugin with [id] is registered.
   bool contains(String id) => find(id) != null;
 
+  /// Returns the registered plugins in registration order.
   Iterable<AuthServerPlugin<TContext>> get values =>
       List<AuthServerPlugin<TContext>>.unmodifiable(_plugins.values);
 
+  /// Returns runtime endpoints contributed by registered plugins.
   Iterable<AuthEndpointDescriptor<TContext>> get endpoints =>
       List<AuthEndpointDescriptor<TContext>>.unmodifiable(_endpoints.values);
 
@@ -1339,6 +1737,7 @@ class AuthServerPluginRegistry<TContext> {
     }
   }
 
+  /// Enforces authentication policies contributed by registered plugins.
   Future<void> enforceAuthenticationPolicy(
     AuthAuthenticationPolicyRequest<TContext> request,
   ) async {
@@ -1349,6 +1748,7 @@ class AuthServerPluginRegistry<TContext> {
     }
   }
 
+  /// Emits a completed lifecycle event to registered contributors.
   Future<void> emitAuthenticationLifecycleEvent(
     AuthAuthenticationLifecycleEvent<TContext> event,
   ) async {
@@ -1359,6 +1759,7 @@ class AuthServerPluginRegistry<TContext> {
     }
   }
 
+  /// Enforces credential policies contributed by registered plugins.
   Future<void> enforceCredentialPolicy(
     AuthCredentialPolicyRequest<TContext> request,
   ) async {
@@ -1369,6 +1770,7 @@ class AuthServerPluginRegistry<TContext> {
     }
   }
 
+  /// Enforces password policies contributed by registered plugins.
   Future<void> enforcePasswordPolicy(
     AuthPasswordPolicyRequest<TContext> request,
   ) async {
@@ -1379,6 +1781,7 @@ class AuthServerPluginRegistry<TContext> {
     }
   }
 
+  /// Returns persistence schemas contributed by registered plugins.
   Iterable<AuthPersistenceSchema> get persistenceSchemas =>
       List<AuthPersistenceSchema>.unmodifiable(
         _plugins.values.whereType<AuthPersistenceContributor>().expand(
@@ -1386,6 +1789,7 @@ class AuthServerPluginRegistry<TContext> {
         ),
       );
 
+  /// Returns client-visible operations contributed by registered plugins.
   Iterable<AuthClientOperationDescriptor> get clientOperations =>
       List<AuthClientOperationDescriptor>.unmodifiable(
         _plugins.values
@@ -1394,6 +1798,7 @@ class AuthServerPluginRegistry<TContext> {
             .where((operation) => !operation.serverOnly),
       );
 
+  /// Returns rate-limit operations contributed by registered plugins.
   Iterable<AuthRateLimitOperation> get rateLimitOperations =>
       List<AuthRateLimitOperation>.unmodifiable(
         _plugins.values.whereType<AuthRateLimitContributor>().expand(

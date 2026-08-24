@@ -22,6 +22,7 @@ import 'email_otp_store.dart';
 
 /// Result of an atomic user create-or-find operation.
 class AuthUserCreateResult {
+  /// Creates the result of an atomic user create-or-find operation.
   const AuthUserCreateResult({required this.user, required this.created});
 
   /// The canonical user returned by the store.
@@ -108,8 +109,10 @@ void validateAuthSessionForPersistence(AuthSessionRecord session) {
 
 /// Persistence contract for user records.
 abstract interface class AuthUserStore {
+  /// Finds a user by its stable identifier.
   FutureOr<AuthUser?> findById(String id);
 
+  /// Finds a user by its normalized email address.
   FutureOr<AuthUser?> findByEmail(String email);
 
   /// Persists [user], whose ID must be non-empty and stable.
@@ -123,6 +126,7 @@ abstract interface class AuthUserStore {
   /// permit concurrent requests to create duplicate users.
   FutureOr<AuthUserCreateResult> createOrFindByEmail(AuthUser user);
 
+  /// Updates a user and returns the persisted value, or `null` when absent.
   FutureOr<AuthUser?> update(AuthUser user);
 
   /// Atomically replaces a user's email while enforcing email uniqueness.
@@ -168,6 +172,7 @@ abstract interface class AuthCredentialStore {
 /// Optional credential-store capability for resolving a user's password
 /// credential without assuming that their login identifier is an email.
 abstract interface class AuthCredentialUserLookupStore {
+  /// Finds the password credential owned by [userId].
   FutureOr<AuthPasswordCredential?> findForUser(String userId);
 }
 
@@ -207,6 +212,7 @@ Future<AuthPasswordCredential?> findAuthCredentialForUser(
 
 /// Persistence contract for external provider accounts.
 abstract interface class AuthAccountStore {
+  /// Finds an external account by provider and provider-account identifier.
   FutureOr<AuthAccount?> find(String providerId, String providerAccountId);
 
   /// Lists external identities linked to [userId].
@@ -237,11 +243,13 @@ abstract interface class AuthAccountStore {
 
 /// Persistence contract for one-time email-change confirmations.
 abstract interface class AuthEmailChangeTokenStore {
+  /// Persists a pending email-change token.
   FutureOr<void> save(AuthEmailChangeToken token);
 
   /// Atomically consumes an active token and returns its user/email binding.
   FutureOr<AuthEmailChangeToken?> consume(String token);
 
+  /// Deletes all pending email-change tokens for [userId].
   FutureOr<void> deleteForUser(String userId);
 }
 
@@ -300,29 +308,40 @@ abstract interface class AuthSessionStore {
 /// Authoritative persistence boundary for authentication plugins.
 ///
 /// Implementations expose each auth concern through its own typed store. An
-/// application must provide one store to [AuthOptions]; there is no implicit
+/// application must provide one store to its auth options; there is no implicit
 /// adapter, fallback store, or untyped callback surface.
 abstract interface class AuthStore {
+  /// User persistence operations.
   AuthUserStore get users;
 
+  /// Password credential persistence operations.
   AuthCredentialStore get credentials;
 
+  /// External provider-account persistence operations.
   AuthAccountStore get accounts;
 
+  /// Server-side session persistence operations.
   AuthSessionStore get sessions;
 
+  /// OAuth authorization-challenge persistence operations.
   AuthOAuthChallengeStore get oauthChallenges;
 
+  /// Password-reset token persistence operations.
   AuthPasswordResetTokenStore get passwordResetTokens;
 
+  /// JWT-version persistence operations.
   AuthJwtVersionStore get jwtVersions;
 
+  /// Email-verification token persistence operations.
   AuthVerificationTokenStore get verificationTokens;
 
+  /// Email-change token persistence operations.
   AuthEmailChangeTokenStore get emailChangeTokens;
 
+  /// Device-authorization persistence operations.
   AuthDeviceAuthorizationStore get deviceAuthorizations;
 
+  /// Email one-time-password persistence operations.
   AuthEmailOtpStore get emailOtps;
 }
 
@@ -332,12 +351,16 @@ abstract interface class AuthStore {
 /// them separate from [AuthStore] preserves source compatibility for stores
 /// that do not opt into administrative APIs.
 abstract interface class AuthAdminStoreCapabilities {
+  /// Lists users for an administrative view.
   FutureOr<List<AuthUser>> listUsersForAdministration();
 
+  /// Updates a user through an administrative operation.
   FutureOr<AuthUser?> updateUserForAdministration(AuthUser user);
 
+  /// Finds a password credential owned by [userId].
   FutureOr<AuthPasswordCredential?> findCredentialForUser(String userId);
 
+  /// Creates or updates a password credential through administration.
   FutureOr<AuthPasswordCredential> upsertCredentialForAdministration(
     AuthPasswordCredential credential,
   );
@@ -470,6 +493,7 @@ class InMemoryAuthStore
         AuthOAuthAccountMutationStore,
         AuthUserDeletionCoordinatorHost,
         AuthInMemoryUserDeletionBackend {
+  /// Creates an in-memory store for tests and local development.
   InMemoryAuthStore({
     this.anonymousFaultInjector,
     this.emailBackendFaultInjector,
@@ -553,8 +577,14 @@ class InMemoryAuthStore
 
   final InMemoryAuthAccountStateStore _accountStates;
   final AuthUsernameFaultInjector? _usernameFaultInjector;
+
+  /// Optional deterministic failures for anonymous-account rollback tests.
   final AuthAnonymousInMemoryFaultInjector? anonymousFaultInjector;
+
+  /// Optional deterministic failures for phone-number rollback tests.
   final AuthPhoneNumberInMemoryFaultInjector? phoneNumberFaultInjector;
+
+  /// Maximum number of phone verifications retained in memory.
   final int maxPhoneNumberVerifications;
   final AuthInMemoryUserDeletionDomain _deletionDomain;
   late final AuthInMemoryUserDeletionCoordinator _deletionCoordinator;
@@ -1951,7 +1981,9 @@ AuthUser _phoneVerifiedUser(AuthUser user, String phoneNumber) {
   );
 }
 
+/// Callback-backed auth store for focused tests and compatibility adapters.
 class CallbackAuthStore implements AuthStore, AuthWebAuthnStoreCapabilities {
+  /// Creates a store from callbacks for the supported persistence operations.
   CallbackAuthStore({
     FutureOr<AuthUser?> Function(String id)? onFindUserById,
     FutureOr<AuthUser?> Function(String email)? onFindUserByEmail,

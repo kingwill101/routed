@@ -112,6 +112,7 @@ Map<String, dynamic> sanitizeAuthPublicAttributes(Map<String, dynamic> value) {
 
 /// Represents an authenticated user or entity.
 class AuthPrincipal {
+  /// Creates a principal with an identifier, roles, and public attributes.
   AuthPrincipal({
     required this.id,
     this.roles = const <String>[],
@@ -120,18 +121,26 @@ class AuthPrincipal {
            ? const <String, dynamic>{}
            : Map<String, dynamic>.from(attributes);
 
+  /// Stable identifier for the authenticated principal.
   final String id;
+
+  /// Role labels associated with the principal.
   final List<String> roles;
+
+  /// Public attributes associated with the principal.
   final Map<String, dynamic> attributes;
 
+  /// Returns whether [role] is assigned to this principal.
   bool hasRole(String role) => roles.contains(role);
 
+  /// Serializes this principal after removing sensitive attributes.
   Map<String, dynamic> toJson() => {
     'id': id,
     'roles': roles,
     'attributes': sanitizeAuthPublicAttributes(attributes),
   };
 
+  /// Creates a principal from a JSON payload.
   factory AuthPrincipal.fromJson(Map<String, dynamic> json) {
     final rolesValue = json['roles'];
     final attributesValue = json['attributes'];
@@ -152,6 +161,7 @@ class AuthPrincipal {
 
 /// Authenticated user profile used by auth flows and sessions.
 class AuthUser {
+  /// Creates a user profile.
   AuthUser({
     required this.id,
     this.email,
@@ -321,6 +331,7 @@ class AuthUser {
 
 /// Provider account metadata linked to an `AuthUser`.
 class AuthAccount {
+  /// Creates linked provider-account metadata.
   AuthAccount({
     required this.providerId,
     required this.providerAccountId,
@@ -417,6 +428,7 @@ class AuthAccount {
 /// This is a storage model, not request input. It contains only an encoded
 /// password hash and may safely be passed between typed persistence layers.
 class AuthPasswordCredential {
+  /// Creates a persisted password credential record.
   AuthPasswordCredential({
     required this.id,
     required this.userId,
@@ -479,6 +491,7 @@ class AuthPasswordCredential {
 
 /// Credential input for username/password flows.
 class AuthCredentials {
+  /// Creates credential input for a sign-in or registration request.
   AuthCredentials({
     this.email,
     this.username,
@@ -528,6 +541,7 @@ class AuthCredentials {
 
 /// Verification token for email sign-in.
 class AuthVerificationToken {
+  /// Creates an email verification token record.
   AuthVerificationToken({
     required this.identifier,
     required this.token,
@@ -556,6 +570,7 @@ class AuthVerificationToken {
 /// The raw [token] is delivery-only. Typed stores must persist only its
 /// digest and return this value only to the caller that atomically consumes it.
 class AuthEmailChangeToken {
+  /// Creates a one-time email-change token record.
   AuthEmailChangeToken({
     required this.userId,
     required this.newEmail,
@@ -563,9 +578,16 @@ class AuthEmailChangeToken {
     required this.expiresAt,
   });
 
+  /// User requesting the email change.
   final String userId;
+
+  /// New email address awaiting confirmation.
   final String newEmail;
+
+  /// Raw token delivered to the user for one-time confirmation.
   final String token;
+
+  /// Time after which this token is invalid.
   final DateTime expiresAt;
 }
 
@@ -575,6 +597,7 @@ class AuthEmailChangeToken {
 /// the raw token must never be persisted. This record is deliberately
 /// separate from [AuthSession], which is the public response projection.
 class AuthSessionRecord {
+  /// Creates persisted metadata for a server-side session.
   AuthSessionRecord({
     required this.id,
     required this.tokenHash,
@@ -663,6 +686,7 @@ class AuthSessionRecord {
 
 /// Session data returned by auth endpoints.
 class AuthSession {
+  /// Creates a public session response.
   AuthSession({
     required this.user,
     required this.expiresAt,
@@ -703,10 +727,17 @@ class AuthSession {
 }
 
 /// Session storage strategy for auth.
-enum AuthSessionStrategy { session, jwt }
+enum AuthSessionStrategy {
+  /// Stores a random opaque token in the server-side session store.
+  session,
+
+  /// Stores a signed JSON Web Token as the session credential.
+  jwt,
+}
 
 /// Result returned by sign-in flows.
 class AuthResult {
+  /// Creates the result of a sign-in flow.
   const AuthResult({
     required this.user,
     required this.session,
