@@ -1,6 +1,5 @@
 import 'package:server_auth/server_auth.dart';
-
-import 'package:routed_core/src/context/context.dart';
+import 'package:routed_core/routed_core.dart' show EngineContext;
 
 /// Checks browser-origin and Fetch Metadata headers for state-changing auth
 /// requests.
@@ -8,6 +7,15 @@ import 'package:routed_core/src/context/context.dart';
 /// OAuth and other external-provider callbacks should not call this helper:
 /// those callbacks are expected to arrive from another origin and still rely
 /// on provider state/nonce validation.
+///
+/// Returns null when the request passes every enabled check. Otherwise returns
+/// one of `method_not_allowed`, `invalid_origin`, `missing_content_type`,
+/// `unsupported_content_type`, `cross_site_request`, or
+/// `referrer_mismatch`. Disabled checks are skipped; the method allowlist is
+/// evaluated first, and a trusted origin bypasses the remaining checks. The
+/// request origin and configured [AuthBrowserProtectionOptions.allowedOrigins]
+/// are accepted when they match, subject to the configured content type,
+/// Fetch Metadata, and Referer policies.
 String? validateRoutedAuthBrowserRequest(
   EngineContext context,
   AuthBrowserProtectionOptions options,

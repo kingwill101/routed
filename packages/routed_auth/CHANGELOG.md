@@ -3,6 +3,8 @@
 - Keep auth lifecycle events from retaining raw request contexts; publish only
   bounded, non-secret request metadata and add regression coverage for request
   secret isolation.
+- Complete public docs for routed API-key, browser-protection, deployment,
+  JWT, OAuth, provider, and last-authentication-method adapters.
 - Complete public Dartdoc for the crypto, route, gate, and conformance APIs.
 - Add a session-bound password reauthentication endpoint and manager API for
   refreshing sensitive-action proofs without replacing the current session.

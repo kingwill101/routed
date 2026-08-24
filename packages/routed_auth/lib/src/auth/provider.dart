@@ -47,6 +47,10 @@ import 'package:routed_core/src/router/types.dart';
 ///
 /// This helper remains internal to Routed's `src` libraries; the public
 /// deployment extension is the user-facing entry point.
+///
+/// The returned provider is coupled to the exact [options] identity later
+/// installed by `bindTo`, so boot fails if the binding is omitted or a
+/// different deployment is bound.
 AuthServiceProvider createDeploymentAuthServiceProvider({
   required AuthConfig configuration,
   required AuthOptions<EngineContext> options,
@@ -61,6 +65,13 @@ AuthServiceProvider createDeploymentAuthServiceProvider({
 /// `AuthManager` when `AuthOptions` is available in the container.
 class AuthServiceProvider extends ServiceProvider
     with ProvidesTypedConfiguration<AuthConfig> {
+  /// Creates a configuration-only provider.
+  ///
+  /// [httpClient] supplies transport for remote JWT keys and OAuth
+  /// introspection; when omitted, this provider owns a default client.
+  /// [configuration] defaults to [AuthConfig.defaults]. Unlike a provider
+  /// created by a deployment, this constructor does not enforce an
+  /// [AuthOptions] identity or require an [AuthManager] binding.
   AuthServiceProvider({http.Client? httpClient, AuthConfig? configuration})
     : _httpClient = httpClient ?? http.Client(),
       configuration = configuration ?? AuthConfig.defaults(),
@@ -72,6 +83,7 @@ class AuthServiceProvider extends ServiceProvider
   }) : _httpClient = http.Client(),
        _expectedDeploymentOptions = expectedOptions;
 
+  /// The typed configuration applied during [boot].
   @override
   final AuthConfig configuration;
 
@@ -94,6 +106,11 @@ class AuthServiceProvider extends ServiceProvider
   final Set<String> _managedGateMiddleware = <String>{};
   final Set<String> _managedRbacAbilities = <String>{};
   final Set<String> _managedPolicyAbilities = <String>{};
+
+  /// Registers Routed middleware identifiers for JWT and OAuth authentication.
+  ///
+  /// The `routed.auth.jwt` and `routed.auth.oauth2` identifiers pass through
+  /// until [boot] materializes the corresponding configured middleware.
   @override
   void register(Container container) {
     final registry = container.get<MiddlewareRegistry>();
@@ -109,6 +126,19 @@ class AuthServiceProvider extends ServiceProvider
     );
   }
 
+  /// Applies authentication configuration and registers live auth routes.
+  ///
+  /// Boot materializes JWT, OAuth, session, guard, and gate configuration and
+  /// creates or reuses an [AuthManager] when matching [AuthOptions] are bound.
+  /// Routes are registered against the live [Engine] only when the required
+  /// manager and engine infrastructure are available. Deployment-created
+  /// providers reject omitted or substituted options; production mode also
+  /// requires the deployment proxy boundary and a durable runtime. Enabled OAuth
+  /// introspection requires an endpoint.
+  ///
+  /// Throws [ProviderConfigException] for invalid enabled OAuth configuration
+  /// and [StateError] for deployment identity, manager, runtime, or production
+  /// engine-boundary mismatches.
   @override
   Future<void> boot(Container container) async {
     _applyConfig(container, configuration);

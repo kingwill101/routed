@@ -14,15 +14,16 @@ import 'package:routed_core/src/router/types.dart';
 
 /// Creates a middleware for OAuth2 token introspection.
 ///
-/// This middleware validates incoming OAuth2 tokens using the provided
-/// [options]. If the token is valid, its claims and attributes are added
-/// to the request context.
+/// This middleware validates incoming OAuth2 bearer tokens using the provided
+/// [options]. If a token is active, its claims and server-auth attributes are
+/// written to the request before [onValidated] and [next] run.
 ///
-/// - [options]: Configuration options for the introspection.
-/// - [onValidated]: Optional callback invoked after successful validation.
-/// - [httpClient]: Optional HTTP client for making introspection requests.
-///
-/// Returns a middleware function that can be used in the routing pipeline.
+/// Only a bearer `Authorization` header is accepted. Missing, empty, or
+/// non-bearer credentials, inactive or expired tokens, malformed responses,
+/// and introspection failures are converted from [OAuth2Exception] to a plain
+/// 401 `Unauthorized` response. Client credentials, token hints, caching, and
+/// upstream requests remain controlled by [OAuthIntrospectionOptions] and
+/// [OAuth2TokenIntrospector]; [httpClient] supplies the HTTP transport.
 ///
 /// Example:
 /// ```dart

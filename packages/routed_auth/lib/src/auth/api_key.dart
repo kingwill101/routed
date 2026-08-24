@@ -18,9 +18,16 @@ const String authApiKeyAuthenticationAttribute = 'auth.api_key';
 
 /// Parsed API-key header state.
 final class AuthApiKeyRequest {
+  /// Creates a parsed API-key result.
+  ///
+  /// [value] contains the parsed credential, or null when no credential was
+  /// supplied. The parser trims values before constructing this result; the
+  /// constructor itself stores [value] unchanged. [malformed] distinguishes
+  /// a recognized `ApiKey` authorization scheme with no value from an absent
+  /// credential.
   const AuthApiKeyRequest({this.value, this.malformed = false});
 
-  /// The raw key when a credential was supplied and structurally valid.
+  /// The trimmed key when a credential was supplied and structurally valid.
   final String? value;
 
   /// Whether a recognized API-key scheme was supplied without a value.
@@ -37,7 +44,15 @@ AuthApiKeyAuthentication? currentApiKey(EngineContext context) => context
 /// The middleware accepts `X-API-Key: <key>` by default and also accepts
 /// `Authorization: ApiKey <key>`. A missing key leaves the request untouched,
 /// allowing applications to compose API-key, session, and JWT middleware. An
-/// invalid supplied key returns a generic 401 response.
+/// An invalid supplied key returns a generic 401 response with an `ApiKey`
+/// challenge. [headerName] is trimmed and must not be empty. After successful
+/// user lookup, [onVerified] runs before [next], and the request receives the
+/// API-key authentication plus an [AuthPrincipal] with `apiKeyId` and
+/// `apiKeyScopes` attributes. Invalid credentials do not disclose whether a
+/// key or user exists; exceptions from the authentication plugin or user store
+/// propagate to the surrounding middleware pipeline.
+///
+/// Throws an [ArgumentError] when [headerName] is empty after trimming.
 Middleware apiKeyAuthentication({
   required AuthApiKeyPlugin<EngineContext> plugin,
   required AuthUserStore userStore,
@@ -94,6 +109,12 @@ String? readApiKeyFromRequest(
 
 /// Parses API-key headers while distinguishing a missing credential from a
 /// malformed recognized authorization scheme.
+///
+/// A non-blank value in [headerName] takes precedence over `Authorization`.
+/// Blank direct-header values fall back to `Authorization: ApiKey <key>`;
+/// scheme matching is case-insensitive. Unsupported authorization schemes are
+/// treated as absent, while a recognized scheme without a key sets
+/// [AuthApiKeyRequest.malformed].
 AuthApiKeyRequest parseApiKeyRequest(
   EngineContext ctx, {
   String headerName = 'x-api-key',
