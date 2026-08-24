@@ -2,6 +2,9 @@
 
 - Completed public Dartdoc coverage and enabled the `public_member_api_docs`
   analyzer lint.
+- Clarified rate-limit middleware, typed provider, auth adapter, key
+  resolution, and event semantics; portable IP-policy tests now provide a
+  client address.
 
 ## 0.1.0
 

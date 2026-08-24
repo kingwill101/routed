@@ -118,6 +118,7 @@ void main() {
           PortableRequest(
             method: 'GET',
             uri: Uri.parse('https://example.test/limited'),
+            remoteAddress: '127.0.0.1',
           ),
         );
 
@@ -173,6 +174,7 @@ void main() {
             PortableRequest(
               method: 'POST',
               uri: Uri.parse('https://example.test/auth/signin/credentials'),
+              remoteAddress: '127.0.0.1',
             ),
           );
 
