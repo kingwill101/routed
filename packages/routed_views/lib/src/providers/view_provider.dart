@@ -1,18 +1,20 @@
-// ignore_for_file: implementation_imports
 import 'dart:async';
 
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
-import 'package:routed_core/src/container/container.dart';
-import 'package:routed_core/src/engine/config.dart';
-import 'package:routed_core/src/provider/provider.dart';
-import 'package:routed_core/src/provider/typed_provider.dart';
+import 'package:routed_core/routed_core.dart'
+    show
+        Container,
+        EngineConfig,
+        ProvidesTypedConfiguration,
+        ServiceProvider,
+        ViewConfig;
+import 'package:routed_views/src/config.dart';
+import 'package:routed_views/src/view/engine_manager.dart';
+import 'package:routed_views/src/view/engines/liquid_engine.dart';
+import 'package:routed_views/src/view/view_engine.dart';
+import 'package:routed_views/src/view/view_extensions.dart';
 import 'package:server_storage/server_storage.dart';
-import '../config.dart';
-import '../view/engines/liquid_engine.dart';
-import '../view/view_engine.dart';
-import '../view/engine_manager.dart';
-import '../view/view_extensions.dart';
 
 /// Configures the view engine from an immutable typed configuration.
 class ViewServiceProvider extends ServiceProvider
@@ -66,9 +68,7 @@ class ViewServiceProvider extends ServiceProvider
 
     final newConfig = engineConfig.copyWith(
       templateDirectory: resolved.directory,
-      // ignore: avoid_dynamic_calls
-      templateEngine:
-          (resolved.viewEngine as dynamic) ?? engineConfig.templateEngine,
+      templateEngine: resolved.viewEngine ?? engineConfig.templateEngine,
       views: resolved.viewConfig,
     );
 
@@ -117,8 +117,11 @@ class ViewServiceProvider extends ServiceProvider
     }
     try {
       return manager.disk(name);
-    } on StateError {
-      return null;
+    } on Object catch (error) {
+      if (error is StateError) {
+        return null;
+      }
+      rethrow;
     }
   }
 
@@ -149,7 +152,7 @@ class ViewServiceProvider extends ServiceProvider
     String engineName,
     String directory,
     file.FileSystem fs,
-    dynamic fallback,
+    Object? fallback,
   ) {
     final name = engineName.toLowerCase();
     switch (name) {
@@ -159,7 +162,7 @@ class ViewServiceProvider extends ServiceProvider
         final root = LiquidRoot(fileSystem: scopedFs);
         return LiquidViewEngine(root: root, directory: directory);
       default:
-        return fallback ?? LiquidViewEngine();
+        return fallback is ViewEngine ? fallback : LiquidViewEngine();
     }
   }
 

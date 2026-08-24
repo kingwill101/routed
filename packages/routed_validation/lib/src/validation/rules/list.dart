@@ -14,7 +14,7 @@ class ListRule extends ValidationRule {
     if (value == null || value is! List) return false;
 
     final listValue = value;
-    for (int i = 0; i < listValue.length; i++) {
+    for (var i = 0; i < listValue.length; i++) {
       if (!listValue.asMap().containsKey(i)) return false;
     }
     return true;

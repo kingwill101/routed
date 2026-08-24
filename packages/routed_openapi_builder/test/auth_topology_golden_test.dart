@@ -43,7 +43,8 @@ void main() {
             components,
           );
 
-          for (final requirement in operation.security ?? const []) {
+          for (final requirement
+              in operation.security ?? const <Map<String, List<String>>>[]) {
             for (final scheme in requirement.keys) {
               expect(components.securitySchemes, contains(scheme));
             }
@@ -228,9 +229,7 @@ AuthServerPluginRegistry<Object> _registry(
     store: store,
     authenticationMethods: AuthAuthenticationMethodService(store: store),
   );
-  for (final plugin in plugins) {
-    registry.register(plugin);
-  }
+  plugins.forEach(registry.register);
   registry.freeze();
   return registry;
 }

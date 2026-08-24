@@ -52,11 +52,11 @@ void main() {
 
     test('increment and decrement item', () async {
       await store.put('counter', 1, 60);
-      await store.increment('counter', 1);
+      await store.increment('counter');
       var value = await store.get('counter');
       expect(value, 2);
 
-      await store.decrement('counter', 1);
+      await store.decrement('counter');
       value = await store.get('counter');
       expect(value, 1);
     });
@@ -87,7 +87,8 @@ void main() {
     });
 
     test('creates shallow directory structure with long keys', () async {
-      // This test ensures that long keys like "dashboard:dev-tenant:default:definitions"
+      // This test ensures that long keys like
+      // "dashboard:dev-tenant:default:definitions"
       // create a shallow hashed directory structure (e.g., ab/cd/hash) instead of
       // character-by-character directories (d/a/s/h/b/o/a/r/d/...)
       const longKey = 'dashboard:dev-tenant:default:definitions';
@@ -97,7 +98,8 @@ void main() {
       final value = await store.get(longKey);
       expect(value, 'test-value');
 
-      // Check directory depth - should be exactly 2 levels deep (e.g., ab/cd/hashfile)
+      // Check directory depth - should be exactly 2 levels deep (e.g.,
+      // ab/cd/hashfile)
       final entities = tempDir.listSync(recursive: true);
       final files = entities.whereType<File>().where(
         (f) => !f.path.contains('.lock'),
@@ -113,7 +115,8 @@ void main() {
         pathParts.length,
         3,
         reason:
-            'Cache path should have 2 directory levels plus filename, got: $relativePath',
+            'Cache path should have 2 directory levels plus filename, '
+            'got: $relativePath',
       );
 
       // Each directory level should be 2 characters (from hash)

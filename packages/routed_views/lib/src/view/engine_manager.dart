@@ -1,6 +1,6 @@
 import 'package:path/path.dart' as path;
 
-import 'view_engine.dart';
+import 'package:routed_views/src/view/view_engine.dart';
 
 /// Manages multiple view engines and delegates rendering to the appropriate one
 class ViewEngineManager {
@@ -38,15 +38,10 @@ class ViewEngineManager {
     return engine.renderFile(filePath, data);
   }
 
-  /// Render template content using the appropriate view engine
+  /// Renders template content using the appropriate view engine.
   ///
-  /// Attempts to find a registered view engine based on the content's file extension.
-  /// Throws an exception if no matching view engine is found.
-  ///
-  /// [content] The template content or file path to render
-  /// [data] Optional data to pass to the template rendering process
-  ///
-  /// Returns the rendered template as a [Future<String>]
+  /// Throws an [Exception] if no engine is registered for the content's
+  /// extension.
   Future<String> render(String content, [Map<String, dynamic>? data]) async {
     final engine = engineForFile(content);
     if (engine == null) {

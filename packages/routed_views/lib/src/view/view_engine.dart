@@ -28,15 +28,15 @@ abstract class ViewEngine {
 
 /// Exception thrown when a template cannot be found.
 class TemplateNotFoundException implements Exception {
+  /// Creates an exception for a missing [templateName].
+  TemplateNotFoundException(this.templateName)
+    : message = 'Template not found: $templateName';
+
   /// Name of the template that could not be found.
   final String templateName;
 
   /// Human-readable explanation of the missing template.
   final String message;
-
-  /// Creates an exception for a missing [templateName].
-  TemplateNotFoundException(this.templateName)
-    : message = 'Template not found: $templateName';
 
   @override
   String toString() => message;

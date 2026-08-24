@@ -1,8 +1,11 @@
-// ignore_for_file: implementation_imports, depend_on_referenced_packages
-import 'package:routed_core/src/contracts/translation/loader.dart';
-import 'package:routed_core/src/contracts/translation/translator.dart';
-import 'message_selector.dart';
+// The dot-path helper is not exported by routed_core's public barrel, so this
+// package uses its stable internal utility while keeping the rest of the
+// translator dependencies on public APIs.
+// ignore_for_file: implementation_imports
+import 'package:routed_core/routed_core.dart'
+    show TranslationLoader, TranslatorContract;
 import 'package:routed_core/src/utils/dot.dart';
+import 'package:routed_views/src/translation/message_selector.dart';
 
 /// Resolves, interpolates, and pluralizes translations from a loader.
 class Translator implements TranslatorContract {
@@ -329,10 +332,6 @@ class _ParsedKey {
     required this.item,
   });
 
-  final String namespace;
-  final String group;
-  final String item;
-
   factory _ParsedKey.parse(String key) {
     var namespace = '*';
     var remainder = key;
@@ -349,4 +348,8 @@ class _ParsedKey {
     final item = remainder.substring(dotIndex + 1);
     return _ParsedKey(namespace: namespace, group: group, item: item);
   }
+
+  final String namespace;
+  final String group;
+  final String item;
 }

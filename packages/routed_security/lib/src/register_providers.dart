@@ -1,6 +1,5 @@
 import 'package:routed_core/routed_core.dart' show ProviderRegistry;
-
-import 'providers/security.dart';
+import 'package:routed_security/src/providers/security.dart';
 
 /// Registers the security provider factory in the shared registry.
 void registerRoutedSecurityProviders() {

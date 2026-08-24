@@ -1,13 +1,10 @@
-// ignore_for_file: implementation_imports, depend_on_referenced_packages
 import 'dart:convert';
 
 import 'package:file/file.dart' as file;
+import 'package:routed_core/routed_core.dart' show TranslationLoader, deepMerge;
 import 'package:yaml/yaml.dart';
 
-import 'package:routed_core/src/contracts/translation/loader.dart';
-import 'package:routed_core/src/utils/deep_merge.dart';
-
-/// Loads grouped and JSON translations from a [fileSystem].
+/// Loads grouped and JSON translations from a `fileSystem`.
 class FileTranslationLoader implements TranslationLoader {
   /// Creates a loader with optional grouped, JSON, and namespace paths.
   FileTranslationLoader({
@@ -120,14 +117,14 @@ class FileTranslationLoader implements TranslationLoader {
     String namespace,
   ) {
     final merged = <String, dynamic>{};
-    deepMerge(merged, lines, override: true);
+    deepMerge(merged, lines);
     for (final path in _paths) {
       final vendorPath = _fileSystem.path.join(path, 'vendor', namespace);
       final overrides = _loadGroupFromDirectory(vendorPath, locale, group);
       if (overrides.isEmpty) {
         continue;
       }
-      deepMerge(merged, overrides, override: true);
+      deepMerge(merged, overrides);
     }
     return merged;
   }
@@ -143,7 +140,7 @@ class FileTranslationLoader implements TranslationLoader {
       if (lines.isEmpty) {
         continue;
       }
-      deepMerge(merged, lines, override: true);
+      deepMerge(merged, lines);
     }
     return merged;
   }
@@ -161,7 +158,7 @@ class FileTranslationLoader implements TranslationLoader {
       final contents = fileHandle.readAsStringSync();
       final decoded = json.decode(contents);
       if (decoded is Map) {
-        deepMerge(merged, _normalizeDynamicMap(decoded), override: true);
+        deepMerge(merged, _normalizeDynamicMap(decoded));
       } else {
         throw FormatException(
           'Translation file $candidate must decode to an object',
@@ -222,13 +219,15 @@ class FileTranslationLoader implements TranslationLoader {
 
   Map<String, dynamic> _normalizeYamlMap(YamlMap map) {
     final result = <String, dynamic>{};
-    map.nodes.forEach((keyNode, valueNode) {
-      final key = keyNode.value?.toString();
+    for (final entry in map.nodes.entries) {
+      final keyNode = entry.key as YamlNode;
+      final valueNode = entry.value;
+      final key = (keyNode.value as Object?)?.toString();
       if (key == null) {
-        return;
+        continue;
       }
       result[key] = _coerceValue(valueNode.value);
-    });
+    }
     return result;
   }
 

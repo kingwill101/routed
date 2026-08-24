@@ -1,5 +1,3 @@
-library;
-
 import 'package:routed_validation/src/validation/abstract_rule.dart';
 
 /// Validation rule that checks if the value contains only alphabetic characters.

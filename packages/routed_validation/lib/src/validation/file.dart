@@ -10,6 +10,10 @@ abstract class ValidationFile {
   String get contentType;
 }
 
+// The duck-typed branch is required to support multipart implementations
+// without coupling this public contract to one concrete HTTP package.
+// ignore_for_file: avoid_dynamic_calls
+
 /// Returns true if [value] is a [ValidationFile] or a duck-typed file
 /// object such as `MultipartFile` from `routed_http`.
 ///
@@ -26,7 +30,7 @@ bool isValidationFile(dynamic value) {
     final size = v.size;
     final contentType = v.contentType;
     return filename is String && size is int && contentType is String;
-  } catch (_) {
+  } on Object catch (_) {
     return false;
   }
 }
@@ -43,22 +47,21 @@ ValidationFile? asValidationFile(dynamic value) {
       size: v.size as int,
       contentType: v.contentType as String,
     );
-  } catch (_) {
+  } on Object catch (_) {
     return null;
   }
 }
 
 class _DuckTypedValidationFile implements ValidationFile {
+  _DuckTypedValidationFile({
+    required this.filename,
+    required this.size,
+    required this.contentType,
+  });
   @override
   final String filename;
   @override
   final int size;
   @override
   final String contentType;
-
-  _DuckTypedValidationFile({
-    required this.filename,
-    required this.size,
-    required this.contentType,
-  });
 }

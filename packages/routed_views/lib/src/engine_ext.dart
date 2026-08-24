@@ -1,8 +1,8 @@
 import 'package:file/file.dart';
 import 'package:routed_core/routed_core.dart';
 
-import 'view/engines/liquid_engine.dart';
-import 'view/view_engine.dart';
+import 'package:routed_views/src/view/engines/liquid_engine.dart';
+import 'package:routed_views/src/view/view_engine.dart';
 
 /// Engine-level configuration helpers for the view feature package.
 extension RoutedViewEngine on Engine {

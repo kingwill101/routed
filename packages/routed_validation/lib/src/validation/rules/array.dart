@@ -3,7 +3,7 @@ import 'package:routed_validation/src/validation/rule.dart';
 /// A validation rule that checks if a given value is an array (List).
 class ArrayRule extends ValidationRule {
   @override
-  String get name => "array";
+  String get name => 'array';
 
   @override
   String message(dynamic value, [List<String>? options]) {

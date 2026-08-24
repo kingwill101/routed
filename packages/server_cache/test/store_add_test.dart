@@ -26,8 +26,11 @@ void main() {
     test('stores only when the key is absent', () async {
       final store = ArrayStore();
       expect(await store.add('key', 'value', 0), isTrue);
-      expect(await store.add('key', 'other', 0), isFalse,
-          reason: 'add must not overwrite an unexpired value');
+      expect(
+        await store.add('key', 'other', 0),
+        isFalse,
+        reason: 'add must not overwrite an unexpired value',
+      );
       expect(await store.get('key'), 'value');
     });
 
@@ -46,21 +49,28 @@ void main() {
     test('entries expire after their TTL (ms comparison)', () async {
       final fs = MemoryFileSystem();
       final store = FileStore(fs.directory('/cache'), null, null, fs);
+      // Keep the write separate from the following read to exercise the
+      // asynchronous store operation directly.
+      // ignore: cascade_invocations
       store.put('key', 'value', 1);
       expect(await store.get('key'), 'value');
 
-      final file = fs
-          .directory('/cache')
-          .listSync(recursive: true)
-          .firstWhere((e) => e is io.File) as io.File;
-      final data =
-          jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      final file =
+          fs
+                  .directory('/cache')
+                  .listSync(recursive: true)
+                  .firstWhere((e) => e is io.File)
+              as io.File;
+      final data = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
       // The stored expiry is a milliseconds epoch; a past value means expired.
       data['expiresAt'] = DateTime.now().millisecondsSinceEpoch - 1000;
       file.writeAsStringSync(jsonEncode(data));
 
-      expect(await store.get('key'), isNull,
-          reason: 'an expired entry must not be returned');
+      expect(
+        await store.get('key'),
+        isNull,
+        reason: 'an expired entry must not be returned',
+      );
     });
   });
 
@@ -69,14 +79,19 @@ void main() {
       final fs = MemoryFileSystem();
       final store = FileStore(fs.directory('/cache'), null, null, fs);
       expect(store.add('key', 'value', 0), isTrue);
-      expect(store.add('key', 'other', 0), isFalse,
-          reason: 'add must not clobber an unexpired entry');
+      expect(
+        store.add('key', 'other', 0),
+        isFalse,
+        reason: 'add must not clobber an unexpired entry',
+      );
       expect(await store.get('key'), 'value');
     });
 
     test('re-acquires a slot once the entry has expired', () async {
       final fs = MemoryFileSystem();
       final store = FileStore(fs.directory('/cache'), null, null, fs);
+      // Keep the write separate from the expiration helper for this test.
+      // ignore: cascade_invocations
       store.put('key', 'value', 1);
       await expireAllFiles(fs.directory('/cache'));
       expect(await store.get('key'), isNull);
@@ -94,9 +109,11 @@ void main() {
       expect(await lock.getCurrentOwner(), 'process-a');
 
       final other = await store.restoreLock('critical', 'process-b');
-      expect(await other.acquire(), isFalse,
-          reason:
-              'must not overwrite an unexpired lock held by another owner');
+      expect(
+        await other.acquire(),
+        isFalse,
+        reason: 'must not overwrite an unexpired lock held by another owner',
+      );
       expect(await lock.getCurrentOwner(), 'process-a');
     });
 
@@ -106,8 +123,11 @@ void main() {
       final lock = await store.lock('critical', 1, 'process-a');
       expect(await lock.acquire(), isTrue);
       await expireAllFiles(fs.directory('/cache'));
-      expect(await lock.acquire(), isTrue,
-          reason: 'an expired lock file must be re-acquirable');
+      expect(
+        await lock.acquire(),
+        isTrue,
+        reason: 'an expired lock file must be re-acquirable',
+      );
     });
   });
 
@@ -116,12 +136,14 @@ void main() {
       final store = ArrayStore();
       final repository = RepositoryImpl(store, 'default', '');
       expect(
-          await repository.add('key', 'value', const Duration(seconds: 10)),
-          isTrue);
+        await repository.add('key', 'value', const Duration(seconds: 10)),
+        isTrue,
+      );
       expect(
-          await repository.add('key', 'other', const Duration(seconds: 10)),
-          isFalse,
-          reason: 'repository add must be store-only-if-absent');
+        await repository.add('key', 'other', const Duration(seconds: 10)),
+        isFalse,
+        reason: 'repository add must be store-only-if-absent',
+      );
       expect(await repository.get('key'), 'value');
     });
   });
@@ -134,8 +156,11 @@ void main() {
       expect(namespace, contains('|'));
       final ids = await tags.tagIds();
       expect(ids, hasLength(2));
-      expect(await tags.getNamespace(), namespace,
-          reason: 'tag ids persist, so the namespace must be stable');
+      expect(
+        await tags.getNamespace(),
+        namespace,
+        reason: 'tag ids persist, so the namespace must be stable',
+      );
     });
 
     test('resetTag changes the namespace', () async {
@@ -152,8 +177,11 @@ void main() {
       final store = ArrayStore();
       final cached = store.tags(['user']);
       await cached.put('profile', 'alice', const Duration(minutes: 5));
-      expect(await store.get('profile'), isNull,
-          reason: 'raw key must not be used; only the namespaced key is set');
+      expect(
+        await store.get('profile'),
+        isNull,
+        reason: 'raw key must not be used; only the namespaced key is set',
+      );
       expect(await cached.get('profile'), 'alice');
     });
 
@@ -173,8 +201,11 @@ void main() {
       await cache.put('profile', 'alice', const Duration(minutes: 5));
       expect(await cache.get('profile'), 'alice');
       await cache.getTags().resetTag('user');
-      expect(await cache.get('profile'), isNull,
-          reason: 'namespace changed, so the old value must be unreachable');
+      expect(
+        await cache.get('profile'),
+        isNull,
+        reason: 'namespace changed, so the old value must be unreachable',
+      );
     });
   });
 }

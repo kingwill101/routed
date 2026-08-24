@@ -1,5 +1,3 @@
-library;
-
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
 import 'package:routed_core/routed_core.dart'
@@ -8,17 +6,16 @@ import 'package:routed_core/routed_core.dart'
         Engine,
         EngineConfig,
         MiddlewareRegistry,
+        ProvidesTypedConfiguration,
         ServiceProvider,
-        TranslatorContract,
         TranslationLoader,
-        ProvidesTypedConfiguration;
-
+        TranslatorContract;
+import 'package:routed_views/src/config.dart';
 import 'package:routed_views/src/middleware/localization.dart'
     show localizationMiddleware;
 import 'package:routed_views/src/translation/loaders/file_translation_loader.dart';
 import 'package:routed_views/src/translation/locale_manager.dart';
 import 'package:routed_views/src/translation/translator.dart';
-import '../config.dart';
 
 /// Registers the localization services and middleware configuration.
 class LocalizationServiceProvider extends ServiceProvider
@@ -69,8 +66,7 @@ class LocalizationServiceProvider extends ServiceProvider
       ..instance<LocaleManager>(localeManager);
 
     if (container.has<MiddlewareRegistry>()) {
-      final registry = container.get<MiddlewareRegistry>();
-      registry.register(
+      container.get<MiddlewareRegistry>().register(
         'routed.localization',
         (c) => localizationMiddleware(localeManager),
       );

@@ -1,5 +1,5 @@
 import 'package:routed_core/routed_core.dart';
-import 'view/engine_manager.dart';
+import 'package:routed_views/src/view/engine_manager.dart';
 
 /// View/render extensions for [EngineContext] — migrated from `routed`
 /// `src/context/render.dart` per refactor.md §16.2.

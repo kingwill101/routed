@@ -1,3 +1,4 @@
+// These ignores cover private test doubles that mirror the Redis client API.
 // ignore_for_file: unused_element, non_constant_identifier_names
 import 'dart:async';
 
@@ -97,7 +98,7 @@ void main() {
         equals({'one': 1, 'two': 'second', 'missing': null}),
       );
       expect(await store.increment('count', 2), equals(3));
-      expect(await store.decrement('count', 1), equals(2));
+      expect(await store.decrement('count'), equals(2));
       expect(await store.forget('key'), isTrue);
       expect(await store.forget('missing'), isFalse);
       expect(await store.get('key'), isNull);
@@ -162,7 +163,7 @@ class _TestRedisConnection extends RedisConnection {
   final Command Function(RedisConnection connection) commandFactory;
   int connectCount = 0;
   @override
-  Future<Command> connect(host, port) async {
+  Future<Command> connect(dynamic host, dynamic port) async {
     connectCount += 1;
     return commandFactory(this);
   }

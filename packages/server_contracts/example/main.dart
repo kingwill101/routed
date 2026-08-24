@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:server_contracts/server_contracts.dart';
 
+// This executable intentionally writes its small demonstration output directly.
+// ignore_for_file: avoid_print
 void main() async {
   final config = InMemoryConfig({
     'cache': {'default': 'array'},
@@ -80,7 +82,7 @@ class InMemoryConfig implements Config {
   @override
   void set(String key, dynamic value) {
     final segments = key.split('.');
-    Map<String, dynamic> current = _values;
+    var current = _values;
     for (var i = 0; i < segments.length - 1; i++) {
       final segment = segments[i];
       final existing = current[segment];
@@ -226,7 +228,7 @@ class InMemoryRepository implements Repository {
   FutureOr<dynamic> remember(String key, dynamic ttl, Function callback) async {
     final existing = await _store.get(key);
     if (existing != null) return existing;
-    final value = await callback();
+    final value = await Function.apply(callback, const <dynamic>[]);
     final seconds = ttl is Duration
         ? ttl.inSeconds
         : ttl is int
@@ -266,8 +268,7 @@ class SimpleTranslator implements TranslatorContract {
     String locale, {
     String namespace = '*',
   }) {
-    final map = _lines.putIfAbsent(locale, () => <String, dynamic>{});
-    map.addAll(lines);
+    _lines.putIfAbsent(locale, () => <String, dynamic>{}).addAll(lines);
   }
 
   @override

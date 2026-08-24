@@ -3,9 +3,8 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart' show sha1;
 import 'package:file/file.dart';
 import 'package:file/local.dart';
+import 'package:server_cache/src/file_lock.dart';
 import 'package:server_contracts/server_contracts.dart';
-
-import 'file_lock.dart';
 
 /// Implements the [Store] and [LockProvider] contracts using files for storage.
 ///
@@ -13,19 +12,6 @@ import 'file_lock.dart';
 /// is stored as a separate file. It supports setting file permissions
 /// and using a separate directory for lock files.
 class FileStore implements Store, LockProvider {
-  /// The main directory used for storing cache items.
-  final Directory directory;
-
-  /// An optional directory used for storing lock files.
-  /// If null, the main [directory] is used.
-  final Directory? lockDirectory;
-
-  /// Optional file permissions to set on created cache files.
-  final int? filePermission;
-
-  /// The file system to use for file operations.
-  final FileSystem fileSystem;
-
   /// Creates a [FileStore] instance.
   ///
   /// The [directory] parameter is required and specifies the main directory
@@ -46,9 +32,23 @@ class FileStore implements Store, LockProvider {
     this.fileSystem = const LocalFileSystem(),
   ]);
 
+  /// The main directory used for storing cache items.
+  final Directory directory;
+
+  /// An optional directory used for storing lock files.
+  /// If null, the main [directory] is used.
+  final Directory? lockDirectory;
+
+  /// Optional file permissions to set on created cache files.
+  final int? filePermission;
+
+  /// The file system to use for file operations.
+  final FileSystem fileSystem;
+
   /// Retrieves an item from the cache.
   ///
-  /// Returns the cached value if found and not expired; otherwise, returns null.
+  /// Returns the cached value if found and not expired; otherwise, returns
+  /// `null`.
   @override
   dynamic get(String key) {
     final payload = _getPayload(key);
@@ -61,13 +61,11 @@ class FileStore implements Store, LockProvider {
   /// stored within each file's metadata.
   @override
   Future<List<String>> getAllKeys() async {
-    final List<String> keys = [];
+    final keys = <String>[];
     if (!directory.existsSync()) {
       return keys;
     }
-    final List<FileSystemEntity> entities = await directory
-        .list(recursive: true)
-        .toList();
+    final entities = await directory.list(recursive: true).toList();
 
     for (final entity in entities) {
       if (entity is File) {
@@ -78,7 +76,7 @@ class FileStore implements Store, LockProvider {
           if (key is String && key.isNotEmpty) {
             keys.add(key);
           }
-        } catch (_) {
+        } on Object catch (_) {
           // Skip files that can't be read or parsed
         }
       }
@@ -97,14 +95,15 @@ class FileStore implements Store, LockProvider {
 
     final expiresAt = _calculateExpiryTime(seconds);
     final file = fileSystem.file(path);
-    file.writeAsStringSync(
-      _serialize({'key': key, 'value': value, 'expiresAt': expiresAt}),
-    );
-    if (file.existsSync()) {
+    final writtenFile = file
+      ..writeAsStringSync(
+        _serialize({'key': key, 'value': value, 'expiresAt': expiresAt}),
+      );
+    if (writtenFile.existsSync()) {
       try {
-        _ensurePermissionsAreCorrect(file);
-      } catch (e) {
-        file.deleteSync();
+        _ensurePermissionsAreCorrect(writtenFile);
+      } on Object {
+        writtenFile.deleteSync();
         return false;
       }
       return true;
@@ -147,7 +146,7 @@ class FileStore implements Store, LockProvider {
       );
       _ensurePermissionsAreCorrect(file);
       return true;
-    } catch (e) {
+    } on Object {
       file.deleteSync();
       return false;
     }
@@ -161,7 +160,7 @@ class FileStore implements Store, LockProvider {
     try {
       final data = _deserialize(file.readAsStringSync());
       return !_isExpired(data['expiresAt']);
-    } catch (_) {
+    } on Object catch (_) {
       // Unreadable or corrupt file — treat as expired so it can be replaced.
       return false;
     }
@@ -178,7 +177,7 @@ class FileStore implements Store, LockProvider {
       if (_isExpired(data['expiresAt'])) {
         file.deleteSync();
       }
-    } catch (_) {
+    } on Object catch (_) {
       // Unreadable or corrupt file — leave it to the caller to fail.
     }
   }
@@ -202,8 +201,9 @@ class FileStore implements Store, LockProvider {
   @override
   bool flush() {
     if (directory.existsSync()) {
-      directory.deleteSync(recursive: true);
-      directory.createSync();
+      directory
+        ..deleteSync(recursive: true)
+        ..createSync();
       return true;
     }
     return false;
@@ -239,14 +239,14 @@ class FileStore implements Store, LockProvider {
   Future<dynamic> increment(String key, [dynamic value = 1]) async {
     final raw = _getPayload(key);
     final currentValue = raw['data'] ?? 0;
-    final num numValue = (value is num) ? value : 1;
+    final numValue = (value is num) ? value : 1;
     final newValue =
         (currentValue is int
             ? currentValue
             : int.parse(currentValue.toString())) +
         numValue;
     final expiresAt = raw['time'] ?? 0;
-    final int expTime = (expiresAt is int) ? expiresAt : 0;
+    final expTime = (expiresAt is int) ? expiresAt : 0;
     put(key, newValue, expTime == 0 ? 0 : expTime);
     return newValue;
   }
@@ -256,7 +256,7 @@ class FileStore implements Store, LockProvider {
   /// Returns the new value.
   @override
   Future<dynamic> decrement(String key, [dynamic value = 1]) async {
-    final num numValue = (value is num) ? value : 1;
+    final numValue = (value is num) ? value : 1;
     return increment(key, -numValue);
   }
 
@@ -281,8 +281,8 @@ class FileStore implements Store, LockProvider {
   /// Returns a map of key-value pairs.
   @override
   Future<Map<String, dynamic>> many(List<String> keys) async {
-    final Map<String, dynamic> results = {};
-    for (var key in keys) {
+    final results = <String, dynamic>{};
+    for (final key in keys) {
       results[key] = await get(key);
     }
     return results;
@@ -293,7 +293,7 @@ class FileStore implements Store, LockProvider {
   /// Returns true if all items were successfully stored.
   @override
   Future<bool> putMany(Map<String, dynamic> values, int seconds) async {
-    for (var entry in values.entries) {
+    for (final entry in values.entries) {
       put(entry.key, entry.value, seconds);
     }
     return true;
@@ -327,16 +327,15 @@ class FileStore implements Store, LockProvider {
   ///
   /// Returns true if the item has expired; otherwise, returns false.
   bool _isExpired(dynamic expiresAt) {
-    final int expTime = expiresAt is int ? expiresAt : 0;
-    return expTime != 0 &&
-        DateTime.now().millisecondsSinceEpoch >= expTime;
+    final expTime = expiresAt is int ? expiresAt : 0;
+    return expTime != 0 && DateTime.now().millisecondsSinceEpoch >= expTime;
   }
 
   /// Gets the remaining time until a cache item expires.
   ///
   /// Returns the remaining time in seconds, or 0 if the item does not expire.
   int _getRemainingTime(dynamic expiresAt) {
-    final int expTime = expiresAt is int ? expiresAt : 0;
+    final expTime = expiresAt is int ? expiresAt : 0;
     return expTime == 0
         ? 0
         : ((expTime - DateTime.now().millisecondsSinceEpoch) ~/ 1000);
@@ -368,8 +367,9 @@ class FileStore implements Store, LockProvider {
   /// Deserializes a JSON string to its original value.
   ///
   /// Returns the deserialized value.
-  dynamic _deserialize(String value) {
-    return jsonDecode(value);
+  Map<String, dynamic> _deserialize(String value) {
+    final decoded = jsonDecode(value);
+    return Map<String, dynamic>.from(decoded as Map);
   }
 
   /// Generates the file path for a given cache key.
@@ -391,7 +391,8 @@ class FileStore implements Store, LockProvider {
 
   /// Ensures that the cache directory exists.
   ///
-  /// If the directory does not exist, it creates it and sets the file permissions.
+  /// If the directory does not exist, it creates it and sets the file
+  /// permissions.
   void _ensureCacheDirectoryExists(String path) {
     final dir = fileSystem.directory(path).parent;
     if (!dir.existsSync()) {
@@ -402,7 +403,8 @@ class FileStore implements Store, LockProvider {
 
   /// Ensures that the file permissions are correct for a given entity.
   ///
-  /// Throws a [FileSystemException] if the permissions are incorrect and cannot be set.
+  /// Throws a [FileSystemException] if the permissions are incorrect and
+  /// cannot be set.
   void _ensurePermissionsAreCorrect(FileSystemEntity entity) {
     if (filePermission != null) {
       final stat = fileSystem.statSync(entity.path);

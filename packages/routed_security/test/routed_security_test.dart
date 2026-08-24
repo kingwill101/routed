@@ -1,6 +1,6 @@
 import 'package:routed_core/routed_core.dart';
-import 'package:test/test.dart';
 import 'package:routed_security/routed_security.dart';
+import 'package:test/test.dart';
 
 void main() {
   test('exports available', () {
@@ -62,7 +62,6 @@ void main() {
             corsMiddleware(
               const CorsConfig(
                 enabled: true,
-                allowedOrigins: ['*'],
                 allowedMethods: ['GET', 'POST'],
                 allowedHeaders: ['Authorization', 'Content-Type'],
                 maxAge: 600,

@@ -1,9 +1,8 @@
 import 'package:file/file.dart' as file;
 import 'package:path/path.dart' as p;
 import 'package:routed_core/routed_core.dart';
+import 'package:routed_storage/src/engine_static_file_sink.dart';
 import 'package:server_storage/server_storage.dart';
-
-import 'engine_static_file_sink.dart';
 
 /// Engine/Router static-file helpers. Lives in the adapter package so foundation
 /// `routed` does not depend on or re-export storage APIs.
@@ -98,8 +97,9 @@ void _mountStaticFile(
     return context.response;
   }
 
-  router.get(relativePath, handler);
-  router.head(relativePath, handler);
+  router
+    ..get(relativePath, handler)
+    ..head(relativePath, handler);
 }
 
 void _mountStaticDir(Router router, String relativePath, Dir dir) {
@@ -113,11 +113,12 @@ void _mountStaticDir(Router router, String relativePath, Dir dir) {
   final fileHandler = FileHandler.fromDir(dir);
 
   Future<Response> handler(EngineContext context) async {
-    final requestPath = context.param('filepath') as String;
+    final requestPath = context.param('filepath')!;
     await fileHandler.serveToContext(context, requestPath);
     return context.response;
   }
 
-  router.get(urlPattern, handler);
-  router.head(urlPattern, handler);
+  router
+    ..get(urlPattern, handler)
+    ..head(urlPattern, handler);
 }

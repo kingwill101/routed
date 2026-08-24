@@ -1,9 +1,8 @@
 import 'package:file/file.dart';
 import 'package:file/local.dart';
+import 'package:server_cache/src/file_store.dart';
+import 'package:server_cache/src/store_factory.dart';
 import 'package:server_contracts/server_contracts.dart';
-
-import 'file_store.dart';
-import 'store_factory.dart';
 
 /// Typed options for [FileStore].
 class FileStoreConfiguration implements StoreConfiguration {

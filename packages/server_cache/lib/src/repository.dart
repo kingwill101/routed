@@ -26,6 +26,15 @@ class RepositoryEventCallbacks {
 /// Implementation of the [Repository] interface.
 /// This class provides methods to interact with the cache store.
 class RepositoryImpl implements Repository {
+  /// Creates a repository around [store] with [storeName] and an initial key
+  /// prefix.
+  RepositoryImpl(
+    this.store,
+    this.storeName,
+    this._prefix, [
+    RepositoryEventCallbacks? callbacks,
+  ]) : _callbacks = callbacks;
+
   /// Store used for persistence.
   final Store store;
 
@@ -34,20 +43,16 @@ class RepositoryImpl implements Repository {
   RepositoryEventCallbacks? _callbacks;
   String _prefix;
 
-  /// Creates a repository around [store] with [storeName] and [prefix].
-  RepositoryImpl(
-    this.store,
-    this.storeName,
-    this._prefix, [
-    RepositoryEventCallbacks? callbacks,
-  ]) : _callbacks = callbacks;
-
   /// Replaces event [callbacks] for this repository.
+  // The method form is retained as part of the repository configuration API.
+  // ignore: use_setters_to_change_properties
   void attachCallbacks(RepositoryEventCallbacks? callbacks) {
     _callbacks = callbacks;
   }
 
   /// Replaces the key [prefix] used for subsequent operations.
+  // The method form is retained as part of the repository configuration API.
+  // ignore: use_setters_to_change_properties
   void updatePrefix(String prefix) {
     _prefix = prefix;
   }
@@ -80,7 +85,7 @@ class RepositoryImpl implements Repository {
   /// - Returns: The cached item or the [defaultValue] if the item is not found.
   @override
   Future<dynamic> pull(dynamic key, [dynamic defaultValue]) async {
-    final String keyString = key is String ? key : key.toString();
+    final keyString = key is String ? key : key.toString();
     final value = await store.get(_prefixed(keyString));
     if (value == null) {
       _publishMiss(keyString);
@@ -154,7 +159,7 @@ class RepositoryImpl implements Repository {
   /// - Returns: The new value after incrementing.
   @override
   Future<dynamic> increment(String key, [dynamic value = 1]) async {
-    final int incrementValue = value is int ? value : 1;
+    final incrementValue = value is int ? value : 1;
     final result = await store.increment(_prefixed(key), incrementValue);
     _publishWrite(key, null);
     return result;
@@ -168,7 +173,7 @@ class RepositoryImpl implements Repository {
   /// - Returns: The new value after decrementing.
   @override
   Future<dynamic> decrement(String key, [dynamic value = 1]) async {
-    final int decrementValue = value is int ? value : 1;
+    final decrementValue = value is int ? value : 1;
     final result = await store.decrement(_prefixed(key), decrementValue);
     _publishWrite(key, null);
     return result;
@@ -189,7 +194,8 @@ class RepositoryImpl implements Repository {
     return success;
   }
 
-  /// Gets an item from the cache, or executes the given [callback] and stores the result.
+  /// Gets an item from the cache, or executes the given [callback] and stores
+  /// the result.
   ///
   /// - Parameters:
   ///   - key: The key of the item to retrieve.
@@ -204,7 +210,7 @@ class RepositoryImpl implements Repository {
       return existing;
     }
     _publishMiss(key);
-    final result = await callback();
+    final result = await Function.apply(callback, const <dynamic>[]);
     Duration? ttlDuration;
     int seconds;
     if (ttl is Duration) {
@@ -222,7 +228,8 @@ class RepositoryImpl implements Repository {
     return result;
   }
 
-  /// Gets an item from the cache, or executes the given [callback] and stores the result forever.
+  /// Gets an item from the cache, or executes the given [callback] and stores
+  /// the result forever.
   ///
   /// - Parameters:
   ///   - key: The key of the item to retrieve.
@@ -230,10 +237,11 @@ class RepositoryImpl implements Repository {
   /// - Returns: The cached item or the result of the [callback].
   @override
   Future<dynamic> sear(String key, Function callback) async {
-    return await rememberForever(key, callback);
+    return rememberForever(key, callback);
   }
 
-  /// Gets an item from the cache, or executes the given [callback] and stores the result forever.
+  /// Gets an item from the cache, or executes the given [callback] and stores
+  /// the result forever.
   ///
   /// - Parameters:
   ///   - key: The key of the item to retrieve.
@@ -247,7 +255,7 @@ class RepositoryImpl implements Repository {
       return existing;
     }
     _publishMiss(key);
-    final result = await callback();
+    final result = await Function.apply(callback, const <dynamic>[]);
     await store.put(_prefixed(key), result, 0);
     _publishWrite(key, null);
     return result;

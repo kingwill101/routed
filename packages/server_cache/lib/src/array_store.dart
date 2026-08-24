@@ -1,13 +1,20 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:server_cache/src/array_lock.dart';
+import 'package:server_cache/src/taggable_store.dart';
 import 'package:server_contracts/server_contracts.dart';
-
-import 'array_lock.dart';
-import 'taggable_store.dart';
 
 /// A store that uses an in-memory array to store cache data.
 class ArrayStore extends TaggableStore implements Store, LockProvider {
+  /// Creates an [ArrayStore] instance.
+  ///
+  /// If [serializesValues] is true, values will be serialized before storing.
+  // The positional option is retained for source compatibility with existing
+  // store construction code.
+  // ignore: avoid_positional_boolean_parameters
+  ArrayStore([this.serializesValues = false]);
+
   /// A map to store the cache data.
   final Map<String, dynamic> storage = {};
 
@@ -16,11 +23,6 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
 
   /// Whether to serialize values before storing them.
   final bool serializesValues;
-
-  /// Creates an [ArrayStore] instance.
-  ///
-  /// If [serializesValues] is true, values will be serialized before storing.
-  ArrayStore([this.serializesValues = false]);
 
   /// Retrieves all keys from the store.
   ///
@@ -38,12 +40,12 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
     if (!storage.containsKey(key)) {
       return null;
     }
-    final item = storage[key];
+    final item = storage[key] as Map<Object?, Object?>?;
     if (item == null) {
       return null;
     }
 
-    final num? expiresAt = item['expiresAt'] as num?;
+    final expiresAt = item['expiresAt'] as num?;
     if (expiresAt != null &&
         expiresAt != 0 &&
         (DateTime.now().millisecondsSinceEpoch / 1000) >= expiresAt) {
@@ -81,8 +83,8 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
   @override
   Future<bool> add(String key, dynamic value, int seconds) async {
     if (storage.containsKey(key)) {
-      final item = storage[key];
-      final num? expiresAt = item?['expiresAt'] as num?;
+      final item = storage[key] as Map<Object?, Object?>?;
+      final expiresAt = item?['expiresAt'] as num?;
       if (expiresAt == null ||
           expiresAt == 0 ||
           (DateTime.now().millisecondsSinceEpoch / 1000) < expiresAt) {
@@ -102,7 +104,7 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
   /// Returns true if all items were successfully stored.
   @override
   Future<bool> putMany(Map<String, dynamic> values, int seconds) async {
-    for (var entry in values.entries) {
+    for (final entry in values.entries) {
       await put(entry.key, entry.value, seconds);
     }
     return true;
@@ -113,15 +115,15 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
   /// Returns the new value.
   @override
   Future<dynamic> increment(String key, [int value = 1]) async {
-    final item = storage[key];
+    final item = storage[key] as Map<Object?, Object?>?;
     final currentValue = item?['value'] ?? 0;
     final newValue =
         (currentValue is int
             ? currentValue
             : int.parse(currentValue.toString())) +
         value;
-    final num? expiresAt = item?['expiresAt'] as num?;
-    final int remainingTime = expiresAt == null || expiresAt == 0
+    final expiresAt = item?['expiresAt'] as num?;
+    final remainingTime = expiresAt == null || expiresAt == 0
         ? 0
         : ((expiresAt - DateTime.now().millisecondsSinceEpoch / 1000).round());
     await put(key, newValue, remainingTime);
@@ -213,8 +215,8 @@ class ArrayStore extends TaggableStore implements Store, LockProvider {
   /// Returns a map of key-value pairs.
   @override
   Future<Map<String, dynamic>> many(List<String> keys) async {
-    final Map<String, dynamic> results = {};
-    for (var key in keys) {
+    final results = <String, dynamic>{};
+    for (final key in keys) {
       results[key] = await get(key);
     }
     return results;

@@ -1,8 +1,10 @@
 import 'package:routed_core/routed_core.dart';
 
 void main() async {
-  final engine = Engine();
-  engine.get('/', (ctx) => ctx.json({'view': 'liquify/mustache via routed_views'}));
-  print('routed_views example');
+  final engine = Engine()
+    ..get(
+      '/',
+      (ctx) => ctx.json({'view': 'liquify/mustache via routed_views'}),
+    );
   await engine.close();
 }

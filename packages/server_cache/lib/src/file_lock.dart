@@ -1,6 +1,5 @@
+import 'package:server_cache/src/file_store.dart';
 import 'package:server_contracts/server_contracts.dart';
-
-import 'file_store.dart';
 
 /// {@template FileLock}
 /// A lock implementation using files to prevent concurrent execution.
@@ -12,6 +11,9 @@ import 'file_store.dart';
 /// which may have performance implications depending on the underlying storage.
 /// {@endtemplate}
 class FileLock implements Lock {
+  /// {@macro FileLock}
+  FileLock(this.store, this.name, this.seconds, [this.lockOwner]);
+
   /// The underlying [FileStore] used to manage the lock file.
   final FileStore store;
 
@@ -21,11 +23,9 @@ class FileLock implements Lock {
   /// The duration for which the lock is valid, in seconds.
   final int seconds;
 
-  /// An identifier for the lock owner, used to ensure only the owner can release the lock.
+  /// An identifier for the lock owner, used to ensure only the owner can
+  /// release the lock.
   final String? lockOwner;
-
-  /// {@macro FileLock}
-  FileLock(this.store, this.name, this.seconds, [this.lockOwner]);
 
   /// Attempts to acquire the lock by creating a lock file.
   ///
@@ -41,7 +41,8 @@ class FileLock implements Lock {
     return store.add(name, lockOwner, seconds);
   }
 
-  /// Releases the lock by deleting the lock file, but only if this instance owns the lock.
+  /// Releases the lock by deleting the lock file, but only if this instance
+  /// owns the lock.
   ///
   /// This method first checks if the current process owns the lock before
   /// attempting to release it. This prevents one process from accidentally
@@ -73,7 +74,8 @@ class FileLock implements Lock {
     store.forget(name);
   }
 
-  /// Executes a callback while holding the lock, ensuring the lock is released afterwards.
+  /// Executes a callback while holding the lock, ensuring the lock is
+  /// released afterwards.
   ///
   /// This method first attempts to acquire the lock, then executes the provided
   /// [callback] if the lock is successfully acquired. The lock is guaranteed to
@@ -87,7 +89,7 @@ class FileLock implements Lock {
     if (await acquire()) {
       try {
         if (callback != null) {
-          return await callback();
+          return await Function.apply(callback, const <dynamic>[]);
         }
         return true;
       } finally {
@@ -97,7 +99,8 @@ class FileLock implements Lock {
     return false;
   }
 
-  /// Blocks execution until the lock can be acquired, or the timeout is reached.
+  /// Blocks execution until the lock can be acquired, or the timeout is
+  /// reached.
   ///
   /// This method repeatedly attempts to acquire the lock until it succeeds, or
   /// the specified [seconds] have elapsed. If a [callback] is provided, it is
@@ -113,7 +116,7 @@ class FileLock implements Lock {
       if (await acquire()) {
         try {
           if (callback != null) {
-            return await callback();
+            return await Function.apply(callback, const <dynamic>[]);
           }
           return true;
         } finally {

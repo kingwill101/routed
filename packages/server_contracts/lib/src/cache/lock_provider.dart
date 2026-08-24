@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'lock.dart';
+import 'package:server_contracts/src/cache/lock.dart';
 
 /// Creates and restores locks for a cache backend.
 abstract class LockProvider {

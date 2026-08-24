@@ -5,7 +5,6 @@ import 'package:routed_core/routed_core.dart';
 import 'package:server_auth/server_auth.dart';
 import 'package:server_rate_limit/server_rate_limit.dart';
 
-export 'package:server_rate_limit/server_rate_limit.dart';
 export 'package:server_auth/server_auth.dart'
     show
         AuthRateLimitAction,
@@ -14,6 +13,7 @@ export 'package:server_auth/server_auth.dart'
         AuthRateLimitOperation,
         AuthRateLimitRequest,
         AuthRateLimiter;
+export 'package:server_rate_limit/server_rate_limit.dart';
 export 'src/events/rate_limit_events.dart';
 
 /// Adds rate-limit service accessors to a Routed request context.
@@ -171,7 +171,8 @@ class RateLimitConfig implements ValidatableConfiguration {
 /// Registers the configured rate-limit service with a Routed application.
 class RoutedRateLimitProvider extends ServiceProvider
     with ProvidesTypedConfiguration<RateLimitConfig> {
-  /// Defaults to an empty policy list (rate limiting disabled until configured).
+  /// Defaults to an empty policy list (rate limiting disabled until
+  /// configured).
   RoutedRateLimitProvider([RateLimitConfig? configuration])
     : configuration = configuration ?? RateLimitConfig();
 
@@ -181,8 +182,9 @@ class RoutedRateLimitProvider extends ServiceProvider
 
   @override
   void register(Container container) {
-    container.singleton<RateLimitService>((_) async => configuration.service);
-    container.instance<dynamic>(configuration.service);
+    container
+      ..singleton<RateLimitService>((_) async => configuration.service)
+      ..instance<dynamic>(configuration.service);
   }
 
   @override

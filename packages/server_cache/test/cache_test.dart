@@ -6,8 +6,7 @@ void main() {
     late DataCacheManager cacheManager;
 
     setUp(() {
-      cacheManager = DataCacheManager();
-      cacheManager.registerStore('array', ArrayStore());
+      cacheManager = DataCacheManager()..registerStore('array', ArrayStore());
     });
 
     test('basic put and get', () async {

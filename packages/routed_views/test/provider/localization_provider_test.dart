@@ -11,8 +11,9 @@ void main() {
     setUp(() {
       container = Container();
       fs = MemoryFileSystem();
-      container.instance<EngineConfig>(EngineConfig(fileSystem: fs));
-      container.instance<MiddlewareRegistry>(MiddlewareRegistry());
+      container
+        ..instance<EngineConfig>(EngineConfig(fileSystem: fs))
+        ..instance<MiddlewareRegistry>(MiddlewareRegistry());
     });
 
     test('registers loader and translator using typed configuration', () async {
@@ -26,6 +27,8 @@ void main() {
         ),
       );
 
+      // Registration must complete before the asynchronous boot phase starts.
+      // ignore: cascade_invocations
       provider.register(container);
       await provider.boot(container);
 
@@ -52,6 +55,8 @@ void main() {
         LocalizationConfig(defaultLocale: 'es'),
       );
 
+      // Registration must complete before the asynchronous boot phase starts.
+      // ignore: cascade_invocations
       provider.register(container);
       await provider.boot(container);
 
@@ -71,6 +76,8 @@ void main() {
         ),
       );
 
+      // Registration must complete before the asynchronous boot phase starts.
+      // ignore: cascade_invocations
       provider.register(container);
       await provider.boot(container);
 
@@ -81,7 +88,6 @@ void main() {
             header: (_) => 'fr',
             query: (_) => null,
             cookie: (_) => 'pt',
-            sessionValue: null,
           ),
         ),
         equals('pt'),
@@ -93,6 +99,8 @@ void main() {
         LocalizationConfig(resolvers: [_StaticLocaleResolver('es')]),
       );
 
+      // Registration must complete before the asynchronous boot phase starts.
+      // ignore: cascade_invocations
       provider.register(container);
       await provider.boot(container);
 
@@ -102,7 +110,6 @@ void main() {
           header: (_) => null,
           query: (_) => null,
           cookie: (_) => null,
-          sessionValue: null,
         ),
       );
       expect(locale, equals('es'));

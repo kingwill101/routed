@@ -1,5 +1,5 @@
-import 'lock.dart';
-import 'redis_store.dart';
+import 'package:server_cache/src/lock.dart';
+import 'package:server_cache/src/redis_store.dart';
 
 /// Redis-backed implementation of [CacheLock].
 class RedisLock extends CacheLock {

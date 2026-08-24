@@ -1,7 +1,6 @@
+import 'package:server_cache/src/repository.dart';
+import 'package:server_cache/src/store_factory.dart';
 import 'package:server_contracts/server_contracts.dart' show Repository, Store;
-
-import 'repository.dart';
-import 'store_factory.dart';
 
 /// Builds repository callbacks for a specific configured store.
 typedef DataCacheCallbacksBuilder =
@@ -14,7 +13,8 @@ typedef DataCacheCallbacksBuilder =
 /// [StoreConfiguration] and creates the store during composition. The
 /// manager never parses string-keyed configuration maps.
 class DataCacheManager {
-  /// Creates a cache manager with an optional key [prefix] and callback builder.
+  /// Creates a cache manager with an optional key [prefix] and callback
+  /// builder.
   DataCacheManager({
     String prefix = '',
     DataCacheCallbacksBuilder? callbacksBuilder,

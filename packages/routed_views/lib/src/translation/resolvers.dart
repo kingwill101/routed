@@ -1,14 +1,14 @@
-// ignore_for_file: implementation_imports, depend_on_referenced_packages
-library;
-
 import 'dart:io';
 
-import 'locale_resolution.dart';
+import 'package:routed_views/src/translation/locale_resolution.dart';
 
 /// Built-in locale resolvers backed by query params, cookies, sessions, and
 /// headers.
 ///
 /// Contract implemented by all locale resolvers.
+// LocaleResolver is intentionally a public interface so applications can add
+// resolution sources without changing the built-in resolver chain.
+// ignore: one_member_abstracts
 abstract class LocaleResolver {
   /// Attempts to resolve a locale from the provided [context].
   ///
@@ -97,8 +97,8 @@ class HeaderLocaleResolver implements LocaleResolver {
       return null;
     }
     final segments = trimmed.split(';');
-    var value = segments.first.trim();
-    double weight = 1.0;
+    final value = segments.first.trim();
+    var weight = 1.0;
     for (final directive in segments.skip(1)) {
       final normalized = directive.trim();
       if (normalized.startsWith('q=')) {

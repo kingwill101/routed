@@ -25,11 +25,11 @@ void main() {
 
     test('increment and decrement item', () async {
       await store.put('counter', 1, 60);
-      await store.increment('counter', 1);
+      await store.increment('counter');
       var value = await store.get('counter');
       expect(value, 2);
 
-      await store.decrement('counter', 1);
+      await store.decrement('counter');
       value = await store.get('counter');
       expect(value, 1);
     });

@@ -2,8 +2,9 @@ import 'package:file/file.dart';
 import 'package:file/memory.dart';
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_testing/routed_testing.dart';
-import 'package:server_testing/server_testing.dart';
 import 'package:routed_views/routed_views.dart';
+import 'package:server_testing/server_testing.dart';
+
 import '../test_engine.dart';
 
 void main() {
@@ -20,24 +21,22 @@ void main() {
       _writeTranslation(fs, tempDir.path, 'en', 'greeting: "Hello"\n');
       _writeTranslation(fs, tempDir.path, 'fr', 'greeting: "Bonjour"\n');
 
-      final engine = testEngine(
-        config: EngineConfig(fileSystem: fs),
-        fileSystem: fs,
-        localizationConfig: LocalizationConfig(
-          paths: [tempDir.path],
-          resolvers: [
-            QueryLocaleResolver(parameter: 'lang'),
-            HeaderLocaleResolver(),
-          ],
-          queryParameter: 'lang',
-        ),
-      );
-
-      engine.get('/greet', (ctx) async {
-        final message = ctx.trans('messages.greeting')?.toString() ?? '';
-        ctx.response.write(message);
-        return ctx.response;
-      });
+      final engine =
+          testEngine(
+            config: EngineConfig(fileSystem: fs),
+            fileSystem: fs,
+            localizationConfig: LocalizationConfig(
+              paths: [tempDir.path],
+              resolvers: [
+                QueryLocaleResolver(parameter: 'lang'),
+                HeaderLocaleResolver(),
+              ],
+            ),
+          )..get('/greet', (ctx) async {
+            final message = ctx.trans('messages.greeting')?.toString() ?? '';
+            ctx.response.write(message);
+            return ctx.response;
+          });
 
       client = TestClient(RoutedRequestHandler(engine));
     });
@@ -76,8 +75,7 @@ void _writeTranslation(
   String locale,
   String content,
 ) {
-  final file = fileSystem.file('$root/$locale/messages.yaml');
-  file
+  fileSystem.file('$root/$locale/messages.yaml')
     ..createSync(recursive: true)
     ..writeAsStringSync(content);
 }

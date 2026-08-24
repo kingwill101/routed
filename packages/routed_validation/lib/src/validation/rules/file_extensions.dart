@@ -1,6 +1,6 @@
+import 'package:path/path.dart' as p;
 import 'package:routed_validation/src/validation/file.dart';
 import 'package:routed_validation/src/validation/rule.dart';
-import 'package:path/path.dart' as p;
 
 /// Validates that a file has one of the supplied filename extensions.
 class FileExtensionsRule extends ValidationRule {

@@ -1,3 +1,8 @@
+// Liquify exposes its backing file system dynamically on its conditional
+// platform-specific root implementations, so this test must inspect it
+// dynamically to cover both IO and non-IO builds.
+// ignore_for_file: avoid_dynamic_calls
+
 import 'package:file/memory.dart';
 import 'package:liquify/liquify.dart' as liquid;
 import 'package:path/path.dart' as path;
@@ -91,10 +96,9 @@ void main() {
 
       LiquidViewEngine(directory: '/custom', root: root);
 
-      expect(
-        (root as dynamic).fileSystem.currentDirectory.path as String,
-        equals(originalCurrent),
-      );
+      final current =
+          (root as dynamic).fileSystem.currentDirectory.path as String;
+      expect(current, equals(originalCurrent));
     });
   });
 }

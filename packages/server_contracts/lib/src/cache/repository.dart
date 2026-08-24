@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'store.dart';
+import 'package:server_contracts/src/cache/store.dart';
 
 /// High-level cache repository contract.
 abstract class Repository {
@@ -25,13 +25,15 @@ abstract class Repository {
   /// Stores [value] without an expiration.
   FutureOr<bool> forever(String key, dynamic value);
 
-  /// Returns the existing value for [key], or computes and stores it with [callback].
+  /// Returns the existing value for [key], or computes and stores it with
+  /// [callback].
   FutureOr<dynamic> remember(String key, dynamic ttl, Function callback);
 
   /// Computes and stores [key] when it is missing.
   FutureOr<dynamic> sear(String key, Function callback);
 
-  /// Returns the existing value for [key], or stores the result of [callback] forever.
+  /// Returns the existing value for [key], or stores the result of [callback]
+  /// forever.
   FutureOr<dynamic> rememberForever(String key, Function callback);
 
   /// Removes [key] from the repository.

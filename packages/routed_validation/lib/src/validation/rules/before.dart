@@ -1,5 +1,3 @@
-library;
-
 import 'package:routed_validation/src/validation/abstract_rule.dart';
 
 /// Validation rule that checks if a date is before a given date.
@@ -25,7 +23,7 @@ class BeforeRule extends AbstractValidationRule {
       if (inputValue == null || beforeDate == null) return false;
 
       return inputValue.isBefore(beforeDate);
-    } catch (e) {
+    } on Object catch (_) {
       return false;
     }
   }

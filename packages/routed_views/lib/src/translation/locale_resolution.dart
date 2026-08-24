@@ -1,7 +1,4 @@
-// ignore_for_file: implementation_imports, depend_on_referenced_packages
-library;
-
-import 'package:routed_core/src/context/context.dart';
+import 'package:routed_core/routed_core.dart' show EngineContext;
 
 /// Looks up a value by [name] from a particular source (headers, query, etc.).
 typedef LocaleLookup = String? Function(String name);
@@ -18,18 +15,6 @@ class LocaleResolutionContext {
     required this.cookie,
     this.sessionValue,
   });
-
-  /// Header lookup (case-insensitive).
-  final LocaleLookup header;
-
-  /// Query parameter lookup.
-  final LocaleLookup query;
-
-  /// Cookie lookup.
-  final LocaleLookup cookie;
-
-  /// Session lookup, if sessions are enabled.
-  final LocaleLookup? sessionValue;
 
   /// Builds a context from the current [EngineContext].
   ///
@@ -56,7 +41,7 @@ class LocaleResolutionContext {
     String? sessionLookup(String key) {
       try {
         return (ctx as dynamic).getSession<String>(key) as String?;
-      } catch (_) {
+      } on Object catch (_) {
         return null;
       }
     }
@@ -68,4 +53,16 @@ class LocaleResolutionContext {
       sessionValue: sessionLookup,
     );
   }
+
+  /// Header lookup (case-insensitive).
+  final LocaleLookup header;
+
+  /// Query parameter lookup.
+  final LocaleLookup query;
+
+  /// Cookie lookup.
+  final LocaleLookup cookie;
+
+  /// Session lookup, if sessions are enabled.
+  final LocaleLookup? sessionValue;
 }

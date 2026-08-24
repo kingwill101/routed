@@ -1,3 +1,4 @@
+import 'package:liquify/liquify.dart' as liquify;
 import 'package:routed_views/routed_views.dart';
 import 'package:test/test.dart';
 
@@ -5,8 +6,7 @@ void main() {
   test('liquid extensions apply to renders', () async {
     final engine = LiquidViewEngine();
     ViewExtensionRegistry.instance.registerFor('liquid', (Object target) {
-      final env = target as dynamic;
-      env.registerLocalFilter('test_upper', (
+      (target as liquify.Environment).registerLocalFilter('test_upper', (
         Object? value,
         List<Object?> args,
         Map<String, Object?> named,

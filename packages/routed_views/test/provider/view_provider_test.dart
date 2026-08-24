@@ -18,7 +18,7 @@ void main() {
         fileSystem: fs,
         viewConfig: RoutedViewConfig(directory: 'templates', cache: false),
       );
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
       await engine.initialize();
 
       expect(engine.config.templateDirectory, endsWith('templates'));
@@ -31,9 +31,9 @@ void main() {
       final engine = testEngine(
         config: EngineConfig(fileSystem: fs),
         fileSystem: fs,
-        viewConfig: RoutedViewConfig(directory: 'views'),
+        viewConfig: RoutedViewConfig(),
       );
-      addTearDown(() async => await engine.close());
+      addTearDown(() async => engine.close());
       await engine.initialize();
 
       expect(engine.config.templateDirectory, endsWith('views'));

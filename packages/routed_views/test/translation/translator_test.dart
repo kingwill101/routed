@@ -52,16 +52,15 @@ void main() {
     });
 
     test('addLines merges ad-hoc entries', () {
-      final translator = Translator(loader: loader, locale: 'en');
-
-      translator.addLines({'messages.goodbye': 'Bye'}, 'en');
+      final translator = Translator(loader: loader, locale: 'en')
+        ..addLines({'messages.goodbye': 'Bye'}, 'en');
 
       expect(translator.translate('messages.goodbye'), equals('Bye'));
     });
 
     test('missing key handler can override output', () {
-      final translator = Translator(loader: loader, locale: 'en');
-      translator.handleMissingKeysUsing((key, locale) => 'missing:$key');
+      final translator = Translator(loader: loader, locale: 'en')
+        ..handleMissingKeysUsing((key, locale) => 'missing:$key');
 
       expect(
         translator.translate('messages.unknown'),

@@ -1,8 +1,7 @@
 import 'package:path/path.dart' as p;
 import 'package:routed_core/routed_core.dart';
+import 'package:routed_storage/src/engine_static_file_sink.dart';
 import 'package:server_storage/server_storage.dart';
-
-import 'engine_static_file_sink.dart';
 
 /// Immutable configuration for [RoutedStaticProvider].
 class StaticConfig implements ValidatableConfiguration {
@@ -26,21 +25,22 @@ class StaticConfig implements ValidatableConfiguration {
       final mount = mounts[index];
       final path = 'mounts[$index]';
       final route = _normalizeStaticRoute(mount.route);
-      context.require(
-        route.trim().isNotEmpty,
-        '$path.route',
-        'route is required',
-      );
-      context.require(
-        !route.contains(':') && !route.contains('*'),
-        '$path.route',
-        'route cannot contain URL parameters',
-      );
-      context.require(
-        mount.disk != null || mount.root != null,
-        path,
-        'mount requires disk or root',
-      );
+      context
+        ..require(
+          route.trim().isNotEmpty,
+          '$path.route',
+          'route is required',
+        )
+        ..require(
+          !route.contains(':') && !route.contains('*'),
+          '$path.route',
+          'route cannot contain URL parameters',
+        )
+        ..require(
+          mount.disk != null || mount.root != null,
+          path,
+          'mount requires disk or root',
+        );
       if (mount.disk != null) {
         context.require(
           mount.disk!.trim().isNotEmpty,
@@ -55,16 +55,17 @@ class StaticConfig implements ValidatableConfiguration {
           'root cannot be empty',
         );
       }
-      context.require(
-        _isSafeStaticRelativePath(mount.path),
-        '$path.path',
-        'path must stay within the mount root',
-      );
-      context.require(
-        _isSafeStaticRelativePath(mount.indexFile),
-        '$path.indexFile',
-        'index file must stay within the mount root',
-      );
+      context
+        ..require(
+          _isSafeStaticRelativePath(mount.path),
+          '$path.path',
+          'path must stay within the mount root',
+        )
+        ..require(
+          _isSafeStaticRelativePath(mount.indexFile),
+          '$path.indexFile',
+          'index file must stay within the mount root',
+        );
     }
   }
 }
@@ -115,17 +116,21 @@ class RoutedStaticProvider extends ServiceProvider
       return context.response;
     }
 
-    router.get(route, (context) => serve(context));
-    router.head(route, (context) => serve(context));
+    router
+      ..get(route, serve)
+      ..head(route, serve);
     final wildcard = p.posix.join(route, '{*filepath}');
-    router.get(
-      wildcard,
-      (context) => serve(context, context.param('filepath')?.toString() ?? ''),
-    );
-    router.head(
-      wildcard,
-      (context) => serve(context, context.param('filepath')?.toString() ?? ''),
-    );
+    router
+      ..get(
+        wildcard,
+        (context) =>
+            serve(context, context.param('filepath')?.toString() ?? ''),
+      )
+      ..head(
+        wildcard,
+        (context) =>
+            serve(context, context.param('filepath')?.toString() ?? ''),
+      );
 
     _registeredRoutes.addAll(router.routes.skip(before));
   }

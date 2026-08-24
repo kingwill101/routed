@@ -69,7 +69,7 @@ void main() {
     });
 
     test('RateLimitEvent is sealed — exhaustive matching', () {
-      RateLimitEvent event = RateLimitAllowedEvent(
+      final RateLimitEvent event = RateLimitAllowedEvent(
         policy: 'p',
         strategy: RateLimitStrategy.tokenBucket,
         identity: 'id',

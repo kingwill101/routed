@@ -15,7 +15,7 @@ const List<String> _httpMethods = <String>[
 Generator<String> httpMethod() => Gen.oneOf(_httpMethods);
 
 Generator<Set<String>> httpMethodSet({int min = 1, int? max}) {
-  final int upper = max ?? _httpMethods.length;
+  final upper = max ?? _httpMethods.length;
   return Gen.someOf(
     _httpMethods,
     min: min,
@@ -159,7 +159,7 @@ Generator<({int start, int end})> byteRange({int maxLength = 1024}) {
 
 const _slugAlphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
 const _slugInvalidReplacements = <String>['_', '.', '@', ' '];
-final RegExp _lettersPattern = RegExp(r'[a-z]');
+final RegExp _lettersPattern = RegExp('[a-z]');
 
 Generator<List<int>> _positiveComposition(int total, int parts) {
   if (parts == 1) {

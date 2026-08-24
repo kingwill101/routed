@@ -24,7 +24,7 @@ class AfterRule extends ContextAwareValidationRule {
       if (inputValue == null || afterDate == null) return false;
 
       return inputValue.isAfter(afterDate);
-    } catch (e) {
+    } on Object catch (_) {
       return false;
     }
   }

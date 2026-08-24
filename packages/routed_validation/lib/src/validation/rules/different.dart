@@ -1,5 +1,3 @@
-library;
-
 import 'package:routed_validation/src/validation/context_aware_rule.dart';
 
 /// Validation rule that checks if the value is different from another field.

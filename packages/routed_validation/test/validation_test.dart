@@ -3,13 +3,13 @@ import 'dart:convert';
 import 'package:file/memory.dart';
 import 'package:property_testing/property_testing.dart';
 import 'package:routed_core/routed_core.dart';
-import 'package:routed_validation/routed_validation.dart';
 import 'package:routed_testing/routed_testing.dart';
+import 'package:routed_validation/routed_validation.dart';
 import 'package:server_testing/server_testing.dart';
+
 import 'test_engine.dart';
 
-TestClient useClient(Engine engine) =>
-    TestClient(RoutedRequestHandler(engine), mode: TransportMode.inMemory);
+TestClient useClient(Engine engine) => TestClient(RoutedRequestHandler(engine));
 
 String synthUsername(
   int length, {
@@ -33,20 +33,19 @@ String synthUsername(
 void main() {
   group('Validation Tests', () {
     test('JSON Binding Validation', () async {
-      final engine = testEngine();
+      final engine = testEngine()
+        ..post('/json', (ctx) async {
+          final data = <String, dynamic>{};
 
-      engine.post('/json', (ctx) async {
-        final data = <String, dynamic>{};
+          await ctx.validate({
+            'name': 'required',
+            'age': 'required|numeric',
+            'tags': 'required|array',
+          });
 
-        await ctx.validate({
-          'name': 'required',
-          'age': 'required|numeric',
-          'tags': 'required|array',
+          await ctx.bind(data);
+          ctx.json(data);
         });
-
-        await ctx.bind(data);
-        ctx.json(data);
-      });
 
       final client = useClient(engine);
 
@@ -60,15 +59,15 @@ void main() {
     });
 
     test('Form URL Encoded Binding Validation', () async {
-      final engine = testEngine();
-      engine.post('/form', (ctx) async {
-        final data = <String, dynamic>{};
+      final engine = testEngine()
+        ..post('/form', (ctx) async {
+          final data = <String, dynamic>{};
 
-        await ctx.validate({'name': 'required', 'age': 'required|numeric'});
+          await ctx.validate({'name': 'required', 'age': 'required|numeric'});
 
-        await ctx.bind(data);
-        ctx.json(data);
-      });
+          await ctx.bind(data);
+          ctx.json(data);
+        });
 
       final client = useClient(engine);
 
@@ -102,20 +101,22 @@ void main() {
       final runner = PropertyTestRunner<({bool nameValid, bool ageValid})>(
         generator,
         (sample) async {
-          final engine = testEngine();
-          engine.post('/form-prop', (ctx) async {
-            final data = <String, dynamic>{};
-            try {
-              await ctx.validate({
-                'name': 'required',
-                'age': 'required|numeric',
-              });
-              await ctx.bind(data);
-              ctx.json({'ok': true});
-            } on ValidationError catch (e) {
-              ctx.json({'errors': e.errors}, statusCode: HttpStatus.badRequest);
-            }
-          });
+          final engine = testEngine()
+            ..post('/form-prop', (ctx) async {
+              final data = <String, dynamic>{};
+              try {
+                await ctx.validate({
+                  'name': 'required',
+                  'age': 'required|numeric',
+                });
+                await ctx.bind(data);
+                ctx.json({'ok': true});
+              } on ValidationError catch (e) {
+                ctx.json({
+                  'errors': e.errors,
+                }, statusCode: HttpStatus.badRequest);
+              }
+            });
 
           final client = useClient(engine);
           final fields = <String, String>{};
@@ -161,20 +162,19 @@ void main() {
     });
 
     test('Query Binding Validation', () async {
-      final engine = testEngine();
+      final engine = testEngine()
+        ..get('/search', (ctx) async {
+          final data = <String, dynamic>{};
 
-      engine.get('/search', (ctx) async {
-        final data = <String, dynamic>{};
+          await ctx.validate({
+            'q': 'required',
+            'page': 'required|numeric',
+            'sort': 'required',
+          });
 
-        await ctx.validate({
-          'q': 'required',
-          'page': 'required|numeric',
-          'sort': 'required',
+          await ctx.bind(data);
+          ctx.json(data);
         });
-
-        await ctx.bind(data);
-        ctx.json(data);
-      });
 
       final client = useClient(engine);
 
@@ -199,23 +199,23 @@ void main() {
           PropertyTestRunner<({bool qValid, bool pageValid, bool sortValid})>(
             generator,
             (sample) async {
-              final engine = testEngine();
-              engine.get('/search-prop', (ctx) async {
-                final data = <String, dynamic>{};
-                try {
-                  await ctx.validate({
-                    'q': 'required',
-                    'page': 'required|numeric',
-                    'sort': 'required',
-                  });
-                  await ctx.bind(data);
-                  ctx.json({'ok': true});
-                } on ValidationError catch (e) {
-                  ctx.json({
-                    'errors': e.errors,
-                  }, statusCode: HttpStatus.badRequest);
-                }
-              });
+              final engine = testEngine()
+                ..get('/search-prop', (ctx) async {
+                  final data = <String, dynamic>{};
+                  try {
+                    await ctx.validate({
+                      'q': 'required',
+                      'page': 'required|numeric',
+                      'sort': 'required',
+                    });
+                    await ctx.bind(data);
+                    ctx.json({'ok': true});
+                  } on ValidationError catch (e) {
+                    ctx.json({
+                      'errors': e.errors,
+                    }, statusCode: HttpStatus.badRequest);
+                  }
+                });
 
               final client = useClient(engine);
               final query = <String, String>{};
@@ -239,7 +239,8 @@ void main() {
                   fail('Unexpected 500 response: ${response.body}');
                 }
                 response.assertStatus(HttpStatus.badRequest);
-                final errors = (response.json()['errors'] as Map)
+                final responseJson = response.json() as Map<String, dynamic>;
+                final errors = (responseJson['errors'] as Map)
                     .cast<String, dynamic>();
                 if (!sample.qValid) {
                   expect(errors.keys, contains('q'));
@@ -267,26 +268,25 @@ void main() {
       timeout: const Timeout(Duration(seconds: 100)),
       () async {
         final fs = MemoryFileSystem();
-        final engine = testEngine(
-          config: EngineConfig(
-            fileSystem: fs,
-            multipart: MultipartConfig(uploadDirectory: '/uploads'),
-          ),
-        );
+        final engine =
+            testEngine(
+              config: EngineConfig(
+                fileSystem: fs,
+                multipart: MultipartConfig(uploadDirectory: '/uploads'),
+              ),
+            )..post('/upload', (ctx) async {
+              final data = <String, dynamic>{};
 
-        engine.post('/upload', (ctx) async {
-          final data = <String, dynamic>{};
+              await ctx.validate({
+                'name': 'required',
+                'age': 'required|numeric',
+                'tags': 'required|array',
+                'document': 'required|file',
+              });
 
-          await ctx.validate({
-            'name': 'required',
-            'age': 'required|numeric',
-            'tags': 'required|array',
-            'document': 'required|file',
-          });
-
-          await ctx.bind(data);
-          ctx.json(data);
-        });
+              await ctx.bind(data);
+              ctx.json(data);
+            });
 
         final client = useClient(engine);
 
@@ -328,42 +328,43 @@ void main() {
           PropertyTestRunner<({bool ageValid, bool tagsValid, bool hasFile})>(
             generator,
             (sample) async {
-              final engine = testEngine(
-                config: EngineConfig(
-                  fileSystem: MemoryFileSystem(),
-                  multipart: MultipartConfig(uploadDirectory: '/uploads'),
-                ),
-              );
-              engine.post('/upload-prop', (ctx) async {
-                final data = <String, dynamic>{};
-                try {
-                  await ctx.validate({
-                    'name': 'required',
-                    'age': 'required|numeric',
-                    'tags': 'required|array',
-                    'document': 'required|file',
+              final engine =
+                  testEngine(
+                    config: EngineConfig(
+                      fileSystem: MemoryFileSystem(),
+                      multipart: MultipartConfig(uploadDirectory: '/uploads'),
+                    ),
+                  )..post('/upload-prop', (ctx) async {
+                    final data = <String, dynamic>{};
+                    try {
+                      await ctx.validate({
+                        'name': 'required',
+                        'age': 'required|numeric',
+                        'tags': 'required|array',
+                        'document': 'required|file',
+                      });
+                      await ctx.bind(data);
+                      ctx.json({'ok': true});
+                    } on ValidationError catch (e) {
+                      ctx.json({
+                        'errors': e.errors,
+                      }, statusCode: HttpStatus.badRequest);
+                    } on Object catch (e) {
+                      ctx.json({
+                        'errors': {
+                          '_': ['Unexpected: $e'],
+                        },
+                      }, statusCode: HttpStatus.badRequest);
+                    }
                   });
-                  await ctx.bind(data);
-                  ctx.json({'ok': true});
-                } on ValidationError catch (e) {
-                  ctx.json({
-                    'errors': e.errors,
-                  }, statusCode: HttpStatus.badRequest);
-                } catch (e) {
-                  ctx.json({
-                    'errors': {
-                      '_': ['Unexpected: ${e.toString()}'],
-                    },
-                  }, statusCode: HttpStatus.badRequest);
-                }
-              });
 
               final client = useClient(engine);
               final response = await client.multipart('/upload-prop', (
                 request,
               ) {
-                request.addField('name', 'tester');
-                request.addField('age', sample.ageValid ? '45' : 'wrong');
+                request
+                  ..addField('name', 'tester')
+                  ..addField('age', sample.ageValid ? '45' : 'wrong');
                 if (sample.tagsValid) {
                   request
                     ..addField('tags', 'one')
@@ -392,7 +393,8 @@ void main() {
                   fail('Unexpected 500 response: ${response.body}');
                 }
                 response.assertStatus(HttpStatus.badRequest);
-                final errors = (response.json()['errors'] as Map)
+                final responseJson = response.json() as Map<String, dynamic>;
+                final errors = (responseJson['errors'] as Map)
                     .cast<String, dynamic>();
                 if (!sample.ageValid) {
                   expect(
@@ -428,26 +430,25 @@ void main() {
     });
 
     test('Validation Error Handling', () async {
-      final engine = testEngine();
+      final engine = testEngine()
+        ..post('/json2', (ctx) async {
+          final data = <String, dynamic>{};
 
-      engine.post('/json2', (ctx) async {
-        final data = <String, dynamic>{};
+          try {
+            await ctx.validate({
+              'name': 'required',
+              'age': 'required|numeric',
+              'tags': 'required|array',
+            });
 
-        try {
-          await ctx.validate({
-            'name': 'required',
-            'age': 'required|numeric',
-            'tags': 'required|array',
-          });
+            await ctx.bind(data);
+            ctx.json(data);
+          } on ValidationError catch (e) {
+            ctx.json({'errors': e.errors});
+          }
+        });
 
-          await ctx.bind(data);
-          ctx.json(data);
-        } on ValidationError catch (e) {
-          ctx.json({'errors': e.errors});
-        }
-      });
-
-      final TestClient client = useClient(engine);
+      final client = useClient(engine);
 
       final response = await client.postJson('/json2', {
         'name': 'test',
@@ -468,22 +469,21 @@ void main() {
     test(
       'Validation accumulates errors and supports custom messages',
       () async {
-        final engine = testEngine();
-
-        engine.post('/multi', (ctx) async {
-          try {
-            await ctx.validate(
-              {'username': 'required|min:5|alpha'},
-              messages: {
-                'username.min': 'Username must be at least five characters.',
-                'username.alpha': 'Username may only contain letters.',
-              },
-            );
-            ctx.string('ok');
-          } on ValidationError catch (e) {
-            ctx.json({'errors': e.errors});
-          }
-        });
+        final engine = testEngine()
+          ..post('/multi', (ctx) async {
+            try {
+              await ctx.validate(
+                {'username': 'required|min:5|alpha'},
+                messages: {
+                  'username.min': 'Username must be at least five characters.',
+                  'username.alpha': 'Username may only contain letters.',
+                },
+              );
+              ctx.string('ok');
+            } on ValidationError catch (e) {
+              ctx.json({'errors': e.errors});
+            }
+          });
 
         final client = useClient(engine);
         final response = await client.postJson('/multi', {'username': '12'});
@@ -511,21 +511,22 @@ void main() {
       final runner = PropertyTestRunner<({int length, bool alphaOnly})>(
         generator,
         (sample) async {
-          final engine = testEngine();
-          engine.post('/multi-prop', (ctx) async {
-            try {
-              await ctx.validate(
-                {'username': 'required|min:5|alpha'},
-                messages: {
-                  'username.min': 'Username must be at least five characters.',
-                  'username.alpha': 'Username may only contain letters.',
-                },
-              );
-              ctx.string('ok');
-            } on ValidationError catch (e) {
-              ctx.json({'errors': e.errors});
-            }
-          });
+          final engine = testEngine()
+            ..post('/multi-prop', (ctx) async {
+              try {
+                await ctx.validate(
+                  {'username': 'required|min:5|alpha'},
+                  messages: {
+                    'username.min':
+                        'Username must be at least five characters.',
+                    'username.alpha': 'Username may only contain letters.',
+                  },
+                );
+                ctx.string('ok');
+              } on ValidationError catch (e) {
+                ctx.json({'errors': e.errors});
+              }
+            });
 
           final client = useClient(engine);
           final value = synthUsername(
@@ -575,23 +576,22 @@ void main() {
     });
 
     test('Validation bail stops after first failure', () async {
-      final engine = testEngine();
-
-      engine.post('/bail', (ctx) async {
-        try {
-          await ctx.validate(
-            {'username': 'required|min:5|alpha'},
-            bail: true,
-            messages: {
-              'username.min': 'Too short',
-              'username.alpha': 'Letters only',
-            },
-          );
-          ctx.string('ok');
-        } on ValidationError catch (e) {
-          ctx.json({'errors': e.errors});
-        }
-      });
+      final engine = testEngine()
+        ..post('/bail', (ctx) async {
+          try {
+            await ctx.validate(
+              {'username': 'required|min:5|alpha'},
+              bail: true,
+              messages: {
+                'username.min': 'Too short',
+                'username.alpha': 'Letters only',
+              },
+            );
+            ctx.string('ok');
+          } on ValidationError catch (e) {
+            ctx.json({'errors': e.errors});
+          }
+        });
 
       final client = useClient(engine);
       final response = await client.postJson('/bail', {'username': '12'});
@@ -615,22 +615,22 @@ void main() {
       final runner = PropertyTestRunner<({int length, bool alphaOnly})>(
         generator,
         (sample) async {
-          final engine = testEngine();
-          engine.post('/bail-prop', (ctx) async {
-            try {
-              await ctx.validate(
-                {'username': 'required|min:5|alpha'},
-                bail: true,
-                messages: {
-                  'username.min': 'Too short',
-                  'username.alpha': 'Letters only',
-                },
-              );
-              ctx.string('ok');
-            } on ValidationError catch (e) {
-              ctx.json({'errors': e.errors});
-            }
-          });
+          final engine = testEngine()
+            ..post('/bail-prop', (ctx) async {
+              try {
+                await ctx.validate(
+                  {'username': 'required|min:5|alpha'},
+                  bail: true,
+                  messages: {
+                    'username.min': 'Too short',
+                    'username.alpha': 'Letters only',
+                  },
+                );
+                ctx.string('ok');
+              } on ValidationError catch (e) {
+                ctx.json({'errors': e.errors});
+              }
+            });
 
           final client = useClient(engine);
           final value = synthUsername(
@@ -645,7 +645,7 @@ void main() {
 
           final isRequiredValid = value.isNotEmpty;
           final meetsMin = value.length >= 5;
-          final isAlpha = value.isEmpty ? true : sample.alphaOnly;
+          final isAlpha = value.isEmpty || sample.alphaOnly;
 
           if (isRequiredValid && meetsMin && isAlpha) {
             response
@@ -697,23 +697,23 @@ void main() {
           PropertyTestRunner<({bool nameValid, bool ageValid, bool tagsValid})>(
             generator,
             (sample) async {
-              final engine = testEngine();
-              engine.post('/json-prop', (ctx) async {
-                final data = <String, dynamic>{};
-                try {
-                  await ctx.validate({
-                    'name': 'required',
-                    'age': 'required|numeric',
-                    'tags': 'required|array',
-                  });
-                  await ctx.bind(data);
-                  ctx.json({'ok': true});
-                } on ValidationError catch (e) {
-                  ctx.json({
-                    'errors': e.errors,
-                  }, statusCode: HttpStatus.badRequest);
-                }
-              });
+              final engine = testEngine()
+                ..post('/json-prop', (ctx) async {
+                  final data = <String, dynamic>{};
+                  try {
+                    await ctx.validate({
+                      'name': 'required',
+                      'age': 'required|numeric',
+                      'tags': 'required|array',
+                    });
+                    await ctx.bind(data);
+                    ctx.json({'ok': true});
+                  } on ValidationError catch (e) {
+                    ctx.json({
+                      'errors': e.errors,
+                    }, statusCode: HttpStatus.badRequest);
+                  }
+                });
 
               final client = useClient(engine);
               final payload = <String, dynamic>{};

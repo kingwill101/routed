@@ -1,11 +1,9 @@
-library;
-
 import 'package:routed_validation/src/validation/abstract_rule.dart';
 
 /// A validation rule that checks if a given value is a valid date in the format YYYY-MM-DD.
 class DateRule extends AbstractValidationRule {
   @override
-  String get name => "date";
+  String get name => 'date';
 
   /// The error message to be displayed if the validation fails.
   @override

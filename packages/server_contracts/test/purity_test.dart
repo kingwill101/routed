@@ -11,7 +11,8 @@ Directory _resolveLibDir() {
     }
   }
   throw StateError(
-    'Unable to locate server_contracts lib directory from ${Directory.current.path}',
+    'Unable to locate server_contracts lib directory from '
+    '${Directory.current.path}',
   );
 }
 
@@ -26,12 +27,12 @@ void main() {
     for (final file in dartFiles) {
       final content = await file.readAsString();
       expect(
-        content.contains("package:routed_core/"),
+        content.contains('package:routed_core/'),
         isFalse,
         reason: 'Forbidden routed import in ${file.path}',
       );
       expect(
-        content.contains("package:routed_auth/"),
+        content.contains('package:routed_auth/'),
         isFalse,
         reason: 'Forbidden routed_auth import in ${file.path}',
       );

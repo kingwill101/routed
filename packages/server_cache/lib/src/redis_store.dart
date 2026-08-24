@@ -2,10 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:redis/redis.dart';
+import 'package:server_cache/src/redis_lock.dart';
+import 'package:server_cache/src/taggable_store.dart';
 import 'package:server_contracts/server_contracts.dart';
-
-import 'redis_lock.dart';
-import 'taggable_store.dart';
 
 /// Implements cache storage and locking using a Redis server.
 class RedisStore extends TaggableStore implements Store, LockProvider {
@@ -55,7 +54,7 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
     _connecting = true;
     try {
       final command = await _connection.connect(host, port);
-      if (password?.isNotEmpty == true) {
+      if (password?.isNotEmpty ?? false) {
         await command.send_object(['AUTH', password]);
       }
       if (db != null) {
@@ -76,7 +75,7 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
     final cmd = await _ensureCommand();
     try {
       return await cmd.send_object(args);
-    } catch (_) {
+    } on Object catch (_) {
       _command = null;
       rethrow;
     }
@@ -237,8 +236,9 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
 
   /// Releases [name] only when it is owned by [owner].
   Future<bool> releaseLock(String name, String owner) async {
-    final script =
-        'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) else return 0 end';
+    const script =
+        'if redis.call("GET", KEYS[1]) == ARGV[1] '
+        'then return redis.call("DEL", KEYS[1]) else return 0 end';
     final result = await _send(['EVAL', script, '1', _lockKey(name), owner]);
     if (result is int) {
       return result > 0;
@@ -277,7 +277,7 @@ class RedisStore extends TaggableStore implements Store, LockProvider {
     if (value.startsWith('json:')) {
       try {
         return jsonDecode(value.substring(5));
-      } catch (_) {
+      } on Object catch (_) {
         return value.substring(5);
       }
     }

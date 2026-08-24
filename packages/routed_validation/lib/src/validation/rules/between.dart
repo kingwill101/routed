@@ -1,5 +1,3 @@
-library;
-
 import 'package:routed_validation/src/validation/abstract_rule.dart';
 
 /// Validation rule that checks if a value is between a given range.
@@ -26,7 +24,7 @@ class BetweenRule extends AbstractValidationRule {
       if (min == null || max == null || inputValue == null) return false;
 
       return inputValue >= min && inputValue <= max;
-    } catch (e) {
+    } on Object catch (_) {
       return false;
     }
   }

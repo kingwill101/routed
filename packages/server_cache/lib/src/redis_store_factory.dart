@@ -1,7 +1,6 @@
+import 'package:server_cache/src/redis_store.dart';
+import 'package:server_cache/src/store_factory.dart';
 import 'package:server_contracts/server_contracts.dart';
-
-import 'redis_store.dart';
-import 'store_factory.dart';
 
 /// Typed options for [RedisStore].
 class RedisStoreConfiguration implements StoreConfiguration {

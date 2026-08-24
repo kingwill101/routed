@@ -1,25 +1,27 @@
 import 'dart:async';
 
+import 'package:server_cache/src/array_store.dart';
+import 'package:server_cache/src/lock.dart';
 import 'package:server_contracts/server_contracts.dart';
-
-import 'array_store.dart';
-import 'lock.dart';
 
 /// A lock implementation using an in-memory array store.
 class ArrayLock extends CacheLock {
-  /// The underlying array store used for locking.
-  final ArrayStore store;
-
-  /// Creates an [ArrayLock] with the given [store], [name], [seconds], and optional [owner].
+  /// Creates an [ArrayLock] with the given [store], [name], and [seconds].
+  ///
+  /// An optional [owner] identifies the process that holds the lock.
   ArrayLock(this.store, String name, int seconds, [String? owner])
     : super(name, seconds, owner);
+
+  /// The underlying array store used for locking.
+  final ArrayStore store;
 
   /// Acquires the lock if it is not already held by another process.
   ///
   /// Returns `true` if the lock was successfully acquired, `false` otherwise.
   @override
   Future<bool> acquire() async {
-    final expiration = store.locks[super.name]?['expiresAt'];
+    final entry = store.locks[super.name] as Map<Object?, Object?>?;
+    final expiration = entry?['expiresAt'];
     if (expiration != null &&
         DateTime.now().isBefore(
           DateTime.fromMillisecondsSinceEpoch(expiration as int),
@@ -55,13 +57,15 @@ class ArrayLock extends CacheLock {
   /// Returns the owner ID if the lock is held, `null` otherwise.
   @override
   Future<String?> getCurrentOwner() async {
-    final dynamic owner = store.locks[super.name]?['owner'];
+    final entry = store.locks[super.name] as Map<Object?, Object?>?;
+    final owner = entry?['owner'];
     return owner as String?;
   }
 
   /// Checks if the lock is owned by the current process.
   ///
-  /// Returns `true` if the lock is owned by the current process, `false` otherwise.
+  /// Returns `true` if the lock is owned by the current process, `false`
+  /// otherwise.
   @override
   Future<bool> isOwnedByCurrentProcess() async {
     return (await getCurrentOwner()) == ownerId;
@@ -76,7 +80,8 @@ class ArrayLock extends CacheLock {
   /// Blocks until the lock is acquired or the timeout is reached.
   ///
   /// If a [callback] is provided, it is executed once the lock is acquired.
-  /// Throws a [LockTimeoutException] if the lock could not be acquired within the specified [seconds].
+  /// Throws a [LockTimeoutException] if the lock could not be acquired within
+  /// the specified [seconds].
   @override
   Future<dynamic> block(int seconds, [Function? callback]) async {
     final starting = DateTime.now().millisecondsSinceEpoch;
@@ -96,7 +101,7 @@ class ArrayLock extends CacheLock {
 
     if (callback != null) {
       try {
-        return await callback();
+        return await Function.apply(callback, const <dynamic>[]);
       } finally {
         await release();
       }
@@ -107,7 +112,8 @@ class ArrayLock extends CacheLock {
 
   /// Acquires the lock and optionally executes a [callback].
   ///
-  /// If the lock is acquired and a [callback] is provided, the callback is executed.
+  /// If the lock is acquired and a [callback] is provided, the callback is
+  /// executed.
   /// Returns the result of the callback or `true` if no callback is provided.
   @override
   Future<dynamic> get([Function? callback]) async {
@@ -115,7 +121,7 @@ class ArrayLock extends CacheLock {
 
     if (result && callback != null) {
       try {
-        return await callback();
+        return await Function.apply(callback, const <dynamic>[]);
       } finally {
         await release();
       }

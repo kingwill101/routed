@@ -52,7 +52,7 @@ void main() {
         RoutedStaticProvider(
           StaticConfig(
             enabled: true,
-            mounts: [StaticMountConfig(route: '/assets', disk: 'assets')],
+            mounts: [const StaticMountConfig(route: '/assets', disk: 'assets')],
           ),
         ),
       ],
@@ -90,7 +90,7 @@ void main() {
         RoutedStaticProvider(
           StaticConfig(
             enabled: true,
-            mounts: [StaticMountConfig(route: '/files', disk: 'one')],
+            mounts: [const StaticMountConfig(route: '/files', disk: 'one')],
           ),
         ),
       ],

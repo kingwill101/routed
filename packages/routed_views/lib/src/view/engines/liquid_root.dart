@@ -16,12 +16,6 @@ import 'package:liquify/liquify.dart';
 /// for resolving template file paths and reading their contents.
 /// {@macro liquid_root_base_directory}
 class LiquidRoot implements Root {
-  /// The file system to be used for file operations.
-  final FileSystem fileSystem;
-
-  /// Base directory used when resolving relative templates.
-  String baseDirectory;
-
   /// Constructor for `LiquidRoot`.
   ///
   /// If no `fileSystem` is provided, it defaults to `local.LocalFileSystem()`.
@@ -31,6 +25,12 @@ class LiquidRoot implements Root {
         fileSystem ?? const local.LocalFileSystem(),
         baseDirectory,
       );
+
+  /// The file system to be used for file operations.
+  final FileSystem fileSystem;
+
+  /// Base directory used when resolving relative templates.
+  String baseDirectory;
 
   /// Resolves the given relative path to a `Source` object.
   ///
@@ -53,6 +53,9 @@ class LiquidRoot implements Root {
   @override
   Future<Source> resolveAsync(String relPath) async {
     final file = fileSystem.file(_resolvePath(relPath));
+    // Keep the async file API for virtual and remote file systems supported by
+    // package:file; this is not a direct blocking dart:io call.
+    // ignore: avoid_slow_async_io
     if (!await file.exists()) {
       throw Exception('Template file not found: $relPath');
     }

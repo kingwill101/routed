@@ -1,10 +1,11 @@
 import 'package:routed_core/routed_core.dart';
+import 'package:routed_testing/routed_testing.dart';
 import 'package:routed_views/src/middleware/localization.dart';
 import 'package:routed_views/src/translation/constants.dart';
 import 'package:routed_views/src/translation/locale_manager.dart';
 import 'package:routed_views/src/translation/resolvers.dart';
-import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+
 import '../test_engine.dart';
 
 void main() {
@@ -19,16 +20,15 @@ void main() {
         ],
       );
 
-      final engine = testEngine();
-      engine.addGlobalMiddleware(localizationMiddleware(manager));
-      engine.get('/welcome', (ctx) {
-        return ctx.json({'locale': ctx.get<String>(kRequestLocaleAttribute)});
-      });
+      final engine = testEngine()
+        ..addGlobalMiddleware(localizationMiddleware(manager))
+        ..get('/welcome', (ctx) {
+          return ctx.json({'locale': ctx.get<String>(kRequestLocaleAttribute)});
+        });
 
       await engine.initialize();
       final client = TestClient(
         RoutedRequestHandler(engine),
-        mode: TransportMode.inMemory,
       );
       addTearDown(() async {
         await client.close();
@@ -43,7 +43,8 @@ void main() {
       );
 
       response.assertStatus(HttpStatus.ok);
-      expect(response.json()['locale'], equals('es'));
+      final body = (response.json() as Map).cast<String, dynamic>();
+      expect(body['locale'], equals('es'));
     });
 
     test('falls back to header resolver when query missing', () async {
@@ -53,16 +54,15 @@ void main() {
         resolvers: [HeaderLocaleResolver()],
       );
 
-      final engine = testEngine();
-      engine.addGlobalMiddleware(localizationMiddleware(manager));
-      engine.get('/', (ctx) {
-        return ctx.json({'locale': ctx.get<String>(kRequestLocaleAttribute)});
-      });
+      final engine = testEngine()
+        ..addGlobalMiddleware(localizationMiddleware(manager))
+        ..get('/', (ctx) {
+          return ctx.json({'locale': ctx.get<String>(kRequestLocaleAttribute)});
+        });
 
       await engine.initialize();
       final client = TestClient(
         RoutedRequestHandler(engine),
-        mode: TransportMode.inMemory,
       );
       addTearDown(() async {
         await client.close();
@@ -76,7 +76,8 @@ void main() {
         },
       );
 
-      expect(response.json()['locale'], equals('de-DE'));
+      final body = (response.json() as Map).cast<String, dynamic>();
+      expect(body['locale'], equals('de-DE'));
     });
   });
 }

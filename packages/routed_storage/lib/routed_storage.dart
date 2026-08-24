@@ -3,11 +3,11 @@ library;
 
 import 'package:file/file.dart';
 import 'package:routed_core/routed_core.dart';
+import 'package:routed_storage/src/static_provider.dart';
 import 'package:server_storage/server_storage.dart';
 
-import 'src/static_provider.dart';
-
 export 'package:server_storage/server_storage.dart';
+
 export 'src/engine_static_file_sink.dart';
 export 'src/static_files.dart';
 export 'src/static_provider.dart';
@@ -85,26 +85,27 @@ class StorageConfig implements ValidatableConfiguration {
 
   @override
   void validate(ConfigValidationContext context) {
-    context.require(
-      defaultDisk.trim().isNotEmpty,
-      'defaultDisk',
-      'default disk name cannot be empty',
-    );
-    context.require(
-      root.trim().isNotEmpty,
-      'root',
-      'default storage root cannot be empty',
-    );
-    context.require(
-      disks.isNotEmpty,
-      'disks',
-      'at least one storage disk must be configured',
-    );
-    context.require(
-      disks.containsKey(defaultDisk),
-      'defaultDisk',
-      'default disk must name a configured disk',
-    );
+    context
+      ..require(
+        defaultDisk.trim().isNotEmpty,
+        'defaultDisk',
+        'default disk name cannot be empty',
+      )
+      ..require(
+        root.trim().isNotEmpty,
+        'root',
+        'default storage root cannot be empty',
+      )
+      ..require(
+        disks.isNotEmpty,
+        'disks',
+        'at least one storage disk must be configured',
+      )
+      ..require(
+        disks.containsKey(defaultDisk),
+        'defaultDisk',
+        'default disk must name a configured disk',
+      );
     for (final entry in disks.entries) {
       final name = entry.key;
       final disk = entry.value;

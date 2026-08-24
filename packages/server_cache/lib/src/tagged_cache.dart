@@ -1,6 +1,5 @@
+import 'package:server_cache/src/tag_set.dart';
 import 'package:server_contracts/server_contracts.dart';
-
-import 'tag_set.dart';
 
 /// A cache repository that supports tagging.
 ///
@@ -9,14 +8,14 @@ import 'tag_set.dart';
 /// flushing a tag (which changes the namespace) invalidates previously cached
 /// values for that tag.
 class TaggedCache implements Repository {
+  /// Creates a new instance of [TaggedCache] with the given [store] and [tags].
+  TaggedCache(this.store, this.tags);
+
   /// The underlying store used for caching.
   final Store store;
 
   /// The set of tags associated with the cache.
   final TagSet tags;
-
-  /// Creates a new instance of [TaggedCache] with the given [store] and [tags].
-  TaggedCache(this.store, this.tags);
 
   /// Scopes [key] by the current tag namespace.
   ///
@@ -39,7 +38,7 @@ class TaggedCache implements Repository {
   /// Returns the cached item or the [defaultValue] if the item is not found.
   @override
   Future<dynamic> pull(dynamic key, [dynamic defaultValue]) async {
-    final String keyString = key is String ? key : key.toString();
+    final keyString = key is String ? key : key.toString();
     final namespaced = await _namespaced(keyString);
     final value = await store.get(namespaced);
     await store.forget(namespaced);
@@ -60,11 +59,7 @@ class TaggedCache implements Repository {
   /// Returns `true` if the item was successfully stored.
   @override
   Future<bool> put(String key, dynamic value, [Duration? ttl]) async {
-    return await store.put(
-      await _namespaced(key),
-      value,
-      ttl?.inSeconds ?? 0,
-    );
+    return await store.put(await _namespaced(key), value, ttl?.inSeconds ?? 0);
   }
 
   /// Stores an item in the cache if the key does not exist.
@@ -78,11 +73,7 @@ class TaggedCache implements Repository {
   Future<bool> add(String key, dynamic value, [Duration? ttl]) async {
     // Delegates to the store's atomic store-only-if-absent operation so
     // concurrent callers cannot both report success for the same key.
-    return await store.add(
-      await _namespaced(key),
-      value,
-      ttl?.inSeconds ?? 0,
-    );
+    return await store.add(await _namespaced(key), value, ttl?.inSeconds ?? 0);
   }
 
   /// Increments the value of an item in the cache.
@@ -95,8 +86,8 @@ class TaggedCache implements Repository {
   Future<dynamic> increment(String key, [dynamic value = 1]) async {
     final namespaced = await _namespaced(key);
     final currentValue = await store.get(namespaced) ?? 0;
-    final int incrementValue = value is int ? value : 1;
-    final newValue = currentValue + incrementValue;
+    final incrementValue = value is int ? value : 1;
+    final newValue = (currentValue as num) + incrementValue;
     await store.put(namespaced, newValue, 0);
     return newValue;
   }
@@ -111,8 +102,8 @@ class TaggedCache implements Repository {
   Future<dynamic> decrement(String key, [dynamic value = 1]) async {
     final namespaced = await _namespaced(key);
     final currentValue = await store.get(namespaced) ?? 0;
-    final int decrementValue = value is int ? value : 1;
-    final newValue = currentValue - decrementValue;
+    final decrementValue = value is int ? value : 1;
+    final newValue = (currentValue as num) - decrementValue;
     await store.put(namespaced, newValue, 0);
     return newValue;
   }
@@ -128,7 +119,8 @@ class TaggedCache implements Repository {
     return await store.put(await _namespaced(key), value, 0);
   }
 
-  /// Gets an item from the cache, or executes the given [callback] and stores the result.
+  /// Gets an item from the cache, or executes the given [callback] and stores
+  /// the result.
   ///
   /// - [key]: The key of the item to retrieve.
   /// - [ttl]: The time-to-live duration for the cache item.
@@ -142,15 +134,14 @@ class TaggedCache implements Repository {
     if (value != null) {
       return value;
     }
-    final result = await callback();
-    final int seconds = ttl is Duration
-        ? ttl.inSeconds
-        : (ttl is int ? ttl : 0);
+    final result = await Function.apply(callback, const <dynamic>[]);
+    final seconds = ttl is Duration ? ttl.inSeconds : (ttl is int ? ttl : 0);
     await store.put(namespaced, result, seconds);
     return result;
   }
 
-  /// Gets an item from the cache, or executes the given [callback] and stores the result forever.
+  /// Gets an item from the cache, or executes the given [callback] and stores
+  /// the result forever.
   ///
   /// - [key]: The key of the item to retrieve.
   /// - [callback]: The function to execute if the item is not found.
@@ -158,10 +149,11 @@ class TaggedCache implements Repository {
   /// Returns the cached item or the result of the [callback].
   @override
   Future<dynamic> sear(String key, Function callback) async {
-    return await rememberForever(key, callback);
+    return rememberForever(key, callback);
   }
 
-  /// Gets an item from the cache, or executes the given [callback] and stores the result forever.
+  /// Gets an item from the cache, or executes the given [callback] and stores
+  /// the result forever.
   ///
   /// - [key]: The key of the item to retrieve.
   /// - [callback]: The function to execute if the item is not found.
@@ -174,7 +166,7 @@ class TaggedCache implements Repository {
     if (value != null) {
       return value;
     }
-    final result = await callback();
+    final result = await Function.apply(callback, const <dynamic>[]);
     await store.put(namespaced, result, 0);
     return result;
   }

@@ -1,7 +1,6 @@
 import 'package:routed_core/routed_core.dart';
-
-import '../cors.dart';
-import '../ip_filter.dart';
+import 'package:routed_security/src/cors.dart';
+import 'package:routed_security/src/ip_filter.dart';
 
 /// Immutable trusted-proxy settings.
 class TrustedProxyConfig {
@@ -95,16 +94,18 @@ class RoutedSecurityConfig implements ValidatableConfiguration {
 
   @override
   void validate(ConfigValidationContext context) {
-    context.require(
-      maxRequestSize > 0,
-      'maxRequestSize',
-      'maximum request size must be greater than zero',
-    );
-    context.require(
-      !trustedProxies.enabled || trustedProxies.proxies.isNotEmpty,
-      'trustedProxies.proxies',
-      'must contain at least one network when trusted proxy support is enabled',
-    );
+    context
+      ..require(
+        maxRequestSize > 0,
+        'maxRequestSize',
+        'maximum request size must be greater than zero',
+      )
+      ..require(
+        !trustedProxies.enabled || trustedProxies.proxies.isNotEmpty,
+        'trustedProxies.proxies',
+        'must contain at least one network when trusted proxy support '
+            'is enabled',
+      );
     _validateNetworkList(
       context,
       'trustedProxies.proxies',
@@ -118,21 +119,22 @@ class RoutedSecurityConfig implements ValidatableConfiguration {
     _validateNetworkList(context, 'ipFilter.allow', ipFilter.allow);
     _validateNetworkList(context, 'ipFilter.deny', ipFilter.deny);
 
-    context.require(
-      cors.allowedOrigins.every((origin) => origin.trim().isNotEmpty),
-      'cors.allowedOrigins',
-      'allowed origins cannot contain empty values',
-    );
-    context.require(
-      cors.allowedMethods.every((method) => method.trim().isNotEmpty),
-      'cors.allowedMethods',
-      'allowed methods cannot contain empty values',
-    );
-    context.require(
-      cors.maxAge == null || cors.maxAge! >= 0,
-      'cors.maxAge',
-      'maximum age cannot be negative',
-    );
+    context
+      ..require(
+        cors.allowedOrigins.every((origin) => origin.trim().isNotEmpty),
+        'cors.allowedOrigins',
+        'allowed origins cannot contain empty values',
+      )
+      ..require(
+        cors.allowedMethods.every((method) => method.trim().isNotEmpty),
+        'cors.allowedMethods',
+        'allowed methods cannot contain empty values',
+      )
+      ..require(
+        cors.maxAge == null || cors.maxAge! >= 0,
+        'cors.maxAge',
+        'maximum age cannot be negative',
+      );
   }
 
   void _validateNetworkList(

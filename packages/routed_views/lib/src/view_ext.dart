@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:routed_core/routed_core.dart';
 
-import 'view/engine_manager.dart';
-import 'view/view_engine.dart';
+import 'package:routed_views/src/view/engine_manager.dart';
+import 'package:routed_views/src/view/view_engine.dart';
 
 /// View helpers for [EngineContext] — moved from `routed` to `routed_views`
 /// per refactor.md §16.2.
@@ -38,7 +38,8 @@ extension RoutedViewContext on EngineContext {
         if (viewPath.isNotEmpty) {
           final fs = engineConfig.fileSystem;
           filePath = fs.path.join(viewPath, templateName);
-          // If file exists at filePath, use it; otherwise try templateName as absolute
+          // If the file exists at filePath, use it; otherwise try templateName
+          // as an absolute path.
           if (!fs.file(filePath).existsSync() &&
               fs.file(templateName).existsSync()) {
             filePath = templateName;

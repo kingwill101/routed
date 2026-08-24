@@ -1,8 +1,8 @@
 import 'package:routed_core/routed_core.dart'
     show ConfigStore, Container, NamedRegistry;
 
-import 'rule.dart';
-import 'rules/rules.dart';
+import 'package:routed_validation/src/validation/rule.dart';
+import 'package:routed_validation/src/validation/rules/rules.dart';
 
 /// Factory function that creates a validation rule instance.
 typedef ValidationRuleFactory = ValidationRule Function();
@@ -22,75 +22,76 @@ ValidationRuleRegistry requireValidationRegistry(Container container) {
 }
 
 final List<ValidationRuleFactory> _defaultRuleFactories = [
-  () => NullableRule(),
-  () => RequiredRule(),
-  () => InRule(),
-  () => MaxLengthRule(),
-  () => MinLengthRule(),
-  () => IntRule(),
-  () => DoubleRule(),
-  () => UuidRule(),
-  () => DateRule(),
-  () => EmailRule(),
-  () => NumericRule(),
-  () => SlugRule(),
-  () => StringRule(),
-  () => UrlRule(),
-  () => WordRule(),
-  () => ArrayRule(),
-  () => FileRule(),
-  () => MaxFileSizeRule(),
-  () => AllowedMimeTypesRule(),
-  () => MinRule(),
-  () => MaxRule(),
-  () => AcceptedRule(),
-  () => ActiveUrlRule(),
-  () => AfterRule(),
-  () => AlphaRule(),
-  () => AlphaDashRule(),
-  () => AlphaNumRule(),
-  () => BeforeRule(),
-  () => BetweenRule(),
-  () => BooleanRule(),
-  () => ConfirmedRule(),
-  () => DateFormatRule(),
-  () => DifferentRule(),
-  () => DigitsRule(),
-  () => DigitsBetweenRule(),
-  () => IpRule(),
-  () => Ipv4Rule(),
-  () => Ipv6Rule(),
-  () => JsonRule(),
-  () => AsciiRule(),
-  () => DoesntStartWithRule(),
-  () => DoesntEndWithRule(),
-  () => EndsWithRule(),
-  () => HexColorRule(),
-  () => LowercaseRule(),
-  () => NotInRule(),
-  () => NotRegexRule(),
-  () => SameRule(),
-  () => StartsWithRule(),
-  () => UppercaseRule(),
-  () => UlidRule(),
-  () => DecimalRule(),
-  () => GreaterThanRule(),
-  () => GreaterThanOrEqualRule(),
-  () => LessThanRule(),
-  () => LessThanOrEqualRule(),
-  () => MultipleOfRule(),
-  () => SameSizeRule(),
-  () => ContainsRule(),
-  () => DistinctRule(),
-  () => InArrayRule(),
-  () => ListRule(),
-  () => RequiredArrayKeysRule(),
-  () => DateEqualsRule(),
-  () => AfterOrEqualRule(),
-  () => BeforeOrEqualRule(),
-  () => FileBetweenRule(),
-  () => FileDimensionsRule(),
-  () => FileExtensionsRule(),
+  NullableRule.new,
+  RequiredRule.new,
+  InRule.new,
+  MaxLengthRule.new,
+  MinLengthRule.new,
+  IntRule.new,
+  DoubleRule.new,
+  UuidRule.new,
+  DateRule.new,
+  EmailRule.new,
+  NumericRule.new,
+  SlugRule.new,
+  StringRule.new,
+  UrlRule.new,
+  WordRule.new,
+  ArrayRule.new,
+  FileRule.new,
+  MaxFileSizeRule.new,
+  AllowedMimeTypesRule.new,
+  MinRule.new,
+  MaxRule.new,
+  AcceptedRule.new,
+  ActiveUrlRule.new,
+  AfterRule.new,
+  AlphaRule.new,
+  AlphaDashRule.new,
+  AlphaNumRule.new,
+  BeforeRule.new,
+  BetweenRule.new,
+  BooleanRule.new,
+  ConfirmedRule.new,
+  DateFormatRule.new,
+  DifferentRule.new,
+  DifferentTimezoneRule.new,
+  DigitsRule.new,
+  DigitsBetweenRule.new,
+  IpRule.new,
+  Ipv4Rule.new,
+  Ipv6Rule.new,
+  JsonRule.new,
+  AsciiRule.new,
+  DoesntStartWithRule.new,
+  DoesntEndWithRule.new,
+  EndsWithRule.new,
+  HexColorRule.new,
+  LowercaseRule.new,
+  NotInRule.new,
+  NotRegexRule.new,
+  SameRule.new,
+  StartsWithRule.new,
+  UppercaseRule.new,
+  UlidRule.new,
+  DecimalRule.new,
+  GreaterThanRule.new,
+  GreaterThanOrEqualRule.new,
+  LessThanRule.new,
+  LessThanOrEqualRule.new,
+  MultipleOfRule.new,
+  SameSizeRule.new,
+  ContainsRule.new,
+  DistinctRule.new,
+  InArrayRule.new,
+  ListRule.new,
+  RequiredArrayKeysRule.new,
+  DateEqualsRule.new,
+  AfterOrEqualRule.new,
+  BeforeOrEqualRule.new,
+  FileBetweenRule.new,
+  FileDimensionsRule.new,
+  FileExtensionsRule.new,
 ];
 
 /// Named registry of validation rule factories.
@@ -129,9 +130,7 @@ class ValidationRuleRegistry extends NamedRegistry<ValidationRuleFactory> {
   Iterable<String> get names => entryNames;
 
   void _registerDefaults() {
-    for (final factory in _defaultRuleFactories) {
-      register(factory);
-    }
+    _defaultRuleFactories.forEach(register);
   }
 }
 
@@ -155,7 +154,7 @@ Map<String, List<RuleWithOptions>> parseRules(
 
   rules.forEach((field, ruleString) {
     final ruleParts = ruleString.split('|');
-    final List<RuleWithOptions> fieldRules = [];
+    final fieldRules = <RuleWithOptions>[];
 
     for (final part in ruleParts) {
       final ruleAndOptions = part.split(':');
@@ -180,6 +179,13 @@ Map<String, List<RuleWithOptions>> parseRules(
 
 /// A class responsible for validating data against a set of rules.
 class Validator {
+  /// Constructs a [Validator] with a map of parsed rules.
+  Validator(
+    this._rules, {
+    required this.registry,
+    this.bail = false,
+    Map<String, String>? messages,
+  }) : _messages = messages;
   final Map<String, List<RuleWithOptions>> _rules;
 
   /// Registry used to resolve rules when the validator was created.
@@ -190,18 +196,12 @@ class Validator {
 
   final Map<String, String>? _messages;
 
-  /// Constructs a [Validator] with a map of parsed rules.
-  Validator(
-    this._rules, {
-    required this.registry,
-    this.bail = false,
-    Map<String, String>? messages,
-  }) : _messages = messages;
-
   /// Factory method to create a [Validator] from a map of string rules.
   ///
   /// The input [rules] map contains field names as keys and rule strings as values.
   /// This method parses the rules and constructs a [Validator] instance.
+  // Keep the static factory name for source compatibility with existing apps.
+  // ignore: prefer_constructors_over_static_methods
   static Validator make(
     Map<String, String> rules, {
     required ValidationRuleRegistry registry,
@@ -228,7 +228,7 @@ class Validator {
     for (final ruleEntry in _rules.entries) {
       final field = ruleEntry.key;
       final validators = ruleEntry.value;
-      bool fieldHasError = false;
+      var fieldHasError = false;
 
       for (final validatorWithOptions in validators) {
         final validator = validatorWithOptions.rule;

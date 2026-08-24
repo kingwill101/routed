@@ -1,7 +1,6 @@
+import 'package:server_cache/src/tag_set.dart';
+import 'package:server_cache/src/tagged_cache.dart';
 import 'package:server_contracts/server_contracts.dart';
-
-import 'tag_set.dart';
-import 'tagged_cache.dart';
 
 /// An abstract class that provides tagging capabilities for cache stores.
 ///
@@ -19,7 +18,8 @@ abstract class TaggableStore {
   /// - Parameters:
   ///   - names: A list of strings representing the tag names.
   ///
-  /// - Returns: A `TaggedCache` instance that is associated with the specified tags.
+  /// - Returns: A `TaggedCache` instance that is associated with the specified
+  ///   tags.
   ///
   /// Example usage:
   /// ```dart

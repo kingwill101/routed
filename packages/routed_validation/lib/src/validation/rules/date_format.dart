@@ -1,5 +1,5 @@
-import 'package:routed_validation/src/validation/rule.dart';
 import 'package:intl/intl.dart';
+import 'package:routed_validation/src/validation/rule.dart';
 
 /// Validation rule that checks if a date matches a given format.
 class DateFormatRule extends ValidationRule {
@@ -21,7 +21,7 @@ class DateFormatRule extends ValidationRule {
     try {
       DateFormat(options[0]).parseStrict(value.toString());
       return true;
-    } catch (e) {
+    } on Object catch (_) {
       return false;
     }
   }

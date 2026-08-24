@@ -1,3 +1,5 @@
+import 'dart:io';
+
 void main() {
-  print('routed_openapi_builder example');
+  stdout.writeln('routed_openapi_builder example');
 }

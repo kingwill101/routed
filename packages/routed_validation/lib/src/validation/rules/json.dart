@@ -1,5 +1,6 @@
-import 'package:routed_validation/src/validation/rule.dart';
 import 'dart:convert';
+
+import 'package:routed_validation/src/validation/rule.dart';
 
 /// Validation rule that checks if the value is a valid JSON string.
 class JsonRule extends ValidationRule {
@@ -17,7 +18,7 @@ class JsonRule extends ValidationRule {
     try {
       jsonDecode(value.toString());
       return true;
-    } catch (e) {
+    } on Object catch (_) {
       return false;
     }
   }

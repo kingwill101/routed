@@ -1,8 +1,5 @@
-// ignore_for_file: implementation_imports, depend_on_referenced_packages
-library;
-
-import 'locale_resolution.dart';
-import 'resolvers.dart';
+import 'package:routed_views/src/translation/locale_resolution.dart';
+import 'package:routed_views/src/translation/resolvers.dart';
 
 /// Coordinates locale resolution across configured resolvers.
 ///

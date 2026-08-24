@@ -1,6 +1,6 @@
 import 'package:build/build.dart';
-import 'package:test/test.dart';
 import 'package:routed_openapi_builder/routed_openapi_builder.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('RoutedOpenApiBuilder', () {
@@ -9,7 +9,7 @@ void main() {
     });
 
     test('builder creates OpenApiBuilder', () {
-      final builder = openApiBuilder(BuilderOptions({}));
+      final builder = openApiBuilder(BuilderOptions.empty);
       expect(builder, isA<OpenApiBuilder>());
     });
 

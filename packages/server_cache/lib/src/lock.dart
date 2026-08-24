@@ -7,6 +7,11 @@ import 'package:server_contracts/server_contracts.dart';
 /// An abstract class representing a lock mechanism.
 /// This class implements the [lock_contract.Lock] interface.
 abstract class CacheLock implements lock_contract.Lock {
+  /// Constructs a [CacheLock] instance with the given [name] and [seconds].
+  /// If [owner] is not provided, a random string is generated as the owner ID.
+  CacheLock(this.name, this.seconds, [String? owner])
+    : ownerId = owner ?? _generateRandomString();
+
   /// The name of the lock.
   final String name;
 
@@ -16,13 +21,9 @@ abstract class CacheLock implements lock_contract.Lock {
   /// The unique identifier for the owner of the lock.
   final String ownerId;
 
-  /// The duration in milliseconds to sleep between attempts to acquire the lock.
+  /// The duration in milliseconds to sleep between attempts to acquire the
+  /// lock.
   int sleepMilliseconds = 250;
-
-  /// Constructs a [CacheLock] instance with the given [name] and [seconds].
-  /// If [owner] is not provided, a random string is generated as the owner ID.
-  CacheLock(this.name, this.seconds, [String? owner])
-    : ownerId = owner ?? _generateRandomString();
 
   /// Acquires the lock.
   ///
@@ -38,17 +39,19 @@ abstract class CacheLock implements lock_contract.Lock {
 
   /// Acquires the lock and executes the given [callback] if provided.
   ///
-  /// If the lock is acquired and [callback] is provided, the [callback] is executed.
+  /// If the lock is acquired and [callback] is provided, the [callback] is
+  /// executed.
   /// The lock is released after the [callback] is executed.
   ///
-  /// Returns the result of the [callback] if it is executed, otherwise the result of [acquire].
+  /// Returns the result of the [callback] if it is executed, otherwise the
+  /// result of [acquire].
   @override
   Future<dynamic> get([Function? callback]) async {
     final result = await acquire();
 
     if (result && callback != null) {
       try {
-        return await callback();
+        return await Function.apply(callback, const <dynamic>[]);
       } finally {
         await release();
       }
@@ -57,12 +60,15 @@ abstract class CacheLock implements lock_contract.Lock {
     return result;
   }
 
-  /// Blocks until the lock is acquired or the specified [seconds] timeout is reached.
+  /// Blocks until the lock is acquired or the specified [seconds] timeout is
+  /// reached.
   ///
-  /// If the lock is acquired and [callback] is provided, the [callback] is executed.
+  /// If the lock is acquired and [callback] is provided, the [callback] is
+  /// executed.
   /// The lock is released after the [callback] is executed.
   ///
-  /// Throws [LockTimeoutException] if the lock cannot be acquired within the specified [seconds].
+  /// Throws [LockTimeoutException] if the lock cannot be acquired within the
+  /// specified [seconds].
   ///
   /// Returns the result of the [callback] if it is executed, otherwise `true`.
   @override
@@ -82,7 +88,7 @@ abstract class CacheLock implements lock_contract.Lock {
 
     if (callback != null) {
       try {
-        return await callback();
+        return await Function.apply(callback, const <dynamic>[]);
       } finally {
         await release();
       }
@@ -93,7 +99,7 @@ abstract class CacheLock implements lock_contract.Lock {
 
   /// Returns the owner ID of the lock.
   @override
-  owner() {
+  String owner() {
     return ownerId;
   }
 
@@ -105,13 +111,18 @@ abstract class CacheLock implements lock_contract.Lock {
 
   /// Checks if the lock is owned by the current process.
   ///
-  /// Returns `true` if the lock is owned by the current process, otherwise `false`.
+  /// Returns `true` if the lock is owned by the current process, otherwise
+  /// `false`.
   @override
   Future<bool> isOwnedByCurrentProcess() async {
     return (await getCurrentOwner()) == ownerId;
   }
 
-  /// Sets the duration in milliseconds to sleep between attempts to acquire the lock.
+  /// Sets the duration in milliseconds to sleep between attempts to acquire
+  /// the lock.
+  // The method form is part of the public cache-lock API and is retained for
+  // source compatibility with existing callers.
+  // ignore: use_setters_to_change_properties
   void betweenBlockedAttemptsSleepFor(int milliseconds) {
     sleepMilliseconds = milliseconds;
   }

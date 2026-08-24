@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_http/routed_http.dart';
 
-import 'file.dart';
-import 'validator.dart';
+import 'package:routed_validation/src/validation/file.dart';
+import 'package:routed_validation/src/validation/validator.dart';
 
 /// Extension that adds [validate] and [bind] to [EngineContext].
 ///
@@ -46,6 +46,9 @@ extension ValidationContext on EngineContext {
     );
     final errors = validator.validate(data);
     if (errors.isNotEmpty) {
+      // ValidationError is Routed's structured engine error, not an
+      // Exception or Error subclass.
+      // ignore: only_throw_errors
       throw ValidationError(errors);
     }
   }
@@ -69,7 +72,7 @@ extension ValidationContext on EngineContext {
     } else {
       try {
         (instance as dynamic).bind(data);
-      } catch (_) {}
+      } on Object catch (_) {}
     }
     return instance;
   }
@@ -96,7 +99,7 @@ extension ValidationContext on EngineContext {
       try {
         final form = await formCache;
         return Map<String, dynamic>.from(form);
-      } catch (_) {
+      } on Object catch (_) {
         final bodyString = utf8.decode(await request.bytes);
         if (bodyString.isEmpty) return <String, dynamic>{};
         return _simpleParseUrlEncoded(bodyString);
@@ -104,20 +107,20 @@ extension ValidationContext on EngineContext {
     }
     if (mime == 'multipart/form-data') {
       try {
-        final dynamic multipart = await multipartForm;
-        final fields = (multipart.fields as Map).cast<String, dynamic>();
-        final files = (multipart.files as List).cast<dynamic>();
+        final multipart = await multipartForm;
+        final fields = Map<String, dynamic>.from(multipart.fields);
+        final files = multipart.files;
         final merged = Map<String, dynamic>.from(fields);
         for (final file in files) {
-          final name = (file as dynamic).name as String;
+          final name = file.name;
           if (!merged.containsKey(name)) merged[name] = file;
         }
         return merged;
-      } catch (_) {
+      } on Object catch (_) {
         try {
           final form = await formCache;
           return Map<String, dynamic>.from(form);
-        } catch (_) {
+        } on Object catch (_) {
           return <String, dynamic>{};
         }
       }
@@ -132,12 +135,12 @@ extension ValidationContext on EngineContext {
             if (decoded is Map<String, dynamic> && decoded.isNotEmpty) {
               return decoded;
             }
-          } catch (_) {}
+          } on Object catch (_) {}
           final parsed = _simpleParseUrlEncoded(bodyString);
           if (parsed.isNotEmpty) return parsed;
         }
       }
-    } catch (_) {}
+    } on Object catch (_) {}
     return Map<String, dynamic>.from(queryCache);
   }
 

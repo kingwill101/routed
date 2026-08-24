@@ -1,7 +1,5 @@
-import 'package:routed_core/src/container/container.dart';
-import 'package:routed_validation/src/validation/rule.dart';
-import 'package:routed_validation/src/validation/rules/required.dart';
-import 'package:routed_validation/src/validation/validator.dart';
+import 'package:routed_core/routed_core.dart';
+import 'package:routed_validation/routed_validation.dart';
 import 'package:test/test.dart';
 
 class _PassRule extends ValidationRule {
@@ -32,13 +30,13 @@ class _MatchesFieldRule extends ContextAwareValidationRule {
 
   @override
   String message(dynamic value, [List<String>? options]) {
-    final field = options?.isNotEmpty == true ? options!.first : 'field';
+    final field = options?.isNotEmpty ?? false ? options!.first : 'field';
     return 'Must match $field.';
   }
 
   @override
   bool validate(dynamic value, [List<String>? options]) {
-    final otherField = options?.isNotEmpty == true ? options!.first : null;
+    final otherField = options?.isNotEmpty ?? false ? options!.first : null;
     if (otherField == null) {
       return false;
     }
@@ -56,8 +54,7 @@ void main() {
     });
 
     test('ValidationRuleRegistry clone keeps registered factories', () {
-      final registry = ValidationRuleRegistry();
-      registry.register(() => _PassRule());
+      final registry = ValidationRuleRegistry()..register(_PassRule.new);
 
       final clone = ValidationRuleRegistry.clone(registry);
 
@@ -80,10 +77,9 @@ void main() {
     });
 
     test('parseRules splits options and resolves rules', () {
-      final registry = ValidationRuleRegistry();
-      registry
-        ..register(() => _OptionsRule())
-        ..register(() => RequiredRule());
+      final registry = ValidationRuleRegistry()
+        ..register(_OptionsRule.new)
+        ..register(RequiredRule.new);
 
       final parsed = parseRules({'field': 'options:a,b|required'}, registry);
       final rules = parsed['field'];
@@ -106,8 +102,8 @@ void main() {
     });
 
     test('Validator applies context-aware rules and overrides', () {
-      final registry = ValidationRuleRegistry();
-      registry.register(() => _MatchesFieldRule());
+      final registry = ValidationRuleRegistry()
+        ..register(_MatchesFieldRule.new);
 
       final validator = Validator.make(
         {'confirm': 'matches:password'},

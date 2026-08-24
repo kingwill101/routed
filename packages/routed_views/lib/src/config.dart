@@ -1,7 +1,7 @@
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_views/src/translation/resolvers.dart';
 
-/// Immutable startup configuration for [LocalizationServiceProvider].
+/// Immutable startup configuration for `LocalizationServiceProvider`.
 class LocalizationConfig implements ValidatableConfiguration {
   /// Creates localization configuration for file-backed translations.
   ///
@@ -98,7 +98,7 @@ class LocalizationConfig implements ValidatableConfiguration {
   }
 }
 
-/// Immutable startup configuration for [ViewServiceProvider].
+/// Immutable startup configuration for `ViewServiceProvider`.
 class RoutedViewConfig implements ValidatableConfiguration {
   /// Creates view-engine configuration.
   ///
@@ -125,16 +125,17 @@ class RoutedViewConfig implements ValidatableConfiguration {
 
   @override
   void validate(ConfigValidationContext context) {
-    context.require(
-      engine.trim().isNotEmpty,
-      'engine',
-      'view engine cannot be empty',
-    );
-    context.require(
-      engine.toLowerCase() == 'liquid',
-      'engine',
-      'only the liquid view engine is currently supported',
-    );
+    context
+      ..require(
+        engine.trim().isNotEmpty,
+        'engine',
+        'view engine cannot be empty',
+      )
+      ..require(
+        engine.toLowerCase() == 'liquid',
+        'engine',
+        'only the liquid view engine is currently supported',
+      );
     if (disk != null) {
       context.require(
         disk!.trim().isNotEmpty,

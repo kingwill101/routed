@@ -1,5 +1,3 @@
-library;
-
 import 'package:routed_validation/src/validation/abstract_rule.dart';
 
 /// A validation rule that checks if a given value is a valid double.

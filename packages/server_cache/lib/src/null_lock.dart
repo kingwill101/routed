@@ -1,4 +1,4 @@
-import 'lock.dart';
+import 'package:server_cache/src/lock.dart';
 
 /// No-op lock implementation for disabled or non-persistent caching.
 class NullLock extends CacheLock {
