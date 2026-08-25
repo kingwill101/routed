@@ -2,6 +2,8 @@
 
 - Complete public API documentation and adopt the shared
   `very_good_analysis` lint baseline.
+- Add file-backed and in-memory setup, migration, and shutdown examples for
+  the SQLite adapter.
 
 ## 0.1.0
 

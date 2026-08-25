@@ -10,14 +10,21 @@ import 'package:sqlite3/sqlite3.dart';
 ///
 /// The store inherits the typed plugin capabilities of the SQL auth adapter,
 /// while this package supplies the local SQLite binding needed by Dart IO.
-/// Call [open] or one of its convenience constructors before using a new
-/// database so the adapter migrations are applied.
+/// Call [open], [openPath], or [openInMemory] before using a new database so
+/// the adapter migrations are applied. The inherited typed stores are the
+/// normal application API; use [database] only for SQLite-specific
+/// administration or diagnostics.
 class SqliteAuthStore extends CloudflareD1AuthStore {
   /// Creates a store over an already-open SQLite database.
   ///
-  /// Prefer [open], [openPath], or [openInMemory] for new databases. The
-  /// caller owns [database] and must call [close] when the store is no longer
-  /// needed.
+  /// Prefer [open], [openPath], or [openInMemory] for new databases because
+  /// this constructor does not apply migrations. The caller supplies and
+  /// owns [database], which must remain open for the lifetime of this store;
+  /// call [close] when the application stops using it.
+  ///
+  /// The capacity arguments bound retained replay, credential, and phone
+  /// records. They must be positive. Use [schema] to select the SQL table
+  /// prefix shared by this adapter's migrations and typed stores.
   SqliteAuthStore(
     Database database, {
     super.schema = const CloudflareD1AuthSchema(),
@@ -36,6 +43,13 @@ class SqliteAuthStore extends CloudflareD1AuthStore {
   }
 
   /// Opens [database], applies migrations, and returns a ready store.
+  ///
+  /// Use this entry point when the application already owns an open SQLite
+  /// connection. The connection remains owned by the caller and is closed by
+  /// [SqliteAuthStore.close] when the store lifecycle ends.
+  ///
+  /// Migration or SQLite errors are propagated to the caller; no partially
+  /// initialized store is returned.
   static Future<SqliteAuthStore> open(
     Database database, {
     CloudflareD1AuthSchema schema = const CloudflareD1AuthSchema(),
@@ -68,6 +82,11 @@ class SqliteAuthStore extends CloudflareD1AuthStore {
   }
 
   /// Opens a SQLite database at [path] and applies adapter migrations.
+  ///
+  /// The file is created when it does not exist, but its parent directory must
+  /// already exist. The returned store owns the connection and must be closed
+  /// with [SqliteAuthStore.close]. Use a stable application-owned path and
+  /// configure file permissions, backups, and encryption for the deployment.
   static Future<SqliteAuthStore> openPath(
     String path, {
     CloudflareD1AuthSchema schema = const CloudflareD1AuthSchema(),
@@ -104,6 +123,10 @@ class SqliteAuthStore extends CloudflareD1AuthStore {
   }
 
   /// Opens an isolated in-memory SQLite database and applies migrations.
+  ///
+  /// Each call creates a fresh database that disappears when [close] is
+  /// called. Use this constructor for tests and disposable local development,
+  /// not for data that must survive a process restart.
   static Future<SqliteAuthStore> openInMemory({
     CloudflareD1AuthSchema schema = const CloudflareD1AuthSchema(),
     Duration scimReplayTtl = const Duration(days: 1),
@@ -139,9 +162,16 @@ class SqliteAuthStore extends CloudflareD1AuthStore {
   }
 
   /// The underlying SQLite connection for advanced local administration.
+  ///
+  /// Prefer the inherited typed stores for application data. Do not close
+  /// this connection directly; call [close] so the store's lifecycle remains
+  /// explicit.
   Database get database => _database;
 
-  /// Closes the caller-owned SQLite connection.
+  /// Closes the SQLite connection owned by this store.
+  ///
+  /// Call this after the framework has stopped accepting requests. The store
+  /// and its inherited typed stores must not be used after this call.
   void close() => _database.close();
 
   final Database _database;
