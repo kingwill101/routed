@@ -4,6 +4,8 @@ All notable changes to `server_native` will be documented in this file.
 
 ## Unreleased
 
+- Expanded public Dartdoc for the native, bridge, direct, secure, and
+  multi-server APIs, including transport-selection and lifecycle guidance.
 - Added verified prebuilt-native metadata and streamlined native asset
   resolution for supported platforms.
 - Expanded native HTTP compatibility coverage for callbacks, headers,

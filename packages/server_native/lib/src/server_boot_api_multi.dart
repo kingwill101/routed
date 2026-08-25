@@ -9,14 +9,17 @@ part of 'server_boot.dart';
 /// configuration.
 final class NativeServerBind {
   /// Creates a bind configuration.
+  ///
+  /// A port of `0` asks the operating system to select an ephemeral port.
+  /// [host] may be a host name, an IP address, or an [InternetAddress].
   const NativeServerBind({this.host = '127.0.0.1', this.port = 0});
 
-  /// Host/address to bind.
+  /// Host name or address to bind.
   ///
   /// Accepts a [String] or [InternetAddress].
   final Object host;
 
-  /// TCP port to bind.
+  /// TCP port to bind, or `0` for an ephemeral port.
   final int port;
 }
 
@@ -37,6 +40,9 @@ final class NativeMultiServer {
   /// Set [nativeCallback] to `true` (default) to use native request callbacks
   /// instead of bridge-socket transport. Provide [shutdownSignal] to terminate
   /// the server without OS signals.
+  ///
+  /// The returned future completes when all listeners stop. The handler must
+  /// close each response it receives.
   static Future<void> loopback(
     BridgeHttpHandler handler,
     int port, {
@@ -72,6 +78,9 @@ final class NativeMultiServer {
   /// Set [nativeCallback] to `true` (default) to use native request callbacks
   /// instead of bridge-socket transport. Provide [shutdownSignal] to terminate
   /// the server without OS signals.
+  ///
+  /// The returned future completes after all TLS listeners stop. The
+  /// certificate and key are shared by every listener.
   static Future<void> loopbackSecure(
     BridgeHttpHandler handler,
     int port, {
@@ -115,6 +124,10 @@ final class NativeMultiServer {
   /// Set [nativeCallback] to `true` (default) to use native request callbacks
   /// instead of bridge-socket transport. Provide [shutdownSignal] to terminate
   /// the server without OS signals.
+  ///
+  /// The returned future completes when the selected listener stops. Use
+  /// [NativeServerBind] with [serveNativeMulti] when each listener needs an
+  /// independently chosen address.
   static Future<void> bind(
     BridgeHttpHandler handler,
     Object address,
@@ -184,6 +197,9 @@ final class NativeMultiServer {
   /// Set [nativeCallback] to `true` (default) to use native request callbacks
   /// instead of bridge-socket transport. Provide [shutdownSignal] to terminate
   /// the server without OS signals.
+  ///
+  /// The returned future completes when all TLS listeners stop. All listeners
+  /// use the same certificate and key.
   static Future<void> bindSecure(
     BridgeHttpHandler handler,
     Object address,

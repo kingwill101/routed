@@ -9,6 +9,10 @@ part of 'server_boot.dart';
 /// when handlers only need method/uri/header/body primitives.
 final class NativeDirectRequest {
   /// Creates a request object from explicit fields.
+  ///
+  /// This constructor is useful for tests and adapters that already have the
+  /// compact request values. Requests created by the server normally use an
+  /// internal frame-backed representation instead.
   NativeDirectRequest({
     required String method,
     required String scheme,
@@ -59,6 +63,9 @@ final class NativeDirectRequest {
   List<MapEntry<String, String>>? _headers;
 
   /// Request body stream.
+  ///
+  /// The stream contains the request body as one or more byte chunks. A
+  /// handler should consume it before returning when it needs the body.
   final Stream<Uint8List> body;
 
   /// HTTP method (for example `GET`, `POST`).
@@ -101,7 +108,8 @@ final class NativeDirectRequest {
     return view;
   }
 
-  /// Parsed request URI reconstructed from scheme/authority/path/query.
+  /// Parsed request URI reconstructed from [scheme], [authority], [path], and
+  /// [query].
   late final Uri uri = _buildDirectUri(
     scheme: scheme,
     authority: authority,
@@ -140,11 +148,15 @@ final class NativeDirectRequest {
   }
 }
 
-/// Response returned by [NativeDirectHandler].
+/// Response returned by `NativeDirectHandler`.
 ///
 /// A direct handler returns a [NativeDirectResponse] for each request.
 final class NativeDirectResponse {
   /// Creates an in-memory bytes response.
+  ///
+  /// [bodyBytes] supplies the non-streaming response body. Leave it null to send
+  /// an empty body. Use `NativeDirectResponse.stream` to produce a response
+  /// incrementally.
   NativeDirectResponse.bytes({
     this.status = HttpStatus.ok,
     List<MapEntry<String, String>> headers = const <MapEntry<String, String>>[],
@@ -155,6 +167,9 @@ final class NativeDirectResponse {
        encodedBridgePayload = null;
 
   /// Creates a streaming response.
+  ///
+  /// The native transport consumes [body] until it completes. Response
+  /// headers and [status] are sent before the first body chunk.
   NativeDirectResponse.stream({
     required this.body,
     this.status = HttpStatus.ok,
@@ -177,7 +192,10 @@ final class NativeDirectResponse {
     BridgeResponseFrame.decodePayload(bridgeResponsePayload);
   }
 
-  /// Builds and caches a single encoded bridge response payload.
+  /// Builds a response whose bridge payload is encoded once.
+  ///
+  /// This is convenient for a static response that can be reused by multiple
+  /// requests. The returned value contains no streaming body.
   factory NativeDirectResponse.preEncodedBytes({
     int status = HttpStatus.ok,
     List<MapEntry<String, String>> headers = const <MapEntry<String, String>>[],
@@ -193,19 +211,23 @@ final class NativeDirectResponse {
     );
   }
 
-  /// Status code.
+  /// HTTP status code sent to the client.
   final int status;
 
-  /// Response headers.
+  /// Response headers sent in insertion order.
   final List<MapEntry<String, String>> headers;
 
-  /// Full response bytes for non-streaming responses.
+  /// Full response bytes for a non-streaming response, or `null` for a
+  /// streaming or pre-encoded response.
   final Uint8List? bodyBytes;
 
-  /// Streamed response body for streaming responses.
+  /// Streamed response body, or `null` for a bytes or pre-encoded response.
   final Stream<Uint8List>? body;
 
   /// Optional pre-encoded bridge response payload.
+  ///
+  /// When this is non-null, [status], [headers], and [bodyBytes] describe no
+  /// additional payload and the encoded bytes are sent as-is.
   final Uint8List? encodedBridgePayload;
 }
 

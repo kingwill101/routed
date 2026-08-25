@@ -16,6 +16,22 @@
 /// `dart:io HttpServer` model and selectively move to lower-overhead
 /// callback paths.
 ///
+/// Use the `NativeHttpServer` APIs when an existing application expects an
+/// `HttpServer`-compatible stream. Use `serveNativeHttp` when the application
+/// already has a request callback. Use `serveNativeDirect` when the handler
+/// can work with `NativeDirectRequest` and `NativeDirectResponse` values
+/// without the `dart:io` wrappers.
+///
+/// The `nativeCallback` option on the `HttpRequest`-compatible APIs selects the
+/// transport between Rust and Dart. Its default, `true`, uses the native FFI
+/// callback path; `false` uses the local bridge socket. Both paths preserve
+/// the same request and response contract. The `nativeDirect` option has the
+/// analogous meaning for direct handlers.
+///
+/// Secure helpers require PEM certificate and private-key files. HTTP/3 is
+/// available only for secure helpers; requesting it for an insecure helper is
+/// ignored by the native transport.
+///
 /// {@template server_native_quick_start}
 /// ## Quick Start (`HttpServer` style)
 ///
