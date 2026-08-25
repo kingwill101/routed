@@ -2,6 +2,8 @@
 
 - Migrated package analysis to `very_good_analysis` and completed public API
   Dartdoc coverage.
+- Expanded storage-manager, local-disk, cloud-disk, and static-file lifecycle
+  guidance, including path-boundary behavior.
 
 ## 0.1.1
 

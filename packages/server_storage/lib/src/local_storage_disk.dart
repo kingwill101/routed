@@ -2,10 +2,15 @@ import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
 import 'package:server_storage/src/storage_manager.dart';
 
-/// Resolves local storage roots with sensible defaults.
+/// Selects a local storage root using application defaults.
 ///
-/// Order: explicit [configuredRoot] -> [storageRoot] for the `local` disk ->
-/// `storage/app` or `storage/<diskName>`.
+/// The precedence is [configuredRoot], then [storageRoot] for the `local`
+/// disk, then `storage/app` for the `local` disk or `storage/<diskName>` for
+/// another disk name. This function only chooses a string; it does not create
+/// the directory or validate that it is writable.
+///
+/// [configuredRoot] is trimmed before it is returned. [storageRoot] is used
+/// as supplied when it is non-empty and [diskName] is `local`.
 String resolveLocalStorageRoot(
   String? configuredRoot,
   String diskName, {
@@ -24,9 +29,16 @@ String resolveLocalStorageRoot(
   return 'storage/$diskName';
 }
 
-/// Local file system backed disk.
+/// Resolves paths inside a local filesystem directory.
+///
+/// The root is normalized to an absolute path when the disk is constructed.
+/// Construction does not create the directory. Supply a [file.FileSystem] to
+/// use a test filesystem or a non-default filesystem context.
 class LocalStorageDisk implements StorageDisk {
   /// Creates a local disk rooted at [root].
+  ///
+  /// Relative roots are resolved against [fileSystem]'s current directory.
+  /// The selected filesystem is retained for all later path resolution.
   LocalStorageDisk({required String root, file.FileSystem? fileSystem})
     : _fileSystem = fileSystem ?? const local.LocalFileSystem(),
       _root = _normalizeRoot(root, fileSystem ?? const local.LocalFileSystem());
@@ -34,7 +46,7 @@ class LocalStorageDisk implements StorageDisk {
   final file.FileSystem _fileSystem;
   final String _root;
 
-  /// Normalizes a disk root against the filesystem context.
+  /// Normalizes [root] against [fileSystem]'s current directory.
   static String _normalizeRoot(String root, file.FileSystem fileSystem) {
     final pathContext = fileSystem.path;
     if (pathContext.isAbsolute(root)) {
@@ -62,10 +74,11 @@ class LocalStorageDisk implements StorageDisk {
     return resolved;
   }
 
-  /// Verifies that [resolved] stays inside this disk's [_root], rejecting
-  /// absolute inputs and `..` segments that escape the configured storage
-  /// directory. Without this guard, untrusted paths such as
-  /// `../../etc/passwd` could reach files outside the disk.
+  /// Verifies that [resolved] remains inside [_root].
+  ///
+  /// Absolute inputs and `..` segments that escape the configured directory
+  /// are rejected. This guard is what makes it safe to resolve an untrusted
+  /// relative path such as `../../etc/passwd` through this disk.
   void _ensureWithinRoot(String resolved, String original) {
     final pathContext = _fileSystem.path;
     if (pathContext.isAbsolute(original) ||
@@ -76,8 +89,7 @@ class LocalStorageDisk implements StorageDisk {
     }
   }
 
-  /// Returns true when [candidate] equals [root] or lies within a
-  /// subdirectory of [root].
+  /// Returns whether [candidate] equals [root] or is one of its descendants.
   static bool _isSameOrChild(String candidate, String root, String separator) {
     if (candidate == root) {
       return true;
