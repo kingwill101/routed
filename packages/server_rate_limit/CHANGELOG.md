@@ -2,6 +2,8 @@
 
 - Completed public API documentation and adopted the `very_good_analysis`
   lint baseline.
+- Expanded the low-level README and API docs with policy strategy, backend
+  atomicity, failover, and service evaluation guidance.
 
 ## 0.1.1
 

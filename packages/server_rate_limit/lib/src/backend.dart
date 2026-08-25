@@ -11,9 +11,15 @@ import 'package:server_rate_limit/src/policy.dart';
 abstract class RateLimiterBackend {
   /// Consumes one unit from the bucket identified by [bucketKey].
   ///
-  /// The backend applies [config] at [now]. If the backend cannot complete the
-  /// operation, [failover] selects whether the request is allowed, blocked, or
-  /// evaluated against local fallback state.
+  /// The backend applies [config] at [now] and returns the resulting allowance
+  /// or block decision. The operation must use the algorithm represented by
+  /// [config]; the returned [RateLimitOutcome.remaining] value is the
+  /// remaining request or token count after the evaluation.
+  ///
+  /// If the backend cannot complete the operation, [failover] selects whether
+  /// the request is allowed, blocked, or evaluated against process-local
+  /// fallback state. A local fallback does not coordinate limits across
+  /// isolates or hosts.
   Future<RateLimitOutcome> consume(
     String bucketKey,
     RateLimitAlgorithmConfig config,
@@ -22,6 +28,9 @@ abstract class RateLimiterBackend {
   });
 
   /// Releases resources owned by this backend.
+  ///
+  /// Implementations must not close a repository or other resource supplied by
+  /// the application unless their contract explicitly says that they own it.
   Future<void> close();
 }
 
@@ -29,11 +38,16 @@ abstract class RateLimiterBackend {
 ///
 /// The repository stores algorithm state. If its store implements
 /// [LockProvider], updates for a bucket are serialized so concurrent requests
-/// cannot consume the same allowance.
+/// cannot consume the same allowance. Without a [LockProvider], the
+/// read-modify-write sequence is not atomic across concurrent requests or
+/// processes, so use a lock-capable store for an enforced distributed limit.
 class CacheRateLimiterBackend implements RateLimiterBackend {
   /// Creates a cache-backed backend using [repository].
   ///
   /// [lockTimeout] bounds how long a distributed lock may be held or acquired.
+  /// Values below one second are treated as one second by the lock contract.
+  /// The repository remains owned by the caller and is not closed by
+  /// [close].
   CacheRateLimiterBackend({
     required Repository repository,
     this.lockTimeout = const Duration(seconds: 2),
@@ -46,6 +60,9 @@ class CacheRateLimiterBackend implements RateLimiterBackend {
   final LockProvider? _lockProvider;
 
   /// Maximum time used when acquiring or executing under a distributed lock.
+  ///
+  /// The effective value passed to [LockProvider] is rounded down to whole
+  /// seconds and clamped to at least one second.
   final Duration lockTimeout;
   static const _ttlFloor = Duration(milliseconds: 1000);
 

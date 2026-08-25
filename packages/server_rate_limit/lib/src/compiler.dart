@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:server_rate_limit/src/backend.dart';
 import 'package:server_rate_limit/src/policy.dart';
+import 'package:server_rate_limit/src/service.dart' show RateLimitService;
 
 /// Key resolver strategies supported by [RateLimitPolicySpec].
 enum RateLimitKeyKind {
@@ -13,11 +14,19 @@ enum RateLimitKeyKind {
 }
 
 /// Declarative key resolver configuration used by [compileRateLimitPolicies].
+///
+/// Use [RateLimitKeySpec.ip] for a network identity or
+/// [RateLimitKeySpec.header] for an application-supplied identity such as a
+/// tenant ID. If a header specification is blank, compilation falls back to
+/// IP resolution.
 class RateLimitKeySpec {
   /// Creates a resolver specification based on the request IP.
   const RateLimitKeySpec.ip() : kind = RateLimitKeyKind.ip, header = null;
 
   /// Creates a resolver specification based on [header].
+  ///
+  /// A blank or whitespace-only header name is treated as an IP resolver when
+  /// the specification is compiled.
   const RateLimitKeySpec.header(this.header) : kind = RateLimitKeyKind.header;
 
   /// The resolver strategy selected by this specification.
@@ -61,21 +70,40 @@ class RateLimitPolicySpec {
   final RateLimitStrategy strategy;
 
   /// Capacity passed to the selected algorithm.
+  ///
+  /// This is the refill capacity for [RateLimitStrategy.tokenBucket] and the
+  /// request limit for the window and quota strategies. The compiler clamps it
+  /// to at least one.
   final int capacity;
 
   /// Refill interval used by [RateLimitStrategy.tokenBucket].
+  ///
+  /// Other strategies ignore this value. Non-positive values are normalized to
+  /// one second during compilation.
   final Duration interval;
 
   /// Window length used by [RateLimitStrategy.slidingWindow].
+  ///
+  /// Other strategies ignore this value. The runtime treats a non-positive
+  /// duration as a one-millisecond window.
   final Duration window;
 
   /// Quota period used by [RateLimitStrategy.quota].
+  ///
+  /// Other strategies ignore this value. The runtime treats a non-positive
+  /// duration as a one-millisecond period.
   final Duration period;
 
   /// Optional token-bucket burst multiplier.
+  ///
+  /// Other strategies ignore this value. Non-positive values use `1.0` during
+  /// compilation.
   final double? burstMultiplier;
 
   /// Strategy used to resolve the request identity.
+  ///
+  /// If the resolver cannot produce an identity, the service skips this
+  /// policy for the request.
   final RateLimitKeySpec key;
 
   /// Failover behavior for this policy, or the compiler default when omitted.
@@ -83,6 +111,10 @@ class RateLimitPolicySpec {
 }
 
 /// Compiles one [RateLimitPolicySpec] into a runtime policy.
+///
+/// The returned policy uses [backend] for all state changes. Its failover mode
+/// is the value from `spec.failover` when provided, otherwise
+/// [defaultFailover].
 CompiledRateLimitPolicy compileRateLimitPolicy({
   required RateLimitPolicySpec spec,
   required RateLimiterBackend backend,
@@ -103,6 +135,9 @@ CompiledRateLimitPolicy compileRateLimitPolicy({
 }
 
 /// Compiles [specs] into immutable runtime policies.
+///
+/// The iterable is consumed once, and the returned list preserves its order.
+/// [RateLimitService] uses that order when it evaluates policies.
 List<CompiledRateLimitPolicy> compileRateLimitPolicies({
   required Iterable<RateLimitPolicySpec> specs,
   required RateLimiterBackend backend,
@@ -120,6 +155,9 @@ List<CompiledRateLimitPolicy> compileRateLimitPolicies({
 }
 
 /// Builds a runtime key resolver from [spec].
+///
+/// A blank header name produces an [IpKeyResolver] so configuration loaded from
+/// optional fields still has a deterministic identity strategy.
 RateLimitKeyResolver buildRateLimitKeyResolver(RateLimitKeySpec spec) {
   switch (spec.kind) {
     case RateLimitKeyKind.ip:

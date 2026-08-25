@@ -36,6 +36,11 @@ abstract class RateLimitAlgorithmConfig {
 }
 
 /// Token-bucket parameters shared by all backends.
+///
+/// [capacity] describes the refill amount used by the compiler-created
+/// configuration. [maxTokens] controls the burst allowance and may be greater
+/// than [capacity]. Directly constructed configurations are not normalized;
+/// use [buildBucketConfig] when accepting untrusted or user-entered values.
 class TokenBucketConfig extends RateLimitAlgorithmConfig {
   /// Creates a token-bucket configuration.
   TokenBucketConfig({
@@ -54,7 +59,7 @@ class TokenBucketConfig extends RateLimitAlgorithmConfig {
   /// How frequently tokens are refilled.
   final Duration refillInterval;
 
-  /// Upper bound of tokens after refills, usually capacity multiplied by a
+  /// Upper bound of tokens after refills, usually [capacity] multiplied by a
   /// burst factor.
   final double maxTokens;
 
@@ -65,6 +70,10 @@ class TokenBucketConfig extends RateLimitAlgorithmConfig {
 }
 
 /// Sliding-window configuration that maintains a strict window boundary.
+///
+/// Requests are counted in aligned windows rather than in a rolling list of
+/// timestamps. The backend calculates the retry delay from the end of the
+/// current window.
 class SlidingWindowConfig extends RateLimitAlgorithmConfig {
   /// Creates a sliding-window configuration.
   SlidingWindowConfig({required this.limit, required this.window})
@@ -78,6 +87,9 @@ class SlidingWindowConfig extends RateLimitAlgorithmConfig {
 }
 
 /// Rolling quota configuration for a longer-lived limit.
+///
+/// The quota resets at an aligned period boundary. It is useful for daily or
+/// monthly-style counters, but it is not a calendar-aware billing quota.
 class QuotaConfig extends RateLimitAlgorithmConfig {
   /// Creates a quota configuration.
   QuotaConfig({required this.limit, required this.period})
@@ -91,6 +103,10 @@ class QuotaConfig extends RateLimitAlgorithmConfig {
 }
 
 /// Result returned by a rate-limit evaluation.
+///
+/// A blocked result contains a suggested [retryAfter] duration. Treat that
+/// duration as advisory: callers should still apply their own response and
+/// retry policy.
 class RateLimitOutcome {
   /// Creates an outcome that allows the request.
   RateLimitOutcome.allowed({
@@ -120,6 +136,10 @@ class RateLimitOutcome {
 }
 
 /// Request data required by the rate-limit policy runtime.
+///
+/// Adapt the host framework's request object to this small contract. The
+/// runtime does not inspect framework-specific request types or mutate the
+/// request.
 abstract class RateLimitRequest {
   /// HTTP method for the request.
   String get method;
@@ -128,9 +148,15 @@ abstract class RateLimitRequest {
   String get path;
 
   /// Client IP address, when available.
+  ///
+  /// Return an empty string when the host cannot determine the client address.
+  /// Do not trust forwarded values unless the host has validated its proxy
+  /// configuration.
   String get clientIP;
 
   /// Remote address of the connected peer.
+  ///
+  /// This is the fallback used by [IpKeyResolver] when [clientIP] is empty.
   String get remoteAddr;
 
   /// Returns the request header named [name], or an empty string when absent.
@@ -140,6 +166,11 @@ abstract class RateLimitRequest {
 typedef _MatchFn = bool Function(RateLimitRequest request);
 
 /// Matches requests against an optional method and wildcard path pattern.
+///
+/// Matching is anchored to the complete path. `*` matches characters within a
+/// single path segment, while `**` can span `/` characters. A `null` method
+/// matches every method; method comparisons are case-insensitive. A blank
+/// pattern is treated as a catch-all.
 class RequestMatcher {
   /// Creates a matcher for [pattern] and an optional HTTP [method].
   RequestMatcher({required String? method, required String pattern})
@@ -198,6 +229,10 @@ class RequestMatcher {
 }
 
 /// Resolves the identity string used for rate limiting.
+///
+/// Returning `null` skips the associated policy for that request. Resolvers
+/// should return a stable, bounded identity rather than an entire request or
+/// an untrusted value that can create unbounded backend keys.
 // This interface is intentionally one method: it is the extension point for
 // custom identity strategies.
 // ignore: one_member_abstracts
@@ -223,6 +258,9 @@ class IpKeyResolver extends RateLimitKeyResolver {
 }
 
 /// Resolves rate-limit identities from a request header.
+///
+/// The header value is used as-is when non-empty. Validate and normalize
+/// tenant or account identifiers before using them as a distributed key.
 class HeaderKeyResolver extends RateLimitKeyResolver {
   /// Creates a header resolver for [header].
   const HeaderKeyResolver(this.header);
@@ -239,11 +277,13 @@ class HeaderKeyResolver extends RateLimitKeyResolver {
 }
 
 /// Callback signature for custom request identity resolution.
+///
+/// Return `null` when [request] should not consume this policy's quota.
 typedef CustomKeyResolver = String? Function(RateLimitRequest request);
 
 /// Resolves identities using a caller-provided callback.
 class CustomResolver extends RateLimitKeyResolver {
-  /// Creates a resolver backed by [_resolver].
+  /// Creates a resolver backed by a caller-provided callback.
   const CustomResolver(this._resolver);
 
   final CustomKeyResolver _resolver;
@@ -253,6 +293,9 @@ class CustomResolver extends RateLimitKeyResolver {
 }
 
 /// Compiled policy ready for runtime enforcement.
+///
+/// A policy combines matching, identity resolution, algorithm state, backend
+/// storage, and backend failure behavior into one evaluation unit.
 class CompiledRateLimitPolicy {
   /// Creates a compiled policy from its matching, identity, and backend parts.
   CompiledRateLimitPolicy({
@@ -286,17 +329,22 @@ class CompiledRateLimitPolicy {
   bool matches(RateLimitRequest request) => matcher.matches(request);
 
   /// Evaluates one request for [identity] at [now].
+  ///
+  /// The backend bucket key is formed by joining [name] and [identity] with a
+  /// colon. Keep both values stable and appropriately bounded for the backing
+  /// store.
   Future<RateLimitOutcome> evaluate(String identity, DateTime now) {
     final bucketKey = '$name:$identity';
     return backend.consume(bucketKey, algorithm, now, failover: failover);
   }
 }
 
-/// Builds a token-bucket configuration from user parameters.
+/// Builds a normalized token-bucket configuration from user parameters.
 ///
 /// Values below one capacity are clamped to one. Non-positive refill
 /// intervals use a one-second interval. A non-positive burst multiplier uses
-/// the default multiplier of `1.0`.
+/// the default multiplier of `1.0`. The resulting [TokenBucketConfig.maxTokens]
+/// is `capacity * burstMultiplier`.
 TokenBucketConfig buildBucketConfig({
   required int capacity,
   required Duration refillInterval,
