@@ -1,16 +1,31 @@
+/// Context extensions for using `server_cache` from a Routed request.
+///
+/// Configure a typed manager with `withCacheManager`, then use `ContextCache`
+/// from handlers to read and write named stores.
+library;
+
 import 'dart:async';
 
 import 'package:routed_core/routed_core.dart';
 import 'package:server_cache/server_cache.dart';
 
-/// Alias for the server cache manager exposed through [ContextCache].
+/// Alias for the typed server cache manager used by [ContextCache].
+///
+/// Register concrete stores on this manager before passing it to
+/// `withCacheManager`.
 typedef CacheManager = DataCacheManager;
 
 /// Adds cache operations to [EngineContext].
+///
+/// The helpers use the manager's default store unless a named `store` is
+/// supplied. `getCache` has pull semantics: it reads and then removes the
+/// entry.
 extension ContextCache on EngineContext {
   /// The cache manager configured for this request's container.
   ///
-  /// Throws a [StateError] when no cache manager has been registered.
+  /// Configure it with `withCacheManager` or register a compatible manager in
+  /// the request container. Throws a [StateError] when no cache manager has
+  /// been registered.
   CacheManager get cacheManager {
     if (container.has<CacheManager>()) {
       return container.get<CacheManager>();
@@ -25,7 +40,13 @@ extension ContextCache on EngineContext {
   /// Stores [value] under [key] for [seconds].
   ///
   /// Returns whether the store accepted the value. If [store] is omitted, the
-  /// manager's default store is used.
+  /// manager's default store is used. A non-positive [seconds] value requests
+  /// a non-expiring entry from the underlying repository.
+  ///
+  /// ```dart
+  /// await ctx.cache('profile:42', {'name': 'Ada'}, 300);
+  /// await ctx.cache('sessions:42', session, 900, store: 'sessions');
+  /// ```
   FutureOr<bool> cache(
     String key,
     dynamic value,
@@ -39,7 +60,9 @@ extension ContextCache on EngineContext {
 
   /// Returns and removes the value stored under [key].
   ///
-  /// If [store] is omitted, the manager's default store is used.
+  /// This is a one-shot read suitable for queues, one-time tokens, and other
+  /// values that should not remain available after retrieval. If [store] is
+  /// omitted, the manager's default store is used.
   FutureOr<dynamic> getCache(String key, {String? store}) {
     return cacheManager
         .store(store ?? cacheManager.getDefaultStoreName())
@@ -48,7 +71,7 @@ extension ContextCache on EngineContext {
 
   /// Removes [key] from the selected cache store.
   ///
-  /// Returns whether an entry was removed. If [store] is omitted, the
+  /// Returns the backend's result for the removal. If [store] is omitted, the
   /// manager's default store is used.
   FutureOr<bool> removeCache(String key, {String? store}) {
     return cacheManager
@@ -58,7 +81,8 @@ extension ContextCache on EngineContext {
 
   /// Increments the numeric value stored under [key] by [value].
   ///
-  /// If [store] is omitted, the manager's default store is used.
+  /// The default [value] is `1`. If [store] is omitted, the manager's default
+  /// store is used.
   FutureOr<dynamic> incrementCache(
     String key, [
     dynamic value = 1,
@@ -71,7 +95,8 @@ extension ContextCache on EngineContext {
 
   /// Decrements the numeric value stored under [key] by [value].
   ///
-  /// If [store] is omitted, the manager's default store is used.
+  /// The default [value] is `1`. If [store] is omitted, the manager's default
+  /// store is used.
   FutureOr<dynamic> decrementCache(
     String key, [
     dynamic value = 1,
@@ -94,8 +119,18 @@ extension ContextCache on EngineContext {
 
   /// Returns the cached value or computes and stores it for [ttl].
   ///
-  /// The [callback] is invoked only when the key is missing. If [store] is
-  /// omitted, the manager's default store is used.
+  /// The [ttl] may be a [Duration] or an integer number of seconds. The
+  /// no-argument [callback] is invoked only when the key is missing, and its
+  /// result is stored before it is returned. If [store] is omitted, the
+  /// manager's default store is used.
+  ///
+  /// ```dart
+  /// final value = await ctx.rememberCache(
+  ///   'account:42',
+  ///   const Duration(minutes: 5),
+  ///   () => loadAccount(),
+  /// );
+  /// ```
   FutureOr<dynamic> rememberCache(
     String key,
     dynamic ttl,
@@ -109,8 +144,8 @@ extension ContextCache on EngineContext {
 
   /// Returns the cached value or computes and stores it indefinitely.
   ///
-  /// The [callback] is invoked only when the key is missing. If [store] is
-  /// omitted, the manager's default store is used.
+  /// The no-argument [callback] is invoked only when the key is missing. If
+  /// [store] is omitted, the manager's default store is used.
   FutureOr<dynamic> rememberCacheForever(
     String key,
     Function callback, {

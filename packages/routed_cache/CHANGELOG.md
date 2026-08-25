@@ -2,6 +2,8 @@
 
 - Adopted `very_good_analysis` and completed Dartdoc for the public cache
   integration APIs.
+- Clarified typed manager setup, provider lifecycle, context helper semantics,
+  and cache event fields with user-facing examples.
 
 ## 0.2.0
 

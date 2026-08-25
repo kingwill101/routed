@@ -1,3 +1,6 @@
+/// Cache lifecycle events emitted by Routed integrations.
+library;
+
 import 'package:routed_core/routed_core.dart';
 
 /// Base class for all cache-related events.
@@ -36,6 +39,9 @@ final class CacheWriteEvent extends CacheEvent {
   CacheWriteEvent({required super.store, required super.key, this.ttl});
 
   /// Optional time-to-live for the written value.
+  ///
+  /// A `null` value represents a write without an expiration supplied by the
+  /// caller.
   final Duration? ttl;
 }
 
