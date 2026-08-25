@@ -43,9 +43,11 @@ class MissingSchemaSummaryRule extends AnalysisRule {
         'human-readable API documentation.',
   );
 
+  /// The diagnostic code reported for a schema without a summary.
   @override
   DiagnosticCode get diagnosticCode => _code;
 
+  /// Registers the AST visitor that checks `RouteSchema` constructors.
   @override
   void registerNodeProcessors(
     RuleVisitorRegistry registry,

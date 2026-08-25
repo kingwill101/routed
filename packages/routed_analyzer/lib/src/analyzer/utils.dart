@@ -1,11 +1,19 @@
-/// Shared utilities for routed analyzer rules.
+/// Shared utilities for Routed analyzer rules.
+///
+/// These helpers deliberately use resolved analyzer elements and types. A
+/// method is treated as a route registration only when its resolved signature
+/// has a named `schema` parameter whose type is `RouteSchema`; a method with
+/// the same name but a different signature is ignored.
 library;
 
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 
-/// HTTP route registration method names on Router and Engine.
+/// Method names that may register HTTP routes on a Router or Engine.
+///
+/// `handle` is included because Routed exposes it as a catch-all route
+/// registration method even though it is not an HTTP verb.
 const routeMethodNames = {
   'get',
   'post',
@@ -18,9 +26,10 @@ const routeMethodNames = {
   'handle',
 };
 
-/// Checks if a [MethodInvocation] is a route registration call on a Router
-/// or Engine (or any class that has a `schema` named parameter of type
-/// `RouteSchema?`).
+/// Returns whether [node] is a route registration with schema support.
+///
+/// The resolved method must use one of [routeMethodNames] and expose a named
+/// `schema` parameter typed as `RouteSchema` or `RouteSchema?`.
 bool isRouteRegistration(MethodInvocation node) {
   final name = node.methodName.name;
   if (!routeMethodNames.contains(name)) return false;
@@ -34,15 +43,14 @@ bool isRouteRegistration(MethodInvocation node) {
   );
 }
 
-/// Checks if an [InstanceCreationExpression] creates a `RouteSchema`.
+/// Returns whether [node] creates a `RouteSchema` value.
 bool isRouteSchemaCreation(InstanceCreationExpression node) {
   final type = node.staticType;
   if (type == null) return false;
   return _isRouteSchemaType(type);
 }
 
-/// Returns the `schema:` named argument from a route method invocation,
-/// or null if not provided.
+/// Returns the `schema:` argument from [node], if one was provided.
 NamedExpression? getSchemaArgument(MethodInvocation node) {
   return node.argumentList.arguments
       .whereType<NamedExpression>()
@@ -50,7 +58,7 @@ NamedExpression? getSchemaArgument(MethodInvocation node) {
       .firstOrNull;
 }
 
-/// Returns a named argument by name from an argument list.
+/// Returns the named argument called [name], if one was provided.
 NamedExpression? getNamedArgument(ArgumentList argumentList, String name) {
   return argumentList.arguments
       .whereType<NamedExpression>()

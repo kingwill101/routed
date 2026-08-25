@@ -22,6 +22,17 @@ import 'package:routed_analyzer/src/analyzer/rules/schema_deprecated_without_des
 /// - `invalid_validation_rule` — unrecognized pipe rule in `validationRules`
 /// - `schema_deprecated_without_description` — deprecated route without
 ///   explaining why
+///
+/// All five rules are registered as analyzer warnings, so they are enabled
+/// when the plugin is enabled. Suppress an individual diagnostic with a
+/// `routed/`-qualified ignore comment, for example:
+///
+/// ```dart
+/// // ignore: routed/missing_schema_summary
+/// final schema = RouteSchema(
+///   responses: [ResponseSchema(200, description: 'OK')],
+/// );
+/// ```
 class RoutedAnalyzerPlugin extends Plugin {
   /// Creates the Routed analyzer plugin.
   RoutedAnalyzerPlugin();
@@ -31,6 +42,9 @@ class RoutedAnalyzerPlugin extends Plugin {
   String get name => 'routed';
 
   /// Registers Routed's built-in analyzer rules.
+  ///
+  /// The rules are warnings rather than opt-in lints, which lets them provide
+  /// feedback immediately after the plugin is enabled.
   @override
   void register(PluginRegistry registry) {
     registry

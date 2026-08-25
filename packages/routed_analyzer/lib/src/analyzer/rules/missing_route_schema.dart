@@ -41,9 +41,11 @@ class MissingRouteSchemaRule extends AnalysisRule {
         'the OpenAPI specification.',
   );
 
+  /// The diagnostic code reported for a route without schema metadata.
   @override
   DiagnosticCode get diagnosticCode => _code;
 
+  /// Registers the AST visitor that checks route registration calls.
   @override
   void registerNodeProcessors(
     RuleVisitorRegistry registry,

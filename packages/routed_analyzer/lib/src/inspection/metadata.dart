@@ -1,3 +1,11 @@
+/// Provider metadata inspection for Routed tooling.
+///
+/// The inspection API is intended for diagnostics, generated tooling, and
+/// development-time screens. It reports the registrations currently held by
+/// [ProviderRegistry] and preserves the provider's typed configuration as a
+/// runtime type name; it does not serialize configuration values.
+library;
+
 import 'package:routed_core/routed_core.dart'
     show ProviderRegistry, TypedConfigurationProvider;
 
@@ -19,7 +27,7 @@ class ProviderMetadata {
   /// Creates metadata from a serialized JSON object.
   ///
   /// Missing fields are represented by empty strings, except for the optional
-  /// [configurationType] field.
+  /// [configurationType] field. Unknown keys are ignored.
   factory ProviderMetadata.fromJson(Map<String, Object?> json) {
     return ProviderMetadata(
       id: json['id']?.toString() ?? '',
@@ -42,6 +50,9 @@ class ProviderMetadata {
   final String? configurationType;
 
   /// Serializes this metadata to a JSON-compatible map.
+  ///
+  /// The map contains the stable provider [id], description, provider type,
+  /// and, when available, the typed configuration type name.
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'id': id,
@@ -55,8 +66,13 @@ class ProviderMetadata {
 /// Collects registered providers and their typed configuration metadata.
 ///
 /// The returned list reflects the registrations currently held by
-/// [ProviderRegistry]. Each registration factory is invoked to determine the
-/// provider and configuration type names.
+/// [ProviderRegistry] in registration order. Each registration factory is
+/// invoked to determine the provider and configuration type names, so callers
+/// should use this during tooling or diagnostics rather than as a substitute
+/// for application startup.
+///
+/// A provider that does not implement [TypedConfigurationProvider] has a null
+/// [ProviderMetadata.configurationType].
 List<ProviderMetadata> inspectProviders() {
   final providers = <ProviderMetadata>[];
   for (final registration in ProviderRegistry.instance.registrations) {

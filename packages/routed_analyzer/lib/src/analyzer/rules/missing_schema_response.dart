@@ -26,7 +26,7 @@ import 'package:routed_analyzer/src/analyzer/utils.dart';
 /// ```dart
 /// schema: RouteSchema(
 ///   summary: 'Get user',
-///   responses: {200: ResponseSchema(description: 'The user')},
+///   responses: [ResponseSchema(200, description: 'The user')],
 /// )
 /// ```
 class MissingSchemaResponseRule extends AnalysisRule {
@@ -41,13 +41,15 @@ class MissingSchemaResponseRule extends AnalysisRule {
     'missing_schema_response',
     "RouteSchema is missing a 'responses' argument.",
     correctionMessage:
-        'Add a responses: {200: ResponseSchema(description: ...)} argument '
+        'Add a responses: [ResponseSchema(200, description: ...)] argument '
         'to document the response contract.',
   );
 
+  /// The diagnostic code reported for a schema without responses.
   @override
   DiagnosticCode get diagnosticCode => _code;
 
+  /// Registers the AST visitor that checks `RouteSchema` constructors.
   @override
   void registerNodeProcessors(
     RuleVisitorRegistry registry,

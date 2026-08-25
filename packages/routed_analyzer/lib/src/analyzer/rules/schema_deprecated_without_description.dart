@@ -46,9 +46,11 @@ class SchemaDeprecatedWithoutDescriptionRule extends AnalysisRule {
         'to use instead.',
   );
 
+  /// The diagnostic code reported for an unexplained deprecation.
   @override
   DiagnosticCode get diagnosticCode => _code;
 
+  /// Registers the AST visitor that checks deprecated `RouteSchema` values.
   @override
   void registerNodeProcessors(
     RuleVisitorRegistry registry,

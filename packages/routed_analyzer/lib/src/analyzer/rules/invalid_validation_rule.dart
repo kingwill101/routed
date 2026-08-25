@@ -53,9 +53,11 @@ class InvalidValidationRuleRule extends AnalysisRule {
         'of supported rules.',
   );
 
+  /// The diagnostic code reported for an unknown pipe rule.
   @override
   DiagnosticCode get diagnosticCode => _code;
 
+  /// Registers the AST visitor that checks literal validation rule maps.
   @override
   void registerNodeProcessors(
     RuleVisitorRegistry registry,

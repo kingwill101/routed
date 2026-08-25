@@ -1,6 +1,8 @@
 ## Unreleased
 
 - Adopt `very_good_analysis` and complete public API documentation.
+- Clarify analyzer-plugin activation, diagnostic suppression, route-schema
+  examples, and provider metadata inspection behavior.
 
 ## 0.1.1
 
