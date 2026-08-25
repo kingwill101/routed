@@ -1,3 +1,5 @@
+use crate::*;
+
 // TLS and HTTP/3 bootstrap helpers for the native transport runtime.
 //
 // Responsibilities:
@@ -13,7 +15,7 @@
 /// Ensures a rustls crypto provider is installed for this process.
 ///
 /// Installs the `ring` provider when none has been configured yet.
-fn ensure_rustls_crypto_provider() -> Result<(), String> {
+pub(crate) fn ensure_rustls_crypto_provider() -> Result<(), String> {
     use tokio_rustls::rustls::crypto::CryptoProvider;
 
     if CryptoProvider::get_default().is_some() {
@@ -38,7 +40,7 @@ fn ensure_rustls_crypto_provider() -> Result<(), String> {
 /// ALPN behavior:
 /// - `enable_http2 = true` => advertise `h2`, then `http/1.1`
 /// - `enable_http2 = false` => advertise `http/1.1` only
-fn load_tls_server_config(
+pub(crate) fn load_tls_server_config(
     cert_path: &str,
     key_path: &str,
     key_password: Option<&str>,
@@ -68,7 +70,7 @@ fn load_tls_server_config(
 }
 
 /// Loads certificate chain PEM entries from disk.
-fn load_tls_cert_chain(
+pub(crate) fn load_tls_cert_chain(
     cert_path: &str,
 ) -> Result<Vec<tokio_rustls::rustls::pki_types::CertificateDer<'static>>, String> {
     let cert_file = File::open(cert_path)
@@ -91,7 +93,7 @@ fn load_tls_cert_chain(
 /// - encrypted PKCS#8 PEM (when `key_password` is provided),
 /// - unencrypted PKCS#8 PEM,
 /// - RSA PEM.
-fn load_tls_private_key(
+pub(crate) fn load_tls_private_key(
     key_path: &str,
     key_password: Option<&str>,
 ) -> Result<tokio_rustls::rustls::pki_types::PrivateKeyDer<'static>, String> {
@@ -101,7 +103,7 @@ fn load_tls_private_key(
         if key_pem.contains("BEGIN ENCRYPTED PRIVATE KEY") {
             let (label, doc) = pkcs8::der::SecretDocument::from_pem(&key_pem)
                 .map_err(|error| format!("read encrypted key pem failed ({key_path}): {error}"))?;
-            pkcs8::EncryptedPrivateKeyInfo::validate_pem_label(&label).map_err(|error| {
+            pkcs8::EncryptedPrivateKeyInfo::validate_pem_label(label).map_err(|error| {
                 format!("invalid encrypted key pem label ({key_path}): {error}")
             })?;
             let encrypted =
@@ -147,7 +149,7 @@ fn load_tls_private_key(
 /// runtime can concurrently serve:
 /// - HTTP/1.1 + optional HTTP/2 over TLS/TCP
 /// - HTTP/3 over QUIC/UDP
-fn create_h3_endpoint(
+pub(crate) fn create_h3_endpoint(
     addr: SocketAddr,
     cert_path: &str,
     key_path: &str,
@@ -193,7 +195,7 @@ fn create_h3_endpoint(
 ///
 /// The verifier is configured with `allow_unauthenticated()` so TLS handshakes
 /// still succeed when the client does not send a certificate.
-fn load_optional_client_verifier(
+pub(crate) fn load_optional_client_verifier(
 ) -> Result<Arc<dyn tokio_rustls::rustls::server::danger::ClientCertVerifier>, String> {
     let roots = load_native_root_store()?;
     let verifier = WebPkiClientVerifier::builder(roots.into())
@@ -204,7 +206,7 @@ fn load_optional_client_verifier(
 }
 
 /// Loads native root certificates from the host operating system.
-fn load_native_root_store() -> Result<RootCertStore, String> {
+pub(crate) fn load_native_root_store() -> Result<RootCertStore, String> {
     let mut roots = RootCertStore::empty();
     let native = rustls_native_certs::load_native_certs();
     if !native.errors.is_empty() {
@@ -221,7 +223,10 @@ fn load_native_root_store() -> Result<RootCertStore, String> {
 }
 
 /// Serves one accepted HTTP/3 connection until graceful close.
-async fn handle_h3_connection(incoming: quinn::Incoming, app: Router) -> Result<(), String> {
+pub(crate) async fn handle_h3_connection(
+    incoming: quinn::Incoming,
+    app: Router,
+) -> Result<(), String> {
     let conn = incoming
         .await
         .map_err(|error| format!("h3 connection accept failed: {error}"))?;
