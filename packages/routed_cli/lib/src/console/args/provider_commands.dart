@@ -4,13 +4,13 @@ import 'package:artisanal/args.dart';
 // ignore: implementation_imports
 import 'package:routed_core/src/support/named_registry.dart';
 
-/// Creates an args-based command registered by a provider.
+/// Creates an args-based command when a provider registration is consumed.
 typedef ProviderCommandFactory = Command<void> Function();
 
-/// Creates an Artisanal command registered by a provider.
+/// Creates an Artisanal command when a provider registration is consumed.
 typedef ProviderArtisanalCommandFactory = Command<void> Function();
 
-/// Metadata for an args-based provider command.
+/// Metadata used to expose one provider-owned command through a runner.
 class ProviderCommandRegistration {
   /// Creates a registration for [factory] under [id].
   ProviderCommandRegistration({
@@ -22,14 +22,14 @@ class ProviderCommandRegistration {
   /// Stable provider-specific identifier.
   final String id;
 
-  /// Factory that creates the command.
+  /// Factory invoked when the command is registered with a runner.
   final ProviderCommandFactory factory;
 
-  /// Description used when reporting the registration.
+  /// Optional description used by provider discovery and diagnostics.
   final String description;
 }
 
-/// Metadata for an Artisanal provider command.
+/// Metadata used to expose one Artisanal provider command through a runner.
 class ProviderArtisanalCommandRegistration {
   /// Creates a registration for [factory] under [id].
   ProviderArtisanalCommandRegistration({
@@ -41,14 +41,30 @@ class ProviderArtisanalCommandRegistration {
   /// Stable provider-specific identifier.
   final String id;
 
-  /// Factory that creates the command.
+  /// Factory invoked when the command is registered with a runner.
   final ProviderArtisanalCommandFactory factory;
 
-  /// Description used when reporting the registration.
+  /// Optional description used by provider discovery and diagnostics.
   final String description;
 }
 
-/// Registry for provider-registered args-based commands.
+/// Process-wide registry for provider-registered args-based commands.
+///
+/// A provider can register a factory once and let an application attach the
+/// resulting commands to its own [CommandRunner]:
+///
+/// ```dart
+/// ProviderCommandRegistry.instance.register(
+///   'reports',
+///   factory: ReportsCommand.new,
+///   description: 'Generate usage reports.',
+/// );
+/// registerProviderCommands(
+///   runner,
+///   ProviderCommandRegistry.instance.registrations,
+///   runner.usage,
+/// );
+/// ```
 class ProviderCommandRegistry
     extends NamedRegistry<ProviderCommandRegistration> {
   ProviderCommandRegistry._();
@@ -56,8 +72,11 @@ class ProviderCommandRegistry
   /// The process-wide provider command registry.
   static final ProviderCommandRegistry instance = ProviderCommandRegistry._();
 
-  /// Registers a command factory and returns whether it was accepted.
-  /// Registers an Artisanal command factory under [id].
+  /// Registers a command factory under [id].
+  ///
+  /// Returns `true` when the registry accepts the entry. When
+  /// [overrideExisting] is `false`, an existing entry with the same identifier
+  /// is retained and the method returns `false`.
   bool register(
     String id, {
     required ProviderCommandFactory factory,
@@ -75,15 +94,16 @@ class ProviderCommandRegistry
     );
   }
 
-  /// Removes the registration identified by [id].
+  /// Removes the registration identified by [id] and returns whether it
+  /// existed.
   bool unregister(String id) => unregisterEntry(id);
 
-  /// Returns the current command registrations.
+  /// Returns a snapshot of the current command registrations.
   Iterable<ProviderCommandRegistration> get registrations =>
       entries.values.toList(growable: false);
 }
 
-/// Registry for provider-registered artisanal command factories.
+/// Process-wide registry for provider-registered Artisanal command factories.
 class ProviderArtisanalCommandRegistry
     extends NamedRegistry<ProviderArtisanalCommandRegistration> {
   ProviderArtisanalCommandRegistry._();
@@ -93,6 +113,10 @@ class ProviderArtisanalCommandRegistry
       ProviderArtisanalCommandRegistry._();
 
   /// Registers an Artisanal command factory under [id].
+  ///
+  /// Returns `true` when the registry accepts the entry. When
+  /// [overrideExisting] is `false`, an existing entry with the same identifier
+  /// is retained and the method returns `false`.
   bool register(
     String id, {
     required ProviderArtisanalCommandFactory factory,
@@ -110,15 +134,20 @@ class ProviderArtisanalCommandRegistry
     );
   }
 
-  /// Removes the registration identified by [id].
+  /// Removes the registration identified by [id] and returns whether it
+  /// existed.
   bool unregister(String id) => unregisterEntry(id);
 
-  /// Returns the current Artisanal command registrations.
+  /// Returns a snapshot of the current Artisanal command registrations.
   Iterable<ProviderArtisanalCommandRegistration> get registrations =>
       entries.values.toList(growable: false);
 }
 
-/// Registers provider commands with the given [runner].
+/// Instantiates and adds provider commands to [runner].
+///
+/// The factory for each registration is invoked lazily. A factory failure or a
+/// name/alias conflict throws a [UsageException] using [usage]; an empty
+/// [registrations] iterable leaves the runner unchanged.
 void registerProviderCommands(
   CommandRunner<void> runner,
   Iterable<ProviderCommandRegistration> registrations,
@@ -157,7 +186,11 @@ void registerProviderCommands(
   }
 }
 
-/// Registers provider artisanal commands with the given [runner].
+/// Instantiates and adds Artisanal provider commands to [runner].
+///
+/// This follows the same conflict and factory-error rules as
+/// [registerProviderCommands], but consumes
+/// [ProviderArtisanalCommandRegistration] values.
 void registerProviderArtisanalCommands(
   CommandRunner<void> runner,
   Iterable<ProviderArtisanalCommandRegistration> registrations,

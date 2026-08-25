@@ -9,6 +9,39 @@ import 'package:routed_cli/src/console/util/dart_exec.dart';
 import 'package:routed_cli/src/console/util/pubspec.dart';
 
 /// Builds and deploys a Routed application without user-authored shell files.
+///
+/// Cloudflare Workers is the default target. An application that exports
+/// `createEngine` can use the default factory:
+///
+/// ```text
+/// routed deploy --target cloudflare
+/// ```
+///
+/// An environment-aware app can opt into the Cloudflare environment factory
+/// and declare its platform resources in the generated Wrangler config:
+///
+/// ```text
+/// routed deploy --target cloudflare \
+///   --cloudflare-factory environment \
+///   --d1 AUTH_DB=auth-db:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx \
+///   --r2 ASSETS=app-assets \
+///   --queue JOBS=app-jobs \
+///   --service ANALYTICS=analytics-worker
+/// ```
+///
+/// Durable Objects and containers use repeatable options. The class names
+/// must be exported by the application entrypoint:
+///
+/// ```text
+/// routed deploy --target cloudflare \
+///   --durable-object COUNTER=Counter \
+///   --container API=ApiContainer|ghcr.io/example/api:latest|8080|2
+/// ```
+///
+/// Use `--dry-run` to compile the Worker and ask Wrangler to validate the
+/// generated configuration without uploading. Netlify and Vercel are also
+/// available through `--target netlify` and `--target vercel`; Vercel accepts
+/// `--runtime node` or `--runtime edge`.
 class DeployCommand extends BaseCommand {
   /// Creates the deployment command.
   DeployCommand({super.logger, super.fileSystem}) {
@@ -1235,6 +1268,22 @@ final class _CloudflareSecretsStoreBinding {
 }
 
 /// Generates the Dart Worker entrypoint used by a Cloudflare deployment.
+///
+/// [importPath] must identify the application library that exports the
+/// selected factory. With the default `engine` factory, that library must
+/// expose `createEngine`; with `environment`, it must expose
+/// `createCloudflareEngine`. Names in [durableObjectClasses] are emitted as
+/// registrations and must be exported by the same application library.
+///
+/// ```dart
+/// final entry = generateCloudflareWorkerEntry(
+///   importPath: 'package:todo_app/app.dart',
+///   factory: 'environment',
+///   durableObjectClasses: const ['Counter'],
+/// );
+/// ```
+///
+/// Throws an [ArgumentError] when [factory] is not `engine` or `environment`.
 String generateCloudflareWorkerEntry({
   required String importPath,
   String factory = 'engine',
@@ -1270,6 +1319,21 @@ $registration  $factorySource
 }
 
 /// Generates the JavaScript wrapper that exports Cloudflare bindings.
+///
+/// [compiledPath] is the path to the Dart-compiled Worker JavaScript. The
+/// generated wrapper imports its basename, exposes each class in
+/// [durableObjectClasses] as a Durable Object class, and exposes container
+/// classes from [containerPorts] using their configured TCP port. The result
+/// is intended to be written as the Wrangler `main` file alongside the
+/// compiled JavaScript.
+///
+/// ```dart
+/// final wrapper = generateCloudflareWorkerWrapper(
+///   '.dart_tool/routed/deploy/cloudflare/worker.dart.js',
+///   const ['Counter'],
+///   containerPorts: const {'ApiContainer': 8080},
+/// );
+/// ```
 String generateCloudflareWorkerWrapper(
   String compiledPath,
   Iterable<String> durableObjectClasses, {

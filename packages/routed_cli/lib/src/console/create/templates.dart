@@ -6,6 +6,10 @@ import 'package:routed_cli/src/console/create/templates_embedded.dart';
 typedef FileBuilder = String Function(TemplateContext context);
 
 /// Values used when rendering a project scaffold.
+///
+/// [TemplateContext] is passed to every [FileBuilder]. Built-in templates use
+/// it to keep generated package metadata, display text, and sample data
+/// consistent across `pubspec.yaml`, `README.md`, and application files.
 class TemplateContext {
   /// Creates a context for a project named [packageName].
   TemplateContext({
@@ -20,7 +24,10 @@ class TemplateContext {
   /// Human-readable project name used in generated copy.
   final String humanName;
 
-  /// Authentication plugins selected for the scaffold.
+  /// Authentication plugin identifiers selected for the scaffold.
+  ///
+  /// The set controls which typed auth dependencies and provider wiring are
+  /// emitted by the selected template. An empty set leaves auth unconfigured.
   final Set<String> authPlugins;
 
   /// JSON for the sample todo data used by starter templates.
@@ -28,7 +35,10 @@ class TemplateContext {
     {'id': 1, 'title': 'Ship Routed starter', 'completed': false},
   ]);
 
-  /// Template token replacements shared by generated files.
+  /// Token replacements shared by generated files.
+  ///
+  /// These values are consumed by embedded scaffold sources; callers creating
+  /// a custom [ScaffoldTemplate] may use the same keys for consistency.
   Map<String, String> get replacements => {
     '{{{routed:packageName}}}': packageName,
     '{{{routed:humanName}}}': humanName,
@@ -37,6 +47,9 @@ class TemplateContext {
 }
 
 /// A named scaffold template and the files it can render.
+///
+/// A template describes files relative to the generated project root and any
+/// additional runtime or development dependencies needed by those files.
 class ScaffoldTemplate {
   /// Creates a scaffold template with the supplied file builders.
   ScaffoldTemplate({
@@ -57,13 +70,15 @@ class ScaffoldTemplate {
   /// Human-readable description of the template.
   final String description;
 
-  /// Builders keyed by their destination-relative file paths.
+  /// Builders keyed by destination-relative file paths.
   final Map<String, FileBuilder> fileBuilders;
 
   /// Builder for the generated README.
   final FileBuilder readmeBuilder;
 
   /// Additional runtime dependencies required by this template.
+  ///
+  /// Values are pubspec constraint strings, such as `>=0.2.0 <1.0.0`.
   final Map<String, String> extraDependencies;
 
   /// Additional development dependencies required by this template.
@@ -74,6 +89,18 @@ class ScaffoldTemplate {
 }
 
 /// Registry and renderer for the built-in Routed scaffolds.
+///
+/// The available identifiers are `basic`, `api`, `web`, and `fullstack`.
+/// `CreateCommand` uses this registry to generate typed Dart configuration in
+/// `lib/config.dart`; provider selection is code-owned rather than YAML-owned.
+/// For example, the equivalent command-line workflow is:
+///
+/// ```text
+/// routed create --name todo_app --template fullstack
+/// cd todo_app
+/// routed dev
+/// routed deploy --target cloudflare
+/// ```
 class Templates {
   Templates._();
 
@@ -110,6 +137,9 @@ class Templates {
   };
 
   /// Resolves a built-in template by case-insensitive [id].
+  ///
+  /// Throws an [ArgumentError] when [id] is not one of the built-in
+  /// identifiers.
   static ScaffoldTemplate resolve(String id) {
     final key = id.toLowerCase();
     final template = _templates[key];
@@ -119,10 +149,10 @@ class Templates {
     return template;
   }
 
-  /// Returns all built-in scaffold templates.
+  /// Returns all built-in scaffold templates in registry order.
   static Iterable<ScaffoldTemplate> get all => _templates.values;
 
-  /// Returns a concise description of the available template identifiers.
+  /// Returns a concise, quoted description of the available template IDs.
   static String describe() =>
       all.map((template) => '"${template.id}"').join(', ');
 }

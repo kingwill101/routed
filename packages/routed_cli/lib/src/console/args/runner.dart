@@ -5,16 +5,19 @@ import 'package:artisanal/args.dart';
 import 'package:routed/routed.dart' show registerRoutedProviders;
 import 'package:routed_cli/routed_cli.dart';
 
-/// RoutedCommandRunner centralizes global flags and command registration.
+/// Runs Routed commands with shared global flags and provider registration.
 ///
-/// - Provides global `--help` and `--version` flags.
-/// - Centralizes command registration so the bin entrypoint can be minimal.
-/// - Uses [CliVersion] to resolve and print the CLI version.
+/// The runner registers Routed's built-in provider catalog in its constructor,
+/// then provides global `--help` and `--version` handling. Add application
+/// commands with [register] before calling [run]. The nested
+/// `openapi generate` spelling is normalized to the legacy
+/// `openapi:generate` command name.
 ///
-/// Usage:
-///   final runner = RoutedCommandRunner();
-///   runner.register(commands); // e.g. DevCommand, BuildCommand
-///   await runner.run(args);
+/// ```dart
+/// final runner = RoutedCommandRunner()
+///   ..register(applicationCommands);
+/// await runner.run(arguments);
+/// ```
 class RoutedCommandRunner extends CommandRunner<void> {
   /// Creates a command runner with the standard Routed global options.
   RoutedCommandRunner({
@@ -35,12 +38,15 @@ class RoutedCommandRunner extends CommandRunner<void> {
     );
   }
 
-  /// Logger for runner-level output.
+  /// Logger used for runner-level diagnostics and version output.
   final CliLogger logger;
 
   ArgResults? _globalResults;
 
-  /// Register multiple commands at once.
+  /// Registers [commands] and returns this runner for fluent composition.
+  ///
+  /// Command names and aliases must be unique according to the underlying
+  /// [CommandRunner] contract.
   RoutedCommandRunner register(Iterable<Command<void>> commands) {
     commands.forEach(addCommand);
     // Fluent registration is part of the public runner API.
@@ -48,9 +54,14 @@ class RoutedCommandRunner extends CommandRunner<void> {
     return this;
   }
 
-  /// Convenience accessor to the parsed [ArgResults] for subcommands.
+  /// The top-level arguments parsed during the most recent [run] call.
   ArgResults? get globalResults => _globalResults;
 
+  /// Handles global options before dispatching to a registered command.
+  ///
+  /// Passing `--help` prints runner usage, while `--version` resolves the
+  /// version through [CliVersion]. Other arguments are delegated to the
+  /// selected subcommand.
   @override
   Future<void> run(Iterable<String> args) async {
     // Accept the documented nested spelling while retaining the existing

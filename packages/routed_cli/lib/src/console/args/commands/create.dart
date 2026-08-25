@@ -14,16 +14,30 @@ import 'package:yaml/yaml.dart';
 /// Runs `dart pub get` for a newly generated project directory.
 typedef PubGetInvoker = Future<int> Function(fs.Directory projectDir);
 
-/// Creates a new Routed app with healthy defaults.
+/// Creates a new Routed app with typed configuration and healthy defaults.
 ///
-/// By default this command scaffolds a project using the "basic" template:
-/// ```dart
+/// By default, this command uses the `basic` template. Choose a richer
+/// starter when the application needs JSON tests, server-rendered views, or
+/// both:
+///
+/// ```text
 /// routed create --name hello_world
+/// routed create --name api_app --template api
+/// routed create --name web_app --template web
+/// routed create --name full_app --template fullstack
 /// ```
-/// This produces:
-/// - pubspec.yaml with routed dependency
-/// - bin/server.dart with a starter route
-/// - analysis_options.yaml, README.md, .gitignore
+///
+/// Each scaffold includes a typed `lib/config.dart` composition point. Select
+/// an auth plugin explicitly when needed:
+///
+/// ```text
+/// routed create --name accounts --auth-plugin username
+/// ```
+///
+/// The command writes the project files, adds a new project to a containing
+/// Dart workspace when applicable, and runs `dart pub get`. Continue with
+/// `routed dev` from the generated project directory. Use `--force` only when
+/// replacing files in an existing target is intentional.
 ///
 /// Options:
 /// - --name/-n: Project name used for the pubspec and folder when writing to

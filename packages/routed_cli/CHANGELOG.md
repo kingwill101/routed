@@ -2,6 +2,8 @@
 
 - Adopted `very_good_analysis` and completed public API Dartdoc coverage across
   the CLI, while preserving existing command and fluent-runner contracts.
+- Expanded examples for typed scaffolding, provider command registration, and
+  Cloudflare deployment bindings and factory modes.
 
 ## 0.3.0
 

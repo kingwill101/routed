@@ -1,3 +1,31 @@
+/// Command-line tooling for creating, inspecting, and deploying Routed apps.
+///
+/// The public barrel exposes the command runner, provider-command registries,
+/// scaffold template APIs, project-command discovery, and local development
+/// server lifecycle helpers. The executable itself uses the same APIs, so a
+/// custom entrypoint can compose the runner without depending on internal
+/// command implementation details.
+///
+/// A custom runner can register commands and retain the standard global
+/// `--help` and `--version` behavior:
+///
+/// ```dart
+/// import 'package:args/command_runner.dart';
+/// import 'package:routed_cli/routed_cli.dart';
+///
+/// Future<void> main(List<String> args) async {
+///   final runner = RoutedCommandRunner()
+///     ..register(<Command<void>>[]);
+///   await runner.run(args);
+/// }
+/// ```
+///
+/// For a new application, start with `routed create`. The generated
+/// `lib/config.dart` is the source of truth for typed provider composition;
+/// use `routed dev` locally and `routed deploy --target cloudflare` when the
+/// app is ready for a Worker deployment.
+library;
+
 import 'dart:async';
 import 'dart:io';
 
@@ -24,24 +52,20 @@ export 'src/console/project/commands_loader.dart'
         ProjectCommandsLoader,
         shouldLoadProjectCommands;
 
-/// Routed CLI core utilities.
-///
-/// This library provides:
-/// - A resilient version resolver for the CLI.
-/// - Lightweight logging utilities for CLI commands.
-/// - Basic dev server helpers intended to be used by the executable.
-/// - Simple helpers to keep CLI concerns decoupled from implementation details.
-///
-/// Future work:
-/// - Integrate hot reload control using the `hotreloader` package.
-/// - Add project scaffolding, build, route listing, and update utilities.
-
-/// Provides methods to resolve the CLI version in a robust manner.
+/// Resolves the version string displayed by the CLI.
 ///
 /// Priority:
 /// 1) Compile-time env var "ROUTED_CLI_VERSION"
 /// 2) pubspec.yaml found by walking up from [Directory.current]
 /// 3) Fallback to [defaultVersion]
+///
+/// Use [resolve] when embedding the version in a custom command or diagnostic
+/// output:
+///
+/// ```dart
+/// final version = await CliVersion.resolve();
+/// print('routed $version');
+/// ```
 class CliVersion {
   /// The environment key used for embedding the version at build time.
   static const String envKey = 'ROUTED_CLI_VERSION';
@@ -54,7 +78,7 @@ class CliVersion {
     envKey,
   );
 
-  /// Resolve the CLI version string.
+  /// Resolves the CLI version string.
   ///
   /// Attempts multiple strategies in order of priority.
   static Future<String> resolve({Directory? start}) async {
@@ -103,7 +127,7 @@ class CliLogger {
   /// Creates a logger that emits verbose diagnostics when [verbose] is true.
   CliLogger({this.verbose = false});
 
-  /// Whether debug messages should be written.
+  /// Whether debug messages are emitted by [debug].
   bool verbose;
 
   /// Writes an informational [message] to standard output.
@@ -141,7 +165,7 @@ class DevOptions {
   /// Application entrypoint to execute.
   final String entry;
 
-  /// Paths that would be watched by a future reload implementation.
+  /// Paths reserved for callers that implement additional watch behavior.
   final List<String> watch;
 
   /// Whether the development server should emit diagnostic logging.
@@ -177,7 +201,17 @@ class DevOptions {
 
 /// Spawns a Dart process using the current Dart executable.
 ///
-/// By default, stdio is inherited to make the child process feel "attached".
+/// By default, standard input, output, and error are inherited so the child
+/// process remains attached to the invoking terminal. Set [inheritStdio] to
+/// `false` when the caller needs to consume the process streams itself.
+///
+/// ```dart
+/// final process = await spawnDartProcess(
+///   ['run', 'bin/server.dart'],
+///   workingDirectory: projectDirectory,
+/// );
+/// final exitCode = await process.exitCode;
+/// ```
 Future<Process> spawnDartProcess(
   List<String> args, {
   Map<String, String>? environment,
@@ -197,11 +231,17 @@ Future<Process> spawnDartProcess(
 
 /// Runs a development server for a Routed app.
 ///
-/// Note:
-/// - This does not implement hot reloading yet; it simply spawns the target
-///   entrypoint with vm-service enabled, which is required for hot reload.
-/// - A future revision can wire in `hotreloader` and file watchers, using
-///   [DevOptions.watch] to fine-tune reload scopes.
+/// This helper starts [DevOptions.entry] with the Dart VM service enabled and
+/// forwards the host and application port as entrypoint arguments. It does
+/// not watch files or restart the process; use `DevServerRunner` or the
+/// `routed dev` command for the full development lifecycle.
+///
+/// The returned [Process] remains under the caller's control:
+///
+/// ```dart
+/// final process = await runDevServer(const DevOptions());
+/// await process.exitCode;
+/// ```
 Future<Process> runDevServer(DevOptions options, {CliLogger? logger}) async {
   final log = logger ?? CliLogger(verbose: options.verbose);
 
@@ -228,12 +268,17 @@ Future<Process> runDevServer(DevOptions options, {CliLogger? logger}) async {
   return process;
 }
 
-/// Short usage header for help text.
+/// Returns the standard Routed CLI usage header.
 String usageHeader() => 'A fast, minimalistic backend framework for Dart.';
 
-/// Formats a simple routes list for use in `list` command outputs.
+/// Formats route strings as one line per route.
 ///
-/// This is intentionally minimal; future improvements can render tables.
+/// The function does not sort, label, or otherwise transform [routes]. An
+/// empty iterable produces an empty string.
+///
+/// ```dart
+/// final output = formatRoutesTable(['/ GET /', 'GET /health']);
+/// ```
 String formatRoutesTable(Iterable<String> routes) {
   final buf = StringBuffer();
   routes.forEach(buf.writeln);
