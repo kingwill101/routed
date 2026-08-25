@@ -128,7 +128,11 @@ Bad Request";
 
 /// Max time to wait for direct-callback response frames from Dart.
 const DIRECT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+/// Grace window for upgraded tunnel tasks to flush a close frame on shutdown.
+const SHUTDOWN_TUNNEL_GRACE: Duration = Duration::from_millis(50);
 
+/// WebSocket close code used when a native proxy is shutting down.
+const WEBSOCKET_CLOSE_GOING_AWAY: u16 = 1001;
 /// C callback signature used by direct request mode.
 ///
 /// Rust invokes this callback with:
@@ -211,12 +215,20 @@ pub struct ProxyServerHandle {
 
 /// Registry for in-flight direct-callback requests.
 struct DirectRequestBridge {
-    callback: Option<DirectRequestCallback>,
+    callback_state: Mutex<DirectCallbackState>,
+    callback_state_cv: Condvar,
     next_request_id: AtomicU64,
     stopped: AtomicBool,
     pending: Mutex<HashMap<u64, PendingDirectRequest>>,
     queued_payloads: Mutex<VecDeque<QueuedDirectPayload>>,
     queued_payloads_cv: Condvar,
+}
+
+/// Lifecycle state for the direct wake callback exposed to Dart.
+struct DirectCallbackState {
+    callback: Option<DirectRequestCallback>,
+    stopping: bool,
+    in_flight: usize,
 }
 
 /// Per-request direct-callback state.
@@ -460,10 +472,43 @@ fn is_expected_shutdown_tunnel_error(message: &str) -> bool {
         || lower.contains(MESSAGE_CHANNEL_CLOSED)
 }
 
+/// Writes an unmasked WebSocket close frame to an upgraded client stream.
+async fn write_websocket_close_frame(
+    writer: &mut (impl AsyncWrite + Unpin),
+    code: u16,
+) -> Result<(), String> {
+    let payload = [0x88_u8, 0x02_u8, (code >> 8) as u8, (code & 0xff) as u8];
+    writer
+        .write_all(&payload)
+        .await
+        .map_err(|error| format!("write websocket close frame failed: {error}"))?;
+    writer
+        .shutdown()
+        .await
+        .map_err(|error| format!("shutdown upgraded frontend stream failed: {error}"))?;
+    Ok(())
+}
+
 #[no_mangle]
 /// Returns the native transport ABI version expected by Dart bindings.
 pub extern "C" fn server_native_transport_version() -> i32 {
     1
+}
+
+/// Chooses Tokio worker thread count for one proxy runtime.
+///
+/// Shared listeners are typically booted once per Dart isolate via
+/// `shared: true`, so keeping each runtime to a single worker avoids
+/// multiplying the machine core count across every isolate.
+fn proxy_runtime_worker_threads(shared: bool) -> usize {
+    if shared {
+        return 1;
+    }
+
+    std::thread::available_parallelism()
+        .map(|value| value.get())
+        .unwrap_or(2)
+        .clamp(2, 16)
 }
 
 #[no_mangle]
@@ -566,7 +611,12 @@ pub extern "C" fn server_native_start_proxy_server(
         && matches!(&bridge_endpoint, BridgeEndpoint::Tcp(addr) if addr == "127.0.0.1:9");
     let direct_bridge = if direct_callback.is_some() || direct_polling_mode {
         Some(Arc::new(DirectRequestBridge {
-            callback: direct_callback,
+            callback_state: Mutex::new(DirectCallbackState {
+                callback: direct_callback,
+                stopping: false,
+                in_flight: 0,
+            }),
+            callback_state_cv: Condvar::new(),
             next_request_id: AtomicU64::new(1),
             stopped: AtomicBool::new(false),
             pending: Mutex::new(HashMap::new()),
@@ -596,10 +646,7 @@ pub extern "C" fn server_native_start_proxy_server(
 
     let runtime_direct_bridge = direct_bridge.clone();
     let join_handle = thread::spawn(move || {
-        let worker_threads = std::thread::available_parallelism()
-            .map(|value| value.get())
-            .unwrap_or(2)
-            .clamp(2, 16);
+        let worker_threads = proxy_runtime_worker_threads(shared);
         let runtime = match tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .worker_threads(worker_threads)
@@ -716,9 +763,7 @@ pub extern "C" fn server_native_stop_proxy_server(handle: *mut ProxyServerHandle
 
     let mut handle = unsafe { Box::from_raw(handle) };
     if let Some(direct_bridge) = handle.direct_bridge.as_ref() {
-        direct_bridge.stopped.store(true, Ordering::Release);
-        direct_bridge.queued_payloads.lock().clear();
-        direct_bridge.queued_payloads_cv.notify_all();
+        stop_direct_bridge(direct_bridge);
     }
     if let Some(tx) = handle.shutdown_tx.take() {
         let _ = tx.send(());
@@ -726,6 +771,23 @@ pub extern "C" fn server_native_stop_proxy_server(handle: *mut ProxyServerHandle
     if let Some(join_handle) = handle.join_handle.take() {
         let _ = join_handle.join();
     }
+}
+
+/// Stops the direct bridge without allowing a callback to race handle teardown.
+fn stop_direct_bridge(direct_bridge: &Arc<DirectRequestBridge>) {
+    direct_bridge.stopped.store(true, Ordering::Release);
+
+    let mut callback_state = direct_bridge.callback_state.lock();
+    callback_state.stopping = true;
+    while callback_state.in_flight != 0 {
+        direct_bridge.callback_state_cv.wait(&mut callback_state);
+    }
+    callback_state.callback = None;
+    drop(callback_state);
+
+    direct_bridge.queued_payloads.lock().clear();
+    direct_bridge.queued_payloads_cv.notify_all();
+    direct_bridge.pending.lock().clear();
 }
 
 #[no_mangle]
@@ -1018,6 +1080,8 @@ async fn run_plain_proxy(
             }
         }
     }
+
+    time::sleep(SHUTDOWN_TUNNEL_GRACE).await;
 
     // Force-close all active per-connection tasks on shutdown so the FFI stop
     // path cannot hang behind idle keep-alive sockets.
@@ -1701,6 +1765,8 @@ async fn run_tls_proxy(
         endpoint.close(0_u32.into(), b"shutdown");
     }
 
+    time::sleep(SHUTDOWN_TUNNEL_GRACE).await;
+
     // Force-close all active per-connection tasks on shutdown so the FFI stop
     // path cannot hang behind idle keep-alive sockets.
     connections.abort_all();
@@ -2203,6 +2269,7 @@ fn emit_direct_callback_payload(
     }
 
     let mut queued = direct_bridge.queued_payloads.lock();
+    let should_wake = queued.is_empty();
     queued.push_back(QueuedDirectPayload {
         request_id,
         payload,
@@ -2210,11 +2277,31 @@ fn emit_direct_callback_payload(
     direct_bridge.queued_payloads_cv.notify_one();
     drop(queued);
 
-    if let Some(callback) = direct_bridge.callback {
-        // In callback mode we still enqueue payloads and only use callback as a
-        // wake-up signal. This avoids passing raw pointers through the async
-        // isolate listener boundary in Dart.
-        callback(request_id, std::ptr::null(), 0);
+    if should_wake {
+        let callback = {
+            let mut callback_state = direct_bridge.callback_state.lock();
+            if callback_state.stopping {
+                None
+            } else if let Some(callback) = callback_state.callback {
+                callback_state.in_flight += 1;
+                Some(callback)
+            } else {
+                None
+            }
+        };
+
+        if let Some(callback) = callback {
+            // In callback mode we still enqueue payloads and only use callback
+            // as a wake-up signal. This avoids passing raw pointers through the
+            // async isolate listener boundary in Dart.
+            callback(request_id, std::ptr::null(), 0);
+
+            let mut callback_state = direct_bridge.callback_state.lock();
+            callback_state.in_flight = callback_state.in_flight.saturating_sub(1);
+            if callback_state.stopping && callback_state.in_flight == 0 {
+                direct_bridge.callback_state_cv.notify_all();
+            }
+        }
     }
     Ok(())
 }
@@ -2325,12 +2412,30 @@ async fn run_direct_websocket_tunnel(
         }
     });
 
+    let response_bridge = direct_bridge.clone();
     let callback_to_frontend = tokio::spawn(async move {
         loop {
             let payload = match time::timeout(DIRECT_REQUEST_TIMEOUT, response_rx.recv()).await {
                 Ok(Some(payload)) => payload,
-                Ok(None) => return Ok::<(), String>(()),
+                Ok(None) => {
+                    if response_bridge.stopped.load(Ordering::Acquire) {
+                        let _ = write_websocket_close_frame(
+                            &mut frontend_writer,
+                            WEBSOCKET_CLOSE_GOING_AWAY,
+                        )
+                        .await;
+                    }
+                    return Ok::<(), String>(());
+                }
                 Err(_) => {
+                    if response_bridge.stopped.load(Ordering::Acquire) {
+                        let _ = write_websocket_close_frame(
+                            &mut frontend_writer,
+                            WEBSOCKET_CLOSE_GOING_AWAY,
+                        )
+                        .await;
+                        return Ok::<(), String>(());
+                    }
                     return Err(format!(
                         "direct bridge callback timed out after {:?}",
                         DIRECT_REQUEST_TIMEOUT
@@ -2604,21 +2709,48 @@ mod tests {
         header::{HeaderName, HeaderValue, CONNECTION},
         StatusCode,
     };
-    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering as AtomicOrdering};
+    use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering as AtomicOrdering};
     use std::time::Duration;
     use tokio::net::TcpListener;
 
     static TEST_CALLBACK_INVOCATIONS: AtomicUsize = AtomicUsize::new(0);
     static TEST_CALLBACK_LAST_REQUEST_ID: AtomicU64 = AtomicU64::new(0);
+    static TEST_BLOCKING_CALLBACK_RELEASED: AtomicBool = AtomicBool::new(false);
+    static TEST_CALLBACK_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     extern "C" fn test_direct_callback(request_id: u64, _payload: *const u8, _payload_len: u64) {
         TEST_CALLBACK_INVOCATIONS.fetch_add(1, AtomicOrdering::SeqCst);
         TEST_CALLBACK_LAST_REQUEST_ID.store(request_id, AtomicOrdering::SeqCst);
     }
 
+    extern "C" fn blocking_test_direct_callback(
+        request_id: u64,
+        _payload: *const u8,
+        _payload_len: u64,
+    ) {
+        TEST_CALLBACK_INVOCATIONS.fetch_add(1, AtomicOrdering::SeqCst);
+        TEST_CALLBACK_LAST_REQUEST_ID.store(request_id, AtomicOrdering::SeqCst);
+        while !TEST_BLOCKING_CALLBACK_RELEASED.load(AtomicOrdering::SeqCst) {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    fn lock_test_callback_state() -> std::sync::MutexGuard<'static, ()> {
+        let guard = TEST_CALLBACK_LOCK.lock().expect("test callback lock");
+        TEST_CALLBACK_INVOCATIONS.store(0, AtomicOrdering::SeqCst);
+        TEST_CALLBACK_LAST_REQUEST_ID.store(0, AtomicOrdering::SeqCst);
+        TEST_BLOCKING_CALLBACK_RELEASED.store(false, AtomicOrdering::SeqCst);
+        guard
+    }
+
     fn create_direct_bridge(callback: Option<DirectRequestCallback>) -> Arc<DirectRequestBridge> {
         Arc::new(DirectRequestBridge {
-            callback,
+            callback_state: Mutex::new(DirectCallbackState {
+                callback,
+                stopping: false,
+                in_flight: 0,
+            }),
+            callback_state_cv: Condvar::new(),
             next_request_id: AtomicU64::new(1),
             stopped: AtomicBool::new(false),
             pending: Mutex::new(HashMap::new()),
@@ -2649,6 +2781,17 @@ mod tests {
         assert!(!transfer_encoding_is_chunked_final(""));
         assert!(!transfer_encoding_is_chunked_final("gzip"));
         assert!(!transfer_encoding_is_chunked_final("chunked, gzip"));
+    }
+
+    #[test]
+    fn shared_proxy_runtime_uses_single_worker_thread() {
+        assert_eq!(proxy_runtime_worker_threads(true), 1);
+    }
+
+    #[test]
+    fn non_shared_proxy_runtime_clamps_worker_threads() {
+        let worker_threads = proxy_runtime_worker_threads(false);
+        assert!((2..=16).contains(&worker_threads));
     }
 
     #[test]
@@ -3031,8 +3174,7 @@ My-Connection-Header2: some-value2\r\n\
 
     #[test]
     fn direct_callback_payload_enqueues_and_signals_callback() {
-        TEST_CALLBACK_INVOCATIONS.store(0, AtomicOrdering::SeqCst);
-        TEST_CALLBACK_LAST_REQUEST_ID.store(0, AtomicOrdering::SeqCst);
+        let _callback_guard = lock_test_callback_state();
 
         let direct_bridge = create_direct_bridge(Some(test_direct_callback));
         let _response_rx = register_pending_request(&direct_bridge, 42);
@@ -3053,6 +3195,59 @@ My-Connection-Header2: some-value2\r\n\
             TEST_CALLBACK_LAST_REQUEST_ID.load(AtomicOrdering::SeqCst),
             42
         );
+    }
+
+    #[test]
+    fn direct_callback_payload_coalesces_wakeups_while_queue_is_non_empty() {
+        let _callback_guard = lock_test_callback_state();
+
+        let direct_bridge = create_direct_bridge(Some(test_direct_callback));
+        let _response_rx = register_pending_request(&direct_bridge, 7);
+
+        emit_direct_callback_payload(&direct_bridge, 7, vec![1]).expect("first payload");
+        emit_direct_callback_payload(&direct_bridge, 7, vec![2]).expect("second payload");
+
+        assert_eq!(TEST_CALLBACK_INVOCATIONS.load(AtomicOrdering::SeqCst), 1);
+        assert_eq!(
+            TEST_CALLBACK_LAST_REQUEST_ID.load(AtomicOrdering::SeqCst),
+            7
+        );
+
+        direct_bridge.queued_payloads.lock().clear();
+        emit_direct_callback_payload(&direct_bridge, 7, vec![3]).expect("third payload");
+
+        assert_eq!(TEST_CALLBACK_INVOCATIONS.load(AtomicOrdering::SeqCst), 2);
+    }
+
+    #[test]
+    fn stopping_direct_bridge_waits_for_in_flight_callback() {
+        let _callback_guard = lock_test_callback_state();
+
+        let direct_bridge = create_direct_bridge(Some(blocking_test_direct_callback));
+        let _response_rx = register_pending_request(&direct_bridge, 5);
+        let callback_bridge = direct_bridge.clone();
+        let callback_thread = std::thread::spawn(move || {
+            emit_direct_callback_payload(&callback_bridge, 5, vec![1])
+                .expect("blocking callback payload");
+        });
+
+        for _ in 0..100 {
+            if TEST_CALLBACK_INVOCATIONS.load(AtomicOrdering::SeqCst) == 1 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(TEST_CALLBACK_INVOCATIONS.load(AtomicOrdering::SeqCst), 1);
+
+        let stop_bridge = direct_bridge.clone();
+        let stop_thread = std::thread::spawn(move || stop_direct_bridge(&stop_bridge));
+        std::thread::sleep(Duration::from_millis(5));
+        TEST_BLOCKING_CALLBACK_RELEASED.store(true, AtomicOrdering::SeqCst);
+
+        callback_thread.join().expect("callback should finish");
+        stop_thread.join().expect("stop should finish");
+        assert!(direct_bridge.callback_state.lock().stopping);
+        assert_eq!(direct_bridge.callback_state.lock().in_flight, 0);
     }
 
     #[test]

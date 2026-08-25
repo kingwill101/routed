@@ -4,6 +4,13 @@ All notable changes to `server_native` will be documented in this file.
 
 ## Unreleased
 
+- Reduced `shared: true` isolate scaling overhead by using one Tokio worker per
+  shared native runtime and replacing the callback-mode hot polling loop with
+  coalesced wakeups.
+- Hardened direct callback and upgraded tunnel shutdown so in-flight callbacks
+  cannot race native teardown and clients receive a clean WebSocket close.
+- Added Rust regression coverage for shared worker sizing, callback wakeup
+  coalescing, and callback lifecycle shutdown.
 - Expanded public Dartdoc for the native, bridge, direct, secure, and
   multi-server APIs, including transport-selection and lifecycle guidance.
 - Added verified prebuilt-native metadata and streamlined native asset
