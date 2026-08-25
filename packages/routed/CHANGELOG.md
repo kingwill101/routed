@@ -2,6 +2,8 @@
 
 - Adopted `very_good_analysis` and completed public API documentation for the
   batteries-included facade.
+- Added runnable full-bundle and typed-provider composition examples, including
+  the provider-registration and slim-engine boundaries.
 
 ## 0.5.0
 

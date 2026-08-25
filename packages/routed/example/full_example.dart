@@ -1,9 +1,16 @@
 import 'package:routed/routed.dart';
 
-void main() {
-  // Importing package:routed registers official providers.
-  assert(
-    officialProvidersRegistered,
-    'The routed facade did not register its official providers.',
-  );
+Future<void> main() async {
+  // Registration is explicit so the selected provider catalogue is clear.
+  registerRoutedProviders();
+
+  final engine = await Engine.create();
+  engine
+    ..get('/health', (ctx) => ctx.json({'ok': true}))
+    ..get('/hello/{name}', (ctx) {
+      final name = ctx.params['name'] ?? 'Routed';
+      return ctx.json({'message': 'Hello, $name!'});
+    });
+
+  await engine.serve(port: 8080);
 }
