@@ -8,10 +8,10 @@ import 'node_runtime.dart' as runtime;
 /// When compiled for a JavaScript/Node host, binds and dispatches each
 /// request through `Engine.handleConnection` via `NodeHttpConnection`.
 final class NodeServerTransport implements ServerTransport {
-  /// Creates a NodeServerTransport value.
+  /// Creates a Node HTTP transport.
   const NodeServerTransport({this.echo = false});
 
-  /// The echo value.
+  /// Whether the transport prints the engine's routes during startup.
   final bool echo;
 
   @override

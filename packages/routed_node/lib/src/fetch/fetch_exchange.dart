@@ -8,60 +8,60 @@ import '../runtime/runtime.dart';
 /// JavaScript host entrypoints adapt their native request object to this view;
 /// the Routed engine never imports a host's Fetch or execution-context types.
 abstract interface class FetchRequestView {
-  /// The method value.
+  /// HTTP method supplied by the host request.
   String get method;
 
-  /// The url value.
+  /// Request URL as supplied by the host.
   String get url;
 
-  /// The rawHeaders value.
+  /// Host header values before conversion to [PortableHeaders].
   Map<String, Object?> get rawHeaders;
 
-  /// The body value.
+  /// Request body bytes.
   Stream<List<int>> get body;
 
-  /// The remoteAddress value.
+  /// Connecting client address, when the host exposes one.
   String? get remoteAddress;
 
-  /// The hostContext value.
+  /// Request-scoped runtime context supplied by the host adapter.
   RoutedNodeContext? get hostContext;
 }
 
 /// Host-neutral response value produced for Fetch-style hosts.
 final class FetchResponseView {
-  /// Performs the FetchResponseView operation.
+  /// Creates a response view for a Fetch-style host.
   FetchResponseView({
     required this.statusCode,
     required this.headers,
     required this.body,
   });
 
-  /// The statusCode value.
+  /// HTTP status code to send to the client.
   final int statusCode;
 
-  /// The headers value.
+  /// Response headers, preserving repeated values.
   final Map<String, List<String>> headers;
 
-  /// The body value.
+  /// Response body bytes produced by the engine.
   final Stream<List<int>> body;
 }
 
 /// Defines the public contract for this host integration.
 final class FetchWebSocketUpgrade {
-  /// Performs the FetchWebSocketUpgrade operation.
+  /// Describes the result of accepting a Fetch WebSocket upgrade.
   FetchWebSocketUpgrade({
     required this.socket,
     required this.response,
     this.responseContainsWebSocket = false,
   });
 
-  /// The socket value.
+  /// Routed WebSocket exposed to application code.
   final RoutedWebSocket socket;
 
-  /// The response value.
+  /// Native response object used to complete the host handshake.
   final Object response;
 
-  /// The responseContainsWebSocket value.
+  /// Whether [response] already contains the platform WebSocket response.
   final bool responseContainsWebSocket;
 }
 

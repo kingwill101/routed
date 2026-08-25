@@ -23,16 +23,16 @@ abstract interface class NodeIncomingView {
 /// Node `http.ServerResponse` surface used by `NodeResponseAdapter`.
 /// Raw upgraded Node socket used by the Node WebSocket adapter.
 abstract interface class NodeWebSocketSocketView {
-  /// The incoming value.
+  /// Incoming bytes read from the upgraded socket.
   Stream<List<int>> get incoming;
 
-  /// Performs the write operation.
+  /// Writes bytes to the upgraded socket.
   Future<void> write(List<int> bytes);
 
-  /// Performs the end operation.
+  /// Ends the socket, optionally writing a final byte sequence.
   Future<void> end([List<int>? bytes]);
 
-  /// Performs the destroy operation.
+  /// Destroys the socket without waiting for a graceful close.
   void destroy();
 }
 

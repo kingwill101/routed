@@ -10,7 +10,7 @@ import 'runtime/runtime.dart';
 /// Exposes host-agnostic [HttpConnection] adapters for
 /// [Engine.handleConnection].
 final class NodeHttpConnection {
-  /// Performs the NodeHttpConnection operation.
+  /// Creates portable request and response adapters for one Node exchange.
   NodeHttpConnection(
     NodeIncomingView incoming,
     NodeServerResponseView outgoing, {
@@ -23,16 +23,16 @@ final class NodeHttpConnection {
        ),
        responseAdapter = NodeResponseAdapter(outgoing);
 
-  /// Host-specific context for this exchange.
+  /// Host-specific context carried by the request, when supplied.
   final RoutedNodeContext? hostContext;
 
-  /// Portable request view.
+  /// Request adapter backed by the incoming Node message.
   final NodeRequestAdapter requestAdapter;
 
-  /// Portable response view.
+  /// Response adapter backed by the outgoing Node response.
   final NodeResponseAdapter responseAdapter;
 
-  /// Core-facing connection pair.
+  /// Connection passed to [Engine.handleConnection].
   HttpConnection get connection =>
       HttpConnection(requestAdapter, responseAdapter);
 }

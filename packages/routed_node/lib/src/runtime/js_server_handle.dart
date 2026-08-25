@@ -9,7 +9,7 @@ import 'runtime.dart';
 
 /// Server handle for a JavaScript-hosted listener.
 final class JsServerHandle implements ServerHandle {
-  /// Performs the JsServerHandle operation.
+  /// Creates a handle for a JavaScript-hosted listener.
   JsServerHandle({
     required this.server,
     required this.engine,
@@ -20,23 +20,23 @@ final class JsServerHandle implements ServerHandle {
     this.waitForSockets,
   });
 
-  /// The server value.
+  /// The host-native server object controlled by this handle.
   final JSObject server;
 
-  /// The engine value.
+  /// The Routed engine served by the listener.
   final Engine engine;
 
-  /// The info value.
+  /// Runtime metadata used for lifecycle events.
   final RoutedNodeRuntimeInfo info;
   @override
   final String host;
   @override
   final int port;
 
-  /// Performs the Function operation.
+  /// Closes host-managed sockets before the server stops, when provided.
   final void Function()? closeSockets;
 
-  /// Performs the Function operation.
+  /// Completes after host-managed sockets have stopped, when provided.
   final Future<void> Function()? waitForSockets;
   bool _closed = false;
 
@@ -82,7 +82,7 @@ final class JsServerHandle implements ServerHandle {
   }
 }
 
-/// Performs the publishHostBootRequested operation.
+/// Publishes a lifecycle event for a requested host boot.
 void publishHostBootRequested(Engine engine, RoutedNodeRuntimeInfo info) {
   publishRoutedNodeLifecycle(
     engine,
@@ -93,7 +93,7 @@ void publishHostBootRequested(Engine engine, RoutedNodeRuntimeInfo info) {
   );
 }
 
-/// Performs the publishHostReady operation.
+/// Publishes a lifecycle event after a host starts accepting requests.
 void publishHostReady(Engine engine, RoutedNodeRuntimeInfo info) {
   publishRoutedNodeLifecycle(
     engine,

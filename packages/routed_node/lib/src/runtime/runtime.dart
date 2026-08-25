@@ -30,7 +30,7 @@ enum RoutedNodeRuntime {
 
 /// Capabilities declared by one host invocation.
 final class RoutedNodeCapabilities {
-  /// Creates a RoutedNodeCapabilities value.
+  /// Describes the features available from a host adapter.
   const RoutedNodeCapabilities({
     required this.runtime,
     required this.entryModel,
@@ -41,61 +41,61 @@ final class RoutedNodeCapabilities {
     required this.backgroundWork,
   });
 
-  /// The runtime value.
+  /// The runtime family that owns the current request.
   final RoutedNodeRuntime runtime;
 
-  /// The entryModel value.
+  /// Whether the host owns a listener or invokes a Fetch export.
   final RoutedNodeEntryModel entryModel;
 
-  /// The streaming value.
+  /// Whether the adapter can stream response bodies.
   final bool streaming;
 
-  /// The bufferedResponses value.
+  /// Whether the adapter supports the buffered portable response path.
   final bool bufferedResponses;
 
-  /// The webSocket value.
+  /// Whether the host can accept WebSocket upgrades.
   final bool webSocket;
 
-  /// The fileSystem value.
+  /// Whether application code can use a host filesystem through this entrypoint.
   final bool fileSystem;
 
-  /// The backgroundWork value.
+  /// Whether the host supports work that continues after a response.
   final bool backgroundWork;
 }
 
 /// Common runtime metadata exposed by a host adapter.
 final class RoutedNodeRuntimeInfo {
-  /// Creates a RoutedNodeRuntimeInfo value.
+  /// Creates runtime metadata for a host invocation.
   const RoutedNodeRuntimeInfo({
     required this.runtime,
     required this.capabilities,
   });
 
-  /// The runtime value.
+  /// The runtime family represented by this metadata.
   final RoutedNodeRuntime runtime;
 
-  /// The capabilities value.
+  /// The feature set declared by the host adapter.
   final RoutedNodeCapabilities capabilities;
 }
 
 /// A typed lookup for host-owned request context values.
 abstract interface class RoutedNodeExtension {
-  /// The runtime value.
+  /// The runtime family that owns this extension.
   RoutedNodeRuntime get runtime;
 }
 
 /// Host-native Node request, response, and server handles.
 final class NodeRuntimeExtension implements RoutedNodeExtension {
-  /// Creates a NodeRuntimeExtension value.
+  /// Captures Node request, response, and server handles.
   const NodeRuntimeExtension({this.request, this.response, this.server});
 
-  /// The request value.
+  /// The host-native request handle, when the adapter exposes one.
   final Object? request;
 
-  /// The response value.
+  /// The host-native response handle, when the adapter exposes one.
   final Object? response;
 
-  /// The server value.
+  /// The host-native server handle, when the adapter exposes one.
   final Object? server;
 
   @override
@@ -104,16 +104,16 @@ final class NodeRuntimeExtension implements RoutedNodeExtension {
 
 /// Host-native Vercel Node.js request, response, and server handles.
 final class VercelNodeRuntimeExtension implements RoutedNodeExtension {
-  /// Creates a VercelNodeRuntimeExtension value.
+  /// Captures Vercel's Node request, response, and server handles.
   const VercelNodeRuntimeExtension({this.request, this.response, this.server});
 
-  /// The request value.
+  /// The Vercel Node request handle, when available.
   final Object? request;
 
-  /// The response value.
+  /// The Vercel Node response handle, when available.
   final Object? response;
 
-  /// The server value.
+  /// The Vercel Node server handle, when available.
   final Object? server;
 
   @override
@@ -122,13 +122,13 @@ final class VercelNodeRuntimeExtension implements RoutedNodeExtension {
 
 /// Host-native Bun request and server handles.
 final class BunRuntimeExtension implements RoutedNodeExtension {
-  /// Creates a BunRuntimeExtension value.
+  /// Captures Bun request and server handles.
   const BunRuntimeExtension({this.request, this.server});
 
-  /// The request value.
+  /// The Bun request handle, when available.
   final Object? request;
 
-  /// The server value.
+  /// The Bun server handle, when available.
   final Object? server;
 
   @override
@@ -137,13 +137,13 @@ final class BunRuntimeExtension implements RoutedNodeExtension {
 
 /// Host-native Deno request and server handles.
 final class DenoRuntimeExtension implements RoutedNodeExtension {
-  /// Creates a DenoRuntimeExtension value.
+  /// Captures Deno request and server handles.
   const DenoRuntimeExtension({this.request, this.server});
 
-  /// The request value.
+  /// The Deno request handle, when available.
   final Object? request;
 
-  /// The server value.
+  /// The Deno server handle, when available.
   final Object? server;
 
   @override
@@ -163,35 +163,35 @@ final class FetchRuntimeExtension implements RoutedNodeExtension {
   @override
   final RoutedNodeRuntime runtime;
 
-  /// The request value.
+  /// The host-native Fetch request handle, when available.
   final Object? request;
 
-  /// The executionContext value.
+  /// The host execution context, when the platform supplies one.
   final Object? executionContext;
 
-  /// The environment value.
+  /// The host environment or binding object, when available.
   final Object? environment;
 }
 
 /// Runtime-scoped host context carried through a Routed request.
 final class RoutedNodeContext {
-  /// Creates a RoutedNodeContext value.
+  /// Creates request-scoped runtime metadata and an optional extension.
   const RoutedNodeContext({required this.info, this.extension});
 
-  /// The info value.
+  /// The runtime and capabilities for the current host invocation.
   final RoutedNodeRuntimeInfo info;
 
-  /// The extension value.
+  /// The optional host-specific handles for the current request.
   final RoutedNodeExtension? extension;
 
-  /// Provides the declared host integration API member.
+  /// Returns the host extension when it has type [T].
   T? extensionAs<T extends RoutedNodeExtension>() {
     final value = extension;
     return value is T ? value : null;
   }
 }
 
-/// Provides the declared host integration API member.
+/// Capabilities advertised by the Node listener adapter.
 const RoutedNodeCapabilities nodeCapabilities = RoutedNodeCapabilities(
   runtime: RoutedNodeRuntime.node,
   entryModel: RoutedNodeEntryModel.listener,
@@ -202,7 +202,7 @@ const RoutedNodeCapabilities nodeCapabilities = RoutedNodeCapabilities(
   backgroundWork: true,
 );
 
-/// Provides the declared host integration API member.
+/// Capabilities advertised by the Bun listener adapter.
 const RoutedNodeCapabilities bunCapabilities = RoutedNodeCapabilities(
   runtime: RoutedNodeRuntime.bun,
   entryModel: RoutedNodeEntryModel.listener,
@@ -213,7 +213,7 @@ const RoutedNodeCapabilities bunCapabilities = RoutedNodeCapabilities(
   backgroundWork: true,
 );
 
-/// Provides the declared host integration API member.
+/// Capabilities advertised by the Deno listener adapter.
 const RoutedNodeCapabilities denoCapabilities = RoutedNodeCapabilities(
   runtime: RoutedNodeRuntime.deno,
   entryModel: RoutedNodeEntryModel.listener,
@@ -224,7 +224,7 @@ const RoutedNodeCapabilities denoCapabilities = RoutedNodeCapabilities(
   backgroundWork: true,
 );
 
-/// Provides the declared host integration API member.
+/// Capabilities advertised by the Cloudflare Workers Fetch adapter.
 const RoutedNodeCapabilities cloudflareCapabilities = RoutedNodeCapabilities(
   runtime: RoutedNodeRuntime.cloudflare,
   entryModel: RoutedNodeEntryModel.fetchExport,
@@ -235,7 +235,7 @@ const RoutedNodeCapabilities cloudflareCapabilities = RoutedNodeCapabilities(
   backgroundWork: false,
 );
 
-/// Provides the declared host integration API member.
+/// Capabilities advertised by the Vercel Fetch adapter.
 const RoutedNodeCapabilities vercelCapabilities = RoutedNodeCapabilities(
   runtime: RoutedNodeRuntime.vercel,
   entryModel: RoutedNodeEntryModel.fetchExport,

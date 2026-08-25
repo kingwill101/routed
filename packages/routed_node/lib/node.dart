@@ -1,3 +1,4 @@
+/// Node.js runtime metadata and the native listener entrypoint for Routed.
 library;
 
 export 'src/runtime/runtime.dart'

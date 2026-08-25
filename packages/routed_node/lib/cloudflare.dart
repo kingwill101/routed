@@ -1,3 +1,13 @@
+/// Cloudflare Workers adapters, typed bindings, and Fetch entrypoints.
+///
+/// The public types in this library keep Cloudflare's JavaScript objects
+/// behind a host-neutral Dart boundary. Application code can use the typed
+/// bindings without importing `package:web` or `dart:js_interop`.
+///
+/// {@canonicalFor fetch_entry_stub.defineFetchExport}
+/// {@canonicalFor fetch_entry_stub.defineFetchExportAsync}
+/// {@canonicalFor fetch_entry_stub.defineFetchExportFactoryAsync}
+/// {@canonicalFor fetch_entry_stub.defineFetchExportFactoryWithEnvironmentAsync}
 library;
 
 import 'package:routed_core/routed_core.dart';

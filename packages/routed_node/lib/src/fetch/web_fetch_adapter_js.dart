@@ -12,7 +12,7 @@ import 'web_stream_bridge.dart';
 
 /// Adapts a native Fetch request to the shared Fetch view.
 final class WebFetchRequest implements FetchRequestView {
-  /// Performs the WebFetchRequest operation.
+  /// Creates a host-neutral view over a native Fetch request.
   WebFetchRequest(
     this.request, {
     required RoutedNodeContext hostContext,
@@ -32,7 +32,7 @@ final class WebFetchRequest implements FetchRequestView {
             false);
   }
 
-  /// Provides the declared host integration API member.
+  /// The native Fetch request wrapped by this adapter.
   final web.Request request;
   final Future<FetchWebSocketUpgrade> Function()? _acceptWebSocket;
   final RoutedNodeContext _hostContext;
@@ -101,7 +101,7 @@ final class WebFetchRequest implements FetchRequestView {
   @override
   RoutedNodeContext get hostContext => _hostContext;
 
-  /// Performs the Function operation.
+  /// Callback used to accept a WebSocket upgrade, when configured.
   Future<FetchWebSocketUpgrade> Function()? get acceptWebSocket =>
       _acceptWebSocket;
 }
@@ -112,7 +112,7 @@ final class WebFetchRequest implements FetchRequestView {
 /// through the returned native `ReadableStream`.
 final class WebStreamingResponseAdapter
     implements ResponseAdapter, WebSocketResponseAdapter {
-  /// Performs the WebStreamingResponseAdapter operation.
+  /// Creates a response adapter backed by a native readable stream.
   WebStreamingResponseAdapter() : _body = StreamController<List<int>>();
 
   final StreamController<List<int>> _body;
@@ -123,19 +123,19 @@ final class WebStreamingResponseAdapter
   bool _closed = false;
   Object? _upgradeResponse;
 
-  /// The upgradeResponse value.
+  /// Native WebSocket response created by an upgrade, when present.
   Object? get upgradeResponse => _upgradeResponse;
 
-  /// The statusCodeValue value.
+  /// Status code currently staged for the native response.
   int get statusCodeValue => _statusCode;
 
-  /// The headersValue value.
+  /// Headers currently staged for the native response.
   Map<String, List<String>> get headersValue => _headers;
 
-  /// The body value.
+  /// Stream receiving response bytes written by Routed.
   Stream<List<int>> get body => _body.stream;
 
-  /// The headersReady value.
+  /// Completes when the native response headers can be released.
   Future<void> get headersReady => _headersReady.future;
 
   void _markHeadersReady() {
@@ -190,7 +190,7 @@ final class WebStreamingResponseAdapter
     await _body.close();
   }
 
-  /// Performs the fail operation.
+  /// Fails the response stream and publishes an error to its consumer.
   void fail(Object error, StackTrace stackTrace) {
     if (_closed) return;
     _closed = true;

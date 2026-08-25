@@ -1,3 +1,7 @@
+/// Vercel Fetch and Node.js adapters for Routed applications.
+///
+/// Use the Fetch entrypoints for Vercel Edge-style handlers and the Node
+/// entrypoints when Vercel captures a native Node.js server handler.
 library;
 
 import 'package:routed_core/routed_core.dart';
@@ -79,36 +83,36 @@ final class VercelRequestProperties {
   /// Provides the declared host integration API member.
   final web.Request request;
 
-  /// The ipAddress value.
+  /// Client IP address reported by Vercel, when available.
   String? get ipAddress => request.headers.get('x-real-ip');
 
-  /// The city value.
+  /// Client city reported by Vercel, when available.
   String? get city => request.headers.get('x-vercel-ip-city');
 
-  /// The country value.
+  /// Client country code reported by Vercel, when available.
   String? get country => request.headers.get('x-vercel-ip-country');
 
-  /// The region value.
+  /// Vercel region inferred from the request identifier.
   String? get region {
     final requestId = request.headers.get('x-vercel-id');
     if (requestId == null || requestId.isEmpty) return 'dev1';
     return requestId.split(':').first;
   }
 
-  /// The countryRegion value.
+  /// Client country or state region reported by Vercel.
   String? get countryRegion =>
       request.headers.get('x-vercel-ip-country-region');
 
-  /// The latitude value.
+  /// Client latitude reported by Vercel, when available.
   String? get latitude => request.headers.get('x-vercel-ip-latitude');
 
-  /// The longitude value.
+  /// Client longitude reported by Vercel, when available.
   String? get longitude => request.headers.get('x-vercel-ip-longitude');
 }
 
 /// Returns Vercel metadata for a request handled by the Vercel Fetch entry.
 extension RoutedVercelRequest on Request {
-  /// The vc value.
+  /// Vercel request metadata for this Fetch request, when available.
   VercelRequestProperties? get vc {
     final context = hostContext;
     if (context is! RoutedNodeContext ||

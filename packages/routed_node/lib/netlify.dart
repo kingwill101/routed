@@ -1,3 +1,4 @@
+/// Netlify Fetch adapters and runtime metadata for Routed applications.
 library;
 
 import 'package:routed_core/routed_core.dart';

@@ -16,20 +16,20 @@ final class NodeWebSocketUpgradeResponse {
     this.protocol,
   });
 
-  /// The socket value.
+  /// Upgraded Node socket that will carry the WebSocket frames.
   final NodeWebSocketSocketView socket;
 
-  /// The key value.
+  /// Client handshake key used to derive [acceptKey].
   final String key;
 
-  /// The protocol value.
+  /// Negotiated subprotocol, when one was selected.
   final String? protocol;
 
-  /// The acceptKey value.
+  /// Base64-encoded `Sec-WebSocket-Accept` handshake value.
   String get acceptKey =>
       base64.encode(sha1.convert(utf8.encode('$key$_webSocketGuid')).bytes);
 
-  /// The handshake value.
+  /// Raw HTTP 101 handshake bytes for the upgraded connection.
   List<int> get handshake => utf8.encode(
     'HTTP/1.1 101 Switching Protocols\r\n'
     'Upgrade: websocket\r\n'
@@ -44,16 +44,16 @@ final class NodeWebSocketAcceptance {
   /// Creates a NodeWebSocketAcceptance value.
   const NodeWebSocketAcceptance({required this.socket, required this.response});
 
-  /// The socket value.
+  /// WebSocket implementation backed by the accepted Node socket.
   final NodeRoutedWebSocket socket;
 
-  /// The response value.
+  /// HTTP handshake response that must be written to the socket.
   final NodeWebSocketUpgradeResponse response;
 }
 
 /// WebSocket implementation for a raw Node upgrade socket.
 final class NodeRoutedWebSocket implements RoutedWebSocket {
-  /// Performs the NodeRoutedWebSocket operation.
+  /// Starts decoding WebSocket frames from a Node upgrade socket.
   NodeRoutedWebSocket({required this.socket, List<int> head = const []}) {
     _subscription = socket.incoming.listen(
       _onData,
@@ -64,7 +64,7 @@ final class NodeRoutedWebSocket implements RoutedWebSocket {
     if (head.isNotEmpty) _onData(head);
   }
 
-  /// The socket value.
+  /// Raw Node socket carrying the WebSocket frames.
   final NodeWebSocketSocketView socket;
   final StreamController<Object?> _messages = StreamController<Object?>();
   final BytesBuilder _buffer = BytesBuilder(copy: false);

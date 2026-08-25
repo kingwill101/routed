@@ -6,7 +6,7 @@ import 'node_views.dart';
 
 /// [ResponseAdapter] backed by a Node.js [NodeServerResponseView].
 final class NodeResponseAdapter implements ResponseAdapter {
-  /// Performs the NodeResponseAdapter operation.
+  /// Creates an adapter over a Node server response.
   NodeResponseAdapter(this.outgoing);
 
   /// Underlying Node response view.

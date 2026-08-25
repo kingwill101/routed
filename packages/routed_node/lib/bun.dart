@@ -1,3 +1,6 @@
+/// Bun listener adapters and runtime metadata for Routed applications.
+///
+/// {@canonicalFor js_listener.serveJsListener}
 library;
 
 import 'package:routed_core/routed_core.dart';

@@ -28,7 +28,7 @@ enum RoutedNodeLifecyclePhase {
 
 /// Host lifecycle event published through Routed's existing [EventManager].
 final class RoutedNodeLifecycleEvent extends Event {
-  /// Performs the RoutedNodeLifecycleEvent operation.
+  /// Creates a lifecycle event for a host adapter transition.
   RoutedNodeLifecycleEvent({
     required this.phase,
     required this.info,
@@ -37,19 +37,19 @@ final class RoutedNodeLifecycleEvent extends Event {
     this.stackTrace,
   });
 
-  /// The phase value.
+  /// The lifecycle phase represented by this event.
   final RoutedNodeLifecyclePhase phase;
 
-  /// The info value.
+  /// Runtime metadata for the host that emitted the event.
   final RoutedNodeRuntimeInfo info;
 
-  /// The requestId value.
+  /// The host request identifier, when one is available.
   final String? requestId;
 
-  /// The error value.
+  /// The failure associated with the event, when [phase] is `requestFailed`.
   final Object? error;
 
-  /// The stackTrace value.
+  /// The stack trace associated with [error], when available.
   final StackTrace? stackTrace;
 }
 
