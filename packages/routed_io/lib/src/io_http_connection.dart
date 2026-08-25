@@ -6,13 +6,16 @@ import 'package:routed_io/src/io_portable.dart';
 import 'package:routed_io/src/io_request_adapter.dart';
 import 'package:routed_io/src/io_response_adapter.dart';
 
-/// One `dart:io` HTTP exchange: holds both [HttpRequest] and [HttpResponse].
+/// A `dart:io` HTTP exchange containing its request and response.
 ///
-/// Exposes host-agnostic [HttpConnection] adapters for
-/// [Engine.handleConnection] while keeping raw `dart:io` types available for
-/// advanced use.
+/// This class exposes host-neutral [HttpConnection] adapters for
+/// [Engine.handleConnection] while retaining the underlying `dart:io` types
+/// for code that needs native request or response features.
 ///
-/// For the value-style edge see [toPortableRequest] / [dispatchIoExchange].
+/// Use [toPortableRequest] or [dispatchIoExchange] when the value-style
+/// [PortableRequest] and [PortableResponse] boundary is preferred. The
+/// portable request shares the request body stream and is therefore still
+/// single-consumer.
 final class IoHttpConnection {
   /// Creates a connection backed by [httpRequest].
   IoHttpConnection(this.httpRequest)
@@ -22,22 +25,28 @@ final class IoHttpConnection {
         httpRequest: httpRequest,
       );
 
-  /// Underlying `dart:io` request.
+  /// The underlying `dart:io` request.
   final HttpRequest httpRequest;
 
-  /// Underlying `dart:io` response.
+  /// The response paired with [httpRequest].
   HttpResponse get httpResponse => httpRequest.response;
 
-  /// Adapter request view (includes [NativeRequestHandle] for IO fast path).
+  /// The request adapter used by the host-neutral connection.
+  ///
+  /// This adapter also implements [NativeRequestHandle], so Routed can retain
+  /// access to the native request on the default IO fast path.
   final IoRequestAdapter requestAdapter;
 
-  /// Adapter response view.
+  /// The response adapter used by the host-neutral connection.
   final IoResponseAdapter responseAdapter;
 
-  /// Core-facing connection pair.
+  /// The host-neutral request and response pair for this exchange.
   HttpConnection get connection =>
       HttpConnection(requestAdapter, responseAdapter);
 
-  /// Creates a host-agnostic [PortableRequest] that shares the body stream.
+  /// Creates a host-neutral [PortableRequest] that shares the body stream.
+  ///
+  /// The returned request is single-consumer because its body is the live
+  /// [HttpRequest] stream.
   PortableRequest toPortableRequest() => portableRequestFromIo(httpRequest);
 }

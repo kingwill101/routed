@@ -6,7 +6,7 @@ import 'package:routed_core/routed_core.dart';
 import 'package:routed_io/src/io_http_connection.dart';
 import 'package:routed_io/src/io_portable.dart';
 
-/// [ServerTransport] using `dart:io` [HttpServer].
+/// A [ServerTransport] backed by a `dart:io` [HttpServer].
 ///
 /// Default path uses the native [HttpRequest] fast path
 /// ([Engine.handleConnection] + [NativeRequestHandle]) so websockets and
@@ -36,6 +36,12 @@ final class IoServerTransport implements ServerTransport {
   /// [HttpRequest] pipeline.
   final bool portableEdge;
 
+  /// Serves [engine] on the host and port in [options].
+  ///
+  /// The engine is initialized before the socket is bound. The returned
+  /// [ServerHandle] owns the listener and must be closed by the application
+  /// when the server should stop. Throws a [StateError] when [engine] has
+  /// already been closed.
   @override
   Future<ServerHandle> serve(Engine engine, ServerOptions options) async {
     if (engine.isClosed) {
