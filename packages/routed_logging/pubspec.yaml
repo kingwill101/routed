@@ -1,6 +1,6 @@
 name: routed_logging
 description: HTTP logging provider and request logger helpers for Routed.
-version: 0.2.0
+version: 0.2.1
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_logging
 funding:
   - https://www.buymeacoffee.com/kingwill101

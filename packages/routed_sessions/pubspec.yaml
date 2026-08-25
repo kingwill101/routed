@@ -1,6 +1,6 @@
 name: routed_sessions
 description: Routed adapter for server_sessions (EngineContext.session).
-version: 0.2.0
+version: 0.2.1
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_sessions
 tags:
   - sessions

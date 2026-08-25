@@ -1,6 +1,6 @@
 name: routed_storage
 description: Routed adapter for server_storage.
-version: 0.2.0
+version: 0.2.1
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_storage
 tags:
   - storage

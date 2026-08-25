@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.1 - 2026-08-25
 
 - Complete public API documentation and adopt the shared
   `very_good_analysis` lint baseline.

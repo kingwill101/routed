@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.2 - 2026-08-25
 
 - Migrated the package to `very_good_analysis` and completed public Dartdoc
   coverage across the session runtime, stores, cookie protection, and contracts.

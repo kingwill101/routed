@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.2 - 2026-08-25
 
 - Adopt `very_good_analysis` and complete public API documentation.
 - Clarify analyzer-plugin activation, diagnostic suppression, route-schema

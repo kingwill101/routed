@@ -1,6 +1,6 @@
 name: routed_observability
 description: Observability providers/middleware for Routed (tracing, metrics, health).
-version: 0.1.0
+version: 0.1.1
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_observability
 funding:
   - https://www.buymeacoffee.com/kingwill101

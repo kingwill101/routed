@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.2 - 2026-08-25
 
 - Expand Dartdoc for the public IO transport APIs, including host-neutral
   request/response flow, native versus portable serving, and adapter lifecycle

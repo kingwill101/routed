@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.1 - 2026-08-25
 
 - Adopt `very_good_analysis` and complete Dartdoc coverage for the public
   OpenAPI generation, schema, route metadata, and auth contract APIs.

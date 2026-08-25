@@ -1,4 +1,4 @@
-## Unreleased
+## 0.5.1 - 2026-08-25
 
 ### Maintenance
 - Adopt `very_good_analysis` and complete public API documentation for the

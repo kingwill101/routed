@@ -1,6 +1,6 @@
 name: server_rate_limit
 description: Framework-agnostic rate-limit runtime (portable, from server_data/rate_limit).
-version: 0.1.1
+version: 0.1.2
 repository: https://github.com/kingwill101/routed/tree/master/packages/server_rate_limit
 tags:
   - rate-limit

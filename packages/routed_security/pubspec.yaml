@@ -1,6 +1,6 @@
 name: routed_security
 description: Security providers for Routed (CORS, IP filtering, trusted proxies, headers, and request size).
-version: 0.1.0
+version: 0.1.1
 repository: https://github.com/kingwill101/routed
 funding:
   - https://www.buymeacoffee.com/kingwill101

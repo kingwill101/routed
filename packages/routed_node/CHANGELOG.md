@@ -1,9 +1,7 @@
-## Unreleased
+## 0.2.1 - 2026-08-25
 
 - Adopt `very_good_analysis` and complete public API documentation for the
   Node, Fetch, and Cloudflare host integrations.
-
-## 0.2.1
 
 - Add `defineCloudflareFetchFactoryWithEnvironmentAsync` for typed Worker
   startup with Cloudflare bindings such as D1 and secrets.

@@ -1,4 +1,4 @@
-## Unreleased
+## 0.3.1 - 2026-08-25
 
 - Adopted `very_good_analysis` and completed public API Dartdoc coverage across
   the CLI, while preserving existing command and fluent-runner contracts.

@@ -1,6 +1,6 @@
 name: routed_auth
 description: Routed-specific authentication integration package built on top of server_auth.
-version: 0.2.0
+version: 0.2.1
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_auth
 tags:
   - auth
