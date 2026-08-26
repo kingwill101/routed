@@ -35,6 +35,5 @@ linter:
     unnecessary_lambdas: false
     unnecessary_library_directive: false
     unnecessary_null_aware_operator_on_extension_on_nullable: false
-    use_if_null_to_convert_nulls_to_bools: false
     use_null_aware_elements: false
     use_raw_strings: false
