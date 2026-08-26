@@ -5,11 +5,11 @@ repository: https://github.com/kingwill101/routed/tree/master/packages/routed_ob
 funding:
   - https://www.buymeacoffee.com/kingwill101
 environment:
-  sdk: ">=3.9.0 <4.0.0"
+  sdk: ">=3.12.0 <4.0.0"
 resolution: workspace
 dependencies:
-  dartastic_opentelemetry: ^0.9.8
-  dartastic_opentelemetry_api: ^0.9.1
+  dartastic_opentelemetry: ^0.10.0
+  dartastic_opentelemetry_api: ^0.10.0
   routed_core: ">=0.4.0 <1.0.0"
   sentry: ^9.10.0
 dev_dependencies:

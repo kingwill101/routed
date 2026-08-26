@@ -1,8 +1,8 @@
 ## 0.1.1 - 2026-08-25
 
 - Adopt `very_good_analysis` and complete public API Dartdoc coverage.
-- Upgrade `dartastic_opentelemetry` to `^0.9.8` and
-  `dartastic_opentelemetry_api` to `^0.9.1`.
+- Upgrade `dartastic_opentelemetry` and `dartastic_opentelemetry_api` to
+  `^0.10.0`.
 
 ## 0.1.0
 
