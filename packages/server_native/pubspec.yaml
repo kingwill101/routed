@@ -22,18 +22,19 @@ environment:
   sdk: '>=3.12.0 <4.0.0'
 
 dependencies:
-  code_assets: ^1.2.1
+  code_assets: ^2.0.0
   contextual: ^2.2.0
-  ffi: ^2.1.4
-  hooks: ^2.1.0
+  ffi: ^2.2.0
+  hooks: ^2.2.0
   native_prebuilt: ^0.4.0
   json_annotation: ^4.10.0
-  native_toolchain_rust: ^1.0.3
 
 dev_dependencies:
+  # ffigen 21's hook currently fails against code_assets 2; keep the latest
+  # generator release that works with the workspace asset protocol.
   ffigen: ^20.1.1
   path: ^1.9.1
-  relic: ^0.14.0
+  relic: ^1.2.0
   routed_core: ">=0.4.0 <1.0.0"
   routed_logging: ">=0.2.0 <1.0.0"
   routed_io: ">=0.1.0 <1.0.0"

@@ -4,6 +4,12 @@ All notable changes to `server_native` will be documented in this file.
 
 ## Unreleased
 
+- Updated the native asset toolchain to `code_assets` 2.0, `hooks` 2.2,
+  `ffi` 2.2, and Relic 1.2.
+- Replaced the Rust hook builder with a manifest-driven `native_prebuilt`
+  recipe, keeping source builds and verified release prebuilts on one path.
+- Kept `ffigen` at 20.1.1 because the current `ffigen` 21 hook is not
+  compatible with the `code_assets` 2 API.
 - Removed the Serinus benchmark and framework-compatibility target because the
   upstream repository no longer provides the expected `server_native` entry
   point.

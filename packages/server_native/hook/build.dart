@@ -1,37 +1,34 @@
 import 'dart:io';
 
-import 'package:code_assets/code_assets.dart';
 import 'package:hooks/hooks.dart';
 import 'package:native_prebuilt/hooks.dart';
-import 'package:native_toolchain_rust/native_toolchain_rust.dart';
-import 'package:server_native/src/generated/server_native_prebuilts.g.dart';
-
-const _assetName = 'src/ffi.g.dart';
-const _cratePath = 'native';
 
 Future<void> main(List<String> args) async {
   await build(args, (input, output) async {
-    if (!input.config.buildCodeAssets) return;
+    final isWorkspace = _isWorkspaceCheckout(input.packageRoot);
+    final detected = detect(Directory.fromUri(input.packageRoot));
+    if (detected == null) {
+      throw StateError(
+        'Could not discover server_native native_prebuilt.yaml from '
+        '${input.packageRoot}.',
+      );
+    }
 
-    await PrebuiltCodeAssetBuilder(
-      assetName: _assetName,
-      libraryStem: 'server_native',
-      manifest: serverNativePrebuilts,
-      linkModeResolver: (_) => DynamicLoadingBundled(),
-      // A workspace checkout must exercise the current Rust sources. Published
-      // packages use native_prebuilt's verified release/cache resolution.
-      resolvers: _isWorkspaceCheckout(input.packageRoot)
-          ? const <PrebuiltResolver>[]
-          : null,
-      sourceFallback: SourceFallback(
-        sources: const [
-          LocalSource(paths: <String>['.']),
-        ],
-        builder: HookBuilderSourceBuilder.factory(
-          (_, _) =>
-              const RustBuilder(assetName: _assetName, cratePath: _cratePath),
-        ),
-      ),
+    // The manifest owns the recipes and release metadata. The local source
+    // override keeps workspace builds on the checked-out Rust source instead
+    // of cloning the release tag declared for published-package fallback.
+    final project = detected.copyWith(
+      sources: const [
+        LocalSource(paths: <String>['.']),
+      ],
+      prebuiltPolicy: isWorkspace
+          ? PrebuiltPolicy.forceSourceBuild
+          : PrebuiltPolicy.preferPrebuilt,
+    );
+
+    await NativeProjectBuilder(
+      project: project,
+      resolvers: isWorkspace ? const <PrebuiltResolver>[] : null,
     ).run(input: input, output: output, logger: null);
   });
 }
