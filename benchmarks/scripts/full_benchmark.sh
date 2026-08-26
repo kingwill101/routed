@@ -28,7 +28,7 @@ RUNS=${RUNS:-3}
 MODE=${MODE:-both}  # aot, jit, or both
 
 # Servers to benchmark (order: baseline first, then frameworks alphabetically, routed last)
-SERVERS=(dart_io relic serinus shelf routed)
+SERVERS=(dart_io relic shelf routed)
 ENDPOINTS=("/" "/json")
 
 # Port mapping
@@ -36,7 +36,6 @@ declare -A PORTS=(
   [dart_io]=8001
   [relic]=8007
   [shelf]=8002
-  [serinus]=8003
   [routed]=8006
 )
 

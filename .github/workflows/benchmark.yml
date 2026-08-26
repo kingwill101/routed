@@ -49,7 +49,6 @@ jobs:
         run: |
           cd benchmarks/servers/dart_io && dart pub get
           cd ../relic && dart pub get
-          cd ../serinus && dart pub get
           cd ../shelf && dart pub get
           cd ../routed && dart pub get
 

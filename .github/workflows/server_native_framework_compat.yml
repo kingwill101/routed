@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       framework:
-        description: "Framework(s): all,shelf,relic,serinus"
+        description: "Framework(s): all,shelf,relic"
         required: false
         default: "all"
       mode:
@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        framework: [shelf, relic, serinus]
+        framework: [shelf, relic]
         mode: [io, native]
 
     steps:
