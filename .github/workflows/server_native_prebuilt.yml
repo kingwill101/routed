@@ -250,10 +250,37 @@ jobs:
             echo "tag=${{ env.PREBUILT_TAG_PREFIX }}${version}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Wait for GitHub to expose the release tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          tag_ref="repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}"
+          for attempt in {1..12}; do
+            if gh api "$tag_ref" >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "GitHub did not expose tag ${RELEASE_TAG} in time." >&2
+          exit 1
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: ${{ steps.tag.outputs.tag }}
-          generate_release_notes: true
-          files: artifacts/**/*.tar.gz
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mapfile -d '' release_files < <(
+            find artifacts -type f -name '*.tar.gz' -print0 | sort -z
+          )
+          if (( ${#release_files[@]} == 0 )); then
+            echo 'No prebuilt artifacts were downloaded.' >&2
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" "${release_files[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$RELEASE_TAG" \
+            --generate-notes \
+            --verify-tag
