@@ -87,7 +87,7 @@ class _Visitor extends SimpleAstVisitor<void> {
     if (validationRulesArg == null) return;
 
     // The value should be a map literal: {'field': 'rules|here', ...}
-    final mapExpr = validationRulesArg.expression;
+    final mapExpr = validationRulesArg.argumentExpression;
     if (mapExpr is! SetOrMapLiteral) return;
 
     for (final element in mapExpr.elements) {

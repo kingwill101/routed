@@ -74,7 +74,7 @@ class _Visitor extends SimpleAstVisitor<void> {
     if (deprecatedArg == null) return;
 
     // Check if deprecated: true (must be a boolean literal `true`).
-    final value = deprecatedArg.expression;
+    final value = deprecatedArg.argumentExpression;
     if (value is! BooleanLiteral || !value.value) return;
 
     // Now check if there's a description argument.
