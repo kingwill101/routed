@@ -224,13 +224,19 @@ op run --env-file=.env -- ./bootstrap.sh
 
 The Pulumi program references the existing D1 database by ID and deploys the
 Routed-generated wrapper and Dart module as a Worker version before promoting
-that version. It does not create or destroy the D1 database. By default,
-`SESSION_KEY` and any omitted social-provider bindings are inherited from the
-latest deployed Worker version, so existing sessions and credentials remain
-usable. For a new Worker, set `inheritExistingBindings` to `false` and provide
-`sessionKey` plus each provider secret explicitly:
+that version. It does not create or destroy the D1 database. The bootstrap
+detects whether the named Worker already has a deployment: existing Workers
+inherit `SESSION_KEY` and omitted social-provider bindings from their latest
+version, while a new Worker gets a generated session key and the initial
+Durable Object migration. Set `WORKER_NAME` to deploy under a different name.
+
+When configuring a new Worker manually, disable binding inheritance and provide
+`sessionKey` as a Pulumi secret before previewing:
 
 ```bash
+pulumi config set --secret sessionKey YOUR_BASE64_SESSION_KEY
+pulumi config set inheritExistingBindings false
+pulumi config set applyDurableObjectMigration true
 pulumi config set GITHUB_CLIENT_ID YOUR_CLIENT_ID
 pulumi config set --secret GITHUB_CLIENT_SECRET YOUR_CLIENT_SECRET
 pulumi config set DROPBOX_CLIENT_ID YOUR_CLIENT_ID

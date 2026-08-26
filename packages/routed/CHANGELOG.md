@@ -1,3 +1,5 @@
+# Changelog
+
 ## 0.5.1 - 2026-08-25
 
 - Adopted `very_good_analysis` and completed public API documentation for the

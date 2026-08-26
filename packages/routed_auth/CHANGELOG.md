@@ -1,3 +1,5 @@
+# Changelog
+
 ## 0.2.1 - 2026-08-25
 
 - Adopt `very_good_analysis` with strict typing, complete public API

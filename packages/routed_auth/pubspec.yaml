@@ -23,7 +23,7 @@ dependencies:
   routed_http: ">=0.1.0 <1.0.0"
   routed_sessions: ">=0.2.0 <1.0.0"
   routed_views: ">=0.2.0 <1.0.0"
-  server_auth: ">=0.2.0 <1.0.0"
+  server_auth: ">=0.2.1 <1.0.0"
   server_sessions: ">=0.1.0 <1.0.0"
 dev_dependencies:
   file: any

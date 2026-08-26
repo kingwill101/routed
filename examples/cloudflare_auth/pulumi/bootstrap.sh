@@ -34,9 +34,10 @@ fi
 
 cd -- "$app_dir"
 dart pub get
+worker_name="${WORKER_NAME:-routed-cloudflare-auth-example}"
 dart run routed_cli:routed deploy \
   --target cloudflare \
-  --name routed-cloudflare-auth-example \
+  --name "$worker_name" \
   --entry package:routed_cloudflare_auth_example/app.dart \
   --cloudflare-factory environment \
   --d1 "AUTH_DB=routed-cloudflare-auth-example:$database_id" \
@@ -53,10 +54,31 @@ pulumi stack select dev \
   --non-interactive
 
 pulumi config set accountId "$CLOUDFLARE_ACCOUNT_ID"
-pulumi config set workerName routed-cloudflare-auth-example
+pulumi config set workerName "$worker_name"
 pulumi config set databaseId "$database_id"
 pulumi config set authOrigin "$BASE_URL"
-pulumi config set inheritExistingBindings true
+
+worker_exists=false
+if deployments_json="$(
+  npx wrangler deployments list --name "$worker_name" --json 2>/dev/null
+)"; then
+  worker_exists="$(jq -r '
+    if type == "array" then length > 0
+    elif (.result? | type) == "array" then (.result | length > 0)
+    else false
+    end
+  ' <<<"$deployments_json")"
+fi
+
+if [[ "$worker_exists" == "true" ]]; then
+  pulumi config set inheritExistingBindings true
+  pulumi config set applyDurableObjectMigration false
+else
+  session_key="${SESSION_KEY:-base64:$(openssl rand -base64 64 | tr -d '\n')}"
+  pulumi config set --secret sessionKey "$session_key"
+  pulumi config set inheritExistingBindings false
+  pulumi config set applyDurableObjectMigration true
+fi
 
 set_optional_social_binding() {
   local public_key="$1"
