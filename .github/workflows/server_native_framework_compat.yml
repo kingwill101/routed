@@ -26,6 +26,8 @@ on:
 
 jobs:
   compat:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
@@ -61,6 +63,14 @@ jobs:
           MATRIX_FRAMEWORK: ${{ matrix.framework }}
           MATRIX_MODE: ${{ matrix.mode }}
         run: |
+          case "$FRAMEWORK" in
+            all|shelf|relic) ;;
+            *)
+              echo "Unsupported framework filter: $FRAMEWORK" >&2
+              exit 64
+              ;;
+          esac
+
           should_run=true
 
           if [[ "$FRAMEWORK" != "all" ]]; then

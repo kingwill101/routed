@@ -1,10 +1,14 @@
 import 'dart:io';
 
+import 'package:code_assets/code_assets.dart';
 import 'package:hooks/hooks.dart';
 import 'package:native_prebuilt/hooks.dart';
 
 Future<void> main(List<String> args) async {
   await build(args, (input, output) async {
+    if (!input.config.buildCodeAssets) {
+      return;
+    }
     final isWorkspace = _isWorkspaceCheckout(input.packageRoot);
     final detected = detect(Directory.fromUri(input.packageRoot));
     if (detected == null) {
