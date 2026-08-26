@@ -2,6 +2,13 @@
 
 All notable changes to `server_native` will be documented in this file.
 
+## 0.1.7 - 2026-08-26
+
+- Keep detached request leases active until the detached transport closes,
+  preserving graceful-shutdown accounting for upgraded and tunneled requests.
+- Publish the matching prebuilt native assets under
+  `server-native-prebuilt-v0.1.7`.
+
 ## 0.1.6 - 2026-08-26
 
 - Preserve an HTTP request's `Connection: close` semantics even when a
