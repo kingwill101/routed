@@ -5,4 +5,4 @@ publish_to: none
 environment:
   sdk: ">=3.3.0 <4.0.0"
 dependencies:
-  serinus: ^2.0.4
+  serinus: ^2.1.12
