@@ -5,8 +5,10 @@ final class BridgeHttpResponse implements HttpResponse {
   /// Creates a buffered response for a single bridge request frame.
   BridgeHttpResponse({
     required String requestMethod,
+    required bool requestPersistentConnection,
     required BridgeConnectionInfo connectionInfo,
   }) : _connectionInfo = connectionInfo,
+       _requestPersistentConnection = requestPersistentConnection,
        _isHeadRequest = _equalsAsciiIgnoreCase(requestMethod, 'HEAD');
 
   _BridgeHttpHeaders? _headers;
@@ -22,6 +24,7 @@ final class BridgeHttpResponse implements HttpResponse {
   bool _autoCompressEnabled = false;
   bool _requestAcceptsGzip = false;
   final BridgeConnectionInfo _connectionInfo;
+  final bool _requestPersistentConnection;
   final bool _isHeadRequest;
 
   /// Enables gzip auto-compression based on request/response negotiation.
@@ -65,9 +68,8 @@ final class BridgeHttpResponse implements HttpResponse {
   bool get persistentConnection => headers.persistentConnection;
 
   @override
-  set persistentConnection(bool value) {
-    headers.persistentConnection = value;
-  }
+  set persistentConnection(bool value) =>
+      headers.persistentConnection = value && _requestPersistentConnection;
 
   @override
   Duration? deadline;

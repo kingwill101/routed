@@ -128,6 +128,16 @@ Future<void> _handleChunkedBridgeRequest(
       _writeBridgeInternalServerError(writer);
       return;
     }
+    // A response-start frame has already been sent. Sending a legacy
+    // single-frame error after it would leave the Rust decoder with an
+    // invalid streaming sequence and can surface as an empty response. End
+    // the existing response instead; the framework may already have emitted
+    // its own fallback status before the response future reported the error.
+    stderr.writeln('[server_native] bridge handler error: $error\n$stack');
+    if (detachedSocket == null) {
+      writer.writeFrame(BridgeResponseFrame.encodeEndPayload());
+      return;
+    }
     rethrow;
   }
 }

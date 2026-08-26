@@ -7,9 +7,11 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
     required this.onStart,
     required this.onChunk,
     required String requestMethod,
+    required bool requestPersistentConnection,
     required BridgeConnectionInfo connectionInfo,
     void Function(BridgeDetachedSocket detachedSocket)? onDetachedSocket,
   }) : _connectionInfo = connectionInfo,
+       _requestPersistentConnection = requestPersistentConnection,
        _onDetachedSocket = onDetachedSocket,
        _isHeadRequest = _equalsAsciiIgnoreCase(requestMethod, 'HEAD');
 
@@ -35,6 +37,7 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   bool _compressBody = false;
   BytesBuilder? _compressionBuffer;
   final BridgeConnectionInfo _connectionInfo;
+  final bool _requestPersistentConnection;
   final void Function(BridgeDetachedSocket detachedSocket)? _onDetachedSocket;
   final bool _isHeadRequest;
 
@@ -60,9 +63,8 @@ final class BridgeStreamingHttpResponse implements HttpResponse {
   bool get persistentConnection => headers.persistentConnection;
 
   @override
-  set persistentConnection(bool value) {
-    headers.persistentConnection = value;
-  }
+  set persistentConnection(bool value) =>
+      headers.persistentConnection = value && _requestPersistentConnection;
 
   @override
   Duration? deadline;

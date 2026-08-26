@@ -319,6 +319,36 @@ Future<int> _runRelicConnectionsInfo(_Backend backend) async {
   }
 }
 
+Future<String> _runRelicConnectionClose(_Backend backend) async {
+  final server = await _startRelicServer(
+    backend,
+    (_) async => relic.Response.ok(body: relic.Body.fromString('ok')),
+  );
+  final socket = await Socket.connect('127.0.0.1', server.port);
+  try {
+    socket.add(
+      ascii.encode(
+        'GET / HTTP/1.1\r\n'
+        'Host: localhost\r\n'
+        'Connection: close\r\n'
+        '\r\n',
+      ),
+    );
+    await socket.flush();
+    return utf8.decode(
+      await socket
+          .fold<List<int>>(<int>[], (a, b) => a..addAll(b))
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => const <int>[],
+          ),
+    );
+  } finally {
+    await socket.close();
+    await server.close(force: true);
+  }
+}
+
 void main() {
   group('Relic Compatibility A/B (dart:io baseline)', () {
     test('invalid Transfer-Encoding passthrough parity', () async {
@@ -377,5 +407,18 @@ void main() {
       expect(dartIo, 2);
       expect(native, dartIo);
     });
+
+    test(
+      'request Connection: close is preserved by the native adapter',
+      () async {
+        final dartIo = await _runRelicConnectionClose(_Backend.dartIo);
+        final native = await _runRelicConnectionClose(_Backend.native);
+
+        expect(dartIo, startsWith('HTTP/1.1 200'));
+        expect(native, startsWith('HTTP/1.1 200'));
+        expect(native.toLowerCase(), contains('connection: close'));
+        expect(native, endsWith('ok'));
+      },
+    );
   });
 }

@@ -291,7 +291,15 @@ _startNativeDirectProxy({
           stderr.writeln(
             '[server_native] native direct callback stream handler error: $error\n$stack',
           );
-          pushResponsePayload(_internalServerErrorFrame().encodePayload());
+          if (responseStartSent) {
+            // The streaming consumer has already received response headers.
+            // A single-frame error here would be an invalid follow-up frame
+            // and causes the native HTTP response to be discarded. Close the
+            // existing stream instead.
+            pushResponsePayload(BridgeResponseFrame.encodeEndPayload());
+          } else {
+            pushResponsePayload(_internalServerErrorFrame().encodePayload());
+          }
           streamState.responseCompleted = true;
           streamState.markRequestCompleted();
           if (streamState.requestEnded && streamState.detachedSocket == null) {
