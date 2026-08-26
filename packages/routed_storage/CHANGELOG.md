@@ -1,3 +1,5 @@
+# Changelog
+
 ## 0.2.1 - 2026-08-25
 
 - Completed public Dartdoc coverage and enabled the `public_member_api_docs`

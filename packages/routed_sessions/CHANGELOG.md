@@ -1,3 +1,5 @@
+# Changelog
+
 ## 0.2.1 - 2026-08-25
 
 - Hardened default Routed session cookies with `Secure`, `HttpOnly`, and
