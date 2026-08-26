@@ -2,7 +2,7 @@
 
 All notable changes to `server_native` will be documented in this file.
 
-## Unreleased
+## 0.1.3+1 - 2026-08-25
 
 - Reduced `shared: true` isolate scaling overhead by using one Tokio worker per
   shared native runtime and replacing the callback-mode hot polling loop with
@@ -17,8 +17,6 @@ All notable changes to `server_native` will be documented in this file.
   resolution for supported platforms.
 - Expanded native HTTP compatibility coverage for callbacks, headers,
   transfer encoding, and framework integrations.
-
-## 0.1.3+1
 
 - Fixed native-callback direct frame handling in `server_boot_proxy_direct.dart` to avoid routing single-frame direct requests through the stream path, improving shelf compatibility stability under repeated request/response cycles.
 - Added loopback bind retry handling for transient dual-stack ephemeral `EADDRINUSE` collisions, including wrapped native bind error detection.
