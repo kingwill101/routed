@@ -276,7 +276,9 @@ _startNativeDirectProxy({
             },
           );
           streamState.responseCompleted = true;
-          streamState.markRequestCompleted();
+          if (streamState.detachedSocket == null) {
+            streamState.markRequestCompleted();
+          }
           if (streamState.detachedSocket != null) {
             startDetachedForwardingIfNeeded();
           } else {
@@ -301,7 +303,9 @@ _startNativeDirectProxy({
             pushResponsePayload(_internalServerErrorFrame().encodePayload());
           }
           streamState.responseCompleted = true;
-          streamState.markRequestCompleted();
+          if (streamState.detachedSocket == null) {
+            streamState.markRequestCompleted();
+          }
           if (streamState.requestEnded && streamState.detachedSocket == null) {
             await removeNativeDirectStream(
               streamState: streamState,
