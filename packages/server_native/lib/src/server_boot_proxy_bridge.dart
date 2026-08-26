@@ -25,24 +25,21 @@ final class _ProxyConnectionCounters {
   }
 
   /// Records request dispatch start for one bridge frame.
-  void onRequestStarted() {
+  _RequestLease onRequestStarted() {
     _activeRequests++;
     _drainableRequests++;
+    return _RequestLease(this);
   }
 
-  /// Records request dispatch completion.
-  void onRequestCompleted() {
+  /// Removes one request from the active request count.
+  void _onRequestCompleted() {
     if (_activeRequests > 0) {
       _activeRequests--;
     }
-    if (_drainableRequests > 0) {
-      _drainableRequests--;
-    }
   }
 
-  /// Stops treating a detached or upgraded request as a request that blocks
-  /// graceful server shutdown while retaining it as an active connection.
-  void onRequestDetached() {
+  /// Stops one request from blocking graceful server shutdown.
+  void _onRequestNoLongerDrainable() {
     if (_drainableRequests > 0) {
       _drainableRequests--;
     }
@@ -66,6 +63,42 @@ final class _ProxyConnectionCounters {
     info.idle = _openSockets - _activeRequests;
     info.closing = 0;
     return info;
+  }
+}
+
+/// Owns accounting for one request from dispatch through completion.
+///
+/// Detached requests stop blocking graceful shutdown as soon as the response
+/// is handed to the tunnel, but remain active until their transport finishes.
+/// Each transition is idempotent so a detached request cannot decrement the
+/// drainable count twice or affect a later request.
+final class _RequestLease {
+  _RequestLease(this._counters);
+
+  final _ProxyConnectionCounters _counters;
+  bool _drainable = true;
+  bool _completed = false;
+
+  /// Marks the request as detached from ordinary request draining.
+  void detach() {
+    if (!_drainable) {
+      return;
+    }
+    _drainable = false;
+    _counters._onRequestNoLongerDrainable();
+  }
+
+  /// Completes the request and removes it from active request accounting.
+  void complete() {
+    if (_completed) {
+      return;
+    }
+    _completed = true;
+    if (_drainable) {
+      _drainable = false;
+      _counters._onRequestNoLongerDrainable();
+    }
+    _counters._onRequestCompleted();
   }
 }
 
@@ -136,8 +169,7 @@ Future<void> _handleBridgeSocket(
   required _BridgeHandleStream handleStream,
   _BridgeHandlePayload? handlePayload,
   Duration? Function()? idleTimeoutProvider,
-  void Function()? onRequestStarted,
-  void Function()? onRequestCompleted,
+  _RequestLease Function()? onRequestStarted,
   void Function()? onSocketClosed,
 }) async {
   final reader = _SocketFrameReader(socket);
@@ -161,16 +193,17 @@ Future<void> _handleBridgeSocket(
           final startFrame = BridgeRequestFrame.decodeStartPayload(
             firstPayload,
           );
-          onRequestStarted?.call();
+          final requestLease = onRequestStarted?.call();
           try {
             await _handleChunkedBridgeRequest(
               reader,
               writer,
               handleStream: handleStream,
               startFrame: startFrame,
+              onRequestDetached: requestLease?.detach,
             );
           } finally {
-            onRequestCompleted?.call();
+            requestLease?.complete();
           }
           continue;
         }
@@ -179,7 +212,7 @@ Future<void> _handleBridgeSocket(
         continue;
       }
 
-      onRequestStarted?.call();
+      final requestLease = onRequestStarted?.call();
       try {
         late final _BridgeHandleFrameResult response;
         if (handlePayload != null) {
@@ -197,7 +230,19 @@ Future<void> _handleBridgeSocket(
             _writeBridgeBadRequest(writer, error);
             continue;
           }
-          response = await handleFrame(frame);
+          try {
+            response = await handleFrame(frame);
+          } catch (error, stack) {
+            stderr.writeln(
+              '[server_native] bridge handler error: $error\n$stack',
+            );
+            response = _BridgeHandleFrameResult.frame(
+              _internalServerErrorFrame(),
+            );
+          }
+        }
+        if (response.detachedSocket != null) {
+          requestLease?.detach();
         }
         _writeBridgeResponse(writer, response);
         final detachedSocket = response.detachedSocket;
@@ -206,7 +251,7 @@ Future<void> _handleBridgeSocket(
           return;
         }
       } finally {
-        onRequestCompleted?.call();
+        requestLease?.complete();
       }
     }
   } catch (error, stack) {

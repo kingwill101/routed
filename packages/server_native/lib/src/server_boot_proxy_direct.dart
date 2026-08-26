@@ -4,14 +4,12 @@ part of 'server_boot.dart';
 final class _NativeDirectRequestStreamState {
   _NativeDirectRequestStreamState(
     this.requestBody, {
-    required this.onRequestCompleted,
-    required this.onRequestDetached,
+    required this.requestLease,
     required this.onSocketClosed,
   });
 
   final StreamController<Uint8List> requestBody;
-  final void Function() onRequestCompleted;
-  final void Function() onRequestDetached;
+  final _RequestLease? requestLease;
   final void Function() onSocketClosed;
   BridgeDetachedSocket? detachedSocket;
   int responseStatusCode = HttpStatus.ok;
@@ -28,7 +26,7 @@ final class _NativeDirectRequestStreamState {
       return;
     }
     _requestDetachNotified = true;
-    onRequestDetached();
+    requestLease?.detach();
   }
 
   void markRequestCompleted() {
@@ -36,7 +34,7 @@ final class _NativeDirectRequestStreamState {
       return;
     }
     _requestCompletionNotified = true;
-    onRequestCompleted();
+    requestLease?.complete();
   }
 
   void closeTrackedRequest() {
@@ -95,9 +93,7 @@ _startNativeDirectProxy({
   required _BridgeHandleStream handleStream,
   void Function()? onSocketOpened,
   void Function()? onSocketClosed,
-  void Function()? onRequestStarted,
-  void Function()? onRequestCompleted,
-  void Function()? onRequestDetached,
+  _RequestLease Function()? onRequestStarted,
 }) {
   final nativeDirectStreams = <int, _NativeDirectRequestStreamState>{};
   late final NativeProxyServer proxyRef;
@@ -111,14 +107,9 @@ _startNativeDirectProxy({
       return;
     }
 
-    void beginTrackedRequest() {
+    _RequestLease? beginTrackedRequest() {
       onSocketOpened?.call();
-      onRequestStarted?.call();
-    }
-
-    void endTrackedRequest() {
-      onRequestCompleted?.call();
-      onSocketClosed?.call();
+      return onRequestStarted?.call();
     }
 
     void pushResponsePayload(Uint8List responsePayload) {
@@ -161,7 +152,10 @@ _startNativeDirectProxy({
         return;
       }
       if (!streamState.requestBody.isClosed) {
-        await streamState.requestBody.close();
+        // An unconsumed single-subscription body never completes its close
+        // future. Shutdown must not wait for a handler that intentionally
+        // ignored the request body.
+        unawaited(streamState.requestBody.close());
       }
       streamState.clearBufferedRequestChunks();
       if (closeDetachedSocket) {
@@ -186,13 +180,12 @@ _startNativeDirectProxy({
         pushResponsePayload(_encodeDirectBadRequestPayload(error));
         return;
       }
-      beginTrackedRequest();
+      final requestLease = beginTrackedRequest();
 
       final requestBody = StreamController<Uint8List>(sync: true);
       final streamState = _NativeDirectRequestStreamState(
         requestBody,
-        onRequestCompleted: () => onRequestCompleted?.call(),
-        onRequestDetached: () => onRequestDetached?.call(),
+        requestLease: requestLease,
         onSocketClosed: () => onSocketClosed?.call(),
       );
       nativeDirectStreams[requestId] = streamState;
@@ -298,7 +291,7 @@ _startNativeDirectProxy({
           stderr.writeln(
             '[server_native] native direct callback stream handler error: $error\n$stack',
           );
-          pushResponsePayload(_internalServerErrorFrame(error).encodePayload());
+          pushResponsePayload(_internalServerErrorFrame().encodePayload());
           streamState.responseCompleted = true;
           streamState.markRequestCompleted();
           if (streamState.requestEnded && streamState.detachedSocket == null) {
@@ -421,7 +414,7 @@ _startNativeDirectProxy({
     }
 
     unawaited(() async {
-      beginTrackedRequest();
+      final requestLease = beginTrackedRequest();
       try {
         final result = await directPayloadHandler(requestPayload);
         final responsePayload =
@@ -431,9 +424,10 @@ _startNativeDirectProxy({
         stderr.writeln(
           '[server_native] native direct callback handler error: $error\n$stack',
         );
-        pushResponsePayload(_internalServerErrorFrame(error).encodePayload());
+        pushResponsePayload(_internalServerErrorFrame().encodePayload());
       } finally {
-        endTrackedRequest();
+        requestLease?.complete();
+        onSocketClosed?.call();
       }
     }());
   }
@@ -443,7 +437,9 @@ _startNativeDirectProxy({
     nativeDirectStreams.clear();
     for (final streamState in streams) {
       if (!streamState.requestBody.isClosed) {
-        await streamState.requestBody.close();
+        // An unconsumed single-subscription body may never complete its close
+        // future. Force shutdown must not wait for an abandoned request body.
+        unawaited(streamState.requestBody.close());
       }
       streamState.clearBufferedRequestChunks();
       final detachedSocket = streamState.detachedSocket;

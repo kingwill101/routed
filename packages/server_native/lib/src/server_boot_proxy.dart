@@ -147,8 +147,6 @@ Future<_RunningProxy> _startNativeProxy({
         // can report idle keep-alive style state between requests.
         onSocketClosed: null,
         onRequestStarted: connectionCounters?.onRequestStarted,
-        onRequestCompleted: connectionCounters?.onRequestCompleted,
-        onRequestDetached: connectionCounters?.onRequestDetached,
       );
       proxy = direct.proxy;
       closeDirectStreams = direct.closeStreams;
@@ -168,7 +166,6 @@ Future<_RunningProxy> _startNativeProxy({
           handlePayload: handlePayload,
           idleTimeoutProvider: idleTimeoutProvider,
           onRequestStarted: connectionCounters?.onRequestStarted,
-          onRequestCompleted: connectionCounters?.onRequestCompleted,
           onSocketClosed: connectionCounters?.onSocketClosed,
         );
       });

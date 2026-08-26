@@ -171,6 +171,44 @@ void main() {
     await _stopDirectServer(running);
   });
 
+  test(
+    'force shutdown does not wait for an unconsumed direct request body',
+    () async {
+      final requestStarted = Completer<void>();
+      final keepHandlerOpen = Completer<void>();
+      final running = await _startDirectServer((request) async {
+        if (request.path == '/hold') {
+          if (!requestStarted.isCompleted) {
+            requestStarted.complete();
+          }
+          await keepHandlerOpen.future;
+        }
+        return NativeDirectResponse.bytes(
+          bodyBytes: Uint8List.fromList(utf8.encode('ready')),
+        );
+      }, nativeDirect: true);
+
+      final client = HttpClient();
+      try {
+        final request = await client.postUrl(
+          running.baseUri.replace(path: '/hold'),
+        );
+        request.contentLength = 1;
+        request.add(<int>[1]);
+        final responseDone = request.close().then<void>(
+          (response) => response.drain<void>(),
+          onError: (_) {},
+        );
+
+        await requestStarted.future.timeout(const Duration(seconds: 3));
+        await _stopDirectServer(running).timeout(const Duration(seconds: 3));
+        await responseDone;
+      } finally {
+        client.close(force: true);
+      }
+    },
+  );
+
   test('serveNativeDirect supports pre-encoded static responses', () async {
     final staticResponse = NativeDirectResponse.preEncodedBytes(
       headers: const <MapEntry<String, String>>[
@@ -260,7 +298,7 @@ void main() {
       final body = await utf8.decodeStream(res);
 
       expect(res.statusCode, HttpStatus.internalServerError);
-      expect(body, contains('direct handler error: Bad state: boom'));
+      expect(body, 'Internal Server Error');
     } finally {
       client.close(force: true);
     }
