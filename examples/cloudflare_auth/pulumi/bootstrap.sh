@@ -40,6 +40,7 @@ dart run routed_cli:routed deploy \
   --name "$worker_name" \
   --entry package:routed_cloudflare_auth_example/app.dart \
   --cloudflare-factory environment \
+  --var "AUTH_ORIGIN=$BASE_URL" \
   --d1 "AUTH_DB=routed-cloudflare-auth-example:$database_id" \
   --durable-object RATE_LIMIT_STORE=CloudflareRateLimitStoreObject \
   --keep-vars \
@@ -59,15 +60,20 @@ pulumi config set databaseId "$database_id"
 pulumi config set authOrigin "$BASE_URL"
 
 worker_exists=false
-if deployments_json="$(
+if ! deployments_json="$(
   npx wrangler deployments list --name "$worker_name" --json 2>/dev/null
 )"; then
-  worker_exists="$(jq -r '
-    if type == "array" then length > 0
-    elif (.result? | type) == "array" then (.result | length > 0)
-    else false
-    end
-  ' <<<"$deployments_json")"
+  echo "Could not determine whether Worker $worker_name already exists." >&2
+  exit 1
+fi
+if ! worker_exists="$(jq -r '
+  if type == "array" then length > 0
+  elif (.result? | type) == "array" then (.result | length > 0)
+  else error("unexpected deployments response")
+  end
+' <<<"$deployments_json")"; then
+  echo "Could not parse the deployments response for Worker $worker_name." >&2
+  exit 1
 fi
 
 if [[ "$worker_exists" == "true" ]]; then

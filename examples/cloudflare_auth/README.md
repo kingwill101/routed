@@ -130,6 +130,7 @@ dart run routed_cli:routed deploy \
   --name routed-cloudflare-auth-example \
   --entry package:routed_cloudflare_auth_example/app.dart \
   --cloudflare-factory environment \
+  --var "AUTH_ORIGIN=$AUTH_ORIGIN" \
   --d1 AUTH_DB=routed-cloudflare-auth-example:YOUR_DATABASE_ID \
   --durable-object RATE_LIMIT_STORE=CloudflareRateLimitStoreObject \
   --keep-vars \
@@ -151,6 +152,7 @@ dart run routed_cli:routed deploy \
   --name routed-cloudflare-auth-example \
   --entry package:routed_cloudflare_auth_example/app.dart \
   --cloudflare-factory environment \
+  --var "AUTH_ORIGIN=$AUTH_ORIGIN" \
   --d1 AUTH_DB=routed-cloudflare-auth-example:YOUR_DATABASE_ID \
   --durable-object RATE_LIMIT_STORE=CloudflareRateLimitStoreObject \
   --keep-vars
@@ -203,6 +205,7 @@ missing, build the host from the matching Pulumi-Dart source tag instead:
 ```bash
 git clone --branch v3.1.0 --depth 1 \
   https://github.com/kingwill101/pulumi-dart.git /tmp/pulumi-dart
+mkdir -p "$HOME/.local/bin"
 (cd /tmp/pulumi-dart/pulumi-language-dart && \
   go build -o "$HOME/.local/bin/pulumi-language-dart" .)
 ```
@@ -222,16 +225,19 @@ cd examples/cloudflare_auth/pulumi
 op run --env-file=.env -- ./bootstrap.sh
 ```
 
-The Pulumi program references the existing D1 database by ID and deploys the
-Routed-generated wrapper and Dart module as a Worker version before promoting
-that version. It does not create or destroy the D1 database. The bootstrap
+The Pulumi program references the existing D1 database by ID and, when
+applied, deploys the Routed-generated wrapper and Dart module as a Worker
+version before promoting that version. It does not create or destroy the D1
+database. The bootstrap
 detects whether the named Worker already has a deployment: existing Workers
 inherit `SESSION_KEY` and omitted social-provider bindings from their latest
 version, while a new Worker gets a generated session key and the initial
 Durable Object migration. Set `WORKER_NAME` to deploy under a different name.
 
 When configuring a new Worker manually, disable binding inheritance and provide
-`sessionKey` as a Pulumi secret before previewing:
+`sessionKey` as a Pulumi secret before previewing. The bootstrap ends at
+`pulumi preview`; review the plan and run `pulumi up --yes` when you are ready
+to apply it:
 
 ```bash
 pulumi config set --secret sessionKey YOUR_BASE64_SESSION_KEY
@@ -398,6 +404,7 @@ dart run routed_cli:routed deploy \
   --name routed-cloudflare-auth-example \
   --entry package:routed_cloudflare_auth_example/app.dart \
   --cloudflare-factory environment \
+  --var "AUTH_ORIGIN=$AUTH_ORIGIN" \
   --d1 AUTH_DB=routed-cloudflare-auth-example:YOUR_DATABASE_ID \
   --durable-object RATE_LIMIT_STORE=CloudflareRateLimitStoreObject \
   --dry-run
