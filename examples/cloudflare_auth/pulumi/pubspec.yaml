@@ -1,0 +1,14 @@
+name: routed_cloudflare_auth_pulumi
+description: Pulumi program for the Routed Cloudflare auth example.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: '>=3.12.0 <4.0.0'
+
+dependencies:
+  pulumi: ^3.1.0
+  pulumi_cloudflare: ^6.19.0
+
+dev_dependencies:
+  lints: ^6.0.0
