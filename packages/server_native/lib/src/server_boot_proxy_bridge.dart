@@ -7,6 +7,7 @@ part of 'server_boot.dart';
 final class _ProxyConnectionCounters {
   int _openSockets = 0;
   int _activeRequests = 0;
+  int _drainableRequests = 0;
 
   /// Records a newly accepted backend bridge socket.
   void onSocketOpened() {
@@ -26,6 +27,7 @@ final class _ProxyConnectionCounters {
   /// Records request dispatch start for one bridge frame.
   void onRequestStarted() {
     _activeRequests++;
+    _drainableRequests++;
   }
 
   /// Records request dispatch completion.
@@ -33,6 +35,27 @@ final class _ProxyConnectionCounters {
     if (_activeRequests > 0) {
       _activeRequests--;
     }
+    if (_drainableRequests > 0) {
+      _drainableRequests--;
+    }
+  }
+
+  /// Stops treating a detached or upgraded request as a request that blocks
+  /// graceful server shutdown while retaining it as an active connection.
+  void onRequestDetached() {
+    if (_drainableRequests > 0) {
+      _drainableRequests--;
+    }
+  }
+
+  /// Returns whether ordinary requests still need to drain before shutdown.
+  bool get hasDrainableRequests => _drainableRequests > 0;
+
+  /// Marks all request and socket accounting as closed.
+  void reset() {
+    _openSockets = 0;
+    _activeRequests = 0;
+    _drainableRequests = 0;
   }
 
   /// Returns a current [HttpConnectionsInfo] snapshot.
@@ -43,12 +66,6 @@ final class _ProxyConnectionCounters {
     info.idle = _openSockets - _activeRequests;
     info.closing = 0;
     return info;
-  }
-
-  /// Clears tracked counters.
-  void reset() {
-    _openSockets = 0;
-    _activeRequests = 0;
   }
 }
 

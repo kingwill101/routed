@@ -9,12 +9,14 @@ use crate::*;
 pub(crate) async fn proxy_request(
     State(state): State<ProxyState>,
     request: Request<Body>,
-) -> Response<Body> {
+) -> Result<Response<Body>, io::Error> {
     if state.benchmark_mode == BENCHMARK_MODE_STATIC_OK {
-        return benchmark_static_ok_response();
+        return Ok(benchmark_static_ok_response());
     }
     if state.benchmark_mode == BENCHMARK_MODE_STATIC_OK_SERVER_NATIVE_DIRECT_SHAPE {
-        return benchmark_static_response(BENCHMARK_SERVER_NATIVE_DIRECT_SHAPE_BODY);
+        return Ok(benchmark_static_response(
+            BENCHMARK_SERVER_NATIVE_DIRECT_SHAPE_BODY,
+        ));
     }
 
     let (mut parts, body) = request.into_parts();
@@ -64,11 +66,14 @@ pub(crate) async fn proxy_request(
         )
         .await
         {
-            Ok(response) => response,
-            Err(error) => text_response(
+            Ok(response) => Ok(response),
+            Err(error) if direct_bridge.stopped.load(Ordering::Acquire) => {
+                Err(io::Error::new(io::ErrorKind::ConnectionAborted, error))
+            }
+            Err(error) => Ok(text_response(
                 StatusCode::BAD_GATEWAY,
                 format!("direct bridge call failed: {error}"),
-            ),
+            )),
         };
     }
 
@@ -86,10 +91,10 @@ pub(crate) async fn proxy_request(
     {
         Ok(response) => response,
         Err(error) => {
-            return text_response(
+            return Ok(text_response(
                 StatusCode::BAD_GATEWAY,
                 format!("bridge call failed: {error}"),
-            );
+            ));
         }
     };
 
@@ -100,16 +105,16 @@ pub(crate) async fn proxy_request(
 
     if websocket_upgrade_requested && status == StatusCode::SWITCHING_PROTOCOLS {
         let Some(upgrade) = upgrade else {
-            return text_response(
+            return Ok(text_response(
                 StatusCode::BAD_GATEWAY,
                 "websocket upgrade failed: missing hyper upgrade handle",
-            );
+            ));
         };
         let Some(tunnel_connection) = bridge_result.tunnel_socket.take() else {
-            return text_response(
+            return Ok(text_response(
                 StatusCode::BAD_GATEWAY,
                 "websocket upgrade failed: bridge did not expose detached socket",
-            );
+            ));
         };
         tokio::spawn(async move {
             if let Err(error) = run_websocket_tunnel(upgrade, tunnel_connection.stream).await {
@@ -128,7 +133,21 @@ pub(crate) async fn proxy_request(
         request_protocol,
         bridge_result.headers,
     );
-    response
+    Ok(response)
+}
+
+/// Adapts the fallible transport handler to Axum's infallible router service.
+pub(crate) async fn router_proxy_request(
+    state: State<ProxyState>,
+    request: Request<Body>,
+) -> Response<Body> {
+    match proxy_request(state, request).await {
+        Ok(response) => response,
+        Err(error) => text_response(
+            StatusCode::BAD_GATEWAY,
+            format!("proxy request failed: {error}"),
+        ),
+    }
 }
 
 /// Restores rewritten compatibility headers before request bridging.

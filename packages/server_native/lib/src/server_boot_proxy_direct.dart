@@ -4,11 +4,15 @@ part of 'server_boot.dart';
 final class _NativeDirectRequestStreamState {
   _NativeDirectRequestStreamState(
     this.requestBody, {
-    required this.onTrackedClose,
+    required this.onRequestCompleted,
+    required this.onRequestDetached,
+    required this.onSocketClosed,
   });
 
   final StreamController<Uint8List> requestBody;
-  final void Function() onTrackedClose;
+  final void Function() onRequestCompleted;
+  final void Function() onRequestDetached;
+  final void Function() onSocketClosed;
   BridgeDetachedSocket? detachedSocket;
   int responseStatusCode = HttpStatus.ok;
   bool detachedSocketUsesTunnel = false;
@@ -16,13 +20,32 @@ final class _NativeDirectRequestStreamState {
   bool requestEnded = false;
   bool responseCompleted = false;
   bool _trackedClosed = false;
+  bool _requestCompletionNotified = false;
+  bool _requestDetachNotified = false;
+
+  void markRequestDetached() {
+    if (_requestDetachNotified) {
+      return;
+    }
+    _requestDetachNotified = true;
+    onRequestDetached();
+  }
+
+  void markRequestCompleted() {
+    if (_requestCompletionNotified) {
+      return;
+    }
+    _requestCompletionNotified = true;
+    onRequestCompleted();
+  }
 
   void closeTrackedRequest() {
     if (_trackedClosed) {
       return;
     }
     _trackedClosed = true;
-    onTrackedClose();
+    markRequestCompleted();
+    onSocketClosed();
   }
 
   void maybeBufferUnconsumedRequestChunk(Uint8List chunk) {
@@ -52,7 +75,11 @@ final class _NativeDirectRequestStreamState {
 }
 
 /// Starts the native callback transport path (no bridge socket backend).
-NativeProxyServer _startNativeDirectProxy({
+({
+  NativeProxyServer proxy,
+  Future<void> Function() closeStreams,
+})
+_startNativeDirectProxy({
   required String host,
   required int port,
   required int backlog,
@@ -70,6 +97,7 @@ NativeProxyServer _startNativeDirectProxy({
   void Function()? onSocketClosed,
   void Function()? onRequestStarted,
   void Function()? onRequestCompleted,
+  void Function()? onRequestDetached,
 }) {
   final nativeDirectStreams = <int, _NativeDirectRequestStreamState>{};
   late final NativeProxyServer proxyRef;
@@ -163,7 +191,9 @@ NativeProxyServer _startNativeDirectProxy({
       final requestBody = StreamController<Uint8List>(sync: true);
       final streamState = _NativeDirectRequestStreamState(
         requestBody,
-        onTrackedClose: endTrackedRequest,
+        onRequestCompleted: () => onRequestCompleted?.call(),
+        onRequestDetached: () => onRequestDetached?.call(),
+        onSocketClosed: () => onSocketClosed?.call(),
       );
       nativeDirectStreams[requestId] = streamState;
 
@@ -229,6 +259,7 @@ NativeProxyServer _startNativeDirectProxy({
             bodyStream: requestBody.stream,
             onDetachedSocket: (socket) {
               streamState.detachedSocket = socket;
+              streamState.markRequestDetached();
               streamState.flushBufferedChunksToDetachedSocket();
               startDetachedForwardingIfNeeded();
             },
@@ -252,6 +283,7 @@ NativeProxyServer _startNativeDirectProxy({
             },
           );
           streamState.responseCompleted = true;
+          streamState.markRequestCompleted();
           if (streamState.detachedSocket != null) {
             startDetachedForwardingIfNeeded();
           } else {
@@ -268,6 +300,7 @@ NativeProxyServer _startNativeDirectProxy({
           );
           pushResponsePayload(_internalServerErrorFrame(error).encodePayload());
           streamState.responseCompleted = true;
+          streamState.markRequestCompleted();
           if (streamState.requestEnded && streamState.detachedSocket == null) {
             await removeNativeDirectStream(
               streamState: streamState,
@@ -405,6 +438,22 @@ NativeProxyServer _startNativeDirectProxy({
     }());
   }
 
+  Future<void> closeStreams() async {
+    final streams = nativeDirectStreams.values.toList(growable: false);
+    nativeDirectStreams.clear();
+    for (final streamState in streams) {
+      if (!streamState.requestBody.isClosed) {
+        await streamState.requestBody.close();
+      }
+      streamState.clearBufferedRequestChunks();
+      final detachedSocket = streamState.detachedSocket;
+      if (detachedSocket != null) {
+        detachedSocket.destroy();
+      }
+      streamState.closeTrackedRequest();
+    }
+  }
+
   void scheduleDrainQueuedRequestFrames() {
     drainWakeRequested = true;
     if (!proxyAssigned || drainQueuedFramesScheduled || proxyRef.isClosed) {
@@ -490,5 +539,5 @@ NativeProxyServer _startNativeDirectProxy({
     scheduleDrainQueuedRequestFrames();
   }
 
-  return proxy;
+  return (proxy: proxy, closeStreams: closeStreams);
 }

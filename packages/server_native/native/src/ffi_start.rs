@@ -193,7 +193,9 @@ pub unsafe extern "C" fn server_native_start_proxy_server(
                 benchmark_mode,
                 direct_bridge: runtime_direct_bridge,
             };
-            let app = Router::new().fallback(any(proxy_request)).with_state(state);
+            let app = Router::new()
+                .fallback(any(router_proxy_request))
+                .with_state(state.clone());
             let _ = startup_tx.send(Ok(actual_port));
 
             let result = match tls_config {
@@ -201,6 +203,7 @@ pub unsafe extern "C" fn server_native_start_proxy_server(
                     run_tls_proxy(
                         listener,
                         app,
+                        state,
                         shutdown_rx,
                         tls_config,
                         enable_http2,
@@ -221,7 +224,7 @@ pub unsafe extern "C" fn server_native_start_proxy_server(
                             if enable_http2 { "/http2" } else { "" }
                         );
                     }
-                    run_plain_proxy(listener, app, shutdown_rx, enable_http2).await
+                    run_plain_proxy(listener, state, shutdown_rx, enable_http2).await
                 }
             };
 

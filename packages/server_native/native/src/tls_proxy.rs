@@ -3,6 +3,7 @@ use crate::*;
 pub(crate) async fn run_tls_proxy(
     listener: TcpListener,
     app: Router,
+    state: ProxyState,
     mut shutdown_rx: oneshot::Receiver<()>,
     tls_config: ProxyTlsConfig,
     enable_http2: bool,
@@ -65,13 +66,19 @@ pub(crate) async fn run_tls_proxy(
                         }
                     };
                     let acceptor = acceptor.clone();
-                    let app = app.clone();
+                    let state = state.clone();
                     connections.spawn(async move {
                         let tls_stream = acceptor
                             .accept(stream)
                             .await
                             .map_err(|error| format!("tls handshake failed: {error}"))?;
-                        let service = TowerToHyperService::new(app);
+                        let service = hyper::service::service_fn(
+                            move |request: Request<hyper::body::Incoming>| {
+                            let state = state.clone();
+                            async move {
+                                proxy_request(State(state), request.map(Body::new)).await
+                            }
+                        });
                         if enable_http2 {
                             let builder = AutoBuilder::new(TokioExecutor::new());
                             builder
@@ -114,13 +121,19 @@ pub(crate) async fn run_tls_proxy(
                         }
                     };
                     let acceptor = acceptor.clone();
-                    let app = app.clone();
+                    let state = state.clone();
                     connections.spawn(async move {
                         let tls_stream = acceptor
                             .accept(stream)
                             .await
                             .map_err(|error| format!("tls handshake failed: {error}"))?;
-                        let service = TowerToHyperService::new(app);
+                        let service = hyper::service::service_fn(
+                            move |request: Request<hyper::body::Incoming>| {
+                            let state = state.clone();
+                            async move {
+                                proxy_request(State(state), request.map(Body::new)).await
+                            }
+                        });
                         if enable_http2 {
                             let builder = AutoBuilder::new(TokioExecutor::new());
                             builder
