@@ -2,6 +2,14 @@
 
 All notable changes to `server_native` will be documented in this file.
 
+## Unreleased
+
+- Removed the Serinus benchmark and framework-compatibility target because the
+  upstream repository no longer provides the expected `server_native` entry
+  point.
+- Refreshed the Relic compatibility patch for the current upstream dependency
+  layout.
+
 ## 0.1.3+1 - 2026-08-25
 
 - Reduced `shared: true` isolate scaling overhead by using one Tokio worker per
