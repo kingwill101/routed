@@ -93,7 +93,8 @@ other typed Worker bindings are supplied by the host at request time.
 
 Use repeatable `--var NAME=VALUE` options for non-secret Worker variables.
 Secrets such as session keys must still be provisioned through Wrangler or a
-secret manager; `--var` never writes secret values to the generated config.
+secret manager. `--var` writes all supplied values as plaintext to the
+generated config, so do not pass secrets with this option.
 
 R2 buckets, Queue producers, and Worker-to-Worker service bindings use the
 same `BINDING=RESOURCE_NAME` form:
