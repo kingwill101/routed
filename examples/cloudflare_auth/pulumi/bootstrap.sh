@@ -60,11 +60,23 @@ pulumi config set databaseId "$database_id"
 pulumi config set authOrigin "$BASE_URL"
 
 worker_exists=false
-if ! deployments_json="$(
-  npx wrangler deployments list --name "$worker_name" --json 2>/dev/null
-)"; then
-  echo "Could not determine whether Worker $worker_name already exists." >&2
-  exit 1
+deployments_output="$(mktemp "${TMPDIR:-/tmp}/routed-worker-deployments.XXXXXX")"
+trap 'rm -f -- "$deployments_output"' EXIT
+if npx wrangler deployments list --name "$worker_name" --json \
+  >"$deployments_output" 2>&1; then
+  deployments_json="$(<"$deployments_output")"
+else
+  if grep -Eqi \
+    '(worker|script).*(not found|does not exist)|(not found|does not exist).*(worker|script)|10090' \
+    "$deployments_output"; then
+    # A missing Worker is the expected first-deployment state. Other failures
+    # (authentication, connectivity, or malformed requests) must fail closed.
+    deployments_json='[]'
+  else
+    cat "$deployments_output" >&2
+    echo "Could not determine whether Worker $worker_name already exists." >&2
+    exit 1
+  fi
 fi
 if ! worker_exists="$(jq -r '
   if type == "array" then length > 0
