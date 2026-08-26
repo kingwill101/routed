@@ -4,7 +4,7 @@ description: Standalone example project with all server framework dependencies.
 version: 0.1.0
 
 environment:
-  sdk: ">=3.10.0 <4.0.0"
+  sdk: ">=3.12.0 <4.0.0"
 
 dependencies:
   server_native:

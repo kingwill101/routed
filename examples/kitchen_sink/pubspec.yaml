@@ -4,7 +4,7 @@ funding:
   - https://www.buymeacoffee.com/kingwill101
 
 environment:
-  sdk: ">=3.9.0 <4.0.0"
+  sdk: ">=3.12.0 <4.0.0"
 
 resolution: workspace
 

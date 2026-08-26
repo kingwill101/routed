@@ -3,7 +3,7 @@ description: Routed CLI reference platform with an in-memory Stem worker.
 version: 0.1.0
 publish_to: none
 environment:
-  sdk: ">=3.9.2 <4.0.0"
+  sdk: ">=3.12.0 <4.0.0"
 
 dependencies:
   args: ^2.7.0

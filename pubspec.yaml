@@ -52,14 +52,12 @@ workspace:
   - examples/rate_limiting
   - examples/openapi_demo
   - examples/full_stack
-  # Keep this example standalone until Stem publishes a release compatible
-  # with dartastic_opentelemetry_api 0.9.x.
 
 funding:
   - https://www.buymeacoffee.com/kingwill101
 
 environment:
-  sdk: ">=3.9.0 <4.0.0"
+  sdk: ">=3.12.0 <4.0.0"
 dependencies:
   contextual: ^2.2.0
   liquify: ^1.4.2

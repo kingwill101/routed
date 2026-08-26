@@ -19,7 +19,7 @@ executables:
   setup:
 
 environment:
-  sdk: '>=3.10.4 <4.0.0'
+  sdk: '>=3.12.0 <4.0.0'
 
 dependencies:
   code_assets: ^1.2.1

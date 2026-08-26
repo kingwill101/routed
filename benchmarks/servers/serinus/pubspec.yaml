@@ -3,6 +3,6 @@ version: 0.1.0
 description: Baseline serinus server for benchmarks.
 publish_to: none
 environment:
-  sdk: ">=3.3.0 <4.0.0"
+  sdk: ">=3.12.0 <4.0.0"
 dependencies:
   serinus: ^2.1.12

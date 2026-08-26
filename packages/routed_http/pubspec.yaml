@@ -9,7 +9,7 @@ tags:
   - http
 resolution: workspace
 environment:
-  sdk: ">=3.9.0 <4.0.0"
+  sdk: ">=3.12.0 <4.0.0"
 dependencies:
   collection: ^1.19.1
   file: ^7.0.1
