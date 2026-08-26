@@ -22,7 +22,9 @@ environment:
   sdk: '>=3.12.0 <4.0.0'
 
 dependencies:
-  code_assets: ^2.0.0
+  # Supports the current code-assets protocol and the 1.x constraint still
+  # advertised by native_prebuilt 0.4.0.
+  code_assets: ">=1.2.1 <3.0.0"
   contextual: ^2.2.0
   ffi: ^2.2.0
   hooks: ^2.2.0
