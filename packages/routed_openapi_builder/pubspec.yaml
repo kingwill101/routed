@@ -10,9 +10,9 @@ tags:
   - build
 resolution: workspace
 environment:
-  sdk: ">=3.9.0 <4.0.0"
+  sdk: ">=3.12.0 <4.0.0"
 dependencies:
-  analyzer: ^10.0.1
+  analyzer: ^14.1.0
   build: ^4.0.0
   collection: ^1.19.1
   meta: ^1.18.0
