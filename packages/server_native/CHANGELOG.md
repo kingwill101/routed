@@ -2,6 +2,19 @@
 
 All notable changes to `server_native` will be documented in this file.
 
+## 0.1.5 - 2026-08-26
+
+- Return a generic internal-server-error body when a native handler fails,
+  while retaining the detailed failure in server-side logs.
+- Scope graceful-shutdown accounting to individual requests so detached
+  upgrades cannot consume another request's drain lease.
+- Ensure forced shutdown does not wait for unconsumed single-subscription
+  request bodies.
+- Validate framework compatibility filters and skip native asset work when
+  code assets are disabled.
+- Publish the matching prebuilt native assets under
+  `server-native-prebuilt-v0.1.5`.
+
 ## 0.1.4 - 2026-08-26
 
 - Fix forceful native shutdown so in-flight frontend requests are terminated
