@@ -1,35 +1,40 @@
 use crate::*;
 
+/// Runtime options shared by the TLS HTTP/1, HTTP/2, and HTTP/3 loops.
+pub(crate) struct TlsProxyOptions {
+    pub(crate) tls_config: ProxyTlsConfig,
+    pub(crate) enable_http2: bool,
+    pub(crate) enable_http3: bool,
+    pub(crate) request_client_certificate: bool,
+}
+
 pub(crate) async fn run_tls_proxy(
     listener: TcpListener,
     app: Router,
     state: ProxyState,
     mut shutdown_rx: oneshot::Receiver<()>,
-    tls_config: ProxyTlsConfig,
-    enable_http2: bool,
-    enable_http3: bool,
-    request_client_certificate: bool,
+    options: TlsProxyOptions,
 ) -> Result<(), String> {
     ensure_rustls_crypto_provider()?;
     let tls = load_tls_server_config(
-        &tls_config.cert_path,
-        &tls_config.key_path,
-        tls_config.cert_password.as_deref(),
-        enable_http2,
-        request_client_certificate,
+        &options.tls_config.cert_path,
+        &options.tls_config.key_path,
+        options.tls_config.cert_password.as_deref(),
+        options.enable_http2,
+        options.request_client_certificate,
     )?;
     let acceptor = TlsAcceptor::from(Arc::new(tls));
     let mut connections = tokio::task::JoinSet::new();
     let local_addr = listener
         .local_addr()
         .map_err(|error| format!("local_addr failed: {error}"))?;
-    let h3_endpoint = if enable_http3 {
+    let h3_endpoint = if options.enable_http3 {
         match create_h3_endpoint(
             local_addr,
-            &tls_config.cert_path,
-            &tls_config.key_path,
-            tls_config.cert_password.as_deref(),
-            request_client_certificate,
+            &options.tls_config.cert_path,
+            &options.tls_config.key_path,
+            options.tls_config.cert_password.as_deref(),
+            options.request_client_certificate,
         ) {
             Ok(endpoint) => {
                 eprintln!(
@@ -42,7 +47,7 @@ pub(crate) async fn run_tls_proxy(
             Err(error) => {
                 eprintln!(
                     "[server_native] http3 setup failed; continuing with http1{} only: {error}",
-                    if enable_http2 { "/http2" } else { "" }
+                    if options.enable_http2 { "/http2" } else { "" }
                 );
                 None
             }
@@ -79,7 +84,7 @@ pub(crate) async fn run_tls_proxy(
                                 proxy_request(State(state), request.map(Body::new)).await
                             }
                         });
-                        if enable_http2 {
+                        if options.enable_http2 {
                             let builder = AutoBuilder::new(TokioExecutor::new());
                             builder
                                 .serve_connection_with_upgrades(TokioIo::new(tls_stream), service)
@@ -134,7 +139,7 @@ pub(crate) async fn run_tls_proxy(
                                 proxy_request(State(state), request.map(Body::new)).await
                             }
                         });
-                        if enable_http2 {
+                    if options.enable_http2 {
                             let builder = AutoBuilder::new(TokioExecutor::new());
                             builder
                                 .serve_connection_with_upgrades(TokioIo::new(tls_stream), service)

@@ -205,10 +205,12 @@ pub unsafe extern "C" fn server_native_start_proxy_server(
                         app,
                         state,
                         shutdown_rx,
-                        tls_config,
-                        enable_http2,
-                        enable_http3,
-                        request_client_certificate,
+                        TlsProxyOptions {
+                            tls_config,
+                            enable_http2,
+                            enable_http3,
+                            request_client_certificate,
+                        },
                     )
                     .await
                 }

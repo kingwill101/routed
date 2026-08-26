@@ -12,6 +12,8 @@ All notable changes to `server_native` will be documented in this file.
   request bodies.
 - Validate framework compatibility filters and skip native asset work when
   code assets are disabled.
+- Consolidate TLS proxy startup options so the native crate passes strict
+  Clippy checks without suppressions.
 - Publish the matching prebuilt native assets under
   `server-native-prebuilt-v0.1.5`.
 
