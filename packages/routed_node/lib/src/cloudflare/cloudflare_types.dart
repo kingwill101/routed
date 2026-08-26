@@ -2,105 +2,31 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-/// Decodes a D1 result row into an application type.
-typedef CloudflareD1RowDecoder<T> = T Function(Map<String, Object?> row);
+import 'package:ormed_d1/d1_binding.dart' as ormed_d1;
+
+/// Cloudflare's D1 row decoder, provided by `package:ormed_d1`.
+typedef CloudflareD1RowDecoder<T> = ormed_d1.D1RowDecoder<T>;
+
+/// Cloudflare D1 metadata, provided by `package:ormed_d1`.
+typedef CloudflareD1Meta = ormed_d1.D1Meta;
+
+/// Cloudflare D1 result, provided by `package:ormed_d1`.
+typedef CloudflareD1Result<T> = ormed_d1.D1Result<T>;
+
+/// Cloudflare D1 exec result, provided by `package:ormed_d1`.
+typedef CloudflareD1ExecResult = ormed_d1.D1ExecResult;
+
+/// Cloudflare D1 database binding, provided by `package:ormed_d1`.
+typedef CloudflareD1Database = ormed_d1.D1DatabaseBinding;
+
+/// Cloudflare D1 prepared statement, provided by `package:ormed_d1`.
+typedef CloudflareD1PreparedStatement = ormed_d1.D1PreparedStatementBinding;
+
+/// Cloudflare D1 session binding, provided by `package:ormed_d1`.
+typedef CloudflareD1DatabaseSession = ormed_d1.D1DatabaseSessionBinding;
 
 /// Decodes a JSON value received from a Cloudflare request or response.
 typedef CloudflareJsonDecoder<T> = T Function(Object? value);
-
-/// Metadata returned by a D1 query.
-final class CloudflareD1Meta {
-  /// Creates a CloudflareD1Meta value.
-  const CloudflareD1Meta({
-    this.duration,
-    this.rowsRead,
-    this.rowsWritten,
-    this.changes,
-    this.changedDb,
-    this.sizeAfter,
-    this.lastRowId,
-    this.servedBy,
-    this.servedByColo,
-    this.servedByPrimary,
-    this.servedByRegion,
-    this.servedByLocation,
-    this.bookmark,
-  });
-
-  /// The duration value.
-  final num? duration;
-
-  /// The rowsRead value.
-  final int? rowsRead;
-
-  /// The rowsWritten value.
-  final int? rowsWritten;
-
-  /// The changes value.
-  final int? changes;
-
-  /// The changedDb value.
-  final bool? changedDb;
-
-  /// The sizeAfter value.
-  final int? sizeAfter;
-
-  /// The lastRowId value.
-  final Object? lastRowId;
-
-  /// The servedBy value.
-  final String? servedBy;
-
-  /// The servedByColo value.
-  final String? servedByColo;
-
-  /// The servedByPrimary value.
-  final bool? servedByPrimary;
-
-  /// The servedByRegion value.
-  final String? servedByRegion;
-
-  /// The servedByLocation value.
-  final String? servedByLocation;
-
-  /// The bookmark value.
-  final String? bookmark;
-}
-
-/// A D1 statement result.
-final class CloudflareD1Result<T> {
-  /// Creates a CloudflareD1Result value.
-  const CloudflareD1Result({
-    required this.success,
-    this.results = const <Never>[],
-    this.meta,
-    this.error,
-  });
-
-  /// The success value.
-  final bool success;
-
-  /// The results value.
-  final List<T> results;
-
-  /// The meta value.
-  final CloudflareD1Meta? meta;
-
-  /// The error value.
-  final Object? error;
-}
-
-/// The aggregate returned by D1's raw `exec` operation.
-final class CloudflareD1ExecResult {
-  /// Creates a CloudflareD1ExecResult value.
-  const CloudflareD1ExecResult({required this.count, required this.duration});
-
-  /// The count value.
-  final int count;
-
-  /// The duration value.
-  final num duration;
-}
 
 /// A Cloudflare Worker environment binding set.
 abstract interface class CloudflareEnvironment {
@@ -903,60 +829,6 @@ abstract interface class CloudflareKvNamespace {
 
   /// Performs the delete operation.
   Future<void> delete(Iterable<String> keys);
-}
-
-/// A D1 database binding.
-abstract interface class CloudflareD1Database {
-  /// Performs the prepare operation.
-  CloudflareD1PreparedStatement prepare(String query);
-
-  /// Provides the declared Cloudflare API member.
-  Future<List<CloudflareD1Result<T>>> batch<T>(
-    Iterable<CloudflareD1PreparedStatement> statements, {
-    CloudflareD1RowDecoder<T>? decode,
-  });
-
-  /// Performs the exec operation.
-  Future<CloudflareD1ExecResult> exec(String query);
-
-  /// Performs the dump operation.
-  Future<Uint8List> dump();
-
-  /// Performs the withSession operation.
-  CloudflareD1DatabaseSession withSession({String? bookmark});
-}
-
-/// A prepared D1 SQL statement.
-abstract interface class CloudflareD1PreparedStatement {
-  /// Performs the bind operation.
-  CloudflareD1PreparedStatement bind([Iterable<Object?> values]);
-
-  /// Provides the declared Cloudflare API member.
-  Future<CloudflareD1Result<T>> all<T>({CloudflareD1RowDecoder<T>? decode});
-
-  /// Provides the declared Cloudflare API member.
-  Future<T?> first<T>({String? column, CloudflareD1RowDecoder<T>? decode});
-
-  /// Provides the declared Cloudflare API member.
-  Future<CloudflareD1Result<T>> run<T>({CloudflareD1RowDecoder<T>? decode});
-
-  /// Provides the declared Cloudflare API member.
-  Future<List<T>> raw<T>({CloudflareD1RowDecoder<T>? decode});
-}
-
-/// A sequential-consistency D1 session.
-abstract interface class CloudflareD1DatabaseSession {
-  /// Performs the prepare operation.
-  CloudflareD1PreparedStatement prepare(String query);
-
-  /// Provides the declared Cloudflare API member.
-  Future<List<CloudflareD1Result<T>>> batch<T>(
-    Iterable<CloudflareD1PreparedStatement> statements, {
-    CloudflareD1RowDecoder<T>? decode,
-  });
-
-  /// Performs the getBookmark operation.
-  Future<String?> getBookmark();
 }
 
 /// A Durable Object namespace binding.

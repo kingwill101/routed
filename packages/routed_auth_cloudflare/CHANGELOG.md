@@ -5,6 +5,10 @@
 - Keep request throttling in the built-in `server_rate_limit` and Routed
   adapter layers instead of adding a Cloudflare-specific D1 rate-limit schema.
 
+- Use the hosted `ormed_d1` binding transport and public D1 contracts for
+  single-statement auth persistence while retaining Cloudflare's native batch
+  API for atomic mutations.
+
 - Complete public API documentation and adopt the shared
   `very_good_analysis` lint baseline.
 

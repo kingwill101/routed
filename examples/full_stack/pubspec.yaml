@@ -5,12 +5,12 @@ publish_to: 'none'
 
 resolution: workspace
 environment:
-  sdk: ">=3.9.2 <4.0.0"
+  sdk: ">=3.12.0 <4.0.0"
 
 dependencies:
   args: ^2.5.0
-  ormed: ^0.1.0-dev+7
-  ormed_sqlite: ^0.1.0-dev+7
+  ormed: ^0.3.0
+  ormed_sqlite: ^0.4.0
   routed:
     path: ../../packages/routed
   routed_testing:

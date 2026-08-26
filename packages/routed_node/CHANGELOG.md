@@ -13,6 +13,9 @@
   portable request IP policies, including rate limiting, work on Workers
   without a socket remote address.
 
+- Reuse the hosted `ormed_d1` binding contracts for Cloudflare D1 types so
+  applications can share the same D1 API across Routed and Ormed.
+
 ## 0.2.0
 
 - Enumerate native Fetch headers at the portable request boundary and retain
