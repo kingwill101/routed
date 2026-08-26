@@ -5,7 +5,7 @@ library_stem: server_native
 release:
   provider: github
   repository: kingwill101/routed
-  tag: server-native-prebuilt-v0.1.5
+  tag: server-native-prebuilt-v0.1.6
 build:
   recipes:
     - target:

@@ -2,6 +2,17 @@
 
 All notable changes to `server_native` will be documented in this file.
 
+## 0.1.6 - 2026-08-26
+
+- Preserve an HTTP request's `Connection: close` semantics even when a
+  framework tries to enable persistent connections on the response.
+- Finish an already-started streamed response cleanly when its handler fails,
+  avoiding an invalid second response frame.
+- Add a Relic compatibility regression covering raw HTTP/1.1 connection
+  shutdown and response completion.
+- Publish the matching prebuilt native assets under
+  `server-native-prebuilt-v0.1.6`.
+
 ## 0.1.5 - 2026-08-26
 
 - Return a generic internal-server-error body when a native handler fails,
