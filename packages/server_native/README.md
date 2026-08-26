@@ -40,7 +40,7 @@ bootstrap.
 
 ```yaml
 dependencies:
-  server_native: ^0.1.3+1
+  server_native: ^0.1.4
 ```
 
 ## Quick Start (`HttpServer` Style)

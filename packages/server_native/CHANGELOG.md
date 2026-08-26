@@ -2,7 +2,18 @@
 
 All notable changes to `server_native` will be documented in this file.
 
-## Unreleased
+## 0.1.4 - 2026-08-26
+
+- Fix forceful native shutdown so in-flight frontend requests are terminated
+  at the transport boundary instead of receiving a synthetic 502 response.
+- Keep detached and upgraded connections visible to `connectionsInfo()` while
+  allowing graceful shutdown to drain ordinary requests independently.
+- Close detached socket pairs without waiting on peers that stopped reading,
+  preventing graceful shutdown deadlocks and callback teardown races.
+- Keep bridge response byte accounting consistent when responses are populated
+  through `addStream`.
+- Publish the matching prebuilt native assets under
+  `server-native-prebuilt-v0.1.4`.
 
 - Updated the native asset toolchain to `code_assets` 2.0, `hooks` 2.2,
   `ffi` 2.2, and Relic 1.2.
