@@ -84,11 +84,16 @@ factory. If `lib/app.dart` exports
 routed deploy --target cloudflare \
   --entry package:my_app/app.dart \
   --cloudflare-factory environment \
+  --var AUTH_ORIGIN=https://example.workers.dev \
   --d1 DB=app-db:00000000-0000-0000-0000-000000000000
 ```
 
 This generates `defineCloudflareFetchFactoryWithEnvironmentAsync` so D1 and
 other typed Worker bindings are supplied by the host at request time.
+
+Use repeatable `--var NAME=VALUE` options for non-secret Worker variables.
+Secrets such as session keys must still be provisioned through Wrangler or a
+secret manager; `--var` never writes secret values to the generated config.
 
 R2 buckets, Queue producers, and Worker-to-Worker service bindings use the
 same `BINDING=RESOURCE_NAME` form:

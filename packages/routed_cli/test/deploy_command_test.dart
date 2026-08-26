@@ -23,6 +23,8 @@ void main() {
     final parsed = command.argParser.parse([
       '--cloudflare-factory',
       'environment',
+      '--var',
+      'AUTH_ORIGIN=https://example.workers.dev',
       '--durable-object',
       'COUNTER=Counter',
       '--durable-object',
@@ -44,6 +46,7 @@ void main() {
     ]);
     expect(parsed['durable-object'], ['COUNTER=Counter', 'ROOM=ChatRoom']);
     expect(parsed['cloudflare-factory'], 'environment');
+    expect(parsed['var'], ['AUTH_ORIGIN=https://example.workers.dev']);
     expect(parsed['d1'], ['DB=routed-node-api-demo:database-id']);
     expect(parsed['r2'], ['FILES=app-files']);
     expect(parsed['queue'], ['EVENTS=app-events']);

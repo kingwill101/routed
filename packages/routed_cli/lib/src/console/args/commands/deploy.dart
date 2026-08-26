@@ -23,6 +23,7 @@ import 'package:routed_cli/src/console/util/pubspec.dart';
 /// ```text
 /// routed deploy --target cloudflare \
 ///   --cloudflare-factory environment \
+///   --var AUTH_ORIGIN=https://example.workers.dev \
 ///   --d1 AUTH_DB=auth-db:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx \
 ///   --r2 ASSETS=app-assets \
 ///   --queue JOBS=app-jobs \
@@ -79,6 +80,11 @@ class DeployCommand extends BaseCommand {
       ..addOption(
         'compatibility-date',
         help: 'Cloudflare compatibility date (defaults to today).',
+      )
+      ..addMultiOption(
+        'var',
+        help: 'Cloudflare plaintext variable. Use NAME=VALUE.',
+        valueHelp: 'NAME=VALUE',
       )
       ..addMultiOption(
         'durable-object',
@@ -169,6 +175,7 @@ class DeployCommand extends BaseCommand {
       );
     }
     final dartDurableObjects = _parseDurableObjectBindings(target);
+    final variables = _parseCloudflareVariables(target);
     final containers = _parseContainerBindings(target);
     final durableObjects = _mergeDurableObjectBindings(
       dartDurableObjects,
@@ -358,6 +365,9 @@ class DeployCommand extends BaseCommand {
             'secret_name': binding.secretName,
           },
       ];
+    }
+    if (variables.isNotEmpty) {
+      config['vars'] = variables;
     }
     await configOutput.writeAsString(
       const JsonEncoder.withIndent('  ').convert(config),
@@ -838,6 +848,46 @@ export const config = { path: "/*" };
       );
     }
     return bindings;
+  }
+
+  Map<String, String> _parseCloudflareVariables(String target) {
+    final raw = results?['var'];
+    if (raw == null) return const {};
+    if (target != 'cloudflare') {
+      throw UsageException(
+        '--var is only supported for Cloudflare deployments.',
+        usage,
+      );
+    }
+
+    final values = raw is List ? raw.whereType<String>() : <String>[];
+    final identifier = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
+    final variables = <String, String>{};
+    for (final value in values) {
+      final equals = value.indexOf('=');
+      if (equals < 1 || equals == value.length - 1) {
+        throw UsageException(
+          'Invalid Cloudflare variable "$value". Use NAME=VALUE.',
+          usage,
+        );
+      }
+      final name = value.substring(0, equals).trim();
+      final variableValue = value.substring(equals + 1);
+      if (!identifier.hasMatch(name)) {
+        throw UsageException(
+          'Invalid Cloudflare variable name "$name".',
+          usage,
+        );
+      }
+      if (variables.containsKey(name)) {
+        throw UsageException(
+          'Cloudflare variable names must be unique: $name.',
+          usage,
+        );
+      }
+      variables[name] = variableValue;
+    }
+    return variables;
   }
 
   List<_CloudflareD1Binding> _parseD1Bindings(String target) {
