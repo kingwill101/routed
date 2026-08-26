@@ -63,25 +63,25 @@ jobs:
           MATRIX_FRAMEWORK: ${{ matrix.framework }}
           MATRIX_MODE: ${{ matrix.mode }}
         run: |
-          case "$FRAMEWORK" in
-            all|shelf|relic) ;;
-            *)
-              echo "Unsupported framework filter: $FRAMEWORK" >&2
-              exit 64
-              ;;
-          esac
+          should_run=false
 
-          should_run=true
-
-          if [[ "$FRAMEWORK" != "all" ]]; then
-            should_run=false
+          if [[ "$FRAMEWORK" == "all" ]]; then
+            should_run=true
+          else
             IFS=',' read -ra framework_filters <<< "$FRAMEWORK"
             for filter in "${framework_filters[@]}"; do
               filter="${filter//[[:space:]]/}"
-              if [[ "$filter" == "$MATRIX_FRAMEWORK" ]]; then
-                should_run=true
-                break
-              fi
+              case "$filter" in
+                shelf|relic)
+                  if [[ "$filter" == "$MATRIX_FRAMEWORK" ]]; then
+                    should_run=true
+                  fi
+                  ;;
+                *)
+                  echo "Unsupported framework filter: $filter" >&2
+                  exit 64
+                  ;;
+              esac
             done
           fi
 

@@ -261,6 +261,7 @@ jobs:
             if gh api "$tag_ref" >/dev/null 2>&1; then
               exit 0
             fi
+            echo "Tag not visible yet (attempt $attempt/12)."
             sleep 5
           done
           echo "GitHub did not expose tag ${RELEASE_TAG} in time." >&2
