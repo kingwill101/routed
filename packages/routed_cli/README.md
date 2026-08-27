@@ -91,21 +91,24 @@ routed deploy --target cloudflare \
 This generates `defineCloudflareFetchFactoryWithEnvironmentAsync` so D1 and
 other typed Worker bindings are supplied by the host at request time.
 
-### React Fetch SSR
+### Frontend Fetch SSR
 
-React Dart projects using `react_server_routed` can embed the generated Fetch
-SSR endpoint into the same Cloudflare Worker:
+Any frontend that produces a Fetch-compatible SSR module can embed its SSR
+handler and complete static build into the same Cloudflare Worker. For example,
+a React Dart project using `react_server_routed` can run:
 
 ```bash
 dart run react_tool:react build --release
 routed deploy --target cloudflare \
-  --react-ssr-entry build/react/ssr.entry.mjs
+  --ssr-entry build/react/ssr.entry.mjs
 ```
 
-The CLI copies the generated SSR entry and its companion artifacts into the
-deployment bundle and reserves `/__react/ssr` for rendering requests. Point
-the JavaScript `ReactSsrClient` in the Routed application at that relative
-endpoint. The generated Wrangler configuration also enables
+The CLI copies the complete generated frontend build into the deployment
+bundle, including the browser bundle, CSS, and other static assets. The
+containing build directory is inferred from the `--ssr-entry` path, and the
+entry module's filename is preserved. The generated SSR module must export the
+standard Fetch handler used by `/__ssr`. A frontend-specific client can target
+`/__ssr` as needed. The generated Wrangler configuration also enables
 `global_fetch_strictly_public`, which Cloudflare requires when the application
 fetches another Worker in the same zone. The option is opt-in; ordinary Routed
 deployments are unchanged.

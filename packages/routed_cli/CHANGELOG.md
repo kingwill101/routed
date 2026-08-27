@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0 - 2026-08-27
+
+- **Breaking:** replace `--react-ssr-entry` with `--ssr-entry` for Cloudflare
+  deployments.
+- Cloudflare frontend deployments now copy the complete generated build,
+  including browser assets and stylesheets, while continuing to use the
+  `ssr.entry.mjs` path supplied to `--ssr-entry` for Fetch SSR. The generated
+  wrapper and asset namespace are frontend-neutral, with SSR requests handled
+  at `/__ssr`; custom SSR entry filenames are preserved. Repeated deploys
+  replace the generated asset directory so removed files do not linger.
+
 ## 0.3.2 - 2026-08-26
 
 - Add repeatable Cloudflare `--var NAME=VALUE` deployment options for

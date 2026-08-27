@@ -26,7 +26,7 @@ void main() {
     final parsed = command.argParser.parse([
       '--cloudflare-factory',
       'environment',
-      '--react-ssr-entry',
+      '--ssr-entry',
       'build/react/ssr.entry.mjs',
       '--var',
       'AUTH_ORIGIN=https://example.workers.dev',
@@ -51,7 +51,7 @@ void main() {
     ]);
     expect(parsed['durable-object'], ['COUNTER=Counter', 'ROOM=ChatRoom']);
     expect(parsed['cloudflare-factory'], 'environment');
-    expect(parsed['react-ssr-entry'], 'build/react/ssr.entry.mjs');
+    expect(parsed['ssr-entry'], 'build/react/ssr.entry.mjs');
     expect(parsed['var'], ['AUTH_ORIGIN=https://example.workers.dev']);
     expect(parsed['d1'], ['DB=routed-node-api-demo:database-id']);
     expect(parsed['r2'], ['FILES=app-files']);
@@ -104,20 +104,20 @@ void main() {
     expect(containerWrapper, contains('getTcpPort(8080)'));
     expect(containerWrapper, contains('this.container.start()'));
 
-    final reactWrapper = generateCloudflareWorkerWrapper(
+    final ssrWrapper = generateCloudflareWorkerWrapper(
       '/tmp/worker.dart.js',
       const [],
-      reactSsrEntry: 'react_ssr/ssr.entry.mjs',
+      ssrEntry: 'frontend/ssr.entry.mjs',
     );
     expect(
-      reactWrapper,
-      contains("import reactSsr from './react_ssr/ssr.entry.mjs';"),
+      ssrWrapper,
+      contains("import frontendSsr from './frontend/ssr.entry.mjs';"),
     );
-    expect(reactWrapper, contains("pathname === '/__react/ssr'"));
-    expect(reactWrapper, contains('reactSsr.fetch(request, env, ctx)'));
+    expect(ssrWrapper, contains("pathname === '/__ssr'"));
+    expect(ssrWrapper, contains('frontendSsr.fetch(request, env, ctx)'));
   });
 
-  test('React SSR deployment enables same-zone Worker fetches', () async {
+  test('frontend SSR deployment uploads the complete build', () async {
     final fs = MemoryFileSystem();
     final root = fs.directory('/workspace/app')..createSync(recursive: true);
     fs.currentDirectory = root;
@@ -129,9 +129,18 @@ void main() {
     fs.file('${root.path}/lib/cloudflare_app.dart')
       ..createSync(recursive: true)
       ..writeAsStringSync('Future<Object> createEngine() async => Object();');
-    fs.file('${root.path}/build/react/ssr.entry.mjs')
+    fs.file('${root.path}/build/site/ssr.entry.mjs')
       ..createSync(recursive: true)
       ..writeAsStringSync('export default {};');
+    fs.file('${root.path}/build/site/index.html')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('<!doctype html>');
+    fs.file('${root.path}/build/site/assets/app.js')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('console.log("frontend");');
+    fs.file('${root.path}/build/site/legacy.js')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('console.log("legacy");');
 
     final processes = <(String, List<String>, String)>[];
     final command = DeployCommand(
@@ -152,16 +161,35 @@ void main() {
     );
     final runner = RoutedCommandRunner()..register([command]);
 
-    await runner.run([
+    final deployArguments = <String>[
       'deploy',
       '--dry-run',
       '--target',
       'cloudflare',
       '--entry',
       'package:demo_app/cloudflare_app.dart',
-      '--react-ssr-entry',
-      'build/react/ssr.entry.mjs',
-    ]);
+      '--ssr-entry',
+      'build/site/custom-ssr.mjs',
+    ];
+    fs
+        .file('${root.path}/build/site/ssr.entry.mjs')
+        .renameSync(
+          '${root.path}/build/site/custom-ssr.mjs',
+        );
+
+    await runner.run(deployArguments);
+
+    expect(
+      fs
+          .file(
+            '${root.path}/.dart_tool/routed/deploy/cloudflare/frontend/legacy.js',
+          )
+          .existsSync(),
+      isTrue,
+    );
+
+    fs.file('${root.path}/build/site/legacy.js').deleteSync();
+    await runner.run(deployArguments);
 
     final config =
         jsonDecode(
@@ -176,7 +204,84 @@ void main() {
       'nodejs_compat',
       'global_fetch_strictly_public',
     ]);
+    expect(config['assets'], {
+      'directory': 'frontend',
+      'binding': 'ASSETS',
+      'run_worker_first': true,
+    });
+    expect(
+      fs
+          .file(
+            '${root.path}/.dart_tool/routed/deploy/cloudflare/frontend/index.html',
+          )
+          .readAsStringSync(),
+      '<!doctype html>',
+    );
+    expect(
+      fs
+          .file(
+            '${root.path}/.dart_tool/routed/deploy/cloudflare/frontend/assets/app.js',
+          )
+          .readAsStringSync(),
+      contains('frontend'),
+    );
+    expect(
+      fs
+          .file(
+            '${root.path}/.dart_tool/routed/deploy/cloudflare/frontend/legacy.js',
+          )
+          .existsSync(),
+      isFalse,
+    );
+    expect(
+      fs
+          .file(
+            '${root.path}/.dart_tool/routed/deploy/cloudflare/worker.js',
+          )
+          .readAsStringSync(),
+      contains("import frontendSsr from './frontend/custom-ssr.mjs';"),
+    );
   });
+
+  test(
+    'frontend SSR deployment rejects an overlapping build directory',
+    () async {
+      final fs = MemoryFileSystem();
+      final root = fs.directory('/workspace/app')..createSync(recursive: true);
+      fs.currentDirectory = root;
+      fs.file('${root.path}/pubspec.yaml')
+        ..createSync()
+        ..writeAsStringSync(
+          'name: demo_app\ndependencies:\n  routed_node: ^0.1.0\n',
+        );
+      final entry =
+          '${root.path}/.dart_tool/routed/deploy/cloudflare/frontend/custom.mjs';
+      fs.file(entry)
+        ..createSync(recursive: true)
+        ..writeAsStringSync('export default {};');
+
+      final command = DeployCommand(
+        fileSystem: fs,
+        processRunner: (_, _, _) async => 0,
+      );
+      final runner = RoutedCommandRunner()..register([command]);
+
+      await expectLater(
+        runner.run([
+          'deploy',
+          '--dry-run',
+          '--target',
+          'cloudflare',
+          '--entry',
+          'package:demo_app/cloudflare_app.dart',
+          '--ssr-entry',
+          '.dart_tool/routed/deploy/cloudflare/frontend/custom.mjs',
+        ]),
+        throwsA(isA<UsageException>()),
+      );
+      expect(fs.file(entry).existsSync(), isTrue);
+    },
+  );
 
   test('Cloudflare dry-run validates and writes all binding sections', () async {
     final fs = MemoryFileSystem();
