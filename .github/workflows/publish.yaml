@@ -18,9 +18,9 @@ on:
 
 jobs:
   publish:
-    # server_native publishes native binaries and generated metadata through
-    # its dedicated release workflow, not the generic pub.dev publisher.
-    if: ${{ !startsWith(github.ref_name, 'server_native-v') }}
+    # server_native's native binaries and generated metadata use a dedicated
+    # release workflow, while its Dart package uses this publisher like the
+    # other workspace packages.
     # This job uses the common publish workflow provided by the ecosystem.
     # See https://github.com/dart-lang/ecosystem/wiki/Publishing-automation
     uses: dart-lang/ecosystem/.github/workflows/publish.yaml@main
