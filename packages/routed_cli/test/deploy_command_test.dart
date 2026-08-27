@@ -104,20 +104,20 @@ void main() {
     expect(containerWrapper, contains('getTcpPort(8080)'));
     expect(containerWrapper, contains('this.container.start()'));
 
-    final reactWrapper = generateCloudflareWorkerWrapper(
+    final ssrWrapper = generateCloudflareWorkerWrapper(
       '/tmp/worker.dart.js',
       const [],
-      reactSsrEntry: 'react_ssr/ssr.entry.mjs',
+      ssrEntry: 'frontend/ssr.entry.mjs',
     );
     expect(
-      reactWrapper,
-      contains("import reactSsr from './react_ssr/ssr.entry.mjs';"),
+      ssrWrapper,
+      contains("import frontendSsr from './frontend/ssr.entry.mjs';"),
     );
-    expect(reactWrapper, contains("pathname === '/__react/ssr'"));
-    expect(reactWrapper, contains('reactSsr.fetch(request, env, ctx)'));
+    expect(ssrWrapper, contains("pathname === '/__ssr'"));
+    expect(ssrWrapper, contains('frontendSsr.fetch(request, env, ctx)'));
   });
 
-  test('React SSR deployment enables same-zone Worker fetches', () async {
+  test('frontend SSR deployment uploads the complete build', () async {
     final fs = MemoryFileSystem();
     final root = fs.directory('/workspace/app')..createSync(recursive: true);
     fs.currentDirectory = root;
@@ -129,9 +129,15 @@ void main() {
     fs.file('${root.path}/lib/cloudflare_app.dart')
       ..createSync(recursive: true)
       ..writeAsStringSync('Future<Object> createEngine() async => Object();');
-    fs.file('${root.path}/build/react/ssr.entry.mjs')
+    fs.file('${root.path}/build/site/ssr.entry.mjs')
       ..createSync(recursive: true)
       ..writeAsStringSync('export default {};');
+    fs.file('${root.path}/build/site/index.html')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('<!doctype html>');
+    fs.file('${root.path}/build/site/assets/app.js')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('console.log("frontend");');
 
     final processes = <(String, List<String>, String)>[];
     final command = DeployCommand(
@@ -160,7 +166,7 @@ void main() {
       '--entry',
       'package:demo_app/cloudflare_app.dart',
       '--ssr-entry',
-      'build/react/ssr.entry.mjs',
+      'build/site/ssr.entry.mjs',
     ]);
 
     final config =
@@ -176,6 +182,27 @@ void main() {
       'nodejs_compat',
       'global_fetch_strictly_public',
     ]);
+    expect(config['assets'], {
+      'directory': 'frontend',
+      'binding': 'ASSETS',
+      'run_worker_first': true,
+    });
+    expect(
+      fs
+          .file(
+            '${root.path}/.dart_tool/routed/deploy/cloudflare/frontend/index.html',
+          )
+          .readAsStringSync(),
+      '<!doctype html>',
+    );
+    expect(
+      fs
+          .file(
+            '${root.path}/.dart_tool/routed/deploy/cloudflare/frontend/assets/app.js',
+          )
+          .readAsStringSync(),
+      contains('frontend'),
+    );
   });
 
   test('Cloudflare dry-run validates and writes all binding sections', () async {

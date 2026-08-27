@@ -300,7 +300,7 @@ class DeployCommand extends BaseCommand {
       p.join(buildRoot.path, 'wrangler.jsonc'),
     );
 
-    String? bundledReactSsrEntry;
+    String? bundledSsrEntry;
     if (ssrEntry != null) {
       final source = root.fileSystem.file(
         p.isAbsolute(ssrEntry) ? ssrEntry : p.join(root.path, ssrEntry),
@@ -313,10 +313,10 @@ class DeployCommand extends BaseCommand {
       }
       final buildDirectory = source.parent;
       final destination = root.fileSystem.directory(
-        p.join(buildRoot.path, 'react_ssr'),
+        p.join(buildRoot.path, 'frontend'),
       );
-      _copyReactSsrBundle(buildDirectory, destination);
-      bundledReactSsrEntry = p.join('react_ssr', 'ssr.entry.mjs');
+      _copyFrontendBuild(buildDirectory, destination);
+      bundledSsrEntry = p.join('frontend', 'ssr.entry.mjs');
     }
 
     await dartEntry.writeAsString(
@@ -344,7 +344,7 @@ class DeployCommand extends BaseCommand {
           for (final container in containers)
             container.className: container.port,
         },
-        reactSsrEntry: bundledReactSsrEntry,
+        ssrEntry: bundledSsrEntry,
       ),
     );
 
@@ -356,7 +356,7 @@ class DeployCommand extends BaseCommand {
       'compatibility_date': date,
       'compatibility_flags': [
         'nodejs_compat',
-        if (bundledReactSsrEntry != null) 'global_fetch_strictly_public',
+        if (bundledSsrEntry != null) 'global_fetch_strictly_public',
       ],
     };
     if (durableObjects.isNotEmpty) {
@@ -437,9 +437,9 @@ class DeployCommand extends BaseCommand {
           },
       ];
     }
-    if (bundledReactSsrEntry != null) {
+    if (bundledSsrEntry != null) {
       config['assets'] = {
-        'directory': 'react_ssr',
+        'directory': 'frontend',
         'binding': 'ASSETS',
         'run_worker_first': true,
       };
@@ -543,9 +543,8 @@ class DeployCommand extends BaseCommand {
     logger.info('Vercel deployment complete: $projectName');
   }
 
-  /// Copies the generated Fetch SSR entry together with its relative imports
-  /// (`ssr.js`, runtime, callback trampoline, and foreign bundles).
-  void _copyReactSsrBundle(fs.Directory source, fs.Directory destination) {
+  /// Copies a frontend build and its generated Fetch SSR entry.
+  void _copyFrontendBuild(fs.Directory source, fs.Directory destination) {
     for (final entity in source.listSync(recursive: true)) {
       if (entity is! fs.File) continue;
       final relative = p.relative(entity.path, from: source.path);
@@ -1504,6 +1503,11 @@ $registration  $factorySource
 /// is intended to be written as the Wrangler `main` file alongside the
 /// compiled JavaScript.
 ///
+/// When [ssrEntry] is supplied, it must refer to a bundled ES module whose
+/// default export exposes a Cloudflare Fetch-compatible `fetch` method. The
+/// wrapper dispatches `/__ssr` requests to that module and leaves all other
+/// requests to the Routed Worker.
+///
 /// ```dart
 /// final wrapper = generateCloudflareWorkerWrapper(
 ///   '.dart_tool/routed/deploy/cloudflare/worker.dart.js',
@@ -1515,7 +1519,7 @@ String generateCloudflareWorkerWrapper(
   String compiledPath,
   Iterable<String> durableObjectClasses, {
   Map<String, int> containerPorts = const <String, int>{},
-  String? reactSsrEntry,
+  String? ssrEntry,
 }) {
   final relative = p.basename(compiledPath);
   final exports = durableObjectClasses
@@ -1578,15 +1582,15 @@ String generateCloudflareWorkerWrapper(
     if (exports.isNotEmpty) exports,
     if (containerExports.isNotEmpty) containerExports,
   ].join('\n\n');
-  final reactSsrImport = reactSsrEntry == null
+  final ssrImport = ssrEntry == null
       ? ''
-      : "import reactSsr from './$reactSsrEntry';";
-  final reactSsrDispatch = reactSsrEntry == null
+      : "import frontendSsr from './$ssrEntry';";
+  final ssrDispatch = ssrEntry == null
       ? ''
       : '''
     const pathname = new URL(request.url).pathname;
-    if (pathname === '/__react/ssr') {
-      return await reactSsr.fetch(request, env, ctx);
+    if (pathname === '/__ssr') {
+      return await frontendSsr.fetch(request, env, ctx);
     }
     if (pathname !== '/' && pathname.lastIndexOf('.') > pathname.lastIndexOf('/')) {
       const asset = await env.ASSETS.fetch(request);
@@ -1595,7 +1599,7 @@ String generateCloudflareWorkerWrapper(
 ''';
   return '''
 import './$relative';
-$reactSsrImport
+$ssrImport
 
 const __routedDurableObjects =
     globalThis.__routed_durable_objects__ ?? {};
@@ -1604,7 +1608,7 @@ $sections
 
 export default {
   async fetch(request, env, ctx) {
-$reactSsrDispatch
+$ssrDispatch
     return await globalThis.__routed_fetch__(request, ctx, env);
   },
 };
