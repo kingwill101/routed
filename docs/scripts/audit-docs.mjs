@@ -6,6 +6,14 @@ const docsDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(docsDir, '..', '..');
 const packagesRoot = path.join(repoRoot, 'packages');
 const catalogPath = path.join(docsDir, '..', 'package-catalog.md');
+const ignoredDirectories = new Set([
+  '.dart_tool',
+  '.git',
+  '.tmp',
+  'build',
+  'coverage',
+  'node_modules',
+]);
 
 const failures = [];
 
@@ -16,7 +24,11 @@ function read(file) {
 function packageManifests(directory) {
   const manifests = [];
   for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {
-    if (entry.name === 'example' || entry.name === 'examples') continue;
+    if (
+      ignoredDirectories.has(entry.name) ||
+      entry.name === 'example' ||
+      entry.name === 'examples'
+    ) continue;
     const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) {
       manifests.push(...packageManifests(entryPath));
@@ -100,6 +112,7 @@ for (const manifestPath of manifests) {
 function readmes(directory) {
   const files = [];
   for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {
+    if (ignoredDirectories.has(entry.name)) continue;
     const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) {
       files.push(...readmes(entryPath));
@@ -113,6 +126,7 @@ function readmes(directory) {
 function siteDocs(directory) {
   const files = [];
   for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {
+    if (ignoredDirectories.has(entry.name)) continue;
     const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) {
       files.push(...siteDocs(entryPath));

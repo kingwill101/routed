@@ -11,12 +11,12 @@ work in an IDE or run `dart analyze`.
 
 Installing `routed_analyzer` as an ordinary dependency is **not** enough for
 its rules to run. Enable it in the top-level `plugins` section of the
-`analysis_options.yaml` at your package or workspace root. This is the Dart
-3.10+ analyzer plugin system (Flutter 3.38+):
+`analysis_options.yaml` at your package or workspace root. This package
+requires Dart 3.12 or newer:
 
 ```yaml
 plugins:
-  routed_analyzer: ^0.1.1
+  routed_analyzer: ^0.1.2
 ```
 
 The `plugins` section is top-level; it does not go under `analyzer`. Do not
@@ -40,7 +40,7 @@ the plugin-qualified diagnostic name:
 
 ```dart
 // ignore: routed/missing_route_schema
-router.get('/health', healthHandler);
+engine.get('/health', healthHandler);
 ```
 
 Use `ignore_for_file` when a generated or intentionally undocumented file
@@ -62,7 +62,7 @@ The plugin registers the following lint rules:
 For example, a documented route can satisfy the schema rules in one place:
 
 ```dart
-router.get(
+engine.get(
   '/users',
   listUsers,
   schema: RouteSchema(
@@ -77,7 +77,7 @@ router.get(
 
 ## Requirements
 
-- Dart SDK `>=3.9.0`
+- Dart SDK `>=3.12.0`
 - An IDE or analysis server supporting analyzer plugins (VS Code, IntelliJ,
   or the Dart CLI analysis server)
 
