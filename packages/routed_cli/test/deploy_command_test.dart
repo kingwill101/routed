@@ -26,8 +26,8 @@ void main() {
     final parsed = command.argParser.parse([
       '--cloudflare-factory',
       'environment',
-      '--react-ssr-entry',
-      'build/react/ssr.entry.mjs',
+      '--build-dir',
+      'build/client',
       '--var',
       'AUTH_ORIGIN=https://example.workers.dev',
       '--durable-object',
@@ -51,7 +51,7 @@ void main() {
     ]);
     expect(parsed['durable-object'], ['COUNTER=Counter', 'ROOM=ChatRoom']);
     expect(parsed['cloudflare-factory'], 'environment');
-    expect(parsed['react-ssr-entry'], 'build/react/ssr.entry.mjs');
+    expect(parsed['build-dir'], 'build/client');
     expect(parsed['var'], ['AUTH_ORIGIN=https://example.workers.dev']);
     expect(parsed['d1'], ['DB=routed-node-api-demo:database-id']);
     expect(parsed['r2'], ['FILES=app-files']);
@@ -129,7 +129,7 @@ void main() {
     fs.file('${root.path}/lib/cloudflare_app.dart')
       ..createSync(recursive: true)
       ..writeAsStringSync('Future<Object> createEngine() async => Object();');
-    fs.file('${root.path}/build/react/ssr.entry.mjs')
+    fs.file('${root.path}/build/client/ssr.entry.mjs')
       ..createSync(recursive: true)
       ..writeAsStringSync('export default {};');
 
@@ -159,8 +159,8 @@ void main() {
       'cloudflare',
       '--entry',
       'package:demo_app/cloudflare_app.dart',
-      '--react-ssr-entry',
-      'build/react/ssr.entry.mjs',
+      '--build-dir',
+      'build/client',
     ]);
 
     final config =

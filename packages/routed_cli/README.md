@@ -99,13 +99,15 @@ SSR endpoint into the same Cloudflare Worker:
 ```bash
 dart run react_tool:react build --release
 routed deploy --target cloudflare \
-  --react-ssr-entry build/react/ssr.entry.mjs
+  --build-dir build/react
 ```
 
-The CLI copies the generated SSR entry and its companion artifacts into the
-deployment bundle and reserves `/__react/ssr` for rendering requests. Point
-the JavaScript `ReactSsrClient` in the Routed application at that relative
-endpoint. The generated Wrangler configuration also enables
+The CLI copies the complete generated frontend build into the deployment
+bundle, including the browser bundle, CSS, and other static assets. The build
+directory must contain `ssr.entry.mjs`; the CLI reserves
+`/__react/ssr` for rendering requests. Point the JavaScript `ReactSsrClient` in
+the Routed application at that relative endpoint. The generated Wrangler
+configuration also enables
 `global_fetch_strictly_public`, which Cloudflare requires when the application
 fetches another Worker in the same zone. The option is opt-in; ordinary Routed
 deployments are unchanged.

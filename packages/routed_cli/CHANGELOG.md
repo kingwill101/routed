@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0 - 2026-08-27
+
+- **Breaking:** replace `--react-ssr-entry` with `--build-dir` for Cloudflare
+  deployments.
+- Cloudflare frontend deployments now copy the complete generated build,
+  including browser assets and stylesheets, while continuing to use
+  `ssr.entry.mjs` for Fetch SSR.
+
 ## 0.3.2 - 2026-08-26
 
 - Add repeatable Cloudflare `--var NAME=VALUE` deployment options for

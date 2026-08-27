@@ -84,11 +84,11 @@ class DeployCommand extends BaseCommand {
         defaultsTo: 'engine',
       )
       ..addOption(
-        'react-ssr-entry',
+        'build-dir',
         help:
-            'Generated React Fetch SSR entry to embed in the Cloudflare '
-            'Worker.',
-        valueHelp: 'build/react/ssr.entry.mjs',
+            'Generated frontend build directory to upload as Cloudflare '
+            'assets and use for Fetch SSR. It must contain ssr.entry.mjs.',
+        valueHelp: 'build/client',
       )
       ..addOption(
         'runtime',
@@ -200,13 +200,13 @@ class DeployCommand extends BaseCommand {
         usage,
       );
     }
-    final reactSsrEntry = (results?['react-ssr-entry'] as String?)?.trim();
-    if (reactSsrEntry != null && reactSsrEntry.isEmpty) {
-      throw UsageException('--react-ssr-entry cannot be empty.', usage);
+    final buildDir = (results?['build-dir'] as String?)?.trim();
+    if (buildDir != null && buildDir.isEmpty) {
+      throw UsageException('--build-dir cannot be empty.', usage);
     }
-    if (reactSsrEntry != null && target != 'cloudflare') {
+    if (buildDir != null && target != 'cloudflare') {
       throw UsageException(
-        '--react-ssr-entry is only supported for Cloudflare deployments.',
+        '--build-dir is only supported for Cloudflare deployments.',
         usage,
       );
     }
@@ -301,23 +301,30 @@ class DeployCommand extends BaseCommand {
     );
 
     String? bundledReactSsrEntry;
-    if (reactSsrEntry != null) {
-      final source = root.fileSystem.file(
-        p.isAbsolute(reactSsrEntry)
-            ? reactSsrEntry
-            : p.join(root.path, reactSsrEntry),
+    if (buildDir != null) {
+      final buildDirectory = root.fileSystem.directory(
+        p.isAbsolute(buildDir) ? buildDir : p.join(root.path, buildDir),
       );
+      final source = root.fileSystem.file(
+        p.join(buildDirectory.path, 'ssr.entry.mjs'),
+      );
+      if (!buildDirectory.existsSync()) {
+        throw UsageException(
+          'Build directory does not exist: ${buildDirectory.path}',
+          usage,
+        );
+      }
       if (!source.existsSync()) {
         throw UsageException(
-          'React SSR entry does not exist: ${source.path}',
+          'Build is missing ssr.entry.mjs: ${source.path}',
           usage,
         );
       }
       final destination = root.fileSystem.directory(
         p.join(buildRoot.path, 'react_ssr'),
       );
-      _copyReactSsrBundle(source.parent, destination);
-      bundledReactSsrEntry = p.join('react_ssr', p.basename(source.path));
+      _copyReactSsrBundle(buildDirectory, destination);
+      bundledReactSsrEntry = p.join('react_ssr', 'ssr.entry.mjs');
     }
 
     await dartEntry.writeAsString(
