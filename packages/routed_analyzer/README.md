@@ -16,7 +16,7 @@ its rules to run. Enable it in the top-level `plugins` section of the
 
 ```yaml
 plugins:
-  routed_analyzer: ^0.1.1
+  routed_analyzer: ^0.1.2
 ```
 
 The `plugins` section is top-level; it does not go under `analyzer`. Do not
@@ -40,7 +40,7 @@ the plugin-qualified diagnostic name:
 
 ```dart
 // ignore: routed/missing_route_schema
-router.get('/health', healthHandler);
+engine.get('/health', healthHandler);
 ```
 
 Use `ignore_for_file` when a generated or intentionally undocumented file
@@ -62,7 +62,7 @@ The plugin registers the following lint rules:
 For example, a documented route can satisfy the schema rules in one place:
 
 ```dart
-router.get(
+engine.get(
   '/users',
   listUsers,
   schema: RouteSchema(
