@@ -26,6 +26,8 @@ void main() {
     final parsed = command.argParser.parse([
       '--cloudflare-factory',
       'environment',
+      '--react-ssr-entry',
+      'build/react/ssr.entry.mjs',
       '--var',
       'AUTH_ORIGIN=https://example.workers.dev',
       '--durable-object',
@@ -49,6 +51,7 @@ void main() {
     ]);
     expect(parsed['durable-object'], ['COUNTER=Counter', 'ROOM=ChatRoom']);
     expect(parsed['cloudflare-factory'], 'environment');
+    expect(parsed['react-ssr-entry'], 'build/react/ssr.entry.mjs');
     expect(parsed['var'], ['AUTH_ORIGIN=https://example.workers.dev']);
     expect(parsed['d1'], ['DB=routed-node-api-demo:database-id']);
     expect(parsed['r2'], ['FILES=app-files']);
@@ -100,6 +103,79 @@ void main() {
     expect(containerWrapper, contains('export class AppContainer'));
     expect(containerWrapper, contains('getTcpPort(8080)'));
     expect(containerWrapper, contains('this.container.start()'));
+
+    final reactWrapper = generateCloudflareWorkerWrapper(
+      '/tmp/worker.dart.js',
+      const [],
+      reactSsrEntry: 'react_ssr/ssr.entry.mjs',
+    );
+    expect(
+      reactWrapper,
+      contains("import reactSsr from './react_ssr/ssr.entry.mjs';"),
+    );
+    expect(reactWrapper, contains("pathname === '/__react/ssr'"));
+    expect(reactWrapper, contains('reactSsr.fetch(request, env, ctx)'));
+  });
+
+  test('React SSR deployment enables same-zone Worker fetches', () async {
+    final fs = MemoryFileSystem();
+    final root = fs.directory('/workspace/app')..createSync(recursive: true);
+    fs.currentDirectory = root;
+    fs.file('${root.path}/pubspec.yaml')
+      ..createSync()
+      ..writeAsStringSync(
+        'name: demo_app\ndependencies:\n  routed_node: ^0.1.0\n',
+      );
+    fs.file('${root.path}/lib/cloudflare_app.dart')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('Future<Object> createEngine() async => Object();');
+    fs.file('${root.path}/build/react/ssr.entry.mjs')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('export default {};');
+
+    final processes = <(String, List<String>, String)>[];
+    final command = DeployCommand(
+      fileSystem: fs,
+      processRunner: (executable, arguments, workingDirectory) async {
+        processes.add((executable, arguments, workingDirectory));
+        if (executable == 'dart' && arguments.contains('compile')) {
+          fs.file(
+              '${root.path}/.dart_tool/routed/deploy/cloudflare/worker.dart.js',
+            )
+            ..createSync(recursive: true)
+            ..writeAsStringSync(
+              'globalThis.__routed_fetch__ = () => new Response();',
+            );
+        }
+        return 0;
+      },
+    );
+    final runner = RoutedCommandRunner()..register([command]);
+
+    await runner.run([
+      'deploy',
+      '--dry-run',
+      '--target',
+      'cloudflare',
+      '--entry',
+      'package:demo_app/cloudflare_app.dart',
+      '--react-ssr-entry',
+      'build/react/ssr.entry.mjs',
+    ]);
+
+    final config =
+        jsonDecode(
+              fs
+                  .file(
+                    '${root.path}/.dart_tool/routed/deploy/cloudflare/wrangler.jsonc',
+                  )
+                  .readAsStringSync(),
+            )
+            as Map<String, dynamic>;
+    expect(config['compatibility_flags'], [
+      'nodejs_compat',
+      'global_fetch_strictly_public',
+    ]);
   });
 
   test('Cloudflare dry-run validates and writes all binding sections', () async {

@@ -84,6 +84,13 @@ class DeployCommand extends BaseCommand {
         defaultsTo: 'engine',
       )
       ..addOption(
+        'react-ssr-entry',
+        help:
+            'Generated React Fetch SSR entry to embed in the Cloudflare '
+            'Worker.',
+        valueHelp: 'build/react/ssr.entry.mjs',
+      )
+      ..addOption(
         'runtime',
         help: 'Vercel runtime.',
         allowed: const ['node', 'edge'],
@@ -193,6 +200,16 @@ class DeployCommand extends BaseCommand {
         usage,
       );
     }
+    final reactSsrEntry = (results?['react-ssr-entry'] as String?)?.trim();
+    if (reactSsrEntry != null && reactSsrEntry.isEmpty) {
+      throw UsageException('--react-ssr-entry cannot be empty.', usage);
+    }
+    if (reactSsrEntry != null && target != 'cloudflare') {
+      throw UsageException(
+        '--react-ssr-entry is only supported for Cloudflare deployments.',
+        usage,
+      );
+    }
     final dartDurableObjects = _parseDurableObjectBindings(target);
     final variables = _parseCloudflareVariables(target);
     final containers = _parseContainerBindings(target);
@@ -283,6 +300,26 @@ class DeployCommand extends BaseCommand {
       p.join(buildRoot.path, 'wrangler.jsonc'),
     );
 
+    String? bundledReactSsrEntry;
+    if (reactSsrEntry != null) {
+      final source = root.fileSystem.file(
+        p.isAbsolute(reactSsrEntry)
+            ? reactSsrEntry
+            : p.join(root.path, reactSsrEntry),
+      );
+      if (!source.existsSync()) {
+        throw UsageException(
+          'React SSR entry does not exist: ${source.path}',
+          usage,
+        );
+      }
+      final destination = root.fileSystem.directory(
+        p.join(buildRoot.path, 'react_ssr'),
+      );
+      _copyReactSsrBundle(source.parent, destination);
+      bundledReactSsrEntry = p.join('react_ssr', p.basename(source.path));
+    }
+
     await dartEntry.writeAsString(
       generateCloudflareWorkerEntry(
         importPath: entry,
@@ -308,6 +345,7 @@ class DeployCommand extends BaseCommand {
           for (final container in containers)
             container.className: container.port,
         },
+        reactSsrEntry: bundledReactSsrEntry,
       ),
     );
 
@@ -317,7 +355,10 @@ class DeployCommand extends BaseCommand {
       'name': workerName,
       'main': p.basename(workerOutput.path),
       'compatibility_date': date,
-      'compatibility_flags': ['nodejs_compat'],
+      'compatibility_flags': [
+        'nodejs_compat',
+        if (bundledReactSsrEntry != null) 'global_fetch_strictly_public',
+      ],
     };
     if (durableObjects.isNotEmpty) {
       config['durable_objects'] = {
@@ -494,6 +535,19 @@ class DeployCommand extends BaseCommand {
       '--yes',
     ], label: 'Deploying Vercel Node.js Function');
     logger.info('Vercel deployment complete: $projectName');
+  }
+
+  /// Copies the generated Fetch SSR entry together with its relative imports
+  /// (`ssr.js`, runtime, callback trampoline, and foreign bundles).
+  void _copyReactSsrBundle(fs.Directory source, fs.Directory destination) {
+    for (final entity in source.listSync(recursive: true)) {
+      if (entity is! fs.File) continue;
+      final relative = p.relative(entity.path, from: source.path);
+      final target = destination.fileSystem.file(
+        p.join(destination.path, relative),
+      )..parent.createSync(recursive: true);
+      target.writeAsBytesSync(entity.readAsBytesSync());
+    }
   }
 
   String _vercelNodeWorkerEntrySource(String importPath) =>
@@ -1455,6 +1509,7 @@ String generateCloudflareWorkerWrapper(
   String compiledPath,
   Iterable<String> durableObjectClasses, {
   Map<String, int> containerPorts = const <String, int>{},
+  String? reactSsrEntry,
 }) {
   final relative = p.basename(compiledPath);
   final exports = durableObjectClasses
@@ -1517,8 +1572,19 @@ String generateCloudflareWorkerWrapper(
     if (exports.isNotEmpty) exports,
     if (containerExports.isNotEmpty) containerExports,
   ].join('\n\n');
+  final reactSsrImport = reactSsrEntry == null
+      ? ''
+      : "import reactSsr from './$reactSsrEntry';";
+  final reactSsrDispatch = reactSsrEntry == null
+      ? ''
+      : '''
+    if (new URL(request.url).pathname === '/__react/ssr') {
+      return await reactSsr.fetch(request, env, ctx);
+    }
+''';
   return '''
 import './$relative';
+$reactSsrImport
 
 const __routedDurableObjects =
     globalThis.__routed_durable_objects__ ?? {};
@@ -1527,6 +1593,7 @@ $sections
 
 export default {
   async fetch(request, env, ctx) {
+$reactSsrDispatch
     return await globalThis.__routed_fetch__(request, ctx, env);
   },
 };

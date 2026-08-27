@@ -91,6 +91,25 @@ routed deploy --target cloudflare \
 This generates `defineCloudflareFetchFactoryWithEnvironmentAsync` so D1 and
 other typed Worker bindings are supplied by the host at request time.
 
+### React Fetch SSR
+
+React Dart projects using `react_server_routed` can embed the generated Fetch
+SSR endpoint into the same Cloudflare Worker:
+
+```bash
+dart run react_tool:react build --release
+routed deploy --target cloudflare \
+  --react-ssr-entry build/react/ssr.entry.mjs
+```
+
+The CLI copies the generated SSR entry and its companion artifacts into the
+deployment bundle and reserves `/__react/ssr` for rendering requests. Point
+the JavaScript `ReactSsrClient` in the Routed application at that relative
+endpoint. The generated Wrangler configuration also enables
+`global_fetch_strictly_public`, which Cloudflare requires when the application
+fetches another Worker in the same zone. The option is opt-in; ordinary Routed
+deployments are unchanged.
+
 Use repeatable `--var NAME=VALUE` options for non-secret Worker variables.
 Secrets such as session keys must still be provisioned through Wrangler or a
 secret manager. `--var` writes all supplied values as plaintext to the
