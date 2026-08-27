@@ -8,7 +8,8 @@
   including browser assets and stylesheets, while continuing to use the
   `ssr.entry.mjs` path supplied to `--ssr-entry` for Fetch SSR. The generated
   wrapper and asset namespace are frontend-neutral, with SSR requests handled
-  at `/__ssr`.
+  at `/__ssr`; custom SSR entry filenames are preserved. Repeated deploys
+  replace the generated asset directory so removed files do not linger.
 
 ## 0.3.2 - 2026-08-26
 

@@ -138,6 +138,9 @@ void main() {
     fs.file('${root.path}/build/site/assets/app.js')
       ..createSync(recursive: true)
       ..writeAsStringSync('console.log("frontend");');
+    fs.file('${root.path}/build/site/legacy.js')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('console.log("legacy");');
 
     final processes = <(String, List<String>, String)>[];
     final command = DeployCommand(
@@ -158,7 +161,7 @@ void main() {
     );
     final runner = RoutedCommandRunner()..register([command]);
 
-    await runner.run([
+    final deployArguments = <String>[
       'deploy',
       '--dry-run',
       '--target',
@@ -166,8 +169,27 @@ void main() {
       '--entry',
       'package:demo_app/cloudflare_app.dart',
       '--ssr-entry',
-      'build/site/ssr.entry.mjs',
-    ]);
+      'build/site/custom-ssr.mjs',
+    ];
+    fs
+        .file('${root.path}/build/site/ssr.entry.mjs')
+        .renameSync(
+          '${root.path}/build/site/custom-ssr.mjs',
+        );
+
+    await runner.run(deployArguments);
+
+    expect(
+      fs
+          .file(
+            '${root.path}/.dart_tool/routed/deploy/cloudflare/frontend/legacy.js',
+          )
+          .existsSync(),
+      isTrue,
+    );
+
+    fs.file('${root.path}/build/site/legacy.js').deleteSync();
+    await runner.run(deployArguments);
 
     final config =
         jsonDecode(
@@ -203,7 +225,63 @@ void main() {
           .readAsStringSync(),
       contains('frontend'),
     );
+    expect(
+      fs
+          .file(
+            '${root.path}/.dart_tool/routed/deploy/cloudflare/frontend/legacy.js',
+          )
+          .existsSync(),
+      isFalse,
+    );
+    expect(
+      fs
+          .file(
+            '${root.path}/.dart_tool/routed/deploy/cloudflare/worker.js',
+          )
+          .readAsStringSync(),
+      contains("import frontendSsr from './frontend/custom-ssr.mjs';"),
+    );
   });
+
+  test(
+    'frontend SSR deployment rejects an overlapping build directory',
+    () async {
+      final fs = MemoryFileSystem();
+      final root = fs.directory('/workspace/app')..createSync(recursive: true);
+      fs.currentDirectory = root;
+      fs.file('${root.path}/pubspec.yaml')
+        ..createSync()
+        ..writeAsStringSync(
+          'name: demo_app\ndependencies:\n  routed_node: ^0.1.0\n',
+        );
+      final entry =
+          '${root.path}/.dart_tool/routed/deploy/cloudflare/frontend/custom.mjs';
+      fs.file(entry)
+        ..createSync(recursive: true)
+        ..writeAsStringSync('export default {};');
+
+      final command = DeployCommand(
+        fileSystem: fs,
+        processRunner: (_, _, _) async => 0,
+      );
+      final runner = RoutedCommandRunner()..register([command]);
+
+      await expectLater(
+        runner.run([
+          'deploy',
+          '--dry-run',
+          '--target',
+          'cloudflare',
+          '--entry',
+          'package:demo_app/cloudflare_app.dart',
+          '--ssr-entry',
+          '.dart_tool/routed/deploy/cloudflare/frontend/custom.mjs',
+        ]),
+        throwsA(isA<UsageException>()),
+      );
+      expect(fs.file(entry).existsSync(), isTrue);
+    },
+  );
 
   test('Cloudflare dry-run validates and writes all binding sections', () async {
     final fs = MemoryFileSystem();

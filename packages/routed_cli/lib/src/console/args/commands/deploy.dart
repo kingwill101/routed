@@ -315,8 +315,15 @@ class DeployCommand extends BaseCommand {
       final destination = root.fileSystem.directory(
         p.join(buildRoot.path, 'frontend'),
       );
+      if (_pathsOverlap(buildDirectory.path, destination.path)) {
+        throw UsageException(
+          'SSR build directory cannot overlap the generated frontend '
+          'directory: ${destination.path}',
+          usage,
+        );
+      }
       _copyFrontendBuild(buildDirectory, destination);
-      bundledSsrEntry = p.join('frontend', 'ssr.entry.mjs');
+      bundledSsrEntry = p.join('frontend', p.basename(source.path));
     }
 
     await dartEntry.writeAsString(
@@ -545,6 +552,10 @@ class DeployCommand extends BaseCommand {
 
   /// Copies a frontend build and its generated Fetch SSR entry.
   void _copyFrontendBuild(fs.Directory source, fs.Directory destination) {
+    if (destination.existsSync()) {
+      destination.deleteSync(recursive: true);
+    }
+    destination.createSync(recursive: true);
     for (final entity in source.listSync(recursive: true)) {
       if (entity is! fs.File) continue;
       final relative = p.relative(entity.path, from: source.path);
@@ -553,6 +564,17 @@ class DeployCommand extends BaseCommand {
       )..parent.createSync(recursive: true);
       target.writeAsBytesSync(entity.readAsBytesSync());
     }
+  }
+
+  bool _pathsOverlap(String first, String second) {
+    final left = p.normalize(p.absolute(first));
+    final right = p.normalize(p.absolute(second));
+
+    bool isSameOrChild(String path, String parent) {
+      return path == parent || path.startsWith('$parent${p.separator}');
+    }
+
+    return isSameOrChild(left, right) || isSameOrChild(right, left);
   }
 
   String _vercelNodeWorkerEntrySource(String importPath) =>
