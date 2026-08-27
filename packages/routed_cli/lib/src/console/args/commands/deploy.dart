@@ -438,6 +438,13 @@ class DeployCommand extends BaseCommand {
           },
       ];
     }
+    if (bundledReactSsrEntry != null) {
+      config['assets'] = {
+        'directory': 'react_ssr',
+        'binding': 'ASSETS',
+        'run_worker_first': true,
+      };
+    }
     if (variables.isNotEmpty) {
       config['vars'] = variables;
     }
@@ -1578,8 +1585,13 @@ String generateCloudflareWorkerWrapper(
   final reactSsrDispatch = reactSsrEntry == null
       ? ''
       : '''
-    if (new URL(request.url).pathname === '/__react/ssr') {
+    const pathname = new URL(request.url).pathname;
+    if (pathname === '/__react/ssr') {
       return await reactSsr.fetch(request, env, ctx);
+    }
+    if (pathname !== '/' && pathname.lastIndexOf('.') > pathname.lastIndexOf('/')) {
+      const asset = await env.ASSETS.fetch(request);
+      if (asset.status !== 404) return asset;
     }
 ''';
   return '''
