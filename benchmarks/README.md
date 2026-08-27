@@ -8,7 +8,6 @@ Performance comparison of Dart HTTP frameworks using reproducible methodology.
 |-----------|-------------|------|
 | **dart:io** | Raw `HttpServer` baseline (no framework) | 8001 |
 | **relic** | Serverpod Relic framework | 8007 |
-| **serinus** | Modular framework with DI | 8003 |
 | **shelf** | Google's composable middleware framework | 8002 |
 | **routed** | This framework | 8006 |
 
@@ -153,7 +152,6 @@ Based on the latest full benchmark run (AOT + JIT, 3 runs, 10s duration).
 | dart:io | ~18,600 | ~17,500 | 100% |
 | routed | ~13,700 | ~14,300 | ~74% |
 | shelf | ~12,800 | ~11,700 | ~69% |
-| serinus | ~12,400 | ~11,400 | ~67% |
 | relic | ~11,900 | ~11,600 | ~64% |
 
 *Results vary by hardware and thermal state. Relative rankings are stable.*

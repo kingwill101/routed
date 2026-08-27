@@ -82,7 +82,7 @@ pub(crate) fn bind_tcp_listener_addr(
 /// Supports HTTP/1.1 always, and HTTP/2 when `enable_http2` is true.
 pub(crate) async fn run_plain_proxy(
     listener: TcpListener,
-    app: Router,
+    state: ProxyState,
     mut shutdown_rx: oneshot::Receiver<()>,
     enable_http2: bool,
 ) -> Result<(), String> {
@@ -104,7 +104,7 @@ pub(crate) async fn run_plain_proxy(
                 if let Err(error) = stream.set_nodelay(true) {
                     eprintln!("[server_native] set_nodelay failed: {error}");
                 }
-                let app = app.clone();
+                let state = state.clone();
                 connections.spawn(async move {
                     let stream = stream;
                     let local_addr = stream.local_addr().ok();
@@ -112,7 +112,13 @@ pub(crate) async fn run_plain_proxy(
                     let Some(stream) = maybe_prepare_http1_prefixed_stream(stream).await? else {
                         return Ok(());
                     };
-                    let service = TowerToHyperService::new(app);
+                    let service = hyper::service::service_fn(
+                        move |request: Request<hyper::body::Incoming>| {
+                        let state = state.clone();
+                        async move {
+                            proxy_request(State(state), request.map(Body::new)).await
+                        }
+                    });
                     if enable_http2 {
                         let builder = AutoBuilder::new(TokioExecutor::new());
                         builder

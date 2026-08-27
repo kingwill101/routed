@@ -172,8 +172,7 @@ final class NativeHttpServer extends StreamView<HttpRequest>
     final deadline = DateTime.now().add(timeout);
     var stableZeroSamples = 0;
     while (DateTime.now().isBefore(deadline)) {
-      final info = _connectionCounters.snapshot();
-      if (info.active == 0) {
+      if (!_connectionCounters.hasDrainableRequests) {
         stableZeroSamples++;
         if (stableZeroSamples >= 3) {
           return;
@@ -344,13 +343,7 @@ final class NativeHttpServer extends StreamView<HttpRequest>
     _forceClosing = force;
     _closed = true;
     _unregisterSharedPorts();
-    if (force) {
-      // Give callback and tunnel responses a short chance to flush before
-      // the native proxy is torn down underneath them.
-      await _waitForActiveRequestsToDrain(
-        timeout: const Duration(milliseconds: 100),
-      );
-    } else {
+    if (!force) {
       await _waitForActiveRequestsToDrain();
     }
     await Future.wait(

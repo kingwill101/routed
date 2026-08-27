@@ -51,6 +51,7 @@ void main() {
     test('starts process with vm-service flag and logs output', () async {
       final logger = _TestLogger(verbose: true);
       final scriptFile = await _writeScript(tempDir);
+      final absoluteScriptPath = io.File(scriptFile.path).absolute.path;
       final startedExecutables = <String>[];
       final startedArguments = <List<String>>[];
       final runInShellValues = <bool>[];
@@ -92,7 +93,7 @@ void main() {
         equals([
           '--enable-vm-service=8282',
           '--enable-asserts',
-          scriptFile.path,
+          absoluteScriptPath,
           '--host',
           '127.0.0.1',
         ]),
@@ -127,6 +128,7 @@ void main() {
     test('restarts process when hot reload disabled', () async {
       final logger = _TestLogger(verbose: true);
       final scriptFile = await _writeScript(tempDir);
+      final absoluteScriptPath = io.File(scriptFile.path).absolute.path;
       final callArguments = <List<String>>[];
       final processes = <_FakeProcess>[];
       final watcher = _FakeDirectoryWatcher(tempDir.path);
@@ -172,7 +174,7 @@ void main() {
         equals([
           '--enable-vm-service=8181',
           '--enable-asserts',
-          scriptFile.path,
+          absoluteScriptPath,
           '--foo',
           'bar',
         ]),
@@ -182,7 +184,7 @@ void main() {
         equals([
           '--enable-vm-service=8181',
           '--enable-asserts',
-          scriptFile.path,
+          absoluteScriptPath,
         ]),
       );
       expect(firstProcess.killCalled, isTrue);

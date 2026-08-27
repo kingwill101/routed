@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.2 - 2026-08-25
 
 - Migrated package analysis to `very_good_analysis` and completed public API
   Dartdoc coverage.

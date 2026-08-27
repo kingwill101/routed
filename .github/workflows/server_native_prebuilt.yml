@@ -250,10 +250,98 @@ jobs:
             echo "tag=${{ env.PREBUILT_TAG_PREFIX }}${version}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: ${{ steps.tag.outputs.tag }}
-          generate_release_notes: true
-          files: artifacts/**/*.tar.gz
+      - name: Wait for GitHub to expose the release tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          tag_ref="repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}"
+          for attempt in {1..12}; do
+            if gh api "$tag_ref" >/dev/null 2>&1; then
+              exit 0
+            fi
+            echo "Tag not visible yet (attempt $attempt/12)."
+            sleep 5
+          done
+          echo "GitHub did not expose tag ${RELEASE_TAG} in time." >&2
+          exit 1
+
+      - name: Prepare GitHub Release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          releases_json="$(
+            gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100"
+          )"
+          release_ids="$(jq -r --arg tag "$RELEASE_TAG" '
+            .[] | select(.tag_name == $tag) | .id
+          ' <<<"$releases_json")"
+          release_id="${release_ids%%$'\n'*}"
+
+          if [[ -z "$release_id" ]]; then
+            release_id="$(gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/releases" \
+              -f "tag_name=$RELEASE_TAG" \
+              -f "name=$RELEASE_TAG" \
+              -F draft=true \
+              -F prerelease=false \
+              -F generate_release_notes=true \
+              --jq '.id')"
+          fi
+
+          if [[ -z "$release_id" ]]; then
+            echo "Could not create or find release $RELEASE_TAG." >&2
+            exit 1
+          fi
+          echo "id=$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Upload prebuilt artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mapfile -d '' release_files < <(
+            find artifacts -type f -name '*.tar.gz' -print0 | sort -z
+          )
+          if (( ${#release_files[@]} == 0 )); then
+            echo 'No prebuilt artifacts were downloaded.' >&2
+            exit 1
+          fi
+          for file in "${release_files[@]}"; do
+            gh release upload "$RELEASE_TAG" "$file" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          done
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ steps.release.outputs.id }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh api --method PATCH \
+            "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            -F draft=false \
+            --jq '{tag_name, draft, html_url}'
+
+          mapfile -t uploaded_files < <(
+            gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+              --jq '.assets[].name'
+          )
+          mapfile -d '' expected_files < <(
+            find artifacts -type f -name '*.tar.gz' -print0 | sort -z
+          )
+          for file in "${expected_files[@]}"; do
+            expected_name="$(basename "$file")"
+            if ! printf '%s\n' "${uploaded_files[@]}" |
+              grep -Fxq "$expected_name"; then
+              echo "Release $RELEASE_TAG is missing $expected_name." >&2
+              exit 1
+            fi
+          done

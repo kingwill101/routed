@@ -1,4 +1,4 @@
-## Unreleased
+## 0.2.1 - 2026-08-25
 
 - Adopt `very_good_analysis` with strict typing and public API documentation
   enforcement for the authentication runtime.

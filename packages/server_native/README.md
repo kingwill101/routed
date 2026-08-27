@@ -40,7 +40,7 @@ bootstrap.
 
 ```yaml
 dependencies:
-  server_native: ^0.1.3+1
+  server_native: ^0.1.7
 ```
 
 ## Quick Start (`HttpServer` Style)
@@ -518,7 +518,10 @@ dart run server_native:setup
 
 `setup` is optional. The `native_prebuilt` hook resolves the verified manifest
 artifact from its shared cache (or downloads it) before falling back to a local
-Rust build. Workspace checkouts intentionally use the current Rust sources.
+Cargo build described by `native_prebuilt.yaml`. Workspace checkouts
+intentionally use the current Rust sources; installed packages can use the
+verified release artifact first and only build from the packaged sources when
+no compatible prebuilt is available.
 
 To auto-select the newest available prebuilt release instead, use:
 
@@ -541,7 +544,12 @@ Downloaded files are extracted to:
 1. `hooks.user_defines` `prebuilt_path` override
 2. Local `.prebuilt/<platform>/` artifact
 3. Verified shared cache/download from the manifest release
-4. Rust source fallback through `native_toolchain_rust`
+4. Manifest-driven Cargo source build
+
+> Publishing note: `native_prebuilt` 0.4.0 still declares `code_assets` 1.x.
+> This workspace temporarily overrides that constraint to exercise
+> `code_assets` 2.x. Publish `server_native` after a compatible
+> `native_prebuilt` release is available, or update that dependency first.
 
 ## Troubleshooting
 

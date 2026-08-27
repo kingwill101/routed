@@ -41,16 +41,6 @@ services:
     ports:
       - "8002:8002"
 
-  serinus_jit:
-    profiles: ["jit"]
-    build:
-      context: ..
-      dockerfile: benchmarks/servers/serinus/Dockerfile.jit
-    environment:
-      PORT: "8003"
-    ports:
-      - "8003:8003"
-
   relic_jit:
     profiles: ["jit"]
     build:
@@ -74,16 +64,6 @@ services:
       default:
         aliases:
           - routedjit
-
-  serinus_aot:
-    profiles: ["aot"]
-    build:
-      context: ..
-      dockerfile: benchmarks/servers/serinus/Dockerfile.aot
-    environment:
-      PORT: "8003"
-    ports:
-      - "8003:8003"
 
   relic_aot:
     profiles: ["aot"]

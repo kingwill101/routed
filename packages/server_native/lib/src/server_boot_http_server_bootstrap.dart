@@ -12,6 +12,7 @@ final class _NativeHttpBinding {
 HttpHeaders _createNativeHttpDefaultResponseHeaders() {
   final headers = BridgeHttpResponse(
     requestMethod: 'GET',
+    requestPersistentConnection: true,
     connectionInfo: BridgeConnectionInfo(
       remoteAddress: InternetAddress.loopbackIPv4,
       remotePort: 0,

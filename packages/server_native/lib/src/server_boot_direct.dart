@@ -6,6 +6,7 @@ Future<void> _handleChunkedBridgeRequest(
   _BridgeSocketWriter writer, {
   required _BridgeHandleStream handleStream,
   required BridgeRequestFrame startFrame,
+  void Function()? onRequestDetached,
 }) async {
   final requestBody = StreamController<Uint8List>(sync: true);
   var requestBodyBytes = 0;
@@ -16,10 +17,14 @@ Future<void> _handleChunkedBridgeRequest(
     bodyStream: requestBody.stream,
     onDetachedSocket: (socket) {
       detachedSocket = socket;
+      onRequestDetached?.call();
     },
     onResponseStart: (frame) async {
       responseStarted = true;
       detachedSocket = frame.detachedSocket;
+      if (frame.detachedSocket != null) {
+        onRequestDetached?.call();
+      }
       writer.writeFrame(frame.encodeStartPayload());
     },
     onResponseChunk: (chunkBytes) async {
@@ -117,9 +122,20 @@ Future<void> _handleChunkedBridgeRequest(
       await _runDetachedSocketTunnel(reader, writer, detachedSocket!);
       return;
     }
-  } catch (error) {
+  } catch (error, stack) {
     if (!responseStarted) {
-      _writeBridgeBadRequest(writer, error);
+      stderr.writeln('[server_native] bridge handler error: $error\n$stack');
+      _writeBridgeInternalServerError(writer);
+      return;
+    }
+    // A response-start frame has already been sent. Sending a legacy
+    // single-frame error after it would leave the Rust decoder with an
+    // invalid streaming sequence and can surface as an empty response. End
+    // the existing response instead; the framework may already have emitted
+    // its own fallback status before the response future reported the error.
+    stderr.writeln('[server_native] bridge handler error: $error\n$stack');
+    if (detachedSocket == null) {
+      writer.writeFrame(BridgeResponseFrame.encodeEndPayload());
       return;
     }
     rethrow;
@@ -161,7 +177,7 @@ Future<_BridgeHandleFrameResult> _handleDirectFrame(
     );
   } catch (error, stack) {
     stderr.writeln('[server_native] direct handler error: $error\n$stack');
-    return _BridgeHandleFrameResult.frame(_internalServerErrorFrame(error));
+    return _BridgeHandleFrameResult.frame(_internalServerErrorFrame());
   }
 }
 
@@ -199,7 +215,7 @@ Future<_BridgeHandleFrameResult> _handleDirectPayload(
     );
   } catch (error, stack) {
     stderr.writeln('[server_native] direct handler error: $error\n$stack');
-    return _BridgeHandleFrameResult.frame(_internalServerErrorFrame(error));
+    return _BridgeHandleFrameResult.frame(_internalServerErrorFrame());
   }
 }
 
@@ -275,7 +291,7 @@ Future<void> _handleDirectStream(
     stderr.writeln(
       '[server_native] direct stream handler error: $error\n$stack',
     );
-    final errorResponse = _internalServerErrorFrame(error);
+    final errorResponse = _internalServerErrorFrame();
     await onResponseStart(
       BridgeResponseFrame(
         status: errorResponse.status,
@@ -377,13 +393,21 @@ Future<Uint8List> _collectDirectBodyBytes(Stream<Uint8List>? bodyStream) async {
 }
 
 /// Creates a generic 500 response frame for uncaught direct handler failures.
-BridgeResponseFrame _internalServerErrorFrame(Object error) {
+BridgeResponseFrame _internalServerErrorFrame() {
   return BridgeResponseFrame(
     status: HttpStatus.internalServerError,
     headers: const <MapEntry<String, String>>[
       MapEntry(HttpHeaders.contentTypeHeader, 'text/plain; charset=utf-8'),
     ],
-    bodyBytes: Uint8List.fromList(utf8.encode('direct handler error: $error')),
+    bodyBytes: Uint8List.fromList(utf8.encode('Internal Server Error')),
+  );
+}
+
+/// Writes a generic `500 Internal Server Error` bridge response.
+void _writeBridgeInternalServerError(_BridgeSocketWriter writer) {
+  _writeBridgeResponse(
+    writer,
+    _BridgeHandleFrameResult.frame(_internalServerErrorFrame()),
   );
 }
 

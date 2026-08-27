@@ -50,13 +50,6 @@ Future<void> main(List<String> args) async {
       branch: 'main',
       patchFile: 'relic.patch',
     ),
-    'serinus': const _FrameworkConfig(
-      name: 'serinus',
-      gitUrl: 'https://github.com/francescovallone/serinus.git',
-      branch: 'feat/server_native',
-      patchFile: null,
-      workspaceTestPackages: ['packages/serinus'],
-    ),
   };
 
   final selectedFrameworks = options.frameworks.contains('all')
@@ -429,16 +422,6 @@ Future<List<_CommandResult>> _runFrameworkSuite({
         framework: framework.name,
         localPrebuiltPath: localPrebuiltPath,
         stopOnFailure: stopOnFailure,
-        workspaceTestPackages: framework.workspaceTestPackages?.toSet(),
-      );
-    case 'serinus':
-      return _runWorkspaceSuite(
-        checkoutDir,
-        mode,
-        framework: framework.name,
-        localPrebuiltPath: localPrebuiltPath,
-        stopOnFailure: stopOnFailure,
-        workspaceTestPackages: framework.workspaceTestPackages?.toSet(),
       );
     default:
       throw StateError('Unsupported framework: ${framework.name}');
@@ -508,7 +491,6 @@ Future<List<_CommandResult>> _runWorkspaceSuite(
   required String framework,
   required String? localPrebuiltPath,
   required bool stopOnFailure,
-  Set<String>? workspaceTestPackages,
 }) async {
   final env = _compatEnvironment(
     mode: mode,
@@ -534,10 +516,6 @@ Future<List<_CommandResult>> _runWorkspaceSuite(
 
   final workspacePackages = await _loadWorkspacePackages(checkoutDir);
   for (final package in workspacePackages) {
-    if (workspaceTestPackages != null &&
-        !workspaceTestPackages.contains(package)) {
-      continue;
-    }
     final packageDir = Directory(p.join(checkoutDir.path, package));
     final testDir = Directory(p.join(packageDir.path, 'test'));
     if (!testDir.existsSync()) {
@@ -749,7 +727,7 @@ Usage:
 Options:
   --workspace-root=<path>   Checkout workspace root.
                             Default: .dart_tool/server_native/framework_compat
-  --framework=<list>        Comma-separated: all,shelf,relic,serinus
+  --framework=<list>        Comma-separated: all,shelf,relic
                             Default: all
   --mode=<list>             Comma-separated: both,io,native
                             Default: both
@@ -770,13 +748,11 @@ class _FrameworkConfig {
     required this.gitUrl,
     required this.branch,
     required this.patchFile,
-    this.workspaceTestPackages,
   });
   final String name;
   final String gitUrl;
   final String branch;
   final String? patchFile;
-  final List<String>? workspaceTestPackages;
 }
 
 enum _CompatMode { io, native }

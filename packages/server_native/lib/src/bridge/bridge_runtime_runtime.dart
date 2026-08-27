@@ -25,6 +25,7 @@ final class BridgeHttpRuntime {
       onStart: onResponseStart,
       onChunk: onResponseChunk,
       requestMethod: frame.method,
+      requestPersistentConnection: _derivePersistentConnection(frame),
       connectionInfo: connectionInfo,
       onDetachedSocket: onDetachedSocket,
     );
@@ -46,6 +47,7 @@ final class BridgeHttpRuntime {
     final connectionInfo = BridgeConnectionInfo.fromRequestFrame(frame);
     final response = BridgeHttpResponse(
       requestMethod: frame.method,
+      requestPersistentConnection: _derivePersistentConnection(frame),
       connectionInfo: connectionInfo,
     );
     final request = BridgeHttpRequest(

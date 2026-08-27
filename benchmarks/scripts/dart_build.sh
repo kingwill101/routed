@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
-SERVERS=(dart_io relic shelf serinus routed)
+SERVERS=(dart_io relic shelf routed)
 
 for name in "${SERVERS[@]}"; do
   dir="$ROOT_DIR/servers/$name"

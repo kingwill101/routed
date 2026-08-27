@@ -37,7 +37,6 @@ use hyper::server::conn::http1;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as AutoBuilder;
-use hyper_util::service::TowerToHyperService;
 use parking_lot::{Condvar, Mutex};
 use pkcs8::der::pem::PemLabel;
 use socket2::{Domain, Protocol, Socket, Type};

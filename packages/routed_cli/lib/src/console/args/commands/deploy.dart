@@ -8,6 +8,19 @@ import 'package:routed_cli/src/console/args/base_command.dart';
 import 'package:routed_cli/src/console/util/dart_exec.dart';
 import 'package:routed_cli/src/console/util/pubspec.dart';
 
+/// Executes an external deployment process and returns its exit code.
+///
+/// [executable] is the process name, [arguments] are passed unchanged, and
+/// [workingDirectory] is the project directory in which the process runs.
+/// Supplying a runner is useful for embedding the command or testing its
+/// generated deployment artifacts without starting external processes.
+typedef DeploymentProcessRunner =
+    Future<int> Function(
+      String executable,
+      List<String> arguments,
+      String workingDirectory,
+    );
+
 /// Builds and deploys a Routed application without user-authored shell files.
 ///
 /// Cloudflare Workers is the default target. An application that exports
@@ -23,6 +36,7 @@ import 'package:routed_cli/src/console/util/pubspec.dart';
 /// ```text
 /// routed deploy --target cloudflare \
 ///   --cloudflare-factory environment \
+///   --var AUTH_ORIGIN=https://example.workers.dev \
 ///   --d1 AUTH_DB=auth-db:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx \
 ///   --r2 ASSETS=app-assets \
 ///   --queue JOBS=app-jobs \
@@ -44,7 +58,11 @@ import 'package:routed_cli/src/console/util/pubspec.dart';
 /// `--runtime node` or `--runtime edge`.
 class DeployCommand extends BaseCommand {
   /// Creates the deployment command.
-  DeployCommand({super.logger, super.fileSystem}) {
+  DeployCommand({
+    super.logger,
+    super.fileSystem,
+    DeploymentProcessRunner? processRunner,
+  }) : _processRunner = processRunner {
     argParser
       ..addOption(
         'target',
@@ -79,6 +97,11 @@ class DeployCommand extends BaseCommand {
       ..addOption(
         'compatibility-date',
         help: 'Cloudflare compatibility date (defaults to today).',
+      )
+      ..addMultiOption(
+        'var',
+        help: 'Cloudflare plaintext variable. Use NAME=VALUE.',
+        valueHelp: 'NAME=VALUE',
       )
       ..addMultiOption(
         'durable-object',
@@ -140,6 +163,8 @@ class DeployCommand extends BaseCommand {
       );
   }
 
+  final DeploymentProcessRunner? _processRunner;
+
   @override
   String get name => 'deploy';
 
@@ -169,6 +194,7 @@ class DeployCommand extends BaseCommand {
       );
     }
     final dartDurableObjects = _parseDurableObjectBindings(target);
+    final variables = _parseCloudflareVariables(target);
     final containers = _parseContainerBindings(target);
     final durableObjects = _mergeDurableObjectBindings(
       dartDurableObjects,
@@ -195,6 +221,18 @@ class DeployCommand extends BaseCommand {
     );
     final workflowBindings = _parseWorkflowBindings(target);
     final secretsStoreBindings = _parseSecretsStoreBindings(target);
+    _validateCloudflareBindingNames(
+      variables: variables.keys,
+      bindingNames: [
+        ...durableObjects.map((binding) => binding.bindingName),
+        ...d1Bindings.map((binding) => binding.bindingName),
+        ...r2Bindings.map((binding) => binding.bindingName),
+        ...queueBindings.map((binding) => binding.bindingName),
+        ...serviceBindings.map((binding) => binding.bindingName),
+        ...workflowBindings.map((binding) => binding.bindingName),
+        ...secretsStoreBindings.map((binding) => binding.bindingName),
+      ],
+    );
 
     final packageName = await readPackageName(root);
     if (packageName == null) {
@@ -358,6 +396,9 @@ class DeployCommand extends BaseCommand {
             'secret_name': binding.secretName,
           },
       ];
+    }
+    if (variables.isNotEmpty) {
+      config['vars'] = variables;
     }
     await configOutput.writeAsString(
       const JsonEncoder.withIndent('  ').convert(config),
@@ -697,13 +738,23 @@ export const config = { path: "/*" };
     required String label,
   }) async {
     logger.info('$label …');
-    final process = await io.Process.start(
-      resolveDartExecutable(),
-      arguments,
-      workingDirectory: root.path,
-      mode: io.ProcessStartMode.inheritStdio,
-    );
-    final code = await process.exitCode;
+    late final int code;
+    final processRunner = _processRunner;
+    if (processRunner != null) {
+      code = await processRunner(
+        resolveDartExecutable(),
+        arguments,
+        root.path,
+      );
+    } else {
+      final process = await io.Process.start(
+        resolveDartExecutable(),
+        arguments,
+        workingDirectory: root.path,
+        mode: io.ProcessStartMode.inheritStdio,
+      );
+      code = await process.exitCode;
+    }
     if (code != 0) throw StateError('$label failed with exit code $code.');
     return code;
   }
@@ -758,13 +809,19 @@ export const config = { path: "/*" };
     required String label,
   }) async {
     logger.info('$label …');
-    final process = await io.Process.start(
-      'npx',
-      ['--yes', ...arguments],
-      workingDirectory: root.path,
-      mode: io.ProcessStartMode.inheritStdio,
-    );
-    final code = await process.exitCode;
+    late final int code;
+    final processRunner = _processRunner;
+    if (processRunner != null) {
+      code = await processRunner('npx', ['--yes', ...arguments], root.path);
+    } else {
+      final process = await io.Process.start(
+        'npx',
+        ['--yes', ...arguments],
+        workingDirectory: root.path,
+        mode: io.ProcessStartMode.inheritStdio,
+      );
+      code = await process.exitCode;
+    }
     if (code != 0) {
       throw StateError(
         '$label failed with exit code $code. Check the target CLI '
@@ -838,6 +895,66 @@ export const config = { path: "/*" };
       );
     }
     return bindings;
+  }
+
+  Map<String, String> _parseCloudflareVariables(String target) {
+    final raw = results?['var'];
+    if (raw == null) return const {};
+    if (target != 'cloudflare') {
+      throw UsageException(
+        '--var is only supported for Cloudflare deployments.',
+        usage,
+      );
+    }
+
+    final values = raw is List ? raw.whereType<String>() : <String>[];
+    final identifier = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
+    final variables = <String, String>{};
+    for (final value in values) {
+      final equals = value.indexOf('=');
+      if (equals < 1 || equals == value.length - 1) {
+        throw UsageException(
+          'Invalid Cloudflare variable "$value". Use NAME=VALUE.',
+          usage,
+        );
+      }
+      final name = value.substring(0, equals).trim();
+      final variableValue = value.substring(equals + 1);
+      if (variableValue.trim().isEmpty) {
+        throw UsageException(
+          'Invalid Cloudflare variable "$value". Use NAME=VALUE.',
+          usage,
+        );
+      }
+      if (!identifier.hasMatch(name)) {
+        throw UsageException(
+          'Invalid Cloudflare variable name "$name".',
+          usage,
+        );
+      }
+      if (variables.containsKey(name)) {
+        throw UsageException(
+          'Cloudflare variable names must be unique: $name.',
+          usage,
+        );
+      }
+      variables[name] = variableValue;
+    }
+    return variables;
+  }
+
+  void _validateCloudflareBindingNames({
+    required Iterable<String> variables,
+    required Iterable<String> bindingNames,
+  }) {
+    final seen = <String>{};
+    for (final name in [...variables, ...bindingNames]) {
+      if (seen.add(name)) continue;
+      throw UsageException(
+        'Cloudflare variable and binding names must be unique: $name.',
+        usage,
+      );
+    }
   }
 
   List<_CloudflareD1Binding> _parseD1Bindings(String target) {

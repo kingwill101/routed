@@ -1,6 +1,6 @@
 name: routed_io
 description: dart:io HTTP(S) host transport for Routed — kept separate from routed_core for Cloudflare Workers and other non-dart:io hosts.
-version: 0.1.1
+version: 0.1.2
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_io
 tags:
   - routed
@@ -13,7 +13,7 @@ funding:
 resolution: workspace
 
 environment:
-  sdk: '>=3.9.0 <4.0.0'
+  sdk: '>=3.12.0 <4.0.0'
 
 dependencies:
   routed_core: ">=0.4.0 <1.0.0"

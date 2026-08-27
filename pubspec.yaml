@@ -52,20 +52,22 @@ workspace:
   - examples/rate_limiting
   - examples/openapi_demo
   - examples/full_stack
-  # Keep this example standalone until Stem publishes a release compatible
-  # with dartastic_opentelemetry_api 0.9.x.
 
 funding:
   - https://www.buymeacoffee.com/kingwill101
 
 environment:
-  sdk: ">=3.9.0 <4.0.0"
+  sdk: ">=3.12.0 <4.0.0"
 dependencies:
   contextual: ^2.2.0
   liquify: ^1.4.2
   uuid: ^4.5.2
 
 dependency_overrides:
+  # native_prebuilt 0.4.0 has not widened its code_assets constraint yet;
+  # keep the workspace on the current code-assets protocol while its manifest
+  # recipe and prebuilt resolver remain source-compatible with it.
+  code_assets: ^2.0.0
   # server_testing 0.4.x uses artisanal ^0.5.0. Keep the workspace on one
   # version while older routed CLI/testing packages are migrated.
   artisanal: ^0.5.0

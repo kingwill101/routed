@@ -2,7 +2,65 @@
 
 All notable changes to `server_native` will be documented in this file.
 
-## Unreleased
+## 0.1.7 - 2026-08-26
+
+- Keep detached request leases active until the detached transport closes,
+  preserving graceful-shutdown accounting for upgraded and tunneled requests.
+- Publish the matching prebuilt native assets under
+  `server-native-prebuilt-v0.1.7`.
+
+## 0.1.6 - 2026-08-26
+
+- Preserve an HTTP request's `Connection: close` semantics even when a
+  framework tries to enable persistent connections on the response.
+- Finish an already-started streamed response cleanly when its handler fails,
+  avoiding an invalid second response frame.
+- Add a Relic compatibility regression covering raw HTTP/1.1 connection
+  shutdown and response completion.
+- Publish the matching prebuilt native assets under
+  `server-native-prebuilt-v0.1.6`.
+
+## 0.1.5 - 2026-08-26
+
+- Return a generic internal-server-error body when a native handler fails,
+  while retaining the detailed failure in server-side logs.
+- Scope graceful-shutdown accounting to individual requests so detached
+  upgrades cannot consume another request's drain lease.
+- Ensure forced shutdown does not wait for unconsumed single-subscription
+  request bodies.
+- Validate framework compatibility filters and skip native asset work when
+  code assets are disabled.
+- Consolidate TLS proxy startup options so the native crate passes strict
+  Clippy checks without suppressions.
+- Publish the matching prebuilt native assets under
+  `server-native-prebuilt-v0.1.5`.
+
+## 0.1.4 - 2026-08-26
+
+- Fix forceful native shutdown so in-flight frontend requests are terminated
+  at the transport boundary instead of receiving a synthetic 502 response.
+- Keep detached and upgraded connections visible to `connectionsInfo()` while
+  allowing graceful shutdown to drain ordinary requests independently.
+- Close detached socket pairs without waiting on peers that stopped reading,
+  preventing graceful shutdown deadlocks and callback teardown races.
+- Keep bridge response byte accounting consistent when responses are populated
+  through `addStream`.
+- Publish the matching prebuilt native assets under
+  `server-native-prebuilt-v0.1.4`.
+
+- Updated the native asset toolchain to `code_assets` 2.0, `hooks` 2.2,
+  `ffi` 2.2, and Relic 1.2.
+- Replaced the Rust hook builder with a manifest-driven `native_prebuilt`
+  recipe, keeping source builds and verified release prebuilts on one path.
+- Kept `ffigen` at 20.1.1 because the current `ffigen` 21 hook is not
+  compatible with the `code_assets` 2 API.
+- Removed the Serinus benchmark and framework-compatibility target because the
+  upstream repository no longer provides the expected `server_native` entry
+  point.
+- Refreshed the Relic compatibility patch for the current upstream dependency
+  layout.
+
+## 0.1.3+1 - 2026-08-25
 
 - Reduced `shared: true` isolate scaling overhead by using one Tokio worker per
   shared native runtime and replacing the callback-mode hot polling loop with
@@ -17,8 +75,6 @@ All notable changes to `server_native` will be documented in this file.
   resolution for supported platforms.
 - Expanded native HTTP compatibility coverage for callbacks, headers,
   transfer encoding, and framework integrations.
-
-## 0.1.3+1
 
 - Fixed native-callback direct frame handling in `server_boot_proxy_direct.dart` to avoid routing single-frame direct requests through the stream path, improving shelf compatibility stability under repeated request/response cycles.
 - Added loopback bind retry handling for transient dual-stack ephemeral `EADDRINUSE` collisions, including wrapped native bind error detection.

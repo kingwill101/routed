@@ -250,9 +250,7 @@ class _MetadataVisitor extends RecursiveAstVisitor<void> {
 
   @override
   void visitClassDeclaration(ClassDeclaration node) {
-    // The analyzer API still exposes this deprecated AST node property.
-    // ignore: deprecated_member_use
-    _classStack.add(node.name.lexeme);
+    _classStack.add(node.namePart.typeName.lexeme);
     super.visitClassDeclaration(node);
     _classStack.removeLast();
   }
@@ -501,7 +499,7 @@ ExtractedRouteMetadata _readDeclarationMetadata({
 
   for (final annotation in metadata) {
     final name = annotation.name.name;
-    final args = annotation.arguments?.arguments ?? const <Expression>[];
+    final args = annotation.arguments?.arguments ?? const <Argument>[];
 
     switch (name) {
       case 'Summary':
@@ -601,7 +599,7 @@ String? _leadingCommentSource(AstNode node) {
   return parts.join('\n');
 }
 
-ResponseSchema? _parseApiResponse(List<Expression> args) {
+ResponseSchema? _parseApiResponse(Iterable<Argument> args) {
   if (args.isEmpty) return null;
   final statusCode = _intValue(_unwrapNamed(args.first));
   if (statusCode == null) return null;
@@ -620,7 +618,7 @@ ResponseSchema? _parseApiResponse(List<Expression> args) {
   );
 }
 
-ParamSchema? _parseApiParam(List<Expression> args) {
+ParamSchema? _parseApiParam(Iterable<Argument> args) {
   if (args.isEmpty) return null;
   final name = _stringValue(_unwrapNamed(args.first));
   if (name == null || name.isEmpty) return null;
@@ -638,7 +636,7 @@ ParamSchema? _parseApiParam(List<Expression> args) {
   );
 }
 
-BodySchema? _parseApiBody(List<Expression> args) {
+BodySchema? _parseApiBody(Iterable<Argument> args) {
   if (args.isEmpty) return null;
   return BodySchema(
     description: _namedString(args, 'description') ?? '',
@@ -673,46 +671,47 @@ List<String> _mergeTags(List<String> a, List<String> b) {
   return merged;
 }
 
-String? _firstStringArg(List<Expression> args) {
-  if (args.isEmpty) return null;
-  return _stringValue(_unwrapNamed(args.first));
+String? _firstStringArg(Iterable<Argument> args) {
+  final first = args.isEmpty ? null : args.first;
+  if (first == null) return null;
+  return _stringValue(_unwrapNamed(first));
 }
 
-List<Expression> _firstListArg(List<Expression> args) {
-  if (args.isEmpty) return const [];
-  final expr = _unwrapNamed(args.first);
+List<Expression> _firstListArg(Iterable<Argument> args) {
+  final first = args.isEmpty ? null : args.first;
+  if (first == null) return const [];
+  final expr = _unwrapNamed(first);
   if (expr is ListLiteral) {
     return expr.elements.whereType<Expression>().toList(growable: false);
   }
   return const [];
 }
 
-Expression _unwrapNamed(Expression expression) {
-  if (expression is NamedExpression) return expression.expression;
-  return expression;
+Expression _unwrapNamed(Argument argument) {
+  return argument.argumentExpression;
 }
 
-Expression? _namedExpression(List<Expression> args, String name) {
+Expression? _namedExpression(Iterable<Argument> args, String name) {
   for (final arg in args) {
-    if (arg is NamedExpression && arg.name.label.name == name) {
-      return arg.expression;
+    if (arg is NamedArgument && arg.name.lexeme == name) {
+      return arg.argumentExpression;
     }
   }
   return null;
 }
 
-String? _namedString(List<Expression> args, String name) {
+String? _namedString(Iterable<Argument> args, String name) {
   final expr = _namedExpression(args, name);
   return _stringValue(expr);
 }
 
-bool? _namedBool(List<Expression> args, String name) {
+bool? _namedBool(Iterable<Argument> args, String name) {
   final expr = _namedExpression(args, name);
   if (expr is BooleanLiteral) return expr.value;
   return null;
 }
 
-Map<String, Object?>? _namedMap(List<Expression> args, String name) {
+Map<String, Object?>? _namedMap(Iterable<Argument> args, String name) {
   final expr = _namedExpression(args, name);
   return _mapValue(expr);
 }

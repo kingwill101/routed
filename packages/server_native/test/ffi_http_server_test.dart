@@ -184,6 +184,70 @@ void main() {
   );
 
   test(
+    'graceful close keeps ordinary request drainable after detached upgrade',
+    () async {
+      final server = await NativeHttpServer.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+        http3: false,
+      );
+      final ordinaryRequestStarted = Completer<void>();
+      final releaseOrdinaryRequest = Completer<void>();
+      final client = HttpClient();
+      WebSocket? webSocket;
+      addTearDown(() async {
+        client.close(force: true);
+        try {
+          await webSocket?.close();
+        } catch (_) {}
+        try {
+          await server.close(force: true).timeout(const Duration(seconds: 1));
+        } catch (_) {}
+      });
+
+      server.listen((request) async {
+        if (request.uri.path == '/ws') {
+          final socket = await WebSocketTransformer.upgrade(request);
+          socket.listen(null, cancelOnError: false);
+          return;
+        }
+        if (request.uri.path == '/ordinary') {
+          if (!ordinaryRequestStarted.isCompleted) {
+            ordinaryRequestStarted.complete();
+          }
+          await releaseOrdinaryRequest.future;
+        }
+        request.response.write('ok');
+        await request.response.close();
+      });
+
+      webSocket = await WebSocket.connect(
+        'ws://127.0.0.1:${server.port}/ws',
+      );
+      final ordinaryRequest = await client.getUrl(
+        Uri.parse('http://127.0.0.1:${server.port}/ordinary'),
+      );
+      final ordinaryResponse = ordinaryRequest.close();
+      await ordinaryRequestStarted.future.timeout(const Duration(seconds: 3));
+
+      var closeCompleted = false;
+      final closeFuture = server.close().then<void>((_) {
+        closeCompleted = true;
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(closeCompleted, isFalse);
+
+      releaseOrdinaryRequest.complete();
+      final response = await ordinaryResponse.timeout(
+        const Duration(seconds: 3),
+      );
+      expect(await utf8.decodeStream(response), 'ok');
+      await closeFuture.timeout(const Duration(seconds: 3));
+      expect(closeCompleted, isTrue);
+    },
+  );
+
+  test(
     'NativeHttpServer nativeCallback replays unread request body for detachSocket(writeHeaders: false)',
     () async {
       final server = await NativeHttpServer.bind(

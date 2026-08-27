@@ -51,18 +51,18 @@ bool isRouteSchemaCreation(InstanceCreationExpression node) {
 }
 
 /// Returns the `schema:` argument from [node], if one was provided.
-NamedExpression? getSchemaArgument(MethodInvocation node) {
+NamedArgument? getSchemaArgument(MethodInvocation node) {
   return node.argumentList.arguments
-      .whereType<NamedExpression>()
-      .where((arg) => arg.name.label.name == 'schema')
+      .whereType<NamedArgument>()
+      .where((arg) => arg.name.lexeme == 'schema')
       .firstOrNull;
 }
 
 /// Returns the named argument called [name], if one was provided.
-NamedExpression? getNamedArgument(ArgumentList argumentList, String name) {
+NamedArgument? getNamedArgument(ArgumentList argumentList, String name) {
   return argumentList.arguments
-      .whereType<NamedExpression>()
-      .where((arg) => arg.name.label.name == name)
+      .whereType<NamedArgument>()
+      .where((arg) => arg.name.lexeme == name)
       .firstOrNull;
 }
 

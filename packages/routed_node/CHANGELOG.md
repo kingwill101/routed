@@ -1,9 +1,7 @@
-## Unreleased
+## 0.2.1 - 2026-08-25
 
 - Adopt `very_good_analysis` and complete public API documentation for the
   Node, Fetch, and Cloudflare host integrations.
-
-## 0.2.1
 
 - Add `defineCloudflareFetchFactoryWithEnvironmentAsync` for typed Worker
   startup with Cloudflare bindings such as D1 and secrets.
@@ -14,6 +12,9 @@
 - Preserve Cloudflare's `CF-Connecting-IP` through the Fetch bridge so
   portable request IP policies, including rate limiting, work on Workers
   without a socket remote address.
+
+- Reuse the hosted `ormed_d1` binding contracts for Cloudflare D1 types so
+  applications can share the same D1 API across Routed and Ormed.
 
 ## 0.2.0
 

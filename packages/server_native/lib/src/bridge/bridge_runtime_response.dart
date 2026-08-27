@@ -63,6 +63,16 @@ final class BridgeDetachedSocket {
       await bridgeSocket.close();
     } catch (_) {}
   }
+
+  /// Destroys both ends immediately without waiting for pending writes.
+  ///
+  /// This is used after the native listener has already been stopped. A peer
+  /// that stopped reading can otherwise keep [Socket.close] waiting forever
+  /// while the detached connection is being torn down.
+  void destroy() {
+    applicationSocket.destroy();
+    bridgeSocket.destroy();
+  }
 }
 
 /// Creates a loopback socket pair used by `HttpResponse.detachSocket`.

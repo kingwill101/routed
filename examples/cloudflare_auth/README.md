@@ -86,7 +86,7 @@ verified Telegram user ID.
 
 ## Prerequisites
 
-- Dart 3.9 or newer
+- Dart 3.12 or newer
 - Node.js and `npx`
 - a Cloudflare account with Wrangler authenticated (`npx wrangler login`)
 - a Workers-compatible D1 database
@@ -120,13 +120,24 @@ SESSION_KEY="base64:$(openssl rand -base64 64 | tr -d '\n')"
 printf '%s\n' "$SESSION_KEY" | npx wrangler secret put SESSION_KEY
 ```
 
-Build the Dart Worker and deploy the JavaScript wrapper:
+Use the Routed CLI dry-run to build and validate the Worker, then upload the
+generated wrapper with Wrangler if you need the manual upload path:
 
 ```bash
-mkdir -p build
 dart pub get
-dart compile js bin/worker.dart -O2 -o build/worker.dart.js
-npx wrangler deploy
+dart run routed_cli:routed deploy \
+  --target cloudflare \
+  --name routed-cloudflare-auth-example \
+  --entry package:routed_cloudflare_auth_example/app.dart \
+  --cloudflare-factory environment \
+  --var "AUTH_ORIGIN=$AUTH_ORIGIN" \
+  --d1 AUTH_DB=routed-cloudflare-auth-example:YOUR_DATABASE_ID \
+  --durable-object RATE_LIMIT_STORE=CloudflareRateLimitStoreObject \
+  --keep-vars \
+  --dry-run
+npx wrangler deploy \
+  --config .dart_tool/routed/deploy/cloudflare/wrangler.jsonc \
+  --keep-vars
 ```
 
 ### Recommended: Routed CLI deployment
@@ -141,6 +152,7 @@ dart run routed_cli:routed deploy \
   --name routed-cloudflare-auth-example \
   --entry package:routed_cloudflare_auth_example/app.dart \
   --cloudflare-factory environment \
+  --var "AUTH_ORIGIN=$AUTH_ORIGIN" \
   --d1 AUTH_DB=routed-cloudflare-auth-example:YOUR_DATABASE_ID \
   --durable-object RATE_LIMIT_STORE=CloudflareRateLimitStoreObject \
   --keep-vars
@@ -161,6 +173,90 @@ for the current allowance and limits.
 `CloudflareD1AuthStore.open` applies the current typed schema migrations on
 the first Worker initialization. No handwritten SQL migration file is
 required for the auth tables.
+
+### Pulumi deployment
+
+The example also includes a standalone Pulumi program under `pulumi/`. The
+Routed CLI remains the recommended deployment path for a quick start; Pulumi
+is useful when the Worker version and deployment need to live alongside a
+larger infrastructure graph. The program uses `pulumi_cloudflare` directly:
+`pulumi_dart_faas` currently targets AWS Lambda and GCP Cloud Run, so it is not
+needed for a Cloudflare Worker.
+
+Install the Pulumi CLI manually using the [official Pulumi installation
+instructions](https://www.pulumi.com/docs/install/), then verify it is
+available on `PATH`:
+
+```bash
+pulumi version
+```
+
+The Dart language host is separate from the Pulumi CLI. Install its Dart-side
+launcher once with:
+
+```bash
+dart pub global activate pulumi
+pulumi-dart install-language-host
+```
+
+If the helper reports that the `pulumi-language-dart` release asset is
+missing, build the host from the matching Pulumi-Dart source tag instead:
+
+```bash
+git clone --branch v3.1.0 --depth 1 \
+  https://github.com/kingwill101/pulumi-dart.git /tmp/pulumi-dart
+mkdir -p "$HOME/.local/bin"
+(cd /tmp/pulumi-dart/pulumi-language-dart && \
+  go build -o "$HOME/.local/bin/pulumi-language-dart" .)
+```
+
+Make sure `pulumi-language-dart` is on `PATH` before running `pulumi preview`.
+The Cloudflare provider reads `CLOUDFLARE_API_TOKEN` from the environment;
+prefer your password manager or CI secret store when supplying it.
+
+The mounted 1Password environment can bootstrap the stack and the Worker
+artifacts in one command. `bootstrap.sh` maps `PULUMI_PASSPHRASE` to
+Pulumi's `PULUMI_CONFIG_PASSPHRASE`, obtains the Cloudflare API token from the
+authenticated Wrangler session without printing it, discovers the example's
+D1 database, and uses `routed deploy --dry-run` to build the Worker:
+
+```bash
+cd examples/cloudflare_auth/pulumi
+op run --env-file=.env -- ./bootstrap.sh
+```
+
+The Pulumi program references the existing D1 database by ID and, when
+applied, deploys the Routed-generated wrapper and Dart module as a Worker
+version before promoting that version. It does not create or destroy the D1
+database. The bootstrap
+detects whether the named Worker already has a deployment: existing Workers
+inherit `SESSION_KEY` and omitted social-provider bindings from their latest
+version, while a new Worker gets a generated session key and the initial
+Durable Object migration. Set `WORKER_NAME` to deploy under a different name.
+
+When configuring a new Worker manually, disable binding inheritance and provide
+`sessionKey` as a Pulumi secret before previewing. The bootstrap ends at
+`pulumi preview`; review the plan and run `pulumi up --yes` when you are ready
+to apply it:
+
+```bash
+pulumi config set --secret sessionKey YOUR_BASE64_SESSION_KEY
+pulumi config set inheritExistingBindings false
+pulumi config set applyDurableObjectMigration true
+pulumi config set GITHUB_CLIENT_ID YOUR_CLIENT_ID
+pulumi config set --secret GITHUB_CLIENT_SECRET YOUR_CLIENT_SECRET
+pulumi config set DROPBOX_CLIENT_ID YOUR_CLIENT_ID
+pulumi config set --secret DROPBOX_CLIENT_SECRET YOUR_CLIENT_SECRET
+pulumi config set TELEGRAM_BOT_USERNAME YOUR_BOT_USERNAME
+pulumi config set --secret TELEGRAM_BOT_TOKEN YOUR_BOT_TOKEN
+```
+
+Pulumi configuration and state are intentionally ignored by this example;
+never commit a generated `Pulumi.*.yaml` file. The optional
+`applyDurableObjectMigration` setting is for a brand-new Worker. Leave it
+false when deploying a version of the already-initialized example, because
+the existing `routed-auth-v1` migration has already created the SQLite-backed
+Durable Object namespace.
 
 ## Try the app
 
@@ -308,6 +404,7 @@ dart run routed_cli:routed deploy \
   --name routed-cloudflare-auth-example \
   --entry package:routed_cloudflare_auth_example/app.dart \
   --cloudflare-factory environment \
+  --var "AUTH_ORIGIN=$AUTH_ORIGIN" \
   --d1 AUTH_DB=routed-cloudflare-auth-example:YOUR_DATABASE_ID \
   --durable-object RATE_LIMIT_STORE=CloudflareRateLimitStoreObject \
   --dry-run

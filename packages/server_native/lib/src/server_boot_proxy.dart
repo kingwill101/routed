@@ -118,6 +118,7 @@ Future<_RunningProxy> _startNativeProxy({
   _BridgeBinding? bridgeBinding;
   StreamSubscription<Socket>? bridgeSubscription;
   late final NativeProxyServer proxy;
+  Future<void> Function()? closeDirectStreams;
   try {
     if (nativeDirectCallback) {
       final directPayloadHandler = handlePayload;
@@ -126,7 +127,7 @@ Future<_RunningProxy> _startNativeProxy({
           'nativeDirectCallback requires a payload-based direct handler',
         );
       }
-      proxy = _startNativeDirectProxy(
+      final direct = _startNativeDirectProxy(
         host: host,
         port: port,
         backlog: backlog,
@@ -146,8 +147,9 @@ Future<_RunningProxy> _startNativeProxy({
         // can report idle keep-alive style state between requests.
         onSocketClosed: null,
         onRequestStarted: connectionCounters?.onRequestStarted,
-        onRequestCompleted: connectionCounters?.onRequestCompleted,
       );
+      proxy = direct.proxy;
+      closeDirectStreams = direct.closeStreams;
     } else {
       bridgeBinding = await _bindBridgeServer();
       final bridgeServer = bridgeBinding.server;
@@ -164,7 +166,6 @@ Future<_RunningProxy> _startNativeProxy({
           handlePayload: handlePayload,
           idleTimeoutProvider: idleTimeoutProvider,
           onRequestStarted: connectionCounters?.onRequestStarted,
-          onRequestCompleted: connectionCounters?.onRequestCompleted,
           onSocketClosed: connectionCounters?.onSocketClosed,
         );
       });
@@ -226,6 +227,13 @@ Future<_RunningProxy> _startNativeProxy({
       proxy.close();
     } catch (error, stack) {
       stderr.writeln('[server_native] proxy shutdown error: $error\n$stack');
+    }
+    try {
+      await closeDirectStreams?.call();
+    } catch (error, stack) {
+      stderr.writeln(
+        '[server_native] direct stream shutdown error: $error\n$stack',
+      );
     }
     try {
       if (bridgeSubscription != null) {

@@ -1,4 +1,4 @@
-## Unreleased
+## 0.2.1 - 2026-08-25
 
 - Adopted `very_good_analysis` and completed Dartdoc for the public cache
   integration APIs.

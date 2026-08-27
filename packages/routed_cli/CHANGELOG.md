@@ -1,4 +1,11 @@
-## Unreleased
+# Changelog
+
+## 0.3.2 - 2026-08-26
+
+- Add repeatable Cloudflare `--var NAME=VALUE` deployment options for
+  explicitly provisioning plaintext Worker variables such as `AUTH_ORIGIN`.
+
+## 0.3.1 - 2026-08-25
 
 - Adopted `very_good_analysis` and completed public API Dartdoc coverage across
   the CLI, while preserving existing command and fluent-runner contracts.

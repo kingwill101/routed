@@ -5,6 +5,7 @@ import 'dart:convert';
 // newline so the exact query text remains easy to compare with D1 schemas.
 // ignore_for_file: leading_newlines_in_multiline_strings
 
+import 'package:ormed_d1/ormed_d1.dart';
 import 'package:routed_auth_cloudflare/src/cloudflare_d1_auth_schema.dart';
 import 'package:routed_node/cloudflare.dart';
 import 'package:server_auth/server_auth.dart';
@@ -2234,20 +2235,18 @@ String _validateGuardedSql(String value) {
 }
 
 final class _D1 {
-  const _D1(this.database);
+  _D1(this.database) : _transport = D1BindingTransport(database);
+
   final CloudflareD1Database database;
+  final D1BindingTransport _transport;
 
   Future<List<T>> all<T>(
     String query,
     Iterable<Object?> values,
     T Function(Map<String, Object?>) decode,
   ) async {
-    final result = await database
-        .prepare(query)
-        .bind(values)
-        .all<T>(decode: decode);
-    _check(result);
-    return result.results;
+    final result = await _transport.query(query, values.toList());
+    return [for (final row in result.rows) decode(row)];
   }
 
   Future<T?> first<T>(
@@ -2255,20 +2254,35 @@ final class _D1 {
     Iterable<Object?> values,
     T Function(Map<String, Object?>) decode,
   ) async {
-    final result = await all(query, values, decode);
-    return result.firstOrNull;
+    final rows = await all(query, values, decode);
+    return rows.firstOrNull;
   }
 
   Future<CloudflareD1Result<Map<String, Object?>>> run(
     String query, [
     Iterable<Object?> values = const [],
   ]) async {
-    final result = await database
-        .prepare(query)
-        .bind(values)
-        .run<Map<String, Object?>>(decode: (row) => row);
-    _check(result);
-    return result;
+    final result = await _transport.execute(query, values.toList());
+    return CloudflareD1Result<Map<String, Object?>>(
+      success: result.success,
+      results: result.rows,
+      meta: CloudflareD1Meta(
+        duration: _number(result.meta['duration']),
+        rowsRead: _integer(result.meta['rows_read']),
+        rowsWritten: _integer(result.meta['rows_written']),
+        changes: _integer(result.meta['changes']),
+        changedDb: result.meta['changed_db'] as bool?,
+        sizeAfter: _integer(result.meta['size_after']),
+        lastRowId: result.meta['last_row_id'],
+        servedBy: result.meta['served_by'] as String?,
+        servedByColo: result.meta['served_by_colo'] as String?,
+        servedByPrimary: result.meta['served_by_primary'] as bool?,
+        servedByRegion: result.meta['served_by_region'] as String?,
+        servedByLocation: result.meta['served_by_location'] as String?,
+        bookmark: result.meta['bookmark'] as String?,
+      ),
+      error: result.error,
+    );
   }
 
   Future<List<CloudflareD1Result<Object?>>> batch(
@@ -2294,6 +2308,16 @@ final class _D1 {
     if (!result.success) {
       throw StateError('D1 statement failed: ${result.error}');
     }
+  }
+
+  static int? _integer(Object? value) {
+    if (value is num) return value.toInt();
+    return value is String ? int.tryParse(value) : null;
+  }
+
+  static num? _number(Object? value) {
+    if (value is num) return value;
+    return value is String ? num.tryParse(value) : null;
   }
 }
 

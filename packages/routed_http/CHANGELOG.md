@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.3 - 2026-08-25
 
 - Adopted `very_good_analysis` and completed public API Dartdoc coverage.
 - Clarified HTTP binding, multipart, negotiation, compression, and SSE APIs.

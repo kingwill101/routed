@@ -1,4 +1,4 @@
-## Unreleased
+## 0.4.1 - 2026-08-25
 
 - Adopt `very_good_analysis` and complete the public API documentation.
 

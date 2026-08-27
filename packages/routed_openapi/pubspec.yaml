@@ -1,15 +1,15 @@
 name: routed_openapi
 description: OpenAPI extraction and generation for Routed - portable OpenAPI spec generation from route manifests.
-version: 0.1.0
+version: 0.1.1
 repository: https://github.com/kingwill101/routed
 
 environment:
-  sdk: ">=3.9.0 <4.0.0"
+  sdk: ">=3.12.0 <4.0.0"
 
 resolution: workspace
 
 dependencies:
-  analyzer: ^10.0.1
+  analyzer: ^14.1.0
   build: ^4.0.0
   collection: ^1.19.1
   glob: ^2.1.3
