@@ -29,6 +29,10 @@ example/api/
 | `POST` | `/echo` | Request body and header echo |
 | `GET` | `/bindings/d1` | Live D1 write/read check |
 | `GET` | `/bindings/durable-object` | Live SQLite Durable Object check |
+| `GET` | `/bindings/r2` | Fixed-key native R2 binding check |
+| `GET` | `/storage/r2` | Fixed-key `storage_fs` R2 check |
+| `GET` | `/storage/r2/signed-url` | Mint a five-minute URL for the fixed private fixture |
+| `GET` | `/storage/r2/files/readme.txt` | Download the fixture with a valid signed query |
 
 Seed data: items `1` (alpha) and `2` (beta).
 
@@ -90,9 +94,24 @@ and ID together with the Durable Object class:
 
 ```bash
 routed deploy --target cloudflare --name routed-bindings-demo \
+  --cloudflare-factory environment \
   --d1 DB=DATABASE_NAME:DATABASE_ID \
+  --r2 FILES=BUCKET_NAME \
   --durable-object COUNTER=Counter
+
+npx wrangler secret put STORAGE_SIGNING_KEY --name routed-bindings-demo
 ```
+
+The environment-aware factory registers `FILES` as an application-scoped R2
+filesystem. `GET /storage/r2` exercises it through `ctx.storage('r2')`; the
+existing `GET /bindings/r2` route demonstrates the lower-level binding API.
+Both smoke routes use fixed keys so request input cannot overwrite or delete
+unrelated objects. `GET /storage/r2/signed-url` seeds one fixed private fixture
+and returns a five-minute capability URL for
+`GET /storage/r2/files/readme.txt`. Direct, expired, or tampered requests are
+rejected before R2 is read. A real application must authenticate and authorize
+the exact object before issuing a URL; the public mint route exists only to
+make this fixed demo fixture easy to validate.
 
 The D1 smoke route expects this table in the remote database:
 

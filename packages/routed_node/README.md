@@ -250,6 +250,64 @@ in Wrangler using the native `r2_buckets`, `queues`, and `services` sections.
 The Routed CLI can generate those sections with `--r2`, `--queue`, and
 `--service`.
 
+To expose a native R2 binding through the same `storage_fs` API as local, S3,
+and SFTP disks, build the Worker engine with its environment:
+
+```dart
+Future<Engine> createCloudflareEngine(
+  CloudflareEnvironment environment,
+) async {
+  final r2 = CloudflareR2Filesystem(
+    bucket: environment.r2('FILES'),
+    prefix: 'production',
+  );
+  final manager = StorageManager()
+    ..registerFilesystem('r2', r2)
+    ..setDefault('r2');
+  final signer = StorageSignedUrlSigner(
+    cloudflareTextBinding(environment, 'STORAGE_SIGNING_KEY'),
+  );
+  final engine = Engine(
+    providers: [
+      ...Engine.defaultProviders,
+      RoutedStorageProvider(manager: manager),
+    ],
+  );
+
+  engine.signedStorage(
+    '/downloads',
+    r2,
+    signer: signer,
+    rootPath: 'private',
+  );
+
+  await engine.initialize();
+  return engine;
+}
+```
+
+Deploy that factory and binding together:
+
+```bash
+routed deploy --target cloudflare \
+  --cloudflare-factory environment \
+  --r2 FILES=app-files
+
+npx wrangler secret put STORAGE_SIGNING_KEY --name YOUR_WORKER_NAME
+```
+
+`CloudflareR2Filesystem` uses the binding directly, so it does not need an R2
+account ID, S3 access key, or secret. Its optional prefix scopes every key. It
+buffers upload streams because `storage_fs` does not carry a known content
+length; use `env.r2('FILES')` directly when an application needs the lower-level
+binding API instead. The storage-backed static handler streams reads and does
+not import `dart:io` directly; it supports GET, HEAD, indexes, metadata,
+conditional requests, and single byte ranges. Ordinary static mounts require
+public visibility, while R2 objects remain private. Issue time-limited URLs
+with `StorageSignedUrlSigner` after authenticating the caller and authorizing
+the exact object; unsigned, expired, and tampered requests are rejected before
+the R2 read.
+
 Use the platform naming for Worker bindings with `env.worker(...)` when that
 reads more clearly in application code. Worker bindings support both Fetch and
 RPC methods:

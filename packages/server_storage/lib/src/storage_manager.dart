@@ -1,5 +1,6 @@
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
+import 'package:storage_fs/storage_fs.dart' show Filesystem;
 
 /// Resolves application paths against a configured storage disk.
 ///
@@ -23,6 +24,50 @@ abstract class StorageDisk {
   String resolve(String path);
 }
 
+/// A storage disk that exposes Laravel-style filesystem operations.
+///
+/// Built-in local and cloud disks implement this contract. Custom disks can
+/// implement only [StorageDisk] when they need path resolution, or implement
+/// this interface as well so [StorageManager.storage] can return their
+/// operational filesystem.
+abstract interface class FilesystemStorageDisk implements StorageDisk {
+  /// Unified asynchronous file operations for this disk.
+  Filesystem get storage;
+}
+
+/// Marks a disk whose `package:file` implementation requires asynchronous I/O.
+///
+/// Framework static-file adapters use [storage] for these disks rather than
+/// invoking synchronous methods through [StorageDisk.fileSystem]. Remote
+/// filesystems such as SFTP and cloud object stores implement this contract.
+abstract interface class AsyncFilesystemStorageDisk
+    implements FilesystemStorageDisk {}
+
+/// A storage disk that can issue provider-backed temporary URLs.
+///
+/// Implementations keep provider SDKs and adapter types behind the
+/// `server_storage` boundary. Applications should normally call
+/// [StorageManager.temporaryUrl] or [StorageManager.temporaryUploadUrl]
+/// instead of selecting or casting an underlying cloud adapter.
+abstract interface class TemporaryUrlStorageDisk implements StorageDisk {
+  /// Creates a time-limited URL for downloading [path].
+  Future<String> temporaryUrl(
+    String path,
+    DateTime expiration, {
+    Map<String, dynamic>? options,
+  });
+
+  /// Creates time-limited provider data for uploading [path].
+  ///
+  /// The returned map contains a `url`, required `headers`, and optional form
+  /// `fields` when the provider uses a multipart upload flow.
+  Future<Map<String, dynamic>> temporaryUploadUrl(
+    String path,
+    DateTime expiration, {
+    Map<String, dynamic>? options,
+  });
+}
+
 /// Registers and selects named storage disks for an application.
 ///
 /// A manager is an in-memory registry. Constructing it does not create a
@@ -38,7 +83,7 @@ class StorageManager {
   StorageManager({file.FileSystem? defaultFileSystem})
     : _defaultFileSystem = defaultFileSystem ?? const local.LocalFileSystem();
 
-  final Map<String, StorageDisk> _disks = {};
+  final Map<String, Object> _disks = {};
   String _defaultDisk = 'local';
   final file.FileSystem _defaultFileSystem;
 
@@ -76,11 +121,60 @@ class StorageManager {
     _disks[name] = disk;
   }
 
+  /// Registers storage operations that do not expose `package:file` paths.
+  ///
+  /// This is intended for host-native object stores, such as a Cloudflare R2
+  /// Worker binding, where [Filesystem] operations are available but a
+  /// synchronous [file.FileSystem] cannot be implemented safely. The
+  /// filesystem can be selected through [storage] and [drive]. Calling [disk]
+  /// or [resolve] for this registration throws [UnsupportedError].
+  ///
+  /// Registering a filesystem replaces any disk with the same [name].
+  /// Throws [ArgumentError] when [name] is empty.
+  void registerFilesystem(String name, Filesystem filesystem) {
+    if (name.isEmpty) {
+      throw ArgumentError('Disk name cannot be empty.');
+    }
+    _disks[name] = filesystem;
+  }
+
   /// Returns whether a disk named [name] is registered.
   bool hasDisk(String name) => _disks.containsKey(name);
 
   /// A snapshot of the registered disk names in insertion order.
   List<String> get diskNames => _disks.keys.toList(growable: false);
+
+  /// Whether the selected registration supports `package:file` path access.
+  ///
+  /// Host-native filesystems registered with [registerFilesystem] return
+  /// `false`; disks registered with [registerDisk] return `true`. The default
+  /// registration is selected when [name] is omitted or empty.
+  ///
+  /// Throws [StateError] when the selected name is not registered.
+  bool supportsPathResolution([String? name]) {
+    final key = _selectedName(name);
+    final selected = _disks[key];
+    if (selected == null) {
+      throw StateError('Storage disk "$key" is not configured.');
+    }
+    return selected is StorageDisk;
+  }
+
+  /// Whether the selected registration exposes asynchronous filesystem APIs.
+  ///
+  /// This is true for a [Filesystem] registered directly and for a disk that
+  /// implements [FilesystemStorageDisk]. It is false for path-only custom
+  /// disks. The default registration is selected when [name] is omitted.
+  ///
+  /// Throws [StateError] when the selected name is not registered.
+  bool supportsFilesystemOperations([String? name]) {
+    final key = _selectedName(name);
+    final selected = _disks[key];
+    if (selected == null) {
+      throw StateError('Storage disk "$key" is not configured.');
+    }
+    return selected is Filesystem || selected is FilesystemStorageDisk;
+  }
 
   /// Resolves [path] against [disk], or against [defaultDisk] when omitted.
   ///
@@ -97,11 +191,88 @@ class StorageManager {
   /// Throws [StateError] when the selected disk is not registered.
   StorageDisk disk([String? name]) {
     final key = (name == null || name.isEmpty) ? _defaultDisk : name;
-    final disk = _disks[key];
-    if (disk == null) {
+    final registration = _disks[key];
+    if (registration == null) {
       throw StateError('Storage disk "$key" is not configured.');
     }
-    return disk;
+    if (registration is StorageDisk) {
+      return registration;
+    }
+    throw UnsupportedError(
+      'Storage disk "$key" exposes filesystem operations but not '
+      '`package:file` paths.',
+    );
+  }
+
+  /// Returns Laravel-style filesystem operations for the selected disk.
+  ///
+  /// The selected disk is the default when [name] is omitted or empty. Local
+  /// and S3 disks support this API, so application code can use the same
+  /// `put`, `get`, `exists`, `delete`, and streaming methods for either.
+  ///
+  /// Throws [UnsupportedError] when a custom disk implements path resolution
+  /// only and does not implement [FilesystemStorageDisk].
+  Filesystem storage([String? name]) {
+    final key = _selectedName(name);
+    final selected = _disks[key];
+    if (selected == null) {
+      throw StateError('Storage disk "$key" is not configured.');
+    }
+    if (selected is Filesystem) {
+      return selected;
+    }
+    if (selected case FilesystemStorageDisk(:final storage)) {
+      return storage;
+    }
+    throw UnsupportedError(
+      'Storage disk "${_selectedName(name)}" does not expose filesystem '
+      'operations.',
+    );
+  }
+
+  /// Alias for [storage], matching `storage_fs` drive terminology.
+  Filesystem drive([String? name]) => storage(name);
+
+  /// Creates a time-limited download URL for [path].
+  ///
+  /// The selected disk is the default when [disk] is omitted. Provider SDKs
+  /// remain encapsulated by the disk implementation. Authenticate and
+  /// authorize the caller before returning the resulting capability URL.
+  ///
+  /// Throws [UnsupportedError] when the selected disk cannot issue temporary
+  /// URLs.
+  Future<String> temporaryUrl(
+    String path,
+    DateTime expiration, {
+    String? disk,
+    Map<String, dynamic>? options,
+  }) async {
+    return _temporaryUrlDisk(disk).temporaryUrl(
+      path,
+      expiration,
+      options: options,
+    );
+  }
+
+  /// Creates time-limited provider data for uploading [path].
+  ///
+  /// The selected disk is the default when [disk] is omitted. The result
+  /// contains a `url`, required `headers`, and optional form `fields`.
+  /// Authenticate and authorize the caller before returning these values.
+  ///
+  /// Throws [UnsupportedError] when the selected disk cannot issue temporary
+  /// upload URLs.
+  Future<Map<String, dynamic>> temporaryUploadUrl(
+    String path,
+    DateTime expiration, {
+    String? disk,
+    Map<String, dynamic>? options,
+  }) async {
+    return _temporaryUrlDisk(disk).temporaryUploadUrl(
+      path,
+      expiration,
+      options: options,
+    );
   }
 
   /// The name selected for implicit disk lookups.
@@ -111,4 +282,22 @@ class StorageManager {
   ///
   /// Reading this property does not create a disk or alter the registry.
   file.FileSystem get defaultFileSystem => _defaultFileSystem;
+
+  String _selectedName(String? name) {
+    return name == null || name.isEmpty ? _defaultDisk : name;
+  }
+
+  TemporaryUrlStorageDisk _temporaryUrlDisk(String? name) {
+    final key = _selectedName(name);
+    final selected = _disks[key];
+    if (selected == null) {
+      throw StateError('Storage disk "$key" is not configured.');
+    }
+    if (selected is TemporaryUrlStorageDisk) {
+      return selected;
+    }
+    throw UnsupportedError(
+      'Storage disk "$key" does not support temporary URLs.',
+    );
+  }
 }

@@ -27,11 +27,54 @@ final engine = await Engine.create(
     RoutedStorageProvider(configuration: storage),
   ],
 );
+
+engine.get('/files/:path', (ctx) async {
+  final storage = ctx.storage();
+  final path = ctx.param('path')!;
+  return ctx.json({
+    'exists': await storage.exists(path),
+    'contents': await storage.get(path),
+  });
+});
 ```
 
-Only the local disk driver is currently built in. Applications that need a
-remote disk provide an application-owned `StorageManager` to
-`RoutedStorageProvider`.
+`StorageConfig` creates local disks. For S3-compatible object storage, build an
+`S3StorageDisk`, register it with an application-owned manager, and supply that
+manager to `RoutedStorageProvider`:
+
+```dart
+import 'dart:io';
+
+import 'package:routed/routed.dart';
+
+final environment = Platform.environment;
+final s3 = S3StorageDisk(
+  endpoint: 'https://<account-id>.r2.cloudflarestorage.com',
+  accessKey: environment['S3_ACCESS_KEY']!,
+  secretKey: environment['S3_SECRET_KEY']!,
+  bucket: 'uploads',
+  region: 'auto',
+  pathStyle: true,
+  prefix: 'production',
+);
+
+final manager = StorageManager()
+  ..registerDisk('uploads', s3)
+  ..setDefault('uploads');
+
+final engine = await Engine.create(
+  providers: [
+    ...Engine.defaultProviders,
+    RoutedStorageProvider(manager: manager),
+  ],
+);
+```
+
+AWS S3, Cloudflare R2, DigitalOcean Spaces, and MinIO use the same driver. A
+bare endpoint host defaults to HTTPS, and cleartext HTTP is rejected by
+default. Local MinIO development can explicitly set `allowInsecureHttp: true`
+with an HTTP endpoint; do not enable it across an untrusted network. The
+constructor does not contact the service or create the bucket.
 
 ## Using the manager
 
@@ -39,6 +82,122 @@ remote disk provide an application-owned `StorageManager` to
 final manager = await engine.make<StorageManager>();
 final logo = manager.resolve('logo.png', disk: 'assets');
 ```
+
+Use `ctx.storage()` or `manager.storage()` for the `storage_fs` filesystem API:
+`put`, `get`, `readStream`, `exists`, `delete`, listings, and metadata all work
+without casting the selected disk. Use `ctx.temporaryStorageUrl()` or
+`manager.temporaryUrl()` for provider-signed URLs. Provider SDKs and cloud
+adapters remain internal to `server_storage`; the manager keeps this API scoped
+to the Routed application instead of initializing `storage_fs`'s process-global
+`Storage` facade.
+
+```dart
+final url = await ctx.temporaryStorageUrl(
+  'reports/monthly.pdf',
+  DateTime.now().add(const Duration(minutes: 5)),
+  disk: 'assets',
+);
+```
+
+Object keys passed to these operations remain rooted inside the disk's
+configured prefix.
+
+## Native Cloudflare R2 bindings
+
+On Cloudflare Workers, prefer the runtime's native R2 binding when the object
+store is already declared in Wrangler. `routed_node` adapts that binding to
+`storage_fs`, so request handlers retain the same storage API without S3
+credentials:
+
+```dart
+Future<Engine> createCloudflareEngine(
+  CloudflareEnvironment environment,
+) async {
+  final r2 = CloudflareR2Filesystem(
+    bucket: environment.r2('FILES'),
+    prefix: 'production',
+  );
+  final manager = StorageManager()
+    ..registerFilesystem('r2', r2)
+    ..setDefault('r2');
+  final signer = StorageSignedUrlSigner(
+    cloudflareTextBinding(environment, 'STORAGE_SIGNING_KEY'),
+  );
+  final engine = Engine(
+    providers: [
+      ...Engine.defaultProviders,
+      RoutedStorageProvider(manager: manager),
+    ],
+  );
+
+  engine.signedStorage(
+    '/downloads',
+    r2,
+    signer: signer,
+    rootPath: 'private',
+  );
+
+  engine.get('/downloads/report-url', (ctx) async {
+    // Authenticate the user and authorize this exact object first.
+    final expiresAt = DateTime.now().add(const Duration(minutes: 5));
+    return ctx.json({
+      'url': signer.sign(
+        Uri.parse('https://app.example.com/downloads/report.pdf'),
+        expiresAt: expiresAt,
+      ).toString(),
+    });
+  });
+
+  await engine.initialize();
+  return engine;
+}
+```
+
+Deploy with the environment-aware factory and matching binding:
+
+```bash
+routed deploy --target cloudflare \
+  --cloudflare-factory environment \
+  --r2 FILES=app-files
+
+npx wrangler secret put STORAGE_SIGNING_KEY --name YOUR_WORKER_NAME
+```
+
+This uses Cloudflare's injected `R2Bucket`; no account ID or S3 credential is
+needed, and the secret is read through Routed's host-neutral binding API with
+no direct `dart:io` or JavaScript interop. R2 has no per-object public ACL in
+the Worker binding, so `CloudflareR2Filesystem` always reports private
+visibility and rejects `visibility: 'public'`. `signedStorage()` verifies the
+path, expiration, and signature before reading the object. The URL-issuing
+route must perform the application's authentication and object authorization.
+For other hosts, or when the same bucket must be accessed outside a Worker,
+use `S3StorageDisk` with the R2 S3-compatible endpoint instead.
+
+## SFTP disks
+
+`SftpStorageDisk` uses the
+[`file_sftp`](https://pub.dev/packages/file_sftp) transport and participates in
+the same manager:
+
+```dart
+final environment = Platform.environment;
+final sftp = SftpStorageDisk(
+  config: SftpConfig(
+    host: environment['SFTP_HOST']!,
+    port: int.tryParse(environment['SFTP_PORT'] ?? '') ?? 22,
+    username: environment['SFTP_USERNAME']!,
+    password: environment['SFTP_PASSWORD'],
+    root: '/srv/uploads',
+  ),
+);
+
+manager.registerDisk('archive', sftp);
+await manager.storage('archive').put('reports/daily.json', reportJson);
+```
+
+Use `privateKeyPems` and `privateKeyPassphrase` instead of `password` for key
+authentication. Connections open lazily. Call `await sftp.close()` during
+application shutdown to release both the storage and `package:file` sessions.
 
 The same manager can be exposed to request handlers with
 `storageMiddleware(manager)`. Configuration is validated before provider boot;

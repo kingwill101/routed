@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_node/cloudflare.dart';
 import 'package:routed_node/routed_node.dart';
+import 'package:routed_storage/routed_storage.dart';
 
 /// In-memory item store for the sample API (demo only — not durable).
 final class _EchoWebSocketHandler extends WebSocketHandler {
@@ -102,9 +103,14 @@ final class Counter extends CloudflareDurableObject {
 /// - `POST /echo` request-body and header echo
 /// - `GET  /bindings/d1` live D1 binding check
 /// - `GET  /bindings/durable-object` live Durable Object check
-Engine createSampleEngine({ItemStore? store}) {
+Engine createSampleEngine({
+  ItemStore? store,
+  Iterable<ServiceProvider> providers = const <ServiceProvider>[],
+}) {
   final items = store ?? ItemStore();
-  final engine = Engine(providers: Engine.defaultProviders);
+  final engine = Engine(
+    providers: <ServiceProvider>[...Engine.defaultProviders, ...providers],
+  );
   engine.ws('/ws', _EchoWebSocketHandler());
 
   engine.get('/', (ctx) {
@@ -267,17 +273,13 @@ Engine createSampleEngine({ItemStore? store}) {
 
   engine.get('/bindings/r2', (ctx) async {
     final environment = cloudflareEnvironmentOf(ctx);
-    final request = cloudflareRequestOf(ctx);
-    if (environment == null || request == null) {
+    if (environment == null) {
       return ctx.json({
         'error': 'cloudflare_bindings_unavailable',
       }, statusCode: 500);
     }
 
-    final requestedKey = Uri.parse(request.url).queryParameters['key'];
-    final key = requestedKey == null || requestedKey.isEmpty
-        ? 'routed-live/default.txt'
-        : requestedKey;
+    const key = 'routed-live/default.txt';
     final bucket = environment.r2('FILES');
     await bucket.put(
       key,
@@ -298,6 +300,32 @@ Engine createSampleEngine({ItemStore? store}) {
       'headKey': head?.key,
       'listed': listed.objects.any((item) => item.key == key),
       'customMetadata': object?.customMetadata,
+    });
+  });
+
+  engine.get('/storage/r2', (ctx) async {
+    if (!ctx.hasStorageManager) {
+      return ctx.json({
+        'error': 'cloudflare_r2_storage_unavailable',
+      }, statusCode: 500);
+    }
+
+    const key = 'smoke/default.txt';
+    final storage = ctx.storage('r2');
+    await storage.put(
+      key,
+      'routed-r2-storage-ok',
+      options: const {
+        'contentType': 'text/plain',
+        'customMetadata': {'source': 'routed-storage'},
+      },
+    );
+    final stored = await storage.get(key);
+    final listed = await storage.allFiles();
+    await storage.delete(key);
+    return ctx.json({
+      'ok': stored == 'routed-r2-storage-ok',
+      'listed': listed.contains(key),
     });
   });
 
@@ -468,5 +496,66 @@ Engine createSampleEngine({ItemStore? store}) {
 Future<Engine> createEngine({bool initialize = true}) async {
   final engine = createSampleEngine();
   if (initialize) await engine.initialize();
+  return engine;
+}
+
+/// Builds the sample with a native R2 binding registered as Routed storage.
+///
+/// Select this factory with `routed deploy --cloudflare-factory environment`
+/// and configure an R2 binding named `FILES`.
+Future<Engine> createCloudflareEngine(CloudflareEnvironment environment) async {
+  final r2 = CloudflareR2Filesystem(
+    bucket: environment.r2('FILES'),
+    prefix: 'routed-storage',
+  );
+  final manager = StorageManager()
+    ..registerFilesystem('r2', r2)
+    ..setDefault('r2');
+  final signer = StorageSignedUrlSigner(
+    cloudflareTextBinding(environment, 'STORAGE_SIGNING_KEY'),
+  );
+  final engine = createSampleEngine(
+    providers: <ServiceProvider>[RoutedStorageProvider(manager: manager)],
+  );
+  engine
+    ..signedStorage(
+      '/storage/r2/files',
+      r2,
+      signer: signer,
+      rootPath: 'private',
+    )
+    ..get('/storage/r2/signed-url', (ctx) async {
+      const objectPath = 'private/readme.txt';
+      await ctx
+          .storage('r2')
+          .put(
+            objectPath,
+            'routed-r2-signed-ok',
+            options: const {
+              'visibility': 'private',
+              'contentType': 'text/plain',
+              'customMetadata': {'source': 'routed-signed-storage-demo'},
+            },
+          );
+      final expiresAt = DateTime.now().toUtc().add(const Duration(minutes: 5));
+      final request = cloudflareRequestOf(ctx);
+      if (request == null) {
+        return ctx.json({
+          'error': 'cloudflare_bindings_unavailable',
+        }, statusCode: 500);
+      }
+      final target = Uri.parse(request.url).replace(
+        path: '/storage/r2/files/readme.txt',
+        queryParameters: const <String, String>{},
+      );
+      final signedUrl = signer.sign(target, expiresAt: expiresAt);
+      ctx.setHeader('cache-control', 'no-store');
+      return ctx.json({
+        'url': signedUrl.toString(),
+        'expiresAt': expiresAt.toIso8601String(),
+        'visibility': 'private',
+      });
+    });
+  await engine.initialize();
   return engine;
 }

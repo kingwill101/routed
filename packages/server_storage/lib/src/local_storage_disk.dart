@@ -1,6 +1,11 @@
+import 'dart:io' as io;
+
+import 'package:file/chroot.dart' show ChrootFileSystem;
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
 import 'package:server_storage/src/storage_manager.dart';
+import 'package:storage_fs/storage_fs.dart'
+    show DiskConfig, Filesystem, FilesystemAdapter;
 
 /// Selects a local storage root using application defaults.
 ///
@@ -34,7 +39,7 @@ String resolveLocalStorageRoot(
 /// The root is normalized to an absolute path when the disk is constructed.
 /// Construction does not create the directory. Supply a [file.FileSystem] to
 /// use a test filesystem or a non-default filesystem context.
-class LocalStorageDisk implements StorageDisk {
+class LocalStorageDisk implements FilesystemStorageDisk {
   /// Creates a local disk rooted at [root].
   ///
   /// Relative roots are resolved against [fileSystem]'s current directory.
@@ -45,6 +50,12 @@ class LocalStorageDisk implements StorageDisk {
 
   final file.FileSystem _fileSystem;
   final String _root;
+
+  @override
+  late final FilesystemAdapter storage = _RootedFilesystemAdapter(
+    rootPath: _root,
+    hostFileSystem: _fileSystem,
+  );
 
   /// Normalizes [root] against [fileSystem]'s current directory.
   static String _normalizeRoot(String root, file.FileSystem fileSystem) {
@@ -100,4 +111,61 @@ class LocalStorageDisk implements StorageDisk {
 
   /// The normalized absolute root path for this disk.
   String get root => _root;
+}
+
+final class _RootedFilesystemAdapter extends FilesystemAdapter {
+  _RootedFilesystemAdapter({
+    required this.rootPath,
+    required this.hostFileSystem,
+  }) : super(
+         const DiskConfig(driver: 'local'),
+         fileSystem: ChrootFileSystem(
+           hostFileSystem,
+           hostFileSystem.path.canonicalize(rootPath),
+         ),
+       );
+
+  final String rootPath;
+  final file.FileSystem hostFileSystem;
+
+  @override
+  Future<bool> setVisibility(String path, String visibility) async {
+    if (hostFileSystem is! local.LocalFileSystem) {
+      return false;
+    }
+    if (io.Platform.isWindows) return true;
+
+    final resolved = _resolveHostPath(path);
+    final mode = visibility == Filesystem.visibilityPublic ? '644' : '600';
+    try {
+      final result = await io.Process.run('chmod', [mode, resolved]);
+      if (result.exitCode == 0) return true;
+      if (config.throw_) {
+        throw io.FileSystemException(
+          'Unable to set visibility (chmod exited ${result.exitCode}).',
+          resolved,
+        );
+      }
+      return false;
+    } on Exception {
+      if (config.throw_) rethrow;
+      return false;
+    }
+  }
+
+  String _resolveHostPath(String value) {
+    final pathContext = hostFileSystem.path;
+    if (pathContext.isAbsolute(value)) {
+      throw ArgumentError.value(value, 'path', 'Must be relative.');
+    }
+    final resolved = pathContext.normalize(pathContext.join(rootPath, value));
+    if (!LocalStorageDisk._isSameOrChild(
+      resolved,
+      rootPath,
+      pathContext.separator,
+    )) {
+      throw ArgumentError.value(value, 'path', 'Escapes the storage root.');
+    }
+    return resolved;
+  }
 }

@@ -1,7 +1,7 @@
 # Routed package catalog
 
 Package inventory for the Routed ecosystem. Versions below match the package
-manifests in this checkout as of 2026-08-27.
+manifests in this checkout as of 2026-08-29.
 
 ## Framework and feature packages
 
@@ -41,7 +41,7 @@ manifests in this checkout as of 2026-08-27.
 | [`server_auth`](https://github.com/kingwill101/routed/tree/master/packages/server_auth) | `0.2.1` | Typed auth plugins, stores, clients, OAuth/OIDC, WebAuthn, deployment presets, and conformance support |
 | [`server_cache`](https://github.com/kingwill101/routed/tree/master/packages/server_cache) | `0.2.1` | Framework-agnostic cache stores and repositories |
 | [`server_sessions`](https://github.com/kingwill101/routed/tree/master/packages/server_sessions) | `0.1.2` | Framework-agnostic session runtime |
-| [`server_storage`](https://github.com/kingwill101/routed/tree/master/packages/server_storage) | `0.1.2` | Framework-agnostic storage runtime |
+| [`server_storage`](https://github.com/kingwill101/routed/tree/master/packages/server_storage) | `0.1.3` | Framework-agnostic storage runtime |
 | [`server_rate_limit`](https://github.com/kingwill101/routed/tree/master/packages/server_rate_limit) | `0.1.2` | Framework-agnostic rate-limit runtime |
 
 ## Tooling and testing

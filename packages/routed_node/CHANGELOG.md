@@ -1,3 +1,23 @@
+# Changelog
+
+## Unreleased
+
+- Added `CloudflareR2Filesystem`, a `storage_fs` adapter for native Worker R2
+  bindings, with scoped keys, metadata, paginated listings, directory markers,
+  and read-only/error policies.
+- Documented application-scoped R2 registration so Routed handlers can use
+  `ctx.storage('r2')` without S3 credentials or direct JavaScript interop.
+- Native R2 filesystems can now back Routed's asynchronous storage handlers
+  without a local `package:file` path; private objects use signed routes.
+- Prevented R2 append/prepend from overwriting objects after failed reads, and
+  made `deleteDirectory()` report listing failures instead of false success.
+- Kept native R2 objects private, rejected per-object public visibility, and
+  changed the Cloudflare demo to expose its fixed fixture only through a
+  Worker-secret-backed signed URL.
+- Removed caller-selected object keys from the public R2 smoke routes so they
+  cannot overwrite or delete unrelated bucket objects.
+- Batched native R2 multi-object deletes at the binding's 1,000-key limit.
+
 ## 0.2.1 - 2026-08-25
 
 - Adopt `very_good_analysis` and complete public API documentation for the

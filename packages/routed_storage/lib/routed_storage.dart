@@ -39,6 +39,49 @@ extension StorageEngineContext on EngineContext {
   /// Throws [StateError] when the selected disk has not been registered.
   StorageDisk storageDisk([String? name]) => storageManager.disk(name);
 
+  /// Returns unified asynchronous storage operations for a named disk.
+  ///
+  /// The manager's default disk is used when [name] is omitted or empty. This
+  /// exposes the `storage_fs` API (`put`, `get`, `exists`, `delete`, streams,
+  /// and metadata) without relying on its process-global [Storage] facade.
+  Filesystem storage([String? name]) => storageManager.storage(name);
+
+  /// Creates a time-limited download URL through the selected storage disk.
+  ///
+  /// The manager's default disk is used when [disk] is omitted. Authenticate
+  /// and authorize the caller before returning the resulting capability URL.
+  Future<String> temporaryStorageUrl(
+    String path,
+    DateTime expiration, {
+    String? disk,
+    Map<String, dynamic>? options,
+  }) {
+    return storageManager.temporaryUrl(
+      path,
+      expiration,
+      disk: disk,
+      options: options,
+    );
+  }
+
+  /// Creates time-limited upload data through the selected storage disk.
+  ///
+  /// The result contains a `url`, required `headers`, and optional form
+  /// `fields`. Authenticate and authorize the caller before returning it.
+  Future<Map<String, dynamic>> temporaryStorageUploadUrl(
+    String path,
+    DateTime expiration, {
+    String? disk,
+    Map<String, dynamic>? options,
+  }) {
+    return storageManager.temporaryUploadUrl(
+      path,
+      expiration,
+      disk: disk,
+      options: options,
+    );
+  }
+
   /// Whether this request has a [StorageManager] in its container.
   bool get hasStorageManager => container.has<StorageManager>();
 }

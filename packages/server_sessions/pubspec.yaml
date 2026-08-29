@@ -16,7 +16,7 @@ dependencies:
   file: ^7.0.1
   pointycastle: ^4.0.0
   server_contracts: ">=0.1.0 <1.0.0"
-  storage_fs: ^0.1.0
+  storage_fs: ">=0.1.0 <1.0.0"
 
 dev_dependencies:
   routed_core: ">=0.4.0 <1.0.0"

@@ -43,13 +43,46 @@ final engine = await Engine.create(
 
 Each mount needs either a named storage disk or an explicit `root`. Paths are
 normalized and validated so a mount cannot escape its configured root.
+Named disks may be local, S3/SFTP-backed, or storage-only filesystems such as
+a native Cloudflare R2 binding registered with `registerFilesystem()`.
+Storage-backed mounts serve only objects whose adapter reports `public`
+visibility. Visibility errors fail closed, and directory listings omit private
+files and directories that contain no public objects.
 
 For one-off routes, use the direct helpers instead:
 
 ```dart
 engine.static('/assets', 'public/assets');
 engine.staticFile('/favicon.ico', 'public/favicon.ico');
+engine.staticStorage(
+  '/objects',
+  manager.storage('public-assets'),
+  rootPath: 'public',
+);
 ```
+
+For private object stores, mount a signed endpoint instead:
+
+```dart
+final signer = StorageSignedUrlSigner(signingSecret);
+
+engine.signedStorage(
+  '/downloads',
+  manager.storage('r2'),
+  signer: signer,
+  rootPath: 'private',
+);
+
+// Authenticate and authorize the object before returning this capability.
+final url = signer.sign(
+  Uri.parse('https://app.example.com/downloads/invoice.pdf'),
+  expiresAt: DateTime.now().add(const Duration(minutes: 5)),
+);
+```
+
+Unsigned, expired, or tampered requests return `403` before storage is read.
+The secret must contain at least 32 UTF-8 bytes and should come from the host's
+secret manager.
 
 Missing files return `404`. Directory requests use `indexFile` when present;
 directory listings are disabled unless `listDirectories` is explicitly true.

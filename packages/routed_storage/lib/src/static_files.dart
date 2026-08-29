@@ -42,6 +42,53 @@ extension EngineStaticFiles on Engine {
   void staticFS(String relativePath, Dir dir) {
     _mountStaticDir(defaultRouter, relativePath, dir);
   }
+
+  /// Mounts a directory from an asynchronous `storage_fs` backend.
+  ///
+  /// This supports host-native object stores, including Cloudflare R2, that
+  /// cannot implement `package:file`.
+  void staticStorage(
+    String relativePath,
+    Filesystem storage, {
+    String rootPath = '',
+    bool listDirectory = false,
+    String indexFile = 'index.html',
+  }) {
+    _mountStorageStaticDir(
+      defaultRouter,
+      relativePath,
+      StorageFileHandler(
+        storage: storage,
+        rootPath: rootPath,
+        allowDirectoryListing: listDirectory,
+        indexFile: indexFile,
+      ),
+    );
+  }
+
+  /// Mounts private storage objects behind time-limited signed URLs.
+  ///
+  /// Authorize the caller before creating a URL with [signer]. The mounted
+  /// route rejects unsigned, expired, or tampered requests before touching
+  /// [storage].
+  void signedStorage(
+    String relativePath,
+    Filesystem storage, {
+    required StorageSignedUrlSigner signer,
+    String rootPath = '',
+    String indexFile = 'index.html',
+  }) {
+    _mountSignedStorageDir(
+      defaultRouter,
+      relativePath,
+      SignedStorageFileHandler(
+        storage: storage,
+        signer: signer,
+        rootPath: rootPath,
+        indexFile: indexFile,
+      ),
+    );
+  }
 }
 
 /// Adds static-file mounting helpers to an individual router.
@@ -76,6 +123,46 @@ extension RouterStaticFiles on Router {
   /// Mounts a directory using an explicit [dir] definition.
   void staticFS(String relativePath, Dir dir) {
     _mountStaticDir(this, relativePath, dir);
+  }
+
+  /// Mounts a directory from an asynchronous `storage_fs` backend.
+  void staticStorage(
+    String relativePath,
+    Filesystem storage, {
+    String rootPath = '',
+    bool listDirectory = false,
+    String indexFile = 'index.html',
+  }) {
+    _mountStorageStaticDir(
+      this,
+      relativePath,
+      StorageFileHandler(
+        storage: storage,
+        rootPath: rootPath,
+        allowDirectoryListing: listDirectory,
+        indexFile: indexFile,
+      ),
+    );
+  }
+
+  /// Mounts private storage objects behind time-limited signed URLs.
+  void signedStorage(
+    String relativePath,
+    Filesystem storage, {
+    required StorageSignedUrlSigner signer,
+    String rootPath = '',
+    String indexFile = 'index.html',
+  }) {
+    _mountSignedStorageDir(
+      this,
+      relativePath,
+      SignedStorageFileHandler(
+        storage: storage,
+        signer: signer,
+        rootPath: rootPath,
+        indexFile: indexFile,
+      ),
+    );
   }
 }
 
@@ -121,4 +208,76 @@ void _mountStaticDir(Router router, String relativePath, Dir dir) {
   router
     ..get(urlPattern, handler)
     ..head(urlPattern, handler);
+}
+
+void _mountStorageStaticDir(
+  Router router,
+  String relativePath,
+  StorageFileHandler fileHandler,
+) {
+  if (relativePath.contains(':') || relativePath.contains('*')) {
+    throw Exception(
+      'URL parameters cannot be used when serving a static folder',
+    );
+  }
+
+  var route = relativePath.startsWith('/') ? relativePath : '/$relativePath';
+  if (route.length > 1 && route.endsWith('/')) {
+    route = route.substring(0, route.length - 1);
+  }
+
+  Future<Response> serve(EngineContext context, [String file = '']) async {
+    await fileHandler.serveToContext(context, file);
+    return context.response;
+  }
+
+  router
+    ..get(route, serve)
+    ..head(route, serve);
+  final wildcard = p.posix.join(route, '{*filepath}');
+  router
+    ..get(
+      wildcard,
+      (context) => serve(context, context.param('filepath')?.toString() ?? ''),
+    )
+    ..head(
+      wildcard,
+      (context) => serve(context, context.param('filepath')?.toString() ?? ''),
+    );
+}
+
+void _mountSignedStorageDir(
+  Router router,
+  String relativePath,
+  SignedStorageFileHandler fileHandler,
+) {
+  if (relativePath.contains(':') || relativePath.contains('*')) {
+    throw Exception(
+      'URL parameters cannot be used when serving a signed storage folder',
+    );
+  }
+
+  var route = relativePath.startsWith('/') ? relativePath : '/$relativePath';
+  if (route.length > 1 && route.endsWith('/')) {
+    route = route.substring(0, route.length - 1);
+  }
+
+  Future<Response> serve(EngineContext context, [String file = '']) async {
+    await fileHandler.serveToContext(context, file);
+    return context.response;
+  }
+
+  router
+    ..get(route, serve)
+    ..head(route, serve);
+  final wildcard = p.posix.join(route, '{*filepath}');
+  router
+    ..get(
+      wildcard,
+      (context) => serve(context, context.param('filepath')?.toString() ?? ''),
+    )
+    ..head(
+      wildcard,
+      (context) => serve(context, context.param('filepath')?.toString() ?? ''),
+    );
 }
