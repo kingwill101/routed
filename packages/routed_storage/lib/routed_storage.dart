@@ -39,6 +39,19 @@ extension StorageEngineContext on EngineContext {
   /// Throws [StateError] when the selected disk has not been registered.
   StorageDisk storageDisk([String? name]) => storageManager.disk(name);
 
+  /// Returns unified asynchronous storage operations for a named disk.
+  ///
+  /// The manager's default disk is used when [name] is omitted or empty. This
+  /// exposes the `storage_fs` API (`put`, `get`, `exists`, `delete`, streams,
+  /// and metadata) without relying on its process-global [Storage] facade.
+  Filesystem storage([String? name]) => storageManager.storage(name);
+
+  /// Returns cloud-specific operations for a named disk.
+  ///
+  /// Use this for cloud-specific and temporary download/upload URLs.
+  /// Throws [UnsupportedError] when the selected disk is not cloud-backed.
+  CloudAdapter cloudStorage([String? name]) => storageManager.cloud(name);
+
   /// Whether this request has a [StorageManager] in its container.
   bool get hasStorageManager => container.has<StorageManager>();
 }

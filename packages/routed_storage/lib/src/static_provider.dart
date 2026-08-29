@@ -113,13 +113,13 @@ class RoutedStaticProvider extends ServiceProvider
     StorageManager storage,
     StaticMountConfig mount,
   ) {
-    final handler = FileHandler.fromDir(_resolveDir(storage, mount));
+    final serveFile = _resolveHandler(storage, mount);
     final router = engine.defaultRouter;
     final route = _normalizeRoute(mount.route);
     final before = router.routes.length;
 
     Future<Response> serve(EngineContext context, [String path = '']) async {
-      await handler.serveToContext(context, path);
+      await serveFile(context, path);
       return context.response;
     }
 
@@ -142,22 +142,45 @@ class RoutedStaticProvider extends ServiceProvider
     _registeredRoutes.addAll(router.routes.skip(before));
   }
 
-  Dir _resolveDir(StorageManager storage, StaticMountConfig mount) {
+  Future<void> Function(EngineContext, String) _resolveHandler(
+    StorageManager storage,
+    StaticMountConfig mount,
+  ) {
     if (mount.root != null) {
-      return Dir(
-        p.join(mount.root!, mount.path),
-        indexFile: mount.indexFile,
-        listDirectory: mount.listDirectories,
+      final handler = FileHandler.fromDir(
+        Dir(
+          p.join(mount.root!, mount.path),
+          indexFile: mount.indexFile,
+          listDirectory: mount.listDirectories,
+        ),
       );
+      return handler.serveToContext;
     }
 
-    final disk = storage.disk(mount.disk);
-    return Dir(
-      disk.resolve(mount.path),
-      fileSystem: disk.fileSystem,
+    StorageDisk? pathDisk;
+    if (storage.supportsPathResolution(mount.disk)) {
+      pathDisk = storage.disk(mount.disk);
+    }
+
+    Future<bool> Function(String)? directoryProbe;
+    final directoryDisk = pathDisk;
+    if (directoryDisk != null) {
+      directoryProbe = (path) {
+        // Remote package:file implementations may only support async I/O.
+        // ignore: avoid_slow_async_io
+        return directoryDisk.fileSystem
+            .directory(directoryDisk.resolve(path))
+            .exists();
+      };
+    }
+    final handler = StorageFileHandler(
+      storage: storage.storage(mount.disk),
+      rootPath: mount.path,
       indexFile: mount.indexFile,
-      listDirectory: mount.listDirectories,
+      allowDirectoryListing: mount.listDirectories,
+      directoryExists: directoryProbe,
     );
+    return handler.serveToContext;
   }
 
   String _normalizeRoute(String route) {

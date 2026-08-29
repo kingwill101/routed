@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:file/memory.dart';
 import 'package:server_storage/server_storage.dart';
 import 'package:test/test.dart';
@@ -47,6 +49,36 @@ void main() {
   });
 
   group('LocalStorageDisk', () {
+    test('visibility operations apply beneath the configured root', () async {
+      if (Platform.isWindows) return;
+      final temporary = await Directory.systemTemp.createTemp(
+        'server-storage-visibility-',
+      );
+      addTearDown(() => temporary.delete(recursive: true));
+      final root = Directory('${temporary.path}/disk')..createSync();
+      final disk = LocalStorageDisk(root: root.path);
+
+      expect(
+        await disk.storage.put(
+          'nested/private.txt',
+          'secret',
+          options: const {'visibility': Filesystem.visibilityPrivate},
+        ),
+        isTrue,
+      );
+      final target = File('${root.path}/nested/private.txt');
+      expect(target.statSync().mode & 0x1ff, 0x180);
+
+      expect(
+        await disk.storage.setVisibility(
+          'nested/private.txt',
+          Filesystem.visibilityPublic,
+        ),
+        isTrue,
+      );
+      expect(target.statSync().mode & 0x1ff, 0x1a4);
+    });
+
     test('resolve with empty path returns root', () {
       final fs = MemoryFileSystem();
       final disk = LocalStorageDisk(root: '/data', fileSystem: fs);

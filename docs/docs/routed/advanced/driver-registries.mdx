@@ -12,13 +12,26 @@ first, then register the driver or backend during application composition.
 
 ## Storage
 
-`routed_storage` currently supports local disks through `StorageConfig`. For a
-custom or cloud disk, implement `StorageDisk`, register it on an application-
-owned `StorageManager`, and pass that manager explicitly:
+`routed_storage` supports local disks through `StorageConfig` and re-exports
+`server_storage`'s `S3StorageDisk` and `SftpStorageDisk`. Register remote or
+custom disks on an application-owned `StorageManager` and pass that manager
+explicitly:
 
 ```dart
+import 'dart:io';
+
+import 'package:routed/routed.dart';
+
+final environment = Platform.environment;
+final assets = S3StorageDisk(
+  endpoint: 'https://objects.example.test',
+  accessKey: environment['S3_ACCESS_KEY']!,
+  secretKey: environment['S3_SECRET_KEY']!,
+  bucket: 'assets',
+);
+
 final manager = StorageManager()
-  ..registerDisk('assets', myStorageDisk)
+  ..registerDisk('assets', assets)
   ..setDefault('assets');
 
 final engine = await Engine.create(
@@ -27,7 +40,16 @@ final engine = await Engine.create(
     RoutedStorageProvider(manager: manager),
   ],
 );
+
+final storage = manager.storage('assets');
+await storage.put('images/logo.png', logoBytes);
 ```
+
+For host-native object stores without a `package:file` implementation, such
+as a Cloudflare Worker R2 binding, use `registerFilesystem()`. These backends
+support `ctx.storage()` and asynchronous storage handlers. They do not expose
+`manager.disk()` or local path resolution. Private backends such as R2 should
+use `engine.signedStorage()`.
 
 Use `RoutedStaticProvider` with a typed `StaticConfig` when the disk should
 serve public files.

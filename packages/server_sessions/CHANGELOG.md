@@ -1,3 +1,8 @@
+## Unreleased
+
+- Widened the `storage_fs` dependency to `>=0.1.0 <1.0.0` so compatible 0.x
+  filesystem adapters can resolve in the same application.
+
 ## 0.1.2 - 2026-08-25
 
 - Migrated the package to `very_good_analysis` and completed public Dartdoc

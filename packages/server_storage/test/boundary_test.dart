@@ -37,4 +37,16 @@ void main() {
       );
     }
   });
+
+  test('storage-backed static handler does not import dart:io', () async {
+    final libDir = _resolveLibDir();
+    final handler = File('${libDir.path}/src/storage_file_handler.dart');
+    final content = await handler.readAsString();
+
+    expect(
+      RegExp(r"^import\s+'dart:io';", multiLine: true).hasMatch(content),
+      isFalse,
+      reason: 'StorageFileHandler must remain portable to Worker hosts.',
+    );
+  });
 }

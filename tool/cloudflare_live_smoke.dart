@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:path/path.dart' as p;
 
@@ -95,9 +96,14 @@ Future<void> main(List<String> args) async {
       resources: resources,
       containerEnabled: containerEnabled,
     );
+    await _putWorkerSecret(
+      resources.workerName,
+      'STORAGE_SIGNING_KEY',
+      _randomSecret(),
+    );
     final workerUrl = _workerUrl(deployOutput, resources.workerName);
     stdout.writeln('Live Worker: $workerUrl');
-    await _runChecks(workerUrl, resources, containerEnabled: containerEnabled);
+    await _runChecks(workerUrl, containerEnabled: containerEnabled);
     stdout.writeln('Cloudflare live smoke test passed.');
   } finally {
     if (options.keep) {
@@ -354,6 +360,8 @@ Future<ProcessResult> _deployRoutedSample({
     'cloudflare',
     '--name',
     resources.workerName,
+    '--cloudflare-factory',
+    'environment',
     '--d1',
     'DB=${resources.d1Name}:$d1Id',
     '--durable-object',
@@ -406,8 +414,7 @@ String _workerUrl(ProcessResult result, String workerName) {
 }
 
 Future<void> _runChecks(
-  String baseUrl,
-  _Resources resources, {
+  String baseUrl, {
   required bool containerEnabled,
 }) async {
   final checks = <String, Future<bool> Function(Map<String, dynamic>)>{
@@ -416,7 +423,9 @@ Future<void> _runChecks(
     '/bindings/cache': (body) => Future.value(body['ok'] == true),
     '/bindings/d1': (body) => Future.value(body['ok'] == true),
     '/bindings/durable-object': (body) => Future.value(body['ok'] == true),
-    '/bindings/r2?key=${Uri.encodeComponent(resources.r2Key)}': (body) =>
+    '/bindings/r2': (body) =>
+        Future.value(body['ok'] == true && body['listed'] == true),
+    '/storage/r2': (body) =>
         Future.value(body['ok'] == true && body['listed'] == true),
     '/bindings/queue': (body) => Future.value(body['ok'] == true),
     '/bindings/service': (body) => Future.value(
@@ -453,6 +462,60 @@ Future<void> _runChecks(
       }
       stdout.writeln('  PASS ${entry.key}');
     }
+
+    final unsignedResponse = await _get(
+      client,
+      '$baseUrl/storage/r2/files/readme.txt',
+    );
+    if (unsignedResponse.status != 403 ||
+        unsignedResponse.body.contains('routed-r2-signed-ok')) {
+      throw StateError(
+        'Unsigned R2 endpoint: expected HTTP 403 without object data, got '
+        'HTTP ${unsignedResponse.status}: ${unsignedResponse.body}',
+      );
+    }
+    stdout.writeln('  PASS unsigned private R2 request denied');
+
+    final mintResponse = await _get(client, '$baseUrl/storage/r2/signed-url');
+    final mint = jsonDecode(mintResponse.body) as Map<String, dynamic>;
+    final signedUrl = Uri.parse(mint['url'] as String);
+    if (mintResponse.status != 200 || mint['visibility'] != 'private') {
+      throw StateError(
+        'Signed URL mint: HTTP ${mintResponse.status} ${mintResponse.body}',
+      );
+    }
+    final signedResponse = await _get(client, signedUrl.toString());
+    if (signedResponse.status != 200 ||
+        signedResponse.body != 'routed-r2-signed-ok') {
+      throw StateError(
+        'Signed R2 endpoint: expected HTTP 200, got '
+        'HTTP ${signedResponse.status}: ${signedResponse.body}',
+      );
+    }
+    stdout.writeln('  PASS signed private R2 request');
+
+    final tampered = signedUrl.replace(path: '/storage/r2/files/other.txt');
+    final tamperedResponse = await _get(client, tampered.toString());
+    if (tamperedResponse.status != 403 ||
+        tamperedResponse.body.contains('routed-r2-signed-ok')) {
+      throw StateError(
+        'Tampered signed R2 endpoint: expected HTTP 403 without object data, '
+        'got HTTP ${tamperedResponse.status}: ${tamperedResponse.body}',
+      );
+    }
+    stdout.writeln('  PASS tampered signed R2 request denied');
+
+    final oldStaticResponse = await _get(
+      client,
+      '$baseUrl/storage/r2/static/readme.txt',
+    );
+    if (oldStaticResponse.status != 404) {
+      throw StateError(
+        'Old R2 static endpoint: expected HTTP 404, got '
+        'HTTP ${oldStaticResponse.status}: ${oldStaticResponse.body}',
+      );
+    }
+    stdout.writeln('  PASS old unsigned R2 static route removed');
   } finally {
     client.close(force: true);
   }
@@ -528,6 +591,23 @@ Future<void> _cleanup(_Resources resources) async {
     'delete',
     resources.queueName,
   ]);
+  if (resources.bucketCreated) {
+    for (final key in <String>{
+      resources.r2Key,
+      'routed-storage/${resources.r2Key}',
+      'routed-storage/public/readme.txt',
+      'routed-storage/private/readme.txt',
+      'routed-storage/smoke/default.txt',
+    }) {
+      await _tryCleanup(true, [
+        'r2',
+        'object',
+        'delete',
+        '${resources.bucketName}/$key',
+        '--remote',
+      ]);
+    }
+  }
   await _tryCleanup(resources.bucketCreated, [
     'r2',
     'bucket',
@@ -569,6 +649,40 @@ Future<ProcessResult> _wrangler(
     throw StateError('Wrangler command failed: ${args.join(' ')}');
   }
   return result;
+}
+
+String _randomSecret() {
+  final random = Random.secure();
+  final bytes = List<int>.generate(48, (_) => random.nextInt(256));
+  return base64UrlEncode(bytes);
+}
+
+Future<void> _putWorkerSecret(
+  String workerName,
+  String binding,
+  String secret,
+) async {
+  final process = await Process.start('npx', [
+    '--yes',
+    'wrangler@latest',
+    'secret',
+    'put',
+    binding,
+    '--name',
+    workerName,
+  ], runInShell: false);
+  final stdoutFuture = process.stdout.transform(utf8.decoder).join();
+  final stderrFuture = process.stderr.transform(utf8.decoder).join();
+  process.stdin.writeln(secret);
+  await process.stdin.close();
+  final exitCode = await process.exitCode;
+  final output = _stripAnsi(
+    '${await stdoutFuture}\n${await stderrFuture}',
+  ).replaceAll(secret, '[redacted]');
+  if (output.trim().isNotEmpty) stdout.write(output);
+  if (exitCode != 0) {
+    throw StateError('Unable to configure Worker secret $binding.');
+  }
 }
 
 String? _uuidFrom(ProcessResult result) {

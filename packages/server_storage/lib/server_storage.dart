@@ -14,6 +14,7 @@
 ///   ..setDefault('local');
 ///
 /// final path = manager.resolve('avatars/user-1.png');
+/// await manager.storage().put('avatars/user-1.png', avatarBytes);
 /// ```
 ///
 /// [LocalStorageDisk] normalizes its root and rejects absolute paths or
@@ -28,7 +29,13 @@ import 'package:server_storage/src/static_file_sink.dart' show StaticFileSink;
 import 'package:server_storage/src/storage.dart' show LocalStorageDisk;
 import 'package:server_storage/src/storage_manager.dart' show StorageManager;
 
+export 'package:file_sftp/file_sftp.dart' show SftpConfig;
+export 'package:storage_fs/storage_fs.dart'
+    show Cloud, CloudAdapter, Filesystem, FilesystemAdapter, Storage;
+
 export 'src/file_handler.dart';
 export 'src/static_file_sink.dart';
 export 'src/storage.dart';
+export 'src/storage_file_handler.dart';
 export 'src/storage_manager.dart';
+export 'src/storage_signed_url.dart';

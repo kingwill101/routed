@@ -19,7 +19,7 @@ dependencies:
   file: ^7.0.1
   redis: ^4.0.0
   server_contracts: ">=0.1.0 <1.0.0"
-  storage_fs: ^0.1.0
+  storage_fs: ">=0.1.0 <1.0.0"
 
 dev_dependencies:
   coverage: ^1.15.1

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file/memory.dart';
 import 'package:property_testing/property_testing.dart';
+import 'package:routed_core/routed_core.dart';
 import 'package:routed_storage/routed_storage.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
@@ -45,6 +46,119 @@ void main() {
 
         final r2 = await client.get('/single');
         r2.assertStatus(200).assertBodyEquals('hello world');
+      },
+    );
+
+    test('staticStorage serves a storage_fs filesystem', () async {
+      final engine = testEngine();
+      addTearDown(engine.close);
+      final storage = LocalStorageDisk(
+        root: 'storage-only',
+        fileSystem: fs,
+      ).storage;
+      await storage.put('public/index.html', 'storage home');
+      await storage.put('public/readme.txt', 'portable');
+      engine.staticStorage('/objects', storage, rootPath: 'public');
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+
+      (await client.get(
+        '/objects',
+      )).assertStatus(200).assertBodyEquals('storage home');
+      (await client.get(
+        '/objects/readme.txt',
+      )).assertStatus(200).assertBodyEquals('portable');
+    });
+
+    test('signedStorage serves private files only with a valid URL', () async {
+      final engine = testEngine();
+      addTearDown(engine.close);
+      final storage = LocalStorageDisk(
+        root: 'signed-storage',
+        fileSystem: fs,
+      ).storage;
+      await storage.put('private/report.txt', 'private-report');
+      final signer = StorageSignedUrlSigner(
+        'test-storage-signing-key-with-at-least-32-bytes',
+      );
+      engine.signedStorage(
+        '/downloads',
+        storage,
+        signer: signer,
+        rootPath: 'private',
+      );
+      engine.defaultRouter.get('/mint', (ctx) {
+        final target = Uri(path: '/downloads/report.txt');
+        return ctx.string(
+          signer
+              .sign(
+                target,
+                expiresAt: DateTime.now().add(const Duration(minutes: 5)),
+              )
+              .toString(),
+        );
+      });
+      final client = TestClient(RoutedRequestHandler(engine));
+      addTearDown(client.close);
+
+      (await client.get('/downloads/report.txt')).assertStatus(403);
+      final signed = Uri.parse((await client.get('/mint')).body);
+      final signedPath = signed.hasQuery
+          ? '${signed.path}?${signed.query}'
+          : signed.path;
+      final signedResponse = await client.get(signedPath);
+      expect(
+        signedResponse.statusCode,
+        200,
+        reason:
+            'url=$signed exists=${await storage.exists('private/report.txt')} '
+            'valid=${signer.verify(signed)} body=${signedResponse.body}',
+      );
+      signedResponse
+          .assertBodyEquals('private-report')
+          .assertHeader('cache-control', 'private, no-store');
+
+      final tampered = signed.replace(path: '/downloads/other.txt');
+      (await client.get(
+        '${tampered.path}?${tampered.query}',
+      )).assertStatus(403);
+    });
+
+    test(
+      'staticStorage serves public files without leaking private names',
+      () async {
+        if (Platform.isWindows) return;
+        final root = await Directory.systemTemp.createTemp(
+          'routed-static-visibility-',
+        );
+        addTearDown(() => root.delete(recursive: true));
+        final storage = LocalStorageDisk(root: root.path).storage;
+        await storage.put(
+          'public.txt',
+          'public-data',
+          options: const {'visibility': 'public'},
+        );
+        await storage.put(
+          'private.txt',
+          'private-canary',
+          options: const {'visibility': 'private'},
+        );
+        final engine = testEngine()
+          ..staticStorage('/', storage, listDirectory: true);
+        addTearDown(engine.close);
+        final client = TestClient(RoutedRequestHandler(engine));
+        addTearDown(client.close);
+
+        (await client.get(
+          '/public.txt',
+        )).assertStatus(200).assertBodyEquals('public-data');
+        final denied = await client.get('/private.txt');
+        denied.assertStatus(404);
+        expect(denied.body, isNot(contains('private-canary')));
+
+        final listing = await client.get('/');
+        listing.assertStatus(200).assertBodyContains('public.txt');
+        expect(listing.body, isNot(contains('private.txt')));
       },
     );
 

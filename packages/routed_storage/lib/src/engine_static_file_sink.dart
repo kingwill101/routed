@@ -58,3 +58,27 @@ extension FileHandlerEngineContext on FileHandler {
   Future<void> serveToContext(EngineContext ctx, String file) =>
       serveFile(EngineContextStaticFileSink(ctx), file);
 }
+
+/// Convenience so storage-backed handlers can write to [EngineContext].
+extension StorageFileHandlerEngineContext on StorageFileHandler {
+  /// Serves [file] through a Routed request context.
+  Future<void> serveToContext(EngineContext ctx, String file) =>
+      serveFile(EngineContextStaticFileSink(ctx), file);
+}
+
+/// Convenience so signed storage handlers can write to [EngineContext].
+extension SignedStorageFileHandlerEngineContext on SignedStorageFileHandler {
+  /// Verifies the current request URL and serves [file] when it is valid.
+  Future<void> serveToContext(EngineContext ctx, String file) {
+    final requested = ctx.request.uri;
+    final requestUrl = Uri(
+      path: requested.path,
+      query: requested.query.isEmpty ? null : requested.query,
+    );
+    return serveFile(
+      EngineContextStaticFileSink(ctx),
+      file,
+      requestUrl: requestUrl,
+    );
+  }
+}

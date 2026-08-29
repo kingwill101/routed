@@ -21,6 +21,7 @@ import 'src/runtime/runtime.dart';
 
 export 'src/cloudflare/cloudflare_types.dart';
 export 'src/cloudflare/cloudflare_durable_object_store.dart';
+export 'src/cloudflare/cloudflare_r2_filesystem.dart';
 export 'src/cloudflare/cloudflare_bindings_stub.dart'
     if (dart.library.js_interop) 'src/cloudflare/cloudflare_bindings_js.dart'
     show

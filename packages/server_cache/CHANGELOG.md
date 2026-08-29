@@ -1,3 +1,8 @@
+## Unreleased
+
+- Widened the `storage_fs` dependency to `>=0.1.0 <1.0.0` so compatible 0.x
+  filesystem adapters can resolve in the same application.
+
 ## 0.2.1 - 2026-08-25
 
 - Completed public Dartdoc coverage and enabled the `public_member_api_docs`
