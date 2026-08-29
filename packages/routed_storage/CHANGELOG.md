@@ -13,6 +13,9 @@
   filesystems do not enter synchronous `package:file` listing paths.
 - Added `Engine.signedStorage()` and `Router.signedStorage()` for private
   objects exposed only through time-limited signed URLs.
+- Added request-scoped `temporaryStorageUrl()` and
+  `temporaryStorageUploadUrl()` helpers for provider-signed URLs without
+  exposing storage-driver implementations.
 - Storage-backed static mounts now fail closed on private/unknown visibility
   and omit private filenames from directory listings.
 

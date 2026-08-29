@@ -52,7 +52,7 @@ void main() {
         ..setDefault('assets');
       expect(manager.storage(), same(disk.adapter));
       expect(manager.drive('assets'), same(disk.adapter));
-      expect(manager.cloud(), same(disk.adapter));
+      expect(manager.disk(), same(disk));
     });
 
     test('defaults a host-only endpoint to HTTPS', () {
@@ -118,7 +118,10 @@ void main() {
         prefix: 'tenant/private',
       );
 
-      final result = await disk.storage.getTemporaryUrl(
+      final manager = StorageManager()
+        ..registerDisk('uploads', disk)
+        ..setDefault('uploads');
+      final result = await manager.temporaryUrl(
         'report.txt',
         DateTime.now().add(const Duration(minutes: 5)),
       );
@@ -129,6 +132,50 @@ void main() {
       expect(
         url.queryParameters,
         containsPair('X-Amz-Algorithm', 'AWS4-HMAC-SHA256'),
+      );
+    });
+
+    test('generates signed temporary upload data', () async {
+      final disk = S3StorageDisk(
+        endpoint: 'https://objects.example.test',
+        accessKey: 'test-access-key',
+        secretKey: 'test-secret-key',
+        bucket: 'uploads',
+        region: 'us-east-1',
+        pathStyle: true,
+        prefix: 'tenant/private',
+      );
+      final manager = StorageManager()..registerDisk('uploads', disk);
+
+      final result = await manager.temporaryUploadUrl(
+        'report.txt',
+        DateTime.now().add(const Duration(minutes: 5)),
+        disk: 'uploads',
+      );
+      final url = Uri.parse(result['url']! as String);
+
+      expect(url.path, '/uploads/tenant/private/report.txt');
+      expect(url.queryParameters, contains('X-Amz-Signature'));
+      expect(result['headers'], isEmpty);
+    });
+
+    test('temporary URLs reject keys outside the disk boundary', () async {
+      final disk = S3StorageDisk(
+        endpoint: 'https://objects.example.test',
+        accessKey: 'test-access-key',
+        secretKey: 'test-secret-key',
+        bucket: 'uploads',
+      );
+      final manager = StorageManager()
+        ..registerDisk('uploads', disk)
+        ..setDefault('uploads');
+
+      await expectLater(
+        manager.temporaryUrl(
+          '../outside.txt',
+          DateTime.now().add(const Duration(minutes: 5)),
+        ),
+        throwsArgumentError,
       );
     });
 

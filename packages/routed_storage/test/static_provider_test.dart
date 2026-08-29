@@ -14,6 +14,8 @@ void main() {
       accessKey: 'test-access-key',
       secretKey: 'test-secret-key',
       bucket: 'assets',
+      region: 'us-east-1',
+      pathStyle: true,
     );
 
     expect(disk, isA<CloudStorageDisk>());
@@ -36,6 +38,8 @@ void main() {
       accessKey: 'test-access-key',
       secretKey: 'test-secret-key',
       bucket: 'assets',
+      region: 'us-east-1',
+      pathStyle: true,
     );
     final manager = StorageManager()
       ..registerDisk('assets', s3)
@@ -43,14 +47,27 @@ void main() {
     final engine =
         testEngine(
           providers: [RoutedStorageProvider(manager: manager)],
-        )..get('/storage', (ctx) {
+        )..get('/storage', (ctx) async {
           final storage = ctx.storage();
-          final cloud = ctx.cloudStorage();
           final disk = ctx.storageDisk();
+          final temporaryUrl = await ctx.temporaryStorageUrl(
+            'images/logo.png',
+            DateTime.now().add(const Duration(minutes: 5)),
+          );
+          final temporaryUpload = await ctx.temporaryStorageUploadUrl(
+            'images/upload.png',
+            DateTime.now().add(const Duration(minutes: 5)),
+          );
+          final downloadIsSigned = Uri.parse(
+            temporaryUrl,
+          ).queryParameters.containsKey('X-Amz-Signature');
+          final uploadIsSigned = Uri.parse(
+            temporaryUpload['url']! as String,
+          ).queryParameters.containsKey('X-Amz-Signature');
           return ctx.string(
             '${identical(storage, s3.adapter)}:'
-            '${identical(cloud, s3.adapter)}:'
-            '${disk.resolve('images/logo.png')}',
+            '${disk.resolve('images/logo.png')}:'
+            '$downloadIsSigned:$uploadIsSigned',
           );
         });
     await engine.initialize();
@@ -61,7 +78,7 @@ void main() {
 
     (await client.get(
       '/storage',
-    )).assertStatus(200).assertBodyEquals('true:true:images/logo.png');
+    )).assertStatus(200).assertBodyEquals('true:images/logo.png:true:true');
   });
 
   test('provider exposes a storage-only filesystem to handlers', () async {

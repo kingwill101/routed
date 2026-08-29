@@ -46,11 +46,41 @@ extension StorageEngineContext on EngineContext {
   /// and metadata) without relying on its process-global [Storage] facade.
   Filesystem storage([String? name]) => storageManager.storage(name);
 
-  /// Returns cloud-specific operations for a named disk.
+  /// Creates a time-limited download URL through the selected storage disk.
   ///
-  /// Use this for cloud-specific and temporary download/upload URLs.
-  /// Throws [UnsupportedError] when the selected disk is not cloud-backed.
-  CloudAdapter cloudStorage([String? name]) => storageManager.cloud(name);
+  /// The manager's default disk is used when [disk] is omitted. Authenticate
+  /// and authorize the caller before returning the resulting capability URL.
+  Future<String> temporaryStorageUrl(
+    String path,
+    DateTime expiration, {
+    String? disk,
+    Map<String, dynamic>? options,
+  }) {
+    return storageManager.temporaryUrl(
+      path,
+      expiration,
+      disk: disk,
+      options: options,
+    );
+  }
+
+  /// Creates time-limited upload data through the selected storage disk.
+  ///
+  /// The result contains a `url`, required `headers`, and optional form
+  /// `fields`. Authenticate and authorize the caller before returning it.
+  Future<Map<String, dynamic>> temporaryStorageUploadUrl(
+    String path,
+    DateTime expiration, {
+    String? disk,
+    Map<String, dynamic>? options,
+  }) {
+    return storageManager.temporaryUploadUrl(
+      path,
+      expiration,
+      disk: disk,
+      options: options,
+    );
+  }
 
   /// Whether this request has a [StorageManager] in its container.
   bool get hasStorageManager => container.has<StorageManager>();

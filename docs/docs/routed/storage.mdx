@@ -84,10 +84,19 @@ final logo = manager.resolve('logo.png', disk: 'assets');
 
 Use `ctx.storage()` or `manager.storage()` for the `storage_fs` filesystem API:
 `put`, `get`, `readStream`, `exists`, `delete`, listings, and metadata all work
-without casting the selected disk. Use `ctx.cloudStorage()` or
-`manager.cloud()` for cloud-specific and temporary URL operations. The manager keeps
-this API scoped to the Routed application instead of initializing
-`storage_fs`'s process-global `Storage` facade.
+without casting the selected disk. Use `ctx.temporaryStorageUrl()` or
+`manager.temporaryUrl()` for provider-signed URLs. Provider SDKs and cloud
+adapters remain internal to `server_storage`; the manager keeps this API scoped
+to the Routed application instead of initializing `storage_fs`'s process-global
+`Storage` facade.
+
+```dart
+final url = await ctx.temporaryStorageUrl(
+  'reports/monthly.pdf',
+  DateTime.now().add(const Duration(minutes: 5)),
+  disk: 'assets',
+);
+```
 
 Object keys passed to these operations remain rooted inside the disk's
 configured prefix.

@@ -13,7 +13,8 @@ import 'package:storage_fs/storage_fs.dart'
 /// wrapper gives it the [StorageDisk] contract so it can be selected by a
 /// [StorageManager]. It does not create buckets, upload objects, or close the
 /// adapter when the manager is cleared.
-class CloudStorageDisk implements AsyncFilesystemStorageDisk {
+class CloudStorageDisk
+    implements AsyncFilesystemStorageDisk, TemporaryUrlStorageDisk {
   /// Creates a disk backed by [adapter].
   ///
   /// [diskName] is descriptive metadata for integrations; it does not alter
@@ -65,6 +66,34 @@ class CloudStorageDisk implements AsyncFilesystemStorageDisk {
   /// enabled. Ordinary S3 disks are ready to use immediately after
   /// construction and this method completes without contacting the service.
   Future<void> ensureReady() => adapter.driver.ensureReady();
+
+  /// Creates a provider-signed temporary download URL for [path].
+  @override
+  Future<String> temporaryUrl(
+    String path,
+    DateTime expiration, {
+    Map<String, dynamic>? options,
+  }) {
+    return adapter.getTemporaryUrl(
+      resolve(path),
+      expiration,
+      options: options,
+    );
+  }
+
+  /// Creates provider-signed temporary upload data for [path].
+  @override
+  Future<Map<String, dynamic>> temporaryUploadUrl(
+    String path,
+    DateTime expiration, {
+    Map<String, dynamic>? options,
+  }) {
+    return adapter.getTemporaryUploadUrl(
+      resolve(path),
+      expiration,
+      options: options,
+    );
+  }
 }
 
 /// A storage disk backed by an S3-compatible object-storage service.

@@ -15,6 +15,48 @@ class _InMemoryDisk implements StorageDisk {
   String resolve(String path) => path.isEmpty ? '/' : '/$path';
 }
 
+final class _TemporaryUrlDisk implements TemporaryUrlStorageDisk {
+  _TemporaryUrlDisk(this._fs);
+
+  final MemoryFileSystem _fs;
+  String? lastPath;
+  DateTime? lastExpiration;
+  Map<String, dynamic>? lastOptions;
+
+  @override
+  MemoryFileSystem get fileSystem => _fs;
+
+  @override
+  String resolve(String path) => path;
+
+  @override
+  Future<String> temporaryUrl(
+    String path,
+    DateTime expiration, {
+    Map<String, dynamic>? options,
+  }) async {
+    lastPath = path;
+    lastExpiration = expiration;
+    lastOptions = options;
+    return 'https://storage.example.test/download/$path';
+  }
+
+  @override
+  Future<Map<String, dynamic>> temporaryUploadUrl(
+    String path,
+    DateTime expiration, {
+    Map<String, dynamic>? options,
+  }) async {
+    lastPath = path;
+    lastExpiration = expiration;
+    lastOptions = options;
+    return <String, dynamic>{
+      'url': 'https://storage.example.test/upload/$path',
+      'headers': const <String, String>{'x-upload-token': 'token'},
+    };
+  }
+}
+
 void main() {
   group('StorageManager', () {
     late StorageManager manager;
@@ -162,12 +204,64 @@ void main() {
       );
     });
 
-    test('cloud rejects local disks', () {
+    test('temporaryUrl delegates through the storage abstraction', () async {
+      final disk = _TemporaryUrlDisk(fs);
+      final expiration = DateTime.utc(2030);
+      const options = <String, dynamic>{'response-content-type': 'text/plain'};
+      manager
+        ..registerDisk('private', disk)
+        ..setDefault('private');
+
+      final url = await manager.temporaryUrl(
+        'reports/monthly.txt',
+        expiration,
+        options: options,
+      );
+
+      expect(url, 'https://storage.example.test/download/reports/monthly.txt');
+      expect(disk.lastPath, 'reports/monthly.txt');
+      expect(disk.lastExpiration, expiration);
+      expect(disk.lastOptions, same(options));
+    });
+
+    test('temporaryUploadUrl delegates to an explicitly named disk', () async {
+      final disk = _TemporaryUrlDisk(fs);
+      final expiration = DateTime.utc(2030);
+      manager.registerDisk('uploads', disk);
+
+      final result = await manager.temporaryUploadUrl(
+        'incoming/report.txt',
+        expiration,
+        disk: 'uploads',
+      );
+
+      expect(
+        result,
+        {
+          'url': 'https://storage.example.test/upload/incoming/report.txt',
+          'headers': {'x-upload-token': 'token'},
+        },
+      );
+      expect(disk.lastPath, 'incoming/report.txt');
+      expect(disk.lastExpiration, expiration);
+    });
+
+    test('temporary URLs reject disks without that capability', () async {
       manager
         ..registerDisk('local', LocalStorageDisk(root: '/data', fileSystem: fs))
         ..setDefault('local');
 
-      expect(() => manager.cloud(), throwsUnsupportedError);
+      await expectLater(
+        manager.temporaryUrl('private.txt', DateTime.utc(2030)),
+        throwsUnsupportedError,
+      );
+      await expectLater(
+        manager.temporaryUploadUrl(
+          'private.txt',
+          DateTime.utc(2030),
+        ),
+        throwsUnsupportedError,
+      );
     });
   });
 }

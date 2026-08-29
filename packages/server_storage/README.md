@@ -49,16 +49,18 @@ and metadata operations. S3 objects are treated as private: attempts to set
 truthful per-object ACL. Generate a temporary download URL instead:
 
 ```dart
-final downloadUrl = await manager.cloud('uploads').getTemporaryUrl(
+final downloadUrl = await manager.temporaryUrl(
   'reports/monthly.pdf',
   DateTime.now().add(const Duration(minutes: 10)),
+  disk: 'uploads',
 );
 ```
 
 Presigning fails closed. It never falls back to an unsigned `publicUrl` when
 the driver cannot create a signature. Supplying `publicUrl` is an explicit
 opt-in for a separately configured public bucket or CDN and bypasses this
-private-by-default model.
+private-by-default model. Provider SDKs and `file_cloud` remain implementation
+details of `server_storage`; application code uses only the manager API.
 
 ## SFTP storage
 

@@ -1,6 +1,6 @@
 import 'package:file/file.dart' as file;
 import 'package:file/local.dart' as local;
-import 'package:storage_fs/storage_fs.dart' show CloudAdapter, Filesystem;
+import 'package:storage_fs/storage_fs.dart' show Filesystem;
 
 /// Resolves application paths against a configured storage disk.
 ///
@@ -42,6 +42,31 @@ abstract interface class FilesystemStorageDisk implements StorageDisk {
 /// filesystems such as SFTP and cloud object stores implement this contract.
 abstract interface class AsyncFilesystemStorageDisk
     implements FilesystemStorageDisk {}
+
+/// A storage disk that can issue provider-backed temporary URLs.
+///
+/// Implementations keep provider SDKs and adapter types behind the
+/// `server_storage` boundary. Applications should normally call
+/// [StorageManager.temporaryUrl] or [StorageManager.temporaryUploadUrl]
+/// instead of selecting or casting an underlying cloud adapter.
+abstract interface class TemporaryUrlStorageDisk implements StorageDisk {
+  /// Creates a time-limited URL for downloading [path].
+  Future<String> temporaryUrl(
+    String path,
+    DateTime expiration, {
+    Map<String, dynamic>? options,
+  });
+
+  /// Creates time-limited provider data for uploading [path].
+  ///
+  /// The returned map contains a `url`, required `headers`, and optional form
+  /// `fields` when the provider uses a multipart upload flow.
+  Future<Map<String, dynamic>> temporaryUploadUrl(
+    String path,
+    DateTime expiration, {
+    Map<String, dynamic>? options,
+  });
+}
 
 /// Registers and selects named storage disks for an application.
 ///
@@ -208,17 +233,45 @@ class StorageManager {
   /// Alias for [storage], matching `storage_fs` drive terminology.
   Filesystem drive([String? name]) => storage(name);
 
-  /// Returns cloud-specific operations for the selected disk.
+  /// Creates a time-limited download URL for [path].
   ///
-  /// Use this for cloud-specific and temporary download/upload URLs.
-  /// Throws [UnsupportedError] when the selected disk is not cloud-backed.
-  CloudAdapter cloud([String? name]) {
-    final filesystem = storage(name);
-    if (filesystem is CloudAdapter) {
-      return filesystem;
-    }
-    throw UnsupportedError(
-      'Storage disk "${_selectedName(name)}" is not cloud-backed.',
+  /// The selected disk is the default when [disk] is omitted. Provider SDKs
+  /// remain encapsulated by the disk implementation. Authenticate and
+  /// authorize the caller before returning the resulting capability URL.
+  ///
+  /// Throws [UnsupportedError] when the selected disk cannot issue temporary
+  /// URLs.
+  Future<String> temporaryUrl(
+    String path,
+    DateTime expiration, {
+    String? disk,
+    Map<String, dynamic>? options,
+  }) async {
+    return _temporaryUrlDisk(disk).temporaryUrl(
+      path,
+      expiration,
+      options: options,
+    );
+  }
+
+  /// Creates time-limited provider data for uploading [path].
+  ///
+  /// The selected disk is the default when [disk] is omitted. The result
+  /// contains a `url`, required `headers`, and optional form `fields`.
+  /// Authenticate and authorize the caller before returning these values.
+  ///
+  /// Throws [UnsupportedError] when the selected disk cannot issue temporary
+  /// upload URLs.
+  Future<Map<String, dynamic>> temporaryUploadUrl(
+    String path,
+    DateTime expiration, {
+    String? disk,
+    Map<String, dynamic>? options,
+  }) async {
+    return _temporaryUrlDisk(disk).temporaryUploadUrl(
+      path,
+      expiration,
+      options: options,
     );
   }
 
@@ -232,5 +285,19 @@ class StorageManager {
 
   String _selectedName(String? name) {
     return name == null || name.isEmpty ? _defaultDisk : name;
+  }
+
+  TemporaryUrlStorageDisk _temporaryUrlDisk(String? name) {
+    final key = _selectedName(name);
+    final selected = _disks[key];
+    if (selected == null) {
+      throw StateError('Storage disk "$key" is not configured.');
+    }
+    if (selected is TemporaryUrlStorageDisk) {
+      return selected;
+    }
+    throw UnsupportedError(
+      'Storage disk "$key" does not support temporary URLs.',
+    );
   }
 }

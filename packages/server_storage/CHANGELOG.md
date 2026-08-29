@@ -4,8 +4,10 @@
   including endpoint, region, temporary-credential, key-prefix, path-style,
   public-URL, and optional bucket-bootstrap configuration.
 - Added application-scoped Laravel-style filesystem access through
-  `StorageManager.storage()` / `drive()` and cloud-specific access through
-  `StorageManager.cloud()` for both built-in local and S3 disks.
+  `StorageManager.storage()` / `drive()` for both built-in local and S3 disks.
+- Added `StorageManager.temporaryUrl()` and `temporaryUploadUrl()` so
+  applications can issue provider-signed URLs without accessing `file_cloud`
+  or an underlying cloud adapter.
 - Added `StorageManager.registerFilesystem()` for host-native object stores
   that expose `storage_fs` operations without a `package:file` filesystem.
 - Added `StorageFileHandler` and explicit path-resolution capability checks so
