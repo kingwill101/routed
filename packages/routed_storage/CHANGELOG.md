@@ -18,6 +18,8 @@
   exposing storage-driver implementations.
 - Storage-backed static mounts now fail closed on private/unknown visibility
   and omit private filenames from directory listings.
+- Preserved path-only custom disks in declarative static mounts and rooted
+  nested directory-listing links at their requested URL.
 
 ## 0.2.1 - 2026-08-25
 

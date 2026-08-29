@@ -1,3 +1,5 @@
+# Changelog
+
 ## 0.1.3 - 2026-08-29
 
 - Added a first-class `S3StorageDisk` for AWS S3 and compatible services,
@@ -31,6 +33,10 @@
   visibility and filter private entries from directory listings.
 - Made S3 storage private by default: public visibility requests are rejected
   and failed presigning no longer falls back to an unsigned public URL.
+- Made HTTPS the S3 default and require an explicit development-only opt-in
+  for cleartext HTTP endpoints.
+- Ensured both SFTP connections are offered cleanup and removed secrets and
+  capability URLs from signed-URL validation errors.
 
 ## 0.1.2 - 2026-08-25
 

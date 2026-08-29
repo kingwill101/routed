@@ -15,6 +15,7 @@ void main() {
         prefix: '/tenant-1/assets/',
         publicUrl: Uri.parse('https://cdn.example.test'),
         autoCreateBucket: true,
+        allowInsecureHttp: true,
         throwOnError: true,
         diskName: 'assets',
       );
@@ -27,6 +28,7 @@ void main() {
       expect(disk.publicUrl, Uri.parse('https://cdn.example.test'));
       expect(disk.pathStyle, isTrue);
       expect(disk.autoCreateBucket, isTrue);
+      expect(disk.allowInsecureHttp, isTrue);
       expect(disk.diskName, 'assets');
       expect(disk.fileSystem, same(disk.adapter.fileSystem));
       expect(disk.storage, same(disk.adapter));
@@ -67,6 +69,44 @@ void main() {
       expect(disk.useSsl, isTrue);
       final driver = disk.adapter.driver as MinioCloudDriver;
       expect(driver.client.port, 443);
+    });
+
+    test('rejects HTTP unless local development explicitly opts in', () {
+      expect(
+        () => S3StorageDisk(
+          endpoint: 'http://127.0.0.1:9000',
+          accessKey: 'test-access-key',
+          secretKey: 'test-secret-key',
+          bucket: 'uploads',
+        ),
+        throwsArgumentError,
+      );
+      const endpointCredential = 'sensitive-endpoint-credential';
+      expect(
+        () => S3StorageDisk(
+          endpoint: 'https://user:$endpointCredential@objects.example.test',
+          accessKey: 'key',
+          secretKey: 'secret',
+          bucket: 'uploads',
+        ),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.toString(),
+            'message',
+            isNot(contains(endpointCredential)),
+          ),
+        ),
+      );
+      expect(
+        () => S3StorageDisk(
+          endpoint: 'objects.example.test',
+          accessKey: 'test-access-key',
+          secretKey: 'test-secret-key',
+          bucket: 'uploads',
+          useSsl: false,
+        ),
+        throwsArgumentError,
+      );
     });
 
     test('is immediately ready when bucket creation is disabled', () async {

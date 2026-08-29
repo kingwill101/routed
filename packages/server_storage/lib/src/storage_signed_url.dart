@@ -15,10 +15,9 @@ final class StorageSignedUrlSigner {
   /// host's secret manager rather than application source or ordinary config.
   StorageSignedUrlSigner(String secret) : _key = utf8.encode(secret) {
     if (_key.length < 32) {
-      throw ArgumentError.value(
-        secret,
-        'secret',
+      throw ArgumentError(
         'Signed storage URL secrets must contain at least 32 UTF-8 bytes.',
+        'secret',
       );
     }
   }
@@ -38,10 +37,9 @@ final class StorageSignedUrlSigner {
     _validateUrl(url);
     if (url.queryParametersAll.containsKey(_expiresParameter) ||
         url.queryParametersAll.containsKey(_signatureParameter)) {
-      throw ArgumentError.value(
-        url,
-        'url',
+      throw ArgumentError(
         'Signed URL parameters are reserved.',
+        'url',
       );
     }
 
@@ -128,17 +126,15 @@ final class StorageSignedUrlSigner {
 
   static void _validateUrl(Uri url) {
     if (url.fragment.isNotEmpty || url.userInfo.isNotEmpty) {
-      throw ArgumentError.value(
-        url,
-        'url',
+      throw ArgumentError(
         'Signed storage URLs cannot contain user info or fragments.',
+        'url',
       );
     }
     if (url.pathSegments.any((segment) => segment == '.' || segment == '..')) {
-      throw ArgumentError.value(
-        url,
-        'url',
+      throw ArgumentError(
         'Signed storage URLs cannot contain traversal segments.',
+        'url',
       );
     }
   }

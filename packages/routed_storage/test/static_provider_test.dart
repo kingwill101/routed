@@ -172,6 +172,36 @@ void main() {
     missing.assertStatus(404);
   });
 
+  test('static.mounts preserves path-only custom disks', () async {
+    final fs = MemoryFileSystem();
+    fs.directory('/legacy').createSync();
+    fs.file('/legacy/readme.txt').writeAsStringSync('legacy');
+    final manager = StorageManager()
+      ..registerDisk('legacy', _PathOnlyStaticDisk(fs, '/legacy'))
+      ..setDefault('legacy');
+    final engine = testEngine(
+      providers: [
+        RoutedStorageProvider(manager: manager),
+        RoutedStaticProvider(
+          StaticConfig(
+            enabled: true,
+            mounts: [
+              const StaticMountConfig(route: '/legacy', disk: 'legacy'),
+            ],
+          ),
+        ),
+      ],
+    );
+    await engine.initialize();
+    addTearDown(engine.close);
+    final client = TestClient(RoutedRequestHandler(engine));
+    addTearDown(client.close);
+
+    (await client.get(
+      '/legacy/readme.txt',
+    )).assertStatus(200).assertBodyEquals('legacy');
+  });
+
   test('static.mounts serves a storage-only filesystem', () async {
     final fs = MemoryFileSystem();
     final filesystem = LocalStorageDisk(root: '/r2', fileSystem: fs).storage;
@@ -319,9 +349,14 @@ void main() {
       final client = TestClient(RoutedRequestHandler(engine));
       addTearDown(client.close);
 
-      (await client.get(
-        '/remote/docs',
-      )).assertStatus(200).assertBodyContains('readme.txt');
+      final withoutSlash = await client.get('/remote/docs');
+      withoutSlash
+          .assertStatus(200)
+          .assertBodyContains('href="/remote/docs/readme.txt"');
+      final withSlash = await client.get('/remote/docs/');
+      withSlash
+          .assertStatus(200)
+          .assertBodyContains('href="/remote/docs/readme.txt"');
     },
   );
 
@@ -377,4 +412,19 @@ final class _AsyncOnlyStaticDisk implements AsyncFilesystemStorageDisk {
 
   @override
   String resolve(String path) => path;
+}
+
+final class _PathOnlyStaticDisk implements StorageDisk {
+  const _PathOnlyStaticDisk(this.fileSystem, this.root);
+
+  @override
+  final FileSystem fileSystem;
+
+  final String root;
+
+  @override
+  String resolve(String path) {
+    if (path.isEmpty) return root;
+    return fileSystem.path.join(root, path);
+  }
 }

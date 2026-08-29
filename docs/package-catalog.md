@@ -1,7 +1,7 @@
 # Routed package catalog
 
 Package inventory for the Routed ecosystem. Versions below match the package
-manifests in this checkout as of 2026-08-27.
+manifests in this checkout as of 2026-08-29.
 
 ## Framework and feature packages
 

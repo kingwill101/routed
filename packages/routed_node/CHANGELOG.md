@@ -1,3 +1,5 @@
+# Changelog
+
 ## Unreleased
 
 - Added `CloudflareR2Filesystem`, a `storage_fs` adapter for native Worker R2
@@ -14,6 +16,7 @@
   Worker-secret-backed signed URL.
 - Removed caller-selected object keys from the public R2 smoke routes so they
   cannot overwrite or delete unrelated bucket objects.
+- Batched native R2 multi-object deletes at the binding's 1,000-key limit.
 
 ## 0.2.1 - 2026-08-25
 

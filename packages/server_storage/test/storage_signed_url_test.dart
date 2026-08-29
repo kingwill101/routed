@@ -62,13 +62,53 @@ void main() {
     });
 
     test('rejects weak secrets and ambiguous reserved parameters', () {
-      expect(() => StorageSignedUrlSigner('too-short'), throwsArgumentError);
+      const weakSecret = 'sensitive-too-short-secret';
+      expect(
+        () => StorageSignedUrlSigner(weakSecret),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.toString(),
+            'message',
+            isNot(contains(weakSecret)),
+          ),
+        ),
+      );
+      const capability = 'sensitive-capability-value';
       expect(
         () => signer.sign(
-          Uri.parse('https://files.example.test/file?expires=1'),
+          Uri.parse(
+            'https://files.example.test/file?expires=1&token=$capability',
+          ),
           expiresAt: now.add(const Duration(minutes: 5)),
         ),
-        throwsArgumentError,
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.toString(),
+            'message',
+            isNot(contains(capability)),
+          ),
+        ),
+      );
+    });
+
+    test('URL validation errors omit capability URLs', () {
+      const capability = 'private-capability-token';
+      final url = Uri.parse(
+        'https://user:$capability@files.example.test/private/report.pdf',
+      );
+
+      expect(
+        () => signer.sign(
+          url,
+          expiresAt: now.add(const Duration(minutes: 5)),
+        ),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.toString(),
+            'message',
+            isNot(contains(capability)),
+          ),
+        ),
       );
     });
   });

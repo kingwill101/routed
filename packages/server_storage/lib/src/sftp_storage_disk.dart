@@ -102,8 +102,24 @@ final class SftpStorageDisk implements AsyncFilesystemStorageDisk {
   /// It is safe to call this when the disk has not connected yet. A later
   /// operation may lazily establish a new connection.
   Future<void> close() async {
-    await _adapter.disconnect();
-    await _fileSystem.disconnect();
+    Object? firstError;
+    StackTrace? firstStackTrace;
+    try {
+      await _adapter.disconnect();
+    } on Object catch (error, stackTrace) {
+      firstError = error;
+      firstStackTrace = stackTrace;
+    } finally {
+      try {
+        await _fileSystem.disconnect();
+      } on Object catch (error, stackTrace) {
+        firstError ??= error;
+        firstStackTrace ??= stackTrace;
+      }
+    }
+    if (firstError case final error?) {
+      Error.throwWithStackTrace(error, firstStackTrace!);
+    }
   }
 
   static SftpConfig _validateConfig(SftpConfig config) {

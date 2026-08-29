@@ -200,6 +200,14 @@ void main() {
         expect(bucket.keys, contains('tenant/assets/private/one.txt'));
       },
     );
+
+    test('batches multi-key deletes at the R2 binding limit', () async {
+      final paths = List<String>.generate(2001, (index) => 'bulk/$index.txt');
+
+      expect(await filesystem.delete(paths), isTrue);
+      expect(bucket.deleteBatchSizes, [1000, 1000, 1]);
+      expect(bucket.singleKeyDeleteCalls, 1);
+    });
   });
 }
 
@@ -210,6 +218,8 @@ final class _MemoryR2Bucket implements CloudflareR2Bucket {
   final Map<String, _StoredObject> _objects = {};
   Exception? getFailure;
   Exception? listFailure;
+  final List<int> deleteBatchSizes = [];
+  int singleKeyDeleteCalls = 0;
 
   List<String> get keys => _objects.keys.toList()..sort();
 
@@ -221,10 +231,14 @@ final class _MemoryR2Bucket implements CloudflareR2Bucket {
   Future<void> delete(Object keys) async {
     switch (keys) {
       case String key:
+        deleteBatchSizes.add(1);
+        singleKeyDeleteCalls++;
         _objects.remove(key);
         return;
       case Iterable<String> values:
-        for (final key in values) {
+        final batch = values.toList(growable: false);
+        deleteBatchSizes.add(batch.length);
+        for (final key in batch) {
           _objects.remove(key);
         }
         return;

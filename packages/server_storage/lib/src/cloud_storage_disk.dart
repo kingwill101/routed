@@ -122,7 +122,8 @@ final class S3StorageDisk extends CloudStorageDisk {
   /// [prefix] scopes every object operation to a key prefix. [pathStyle]
   /// controls S3 path-style addressing; when omitted, the underlying client
   /// selects its provider default. [publicUrl] is an optional CDN or public
-  /// bucket base URL used by [CloudAdapter.url].
+  /// bucket base URL used by [CloudAdapter.url]. HTTP endpoints are rejected
+  /// unless [allowInsecureHttp] is explicitly enabled for local development.
   factory S3StorageDisk({
     required String endpoint,
     required String accessKey,
@@ -135,10 +136,15 @@ final class S3StorageDisk extends CloudStorageDisk {
     String? prefix,
     Uri? publicUrl,
     bool autoCreateBucket = false,
+    bool allowInsecureHttp = false,
     bool throwOnError = false,
     String? diskName,
   }) {
-    final target = _S3Endpoint.parse(endpoint, useSsl: useSsl);
+    final target = _S3Endpoint.parse(
+      endpoint,
+      useSsl: useSsl,
+      allowInsecureHttp: allowInsecureHttp,
+    );
     final normalizedAccessKey = _requireValue(accessKey, 'accessKey');
     final normalizedSecretKey = _requireValue(secretKey, 'secretKey');
     final normalizedBucket = _requireValue(bucket, 'bucket');
@@ -170,6 +176,7 @@ final class S3StorageDisk extends CloudStorageDisk {
       'bucket': normalizedBucket,
       'use_ssl': target.useSsl,
       'auto_create_bucket': autoCreateBucket,
+      'allow_insecure_http': allowInsecureHttp,
     };
     if (normalizedRegion != null) {
       diagnosticOptions['region'] = normalizedRegion;
@@ -197,6 +204,7 @@ final class S3StorageDisk extends CloudStorageDisk {
       publicUrl: publicUrl,
       pathStyle: pathStyle,
       autoCreateBucket: autoCreateBucket,
+      allowInsecureHttp: allowInsecureHttp,
       diskName: diskName,
     );
   }
@@ -210,6 +218,7 @@ final class S3StorageDisk extends CloudStorageDisk {
     required this.publicUrl,
     required this.pathStyle,
     required this.autoCreateBucket,
+    required this.allowInsecureHttp,
     required super.diskName,
   });
 
@@ -233,6 +242,9 @@ final class S3StorageDisk extends CloudStorageDisk {
 
   /// Whether [ensureReady] may create a missing bucket.
   final bool autoCreateBucket;
+
+  /// Whether this disk explicitly permits cleartext HTTP for development.
+  final bool allowInsecureHttp;
 
   /// Whether this disk connects to its service using TLS.
   bool get useSsl => endpoint.scheme == 'https';
@@ -415,10 +427,14 @@ final class _PrivateS3CloudAdapter extends CloudAdapter {
 final class _S3Endpoint {
   const _S3Endpoint(this.uri, {required this.useSsl});
 
-  factory _S3Endpoint.parse(String endpoint, {required bool? useSsl}) {
+  factory _S3Endpoint.parse(
+    String endpoint, {
+    required bool? useSsl,
+    required bool allowInsecureHttp,
+  }) {
     final raw = endpoint.trim();
     if (raw.isEmpty) {
-      throw ArgumentError.value(endpoint, 'endpoint', 'Value cannot be empty.');
+      throw ArgumentError('Value cannot be empty.', 'endpoint');
     }
 
     final hasScheme = raw.contains('://');
@@ -430,14 +446,20 @@ final class _S3Endpoint {
     if (parsed == null ||
         (parsed.scheme != 'http' && parsed.scheme != 'https') ||
         parsed.host.isEmpty) {
-      throw ArgumentError.value(
-        endpoint,
-        'endpoint',
+      throw ArgumentError(
         'Expected an S3 host or an HTTP(S) URL.',
+        'endpoint',
       );
     }
 
     final parsedUseSsl = parsed.scheme == 'https';
+    if (!parsedUseSsl && !allowInsecureHttp) {
+      throw ArgumentError(
+        'HTTP S3 endpoints are disabled by default. Set allowInsecureHttp to '
+            'true only for local development.',
+        'endpoint',
+      );
+    }
     if (hasScheme && useSsl != null && useSsl != parsedUseSsl) {
       throw ArgumentError.value(
         useSsl,
@@ -449,10 +471,9 @@ final class _S3Endpoint {
         (parsed.path.isNotEmpty && parsed.path != '/') ||
         parsed.hasQuery ||
         parsed.hasFragment) {
-      throw ArgumentError.value(
-        endpoint,
-        'endpoint',
+      throw ArgumentError(
         'Endpoint cannot contain user info, a path, query, or fragment.',
+        'endpoint',
       );
     }
 

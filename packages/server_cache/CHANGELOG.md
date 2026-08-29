@@ -1,3 +1,5 @@
+# Changelog
+
 ## Unreleased
 
 - Widened the `storage_fs` dependency to `>=0.1.0 <1.0.0` so compatible 0.x

@@ -162,6 +162,25 @@ class RoutedStaticProvider extends ServiceProvider
       pathDisk = storage.disk(mount.disk);
     }
 
+    if (!storage.supportsFilesystemOperations(mount.disk)) {
+      final disk = pathDisk;
+      if (disk == null) {
+        throw UnsupportedError(
+          'Static mount disk "${mount.disk}" exposes neither storage '
+          'operations nor path resolution.',
+        );
+      }
+      final handler = FileHandler.fromDir(
+        Dir(
+          disk.resolve(mount.path),
+          fileSystem: disk.fileSystem,
+          indexFile: mount.indexFile,
+          listDirectory: mount.listDirectories,
+        ),
+      );
+      return handler.serveToContext;
+    }
+
     Future<bool> Function(String)? directoryProbe;
     final directoryDisk = pathDisk;
     if (directoryDisk != null) {

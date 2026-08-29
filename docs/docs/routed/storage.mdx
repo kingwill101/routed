@@ -71,9 +71,10 @@ final engine = await Engine.create(
 ```
 
 AWS S3, Cloudflare R2, DigitalOcean Spaces, and MinIO use the same driver. A
-bare endpoint host defaults to HTTPS; an explicit URL can select HTTP and a
-custom port for local development. The constructor does not contact the
-service or create the bucket.
+bare endpoint host defaults to HTTPS, and cleartext HTTP is rejected by
+default. Local MinIO development can explicitly set `allowInsecureHttp: true`
+with an HTTP endpoint; do not enable it across an untrusted network. The
+constructor does not contact the service or create the bucket.
 
 ## Using the manager
 

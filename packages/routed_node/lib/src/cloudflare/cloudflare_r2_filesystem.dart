@@ -179,7 +179,7 @@ final class CloudflareR2Filesystem implements Filesystem {
         ),
       };
       if (keys.isEmpty) return true;
-      await bucket.delete(keys.length == 1 ? keys.single : keys);
+      await _deleteKeys(keys);
       return true;
     });
   }
@@ -326,12 +326,19 @@ final class CloudflareR2Filesystem implements Filesystem {
         suppressErrors: false,
       );
       final keys = listing.objects.map((object) => object.key).toList();
-      for (var offset = 0; offset < keys.length; offset += 1000) {
-        final end = offset + 1000 < keys.length ? offset + 1000 : keys.length;
-        await bucket.delete(keys.sublist(offset, end));
-      }
+      await _deleteKeys(keys);
       return true;
     });
+  }
+
+  Future<void> _deleteKeys(List<String> keys) async {
+    for (var offset = 0; offset < keys.length; offset += _maximumDeleteKeys) {
+      final end = offset + _maximumDeleteKeys < keys.length
+          ? offset + _maximumDeleteKeys
+          : keys.length;
+      final batch = keys.sublist(offset, end);
+      await bucket.delete(batch.length == 1 ? batch.single : batch);
+    }
   }
 
   Future<T> _attempt<T>(T fallback, Future<T> Function() operation) async {
@@ -517,6 +524,8 @@ final class CloudflareR2Filesystem implements Filesystem {
     );
   }
 }
+
+const _maximumDeleteKeys = 1000;
 
 final class _R2Listing {
   const _R2Listing({

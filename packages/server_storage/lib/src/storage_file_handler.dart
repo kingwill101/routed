@@ -62,7 +62,14 @@ final class StorageFileHandler {
   final bool _requirePublicVisibility;
 
   /// Serves [requestedPath] through [sink].
-  Future<void> serveFile(StaticFileSink sink, String requestedPath) async {
+  ///
+  /// When [requestUrl] is supplied, directory-listing links are rooted at the
+  /// current request path so they work with or without a trailing slash.
+  Future<void> serveFile(
+    StaticFileSink sink,
+    String requestedPath, {
+    Uri? requestUrl,
+  }) async {
     final relative = _normalizeRequestPath(requestedPath);
     if (relative == null) {
       _abort(sink, _forbidden, 'Access denied');
@@ -71,14 +78,14 @@ final class StorageFileHandler {
 
     try {
       if (await _isDirectory(relative, requestedPath)) {
-        await _serveDirectory(sink, relative);
+        await _serveDirectory(sink, relative, requestUrl);
         return;
       }
       if (relative.isNotEmpty && await storage.exists(relative)) {
         await _serveObject(sink, relative);
         return;
       }
-      await _serveDirectory(sink, relative);
+      await _serveDirectory(sink, relative, requestUrl);
     } on Object {
       _abort(sink, _internalServerError, 'Internal Server Error');
     }
@@ -98,7 +105,11 @@ final class StorageFileHandler {
     return false;
   }
 
-  Future<void> _serveDirectory(StaticFileSink sink, String directory) async {
+  Future<void> _serveDirectory(
+    StaticFileSink sink,
+    String directory,
+    Uri? requestUrl,
+  ) async {
     final indexPath = indexFile.isEmpty
         ? null
         : path.posix.join(directory, indexFile);
@@ -147,10 +158,15 @@ final class StorageFileHandler {
       ..setHeader(_contentTypeHeader, 'text/html; charset=utf-8')
       ..write('<!DOCTYPE html><html><body><ul>');
     const escape = HtmlEscape(HtmlEscapeMode.element);
+    final basePath = switch (requestUrl?.path) {
+      final value? when value.endsWith('/') => value,
+      final value? => '$value/',
+      null => '',
+    };
     for (final entry in entries) {
       final suffix = entry.directory ? '/' : '';
       final label = escape.convert('${entry.name}$suffix');
-      final href = Uri.encodeComponent(entry.name) + suffix;
+      final href = Uri(path: '$basePath${entry.name}$suffix').toString();
       sink.write('<li><a href="$href">$label</a></li>');
     }
     sink.write('</ul></body></html>');
@@ -432,7 +448,11 @@ final class SignedStorageFileHandler {
       return;
     }
     sink.setHeader(_cacheControlHeader, 'private, no-store');
-    await _delegate.serveFile(sink, requestedPath);
+    await _delegate.serveFile(
+      sink,
+      requestedPath,
+      requestUrl: requestUrl,
+    );
   }
 }
 

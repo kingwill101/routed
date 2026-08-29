@@ -32,11 +32,14 @@ await manager.storage().put(
 );
 ```
 
-The endpoint can be a bare host or an HTTP(S) URL. Use an explicit URL for a
-custom port, for example `http://127.0.0.1:9000` for MinIO. Construction is
-network-free. For a development service where the application may create its
-bucket, set `autoCreateBucket: true` and call `await s3.ensureReady()` during
-startup. Production buckets should normally be provisioned separately.
+The endpoint can be a bare host or an HTTPS URL. Cleartext HTTP is rejected by
+default. Local MinIO development can opt in explicitly with an endpoint such
+as `http://127.0.0.1:9000` and `allowInsecureHttp: true`; never enable that
+option for credentials or object data crossing an untrusted network.
+Construction is network-free. For a development service where the application
+may create its bucket, set `autoCreateBucket: true` and call
+`await s3.ensureReady()` during startup. Production buckets should normally be
+provisioned separately.
 
 The disk roots object operations inside its configured prefix, including
 reads, writes, listings, and signed URLs, without requiring application code

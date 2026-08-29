@@ -127,15 +127,18 @@ final engine = await Engine.create(
   providers: [RoutedStorageProvider(manager: manager)],
 );
 
-engine.get('/files/:path', (ctx) async {
-  final storage = ctx.storage();
-  final path = ctx.param('path')!;
-  return ctx.json({
-    'exists': await storage.exists(path),
-    'contents': await storage.get(path),
-  });
-});
+final signer = StorageSignedUrlSigner(
+  environment['STORAGE_SIGNING_KEY']!,
+);
+engine.signedStorage(
+  '/files',
+  manager.storage('assets'),
+  signer: signer,
+);
 ```
+
+Authenticate and authorize the requested object before issuing a signed URL;
+the mount itself rejects unsigned, expired, and path-tampered reads.
 
 SFTP uses the same manager and request API:
 
