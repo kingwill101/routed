@@ -55,6 +55,9 @@ workspace:
   - examples/rate_limiting
   - examples/openapi_demo
   - examples/full_stack
+  - examples/architecture/database_app
+  - examples/architecture/tenant_app
+  - examples/architecture/cloudflare_d1
 
 funding:
   - https://www.buymeacoffee.com/kingwill101
