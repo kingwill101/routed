@@ -1,3 +1,17 @@
+## Unreleased
+
+- Added the host-neutral `RuntimeEnvironmentSource` contract and immutable
+  process metadata fields used by runtime adapters during configuration.
+- Added a per-engine `CliCommandRegistry` and `ServiceProvider.registerCliCommands`
+  hook so runtime packages can expose commands without depending on
+  `routed_cli`.
+- Scaffold templates now include a `routed_database` provider, a local SQLite
+  factory, a codegen-free Ormed migration, and a `/db/health` example route.
+- Route-manifest inspection avoids initializing host resources, so CLI
+  discovery does not open the generated database.
+- Added a Cloudflare Worker scaffold with typed D1 database and auth setup,
+  environment-backed boot, and a Fetch entrypoint.
+
 ## 0.5.1 - 2026-08-25
 
 ### Maintenance

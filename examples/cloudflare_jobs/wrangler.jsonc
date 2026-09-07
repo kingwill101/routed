@@ -1,0 +1,52 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "routed-cloudflare-jobs-example",
+  "main": "worker_wrapper.mjs",
+  "compatibility_date": "2026-08-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "kv_namespaces": [
+    {
+      "binding": "RESULTS",
+      "id": "REPLACE_WITH_KV_NAMESPACE_ID"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "JOBS",
+        "queue": "routed-cloudflare-jobs-example"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "routed-cloudflare-jobs-example",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "routed-cloudflare-jobs-example-dlq"
+      }
+    ]
+  },
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SCHEDULE_STORE",
+        "class_name": "CloudflareScheduleStoreObject"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "routed-jobs-schedule-v1",
+      "new_sqlite_classes": ["CloudflareScheduleStoreObject"]
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

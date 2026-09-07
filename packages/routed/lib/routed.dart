@@ -30,6 +30,7 @@ export 'package:routed_auth/routed_auth.dart';
 export 'package:routed_cache/routed_cache.dart';
 export 'package:routed_core/routed_core.dart' hide ProviderConfigException;
 export 'package:routed_http/routed_http.dart';
+export 'package:routed_jobs/routed_jobs.dart';
 export 'package:routed_logging/routed_logging.dart';
 export 'package:routed_observability/routed_observability.dart';
 export 'package:routed_openapi/routed_openapi.dart';

@@ -11,3 +11,6 @@ build/
 
 # Generated sources
 lib/generated/
+
+# Local development database
+storage/*.sqlite

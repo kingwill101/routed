@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Added the provider-owned `routed deploy` command and CLI provider discovery
+  for Cloudflare, Netlify, and Vercel deployments. The CLI contribution is
+  conditional on Dart VM builds so Worker bundles remain portable.
+
+- Exported the Node event-loop bootstrap used by generated Node entrypoints,
+  including a one-shot mode for command-only invocations.
+- Added the Node process-argument bridge used by generated JavaScript
+  entrypoints, keeping `process.argv` handling out of `routed_core`.
+- Add `CloudflareJobQueue` plus typed Queue batch and Cron Trigger exports for
+  `routed_jobs`, including per-message acknowledgement/retry mapping.
+- Add the Cloudflare scheduler tick bridge and `CloudflareScheduleStore` for
+  atomic occurrence claims backed by a Durable Object-compatible `Store`.
+- Fence Cloudflare schedule completion by the current Durable Object lock
+  owner and route completion markers through the claim shard.
+
+- Add `openCloudflareD1()` for creating a codegen-optional Ormed database from
+  a native Worker D1 binding, ready for `routed_database` registration.
+- Document the shared `routed_database`/`ctx.db()` path for Cloudflare apps.
+- Update the Cloudflare sample and live smoke harness to apply and verify an
+  Ormed migration instead of pre-creating the D1 table with raw SQL.
 - Added `CloudflareR2Filesystem`, a `storage_fs` adapter for native Worker R2
   bindings, with scoped keys, metadata, paginated listings, directory markers,
   and read-only/error policies.

@@ -8,6 +8,8 @@
 /// {@canonicalFor fetch_entry_stub.defineFetchExportAsync}
 /// {@canonicalFor fetch_entry_stub.defineFetchExportFactoryAsync}
 /// {@canonicalFor fetch_entry_stub.defineFetchExportFactoryWithEnvironmentAsync}
+/// {@canonicalFor cloudflare_bindings_stub.defineCloudflareQueueExport}
+/// {@canonicalFor cloudflare_bindings_stub.defineCloudflareScheduledExport}
 library;
 
 import 'package:routed_core/routed_core.dart';
@@ -20,8 +22,11 @@ import 'src/fetch/fetch_entry.dart';
 import 'src/runtime/runtime.dart';
 
 export 'src/cloudflare/cloudflare_types.dart';
+export 'src/cloudflare/cloudflare_database.dart';
 export 'src/cloudflare/cloudflare_durable_object_store.dart';
+export 'src/cloudflare/cloudflare_jobs.dart';
 export 'src/cloudflare/cloudflare_r2_filesystem.dart';
+export 'src/cloudflare/cloudflare_schedule.dart';
 export 'src/cloudflare/cloudflare_bindings_stub.dart'
     if (dart.library.js_interop) 'src/cloudflare/cloudflare_bindings_js.dart'
     show
@@ -32,7 +37,9 @@ export 'src/cloudflare/cloudflare_bindings_stub.dart'
         cloudflareCache,
         cloudflareWebSocketPair,
         cloudflareExecutionContextOf,
-        defineCloudflareDurableObjects;
+        defineCloudflareDurableObjects,
+        defineCloudflareQueueExport,
+        defineCloudflareScheduledExport;
 export 'src/runtime/runtime.dart'
     show
         RoutedNodeCapabilities,

@@ -14,7 +14,9 @@ workspace:
   - packages/routed_cache
   - packages/routed_sessions
   - packages/routed_storage
+  - packages/routed_database
   - packages/routed_rate_limit
+  - packages/routed_jobs
   - packages/routed_io
   - packages/routed_node
   - packages/routed_node/example/api
@@ -42,6 +44,7 @@ workspace:
   - examples/localization
   - examples/auth_demo
   - examples/cloudflare_auth
+  - examples/cloudflare_jobs
   - examples/static_mounts
   - examples/oauth_keycloak
   - examples/kitchen_sink
@@ -61,9 +64,18 @@ environment:
 dependencies:
   contextual: ^2.2.0
   liquify: ^1.4.2
+  routed_node: ^0.2.1
   uuid: ^4.5.2
 
 dependency_overrides:
+  # Internal-only temporary pin while Routed's jobs layer targets Stem PR #32.
+  # Stem types must not cross the public Routed jobs/session API. Remove after
+  # the portable runtime surface lands in a published Stem release.
+  stem:
+    git:
+      url: https://github.com/kingwill101/stem.git
+      ref: refs/pull/32/head
+      path: packages/stem
   # native_prebuilt 0.4.0 has not widened its code_assets constraint yet;
   # keep the workspace on the current code-assets protocol while its manifest
   # recipe and prebuilt resolver remain source-compatible with it.

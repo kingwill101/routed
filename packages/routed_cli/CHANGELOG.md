@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- Added `routed build` (also available as `routed cli build`) to compile a
+  self-contained native server binary or a Node.js JavaScript server bundle.
+  Both generated entrypoints boot the normal application engine and provision
+  provider and project CLI commands.
+- Routed CLI commands and generated command runners now consistently use the
+  Artisanal argument/console wrapper; the direct `package:args` dependency is
+  no longer required by `routed_cli`.
+- Project command discovery now boots the application's engine and includes
+  commands registered by service providers through `CliCommandRegistry`.
+- Generated basic, API, web, and fullstack projects now include the
+  `routed_database` provider, codegen-free SQLite/Ormed migrations, and a
+  `/db/health` example route.
+- Added a Cloudflare scaffold with environment-backed D1 migrations, a
+  Fetch-compatible Worker entrypoint, and D1-backed `routed_auth` sessions.
+- **Breaking:** deployment target flags now come from runtime adapter
+  providers; the CLI host no longer registers a built-in deploy command or
+  owns the Cloudflare deployment implementation. Add the adapter's provider to
+  the application engine used by CLI discovery.
+
 ## 0.4.0 - 2026-08-27
 
 - **Breaking:** replace `--react-ssr-entry` with `--ssr-entry` for Cloudflare

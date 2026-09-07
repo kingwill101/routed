@@ -1,4 +1,4 @@
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 import 'package:file/file.dart' as fs;
 import 'package:file/memory.dart';
 import 'package:routed_cli/routed_cli.dart' show CliLogger;
@@ -60,6 +60,8 @@ void main() {
       final dependencies = pubspec['dependencies'] as YamlMap;
       expect(dependencies.containsKey('routed'), isTrue);
       expect(dependencies['routed_core'], equals('>=0.5.0 <1.0.0'));
+      expect(dependencies.containsKey('routed_database'), isTrue);
+      expect(dependencies.containsKey('ormed_sqlite'), isTrue);
 
       expect(
         projectDir.fileSystem
@@ -73,6 +75,7 @@ void main() {
 
       expect(_exists(projectDir, 'analysis_options.yaml'), isTrue);
       expect(_exists(projectDir, 'README.md'), isTrue);
+      expect(_exists(projectDir, 'lib/database.dart'), isTrue);
 
       final serverContent = _read(projectDir, 'bin/server.dart');
       expect(
@@ -104,6 +107,7 @@ void main() {
       expect(configContent, contains('AppConfig config()'));
       expect(configContent, contains('CoreServiceProvider()'));
       expect(configContent, contains('RoutingServiceProvider()'));
+      expect(configContent, contains('RoutedDatabaseProvider('));
       expect(configContent, contains('final List<EngineOpt> options;'));
       expect(configContent, contains('options: options'));
       expect(configContent, isNot(contains('AuthDeployment')));
@@ -302,6 +306,18 @@ void main() {
         'fullstack': _TemplateExpectation(
           expectedFiles: ['templates/todos.liquid', 'lib/config.dart'],
           contentChecks: {'lib/app.dart': "templateName: 'todos.liquid'"},
+        ),
+        'cloudflare': _TemplateExpectation(
+          expectedFiles: [
+            'lib/database.dart',
+            'lib/auth.dart',
+            'lib/config.dart',
+          ],
+          contentChecks: {
+            'lib/app.dart': 'createCloudflareEngine',
+            'lib/auth.dart': 'CloudflareD1AuthStore',
+            'lib/database.dart': 'openCloudflareD1',
+          },
         ),
       };
 

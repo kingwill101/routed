@@ -1,0 +1,20 @@
+name: routed_jobs
+description: Laravel-inspired jobs and queue abstractions for Routed applications.
+version: 0.1.0
+repository: https://github.com/kingwill101/routed/tree/master/packages/routed_jobs
+tags:
+  - jobs
+  - queue
+  - routed
+funding:
+  - https://www.buymeacoffee.com/kingwill101
+resolution: workspace
+environment:
+  sdk: ">=3.12.0 <4.0.0"
+dependencies:
+  artisanal: ^0.5.0
+  routed_core: ">=0.5.0 <1.0.0"
+  stem: ">=0.4.0 <1.0.0"
+dev_dependencies:
+  test: ^1.29.0
+  very_good_analysis: ^10.0.0

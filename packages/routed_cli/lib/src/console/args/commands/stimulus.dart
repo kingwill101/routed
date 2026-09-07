@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:args/command_runner.dart' show UsageException;
+import 'package:artisanal/args.dart' show UsageException;
 import 'package:file/file.dart' as fs;
 
 import 'package:routed_cli/src/console/args/base_command.dart';

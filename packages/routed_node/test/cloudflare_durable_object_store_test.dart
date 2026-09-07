@@ -103,6 +103,72 @@ void main() {
     );
   });
 
+  test('fenced schedule completion rejects a stale lock owner', () async {
+    expect(
+      await _call(object, 'lock_acquire', <String, Object?>{
+        'name': 'schedule:lock:daily',
+        'owner': 'owner-a',
+        'seconds': 30,
+      }),
+      <String, Object?>{'acquired': true},
+    );
+    expect(
+      await _call(object, 'lock_complete', <String, Object?>{
+        'name': 'schedule:lock:daily',
+        'owner': 'owner-b',
+        'completedKey': 'schedule:completed:daily',
+        'seconds': 300,
+      }),
+      <String, Object?>{'completed': false},
+    );
+    expect(
+      await _call(object, 'get', <String, Object?>{
+        'key': 'schedule:completed:daily',
+      }),
+      <String, Object?>{'found': false},
+    );
+    expect(
+      await _call(object, 'lock_complete', <String, Object?>{
+        'name': 'schedule:lock:daily',
+        'owner': 'owner-a',
+        'completedKey': 'schedule:completed:daily',
+        'seconds': 300,
+      }),
+      <String, Object?>{'completed': true},
+    );
+    expect(
+      await _call(object, 'get', <String, Object?>{
+        'key': 'schedule:completed:daily',
+      }),
+      <String, Object?>{'found': true, 'value': 'completed'},
+    );
+    expect(
+      await _call(object, 'lock_owner', <String, Object?>{
+        'name': 'schedule:lock:daily',
+        'owner': 'owner-a',
+      }),
+      <String, Object?>{'owner': null},
+    );
+  });
+
+  test('schedule completion checks use the claim shard', () async {
+    expect(
+      await _call(object, 'put', <String, Object?>{
+        'key': 'schedule:completed:daily',
+        'value': 'completed',
+        'seconds': 300,
+      }),
+      <String, Object?>{'stored': true},
+    );
+    expect(
+      await _call(object, 'schedule_completed', <String, Object?>{
+        'key': 'schedule:lock:daily',
+        'completedKey': 'schedule:completed:daily',
+      }),
+      <String, Object?>{'completed': true},
+    );
+  });
+
   test('does not expose exception details in protocol errors', () async {
     final response = await object.fetch(
       _FakeRequest('/get', <String, Object?>{'key': ''}),

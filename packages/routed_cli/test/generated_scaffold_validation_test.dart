@@ -19,6 +19,12 @@ void main() {
     (name: 'api', template: 'api', authPlugins: []),
     (name: 'web', template: 'web', authPlugins: []),
     (name: 'fullstack', template: 'fullstack', authPlugins: []),
+    (name: 'cloudflare', template: 'cloudflare', authPlugins: []),
+    (
+      name: 'cloudflare_username',
+      template: 'cloudflare',
+      authPlugins: ['username'],
+    ),
     (name: 'username', template: 'basic', authPlugins: ['username']),
   ];
 
@@ -59,6 +65,50 @@ void main() {
         ]);
 
         final project = Directory(p.join(sandbox.path, packageName));
+        final generatedPubspec = File(
+          p.join(project.path, 'pubspec.yaml'),
+        ).readAsStringSync();
+        expect(generatedPubspec, contains('routed_database'));
+        if (template == 'cloudflare') {
+          expect(generatedPubspec, contains('routed_node'));
+          expect(generatedPubspec, isNot(contains('ormed_sqlite')));
+        } else {
+          expect(generatedPubspec, contains('ormed_sqlite'));
+        }
+        expect(
+          File(p.join(project.path, 'lib', 'database.dart')).existsSync(),
+          isTrue,
+        );
+        expect(
+          File(p.join(project.path, 'lib', 'app.dart')).readAsStringSync(),
+          contains('/db/health'),
+        );
+        if (template == 'cloudflare') {
+          expect(generatedPubspec, contains('routed_auth_cloudflare'));
+          expect(generatedPubspec, contains('routed_sessions'));
+          expect(
+            File(p.join(project.path, 'lib', 'app.dart')).readAsStringSync(),
+            contains('createCloudflareEngine'),
+          );
+          expect(
+            File(p.join(project.path, 'lib', 'app.dart')).readAsStringSync(),
+            contains('routedNodeCliProviders'),
+          );
+          expect(
+            File(p.join(project.path, 'lib', 'auth.dart')).readAsStringSync(),
+            contains('createCloudflareAuthSetup'),
+          );
+          expect(
+            File(p.join(project.path, 'lib', 'config.dart')).readAsStringSync(),
+            contains('auth.deployment'),
+          );
+          expect(
+            File(
+              p.join(project.path, 'lib', 'database.dart'),
+            ).readAsStringSync(),
+            contains('openCloudflareD1'),
+          );
+        }
         await _installPackageConfig(
           source: sourcePackageConfig,
           project: project,

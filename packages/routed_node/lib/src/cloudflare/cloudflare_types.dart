@@ -4,6 +4,10 @@ import 'dart:typed_data';
 
 import 'package:ormed_d1/d1_binding.dart' as ormed_d1;
 
+// Callback-backed host values cannot use private initializing formals because
+// their constructors are called by the conditional JavaScript bridge.
+// ignore_for_file: prefer_initializing_formals
+
 /// Cloudflare's D1 row decoder, provided by `package:ormed_d1`.
 typedef CloudflareD1RowDecoder<T> = ormed_d1.D1RowDecoder<T>;
 
@@ -348,6 +352,134 @@ abstract interface class CloudflareQueue {
   /// Performs the metrics operation.
   Future<CloudflareQueueMetrics> metrics();
 }
+
+/// One message delivered to a Cloudflare Queue consumer Worker.
+///
+/// The acknowledgement methods map directly to Cloudflare's synchronous
+/// `Message.ack()` and `Message.retry()` operations. They are intentionally
+/// synchronous because Cloudflare records the decision before the queue
+/// handler returns.
+final class CloudflareQueueDelivery {
+  /// Creates a queue delivery value.
+  ///
+  /// The callback parameters are used by the JavaScript Worker bridge. They
+  /// are public only so the host-neutral value can be constructed by that
+  /// bridge; application code should normally receive deliveries from
+  /// the Cloudflare queue consumer bridge.
+  CloudflareQueueDelivery({
+    required this.id,
+    required this.timestamp,
+    required this.attempts,
+    required this.body,
+    required void Function() acknowledge,
+    required void Function(Duration? delay) retryHandler,
+  }) : _acknowledge = acknowledge,
+       _retryHandler = retryHandler;
+
+  /// Unique Cloudflare message identifier.
+  final String id;
+
+  /// Time at which Cloudflare accepted the message.
+  final DateTime timestamp;
+
+  /// One-based delivery attempt count.
+  final int attempts;
+
+  /// Structured-clone body delivered by Cloudflare.
+  final Object? body;
+
+  final void Function() _acknowledge;
+  final void Function(Duration? delay) _retryHandler;
+
+  /// Acknowledges this message as successfully handled.
+  void ack() => _acknowledge();
+
+  /// Requests a later delivery of this message.
+  void retry({Duration? delay}) {
+    if (delay != null && delay.isNegative) {
+      throw ArgumentError.value(
+        delay,
+        'delay',
+        'Retry delay must not be negative',
+      );
+    }
+    _retryHandler(delay);
+  }
+}
+
+/// A batch delivered to a Cloudflare Queue consumer Worker.
+final class CloudflareQueueBatch {
+  /// Creates a queue batch value.
+  CloudflareQueueBatch({
+    required this.queue,
+    required Iterable<CloudflareQueueDelivery> messages,
+    required void Function() acknowledgeAll,
+    required void Function(Duration? delay) retryAllHandler,
+  }) : messages = List<CloudflareQueueDelivery>.unmodifiable(messages),
+       _acknowledgeAll = acknowledgeAll,
+       _retryAllHandler = retryAllHandler;
+
+  /// Name of the queue that produced this batch.
+  final String queue;
+
+  /// Messages delivered in this batch.
+  final List<CloudflareQueueDelivery> messages;
+
+  final void Function() _acknowledgeAll;
+  final void Function(Duration? delay) _retryAllHandler;
+
+  /// Acknowledges every message that has not already been explicitly handled.
+  void ackAll() => _acknowledgeAll();
+
+  /// Requests a later delivery for every message not explicitly handled.
+  void retryAll({Duration? delay}) {
+    if (delay != null && delay.isNegative) {
+      throw ArgumentError.value(
+        delay,
+        'delay',
+        'Retry delay must not be negative',
+      );
+    }
+    _retryAllHandler(delay);
+  }
+}
+
+/// A Cloudflare Cron Trigger invocation.
+final class CloudflareScheduledEvent {
+  /// Creates a scheduled event value.
+  const CloudflareScheduledEvent({
+    required this.scheduledTime,
+    required this.cron,
+    required void Function() noRetryHandler,
+  }) : _noRetryHandler = noRetryHandler;
+
+  /// Scheduled invocation time in UTC.
+  final DateTime scheduledTime;
+
+  /// Cron expression that triggered this invocation, when available.
+  final String? cron;
+
+  final void Function() _noRetryHandler;
+
+  /// Prevents Cloudflare from retrying a failed scheduled invocation.
+  void noRetry() => _noRetryHandler();
+}
+
+/// Callback invoked for one Cloudflare Queue batch.
+typedef CloudflareQueueHandler =
+    FutureOr<void> Function(
+      CloudflareQueueBatch batch,
+      CloudflareEnvironment environment,
+      CloudflareExecutionContext context,
+    );
+
+/// Callback invoked by a Cloudflare Cron Trigger.
+typedef CloudflareScheduledHandler =
+    FutureOr<void> Function(
+      CloudflareScheduledEvent event,
+      CloudflareEnvironment environment,
+      CloudflareExecutionContext context,
+    );
 
 /// A Worker-to-Worker service binding.
 abstract interface class CloudflareServiceBinding {

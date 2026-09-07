@@ -1,4 +1,5 @@
 import 'package:artisanal/args.dart';
+import 'package:routed_cli/routed_cli.dart' show RoutedCommandRunner;
 import 'package:routed_cli/src/console/args/provider_commands.dart';
 import 'package:routed_core/routed_core.dart';
 import 'package:test/test.dart';
@@ -34,6 +35,12 @@ class _CommandProvider extends ServiceProvider {
 }
 
 void main() {
+  test('deployment commands are contributed by runtime adapters', () {
+    final runner = RoutedCommandRunner();
+
+    expect(runner.commands.containsKey('deploy'), isFalse);
+  });
+
   test('provider-registered commands are added to runners', () {
     const id = 'cli-flow';
     addTearDown(() {
@@ -59,4 +66,31 @@ void main() {
     expect(runner.commands.containsKey('provider:$id'), isTrue);
     expect(runner.commands.containsKey('artisan:$id'), isTrue);
   });
+
+  test('engine command registrations are added with conflict checks', () {
+    final engine = Engine(providers: [_CliCommandProvider()]);
+    final runner = CommandRunner<void>('app', 'desc');
+
+    registerRoutedCliCommands(
+      runner,
+      engine.container.get<CliCommandRegistry>(),
+      engine.container,
+      runner.usage,
+    );
+
+    expect(runner.commands.containsKey('engine-command'), isTrue);
+  });
+}
+
+class _CliCommandProvider extends ServiceProvider {
+  @override
+  void register(Container container) {}
+
+  @override
+  void registerCliCommands(CliCommandRegistry registry) {
+    registry.register(
+      'engine-command',
+      factory: (_) => _TestCommand('engine-command'),
+    );
+  }
 }

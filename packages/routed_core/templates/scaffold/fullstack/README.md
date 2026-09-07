@@ -14,7 +14,9 @@ dart run routed_cli dev
 
 - Visit http://localhost:8080 for the web UI.
 - Call http://localhost:8080/api/todos for JSON responses.
+- Call http://localhost:8080/db/health to verify database initialization.
 
 The app renders vanilla HTML and exposes a simple REST API. Swap the front end
 for HTMX, a SPA framework, or your favourite renderer while keeping the API layer
-in Dart.
+in Dart. `RoutedDatabaseProvider` configures the generated SQLite connection and
+Ormed migration; customize `lib/database.dart` for application tables.

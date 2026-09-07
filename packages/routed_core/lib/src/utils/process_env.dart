@@ -1,4 +1,8 @@
-/// Portable process environment and host OS flags.
+/// Best-effort process environment and host OS flags used by core internals.
+///
+/// Application and adapter configuration should use the typed runtime
+/// environment source instead of reading this low-level compatibility surface
+/// directly.
 ///
 /// - VM: `dart:io` [Platform.environment]
 /// - Node/JS: `process.env` via js_interop

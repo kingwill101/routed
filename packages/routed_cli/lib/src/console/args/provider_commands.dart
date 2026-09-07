@@ -1,6 +1,8 @@
 import 'package:artisanal/args.dart';
+import 'package:routed_core/routed_core.dart'
+    show CliCommandRegistry, Container;
 // Provider registration intentionally uses this low-level registry contract;
-// package:routed_core does not expose the registry through its public barrel.
+// the public routed_cli barrel re-exports the adapter functions below.
 // ignore: implementation_imports
 import 'package:routed_core/src/support/named_registry.dart';
 
@@ -226,6 +228,46 @@ void registerProviderArtisanalCommands(
     existingNames
       ..add(command.name)
       ..addAll(command.aliases);
+  }
+}
+
+/// Instantiates service-provider commands registered on an engine and adds
+/// them to [runner].
+///
+/// Runtime packages use the core registry so they do not depend on the CLI
+/// package. Call this after the application engine has booted and before
+/// parsing the command line.
+void registerRoutedCliCommands(
+  CommandRunner<void> runner,
+  CliCommandRegistry registry,
+  Container container,
+  String usage,
+) {
+  final existingNames = runner.commands.values
+      .expand((command) => [command.name, ...command.aliases])
+      .toSet();
+  for (final registration in registry.registrations) {
+    final value = registration.factory(container);
+    if (value is! Command<void>) {
+      throw UsageException(
+        'CLI command registration "${registration.id}" returned '
+        '${value.runtimeType}, expected artisanal Command<void>.',
+        usage,
+      );
+    }
+    final hasConflict =
+        existingNames.contains(value.name) ||
+        value.aliases.any(existingNames.contains);
+    if (hasConflict) {
+      throw UsageException(
+        'CLI command "${value.name}" conflicts with an existing command.',
+        usage,
+      );
+    }
+    runner.addCommand(value);
+    existingNames
+      ..add(value.name)
+      ..addAll(value.aliases);
   }
 }
 

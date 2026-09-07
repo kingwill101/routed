@@ -11,6 +11,16 @@ abstract interface class TypedValueSource<T> {
   FutureOr<T> resolve(RuntimeContext runtime);
 }
 
+/// Supplies a snapshot of values exposed by the active host runtime.
+///
+/// Runtime adapters implement this contract at their package boundary. Core
+/// only consumes the resulting [RuntimeEnvironment] value and does not import
+/// a host SDK or inspect process globals itself.
+abstract interface class RuntimeEnvironmentSource {
+  /// Reads the current host environment.
+  RuntimeEnvironment snapshot();
+}
+
 /// Host services available while assembling application configuration.
 ///
 /// Application configuration remains portable data. Host-specific resources
@@ -18,11 +28,18 @@ abstract interface class TypedValueSource<T> {
 /// resolved by typed providers separately.
 class RuntimeContext {
   /// Creates a runtime context from optional host services and values.
+  ///
+  /// When [environment] is omitted, [environmentSource] can provide a
+  /// host-specific snapshot without making core depend on that host package.
   RuntimeContext({
     RuntimeEnvironment? environment,
+    RuntimeEnvironmentSource? environmentSource,
     RuntimeSecrets? secrets,
     Map<Type, Object>? bindings,
-  }) : environment = environment ?? RuntimeEnvironment.empty(),
+  }) : environment =
+           environment ??
+           environmentSource?.snapshot() ??
+           RuntimeEnvironment.empty(),
        secrets = secrets ?? RuntimeSecrets.empty(),
        bindings = Map<Type, Object>.unmodifiable(bindings ?? const {});
 
@@ -52,14 +69,27 @@ class RuntimeContext {
 /// Typed access to deployment environment values.
 class RuntimeEnvironment {
   /// Creates an environment from [values].
-  RuntimeEnvironment(Map<String, String> values)
-    : values = Map<String, String>.unmodifiable(values);
+  RuntimeEnvironment(
+    Map<String, String> values, {
+    Iterable<String> arguments = const <String>[],
+    this.isWindows = false,
+  }) : values = Map<String, String>.unmodifiable(values),
+       arguments = List<String>.unmodifiable(arguments);
 
   /// Creates an empty environment.
-  RuntimeEnvironment.empty() : values = const <String, String>{};
+  RuntimeEnvironment.empty()
+    : values = const <String, String>{},
+      arguments = const <String>[],
+      isWindows = false;
 
   /// The immutable environment values keyed by variable name.
   final Map<String, String> values;
+
+  /// The host process arguments, when the host exposes them.
+  final List<String> arguments;
+
+  /// Whether the host reports a Windows operating system.
+  final bool isWindows;
 
   /// Returns the value for [name], or `null` when it is not set.
   String? string(String name) => values[name];

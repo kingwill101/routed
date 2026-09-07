@@ -2,9 +2,12 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:routed_core/routed_core.dart';
+import 'package:routed_database/routed_database.dart';
 import 'package:routed_node/cloudflare.dart';
 import 'package:routed_node/routed_node.dart';
 import 'package:routed_storage/routed_storage.dart';
+
+import 'migrations.dart';
 
 /// In-memory item store for the sample API (demo only — not durable).
 final class _EchoWebSocketHandler extends WebSocketHandler {
@@ -109,7 +112,11 @@ Engine createSampleEngine({
 }) {
   final items = store ?? ItemStore();
   final engine = Engine(
-    providers: <ServiceProvider>[...Engine.defaultProviders, ...providers],
+    providers: <ServiceProvider>[
+      ...Engine.defaultProviders,
+      ...routedNodeCliProviders(),
+      ...providers,
+    ],
   );
   engine.ws('/ws', _EchoWebSocketHandler());
 
@@ -181,6 +188,28 @@ Engine createSampleEngine({
   });
 
   engine.get('/bindings/d1', (ctx) async {
+    if (ctx.hasDatabaseManager) {
+      final database = ctx.db();
+      await database.executeRaw(
+        'INSERT INTO routed_live_checks (marker) VALUES (?)',
+        ['cloudflare'],
+      );
+      final rows = await database.queryRaw(
+        'SELECT COUNT(*) AS count FROM routed_live_checks',
+      );
+      final migrationRows = await database.queryRaw(
+        'SELECT COUNT(*) AS count FROM orm_migrations',
+      );
+      return ctx.json({
+        'ok': true,
+        'count': rows.isEmpty ? null : rows.first['count'],
+        'migrationCount': migrationRows.isEmpty
+            ? null
+            : migrationRows.first['count'],
+        'driver': database.driver.runtimeType.toString(),
+      });
+    }
+
     final environment = cloudflareEnvironmentOf(ctx);
     if (environment == null) {
       return ctx.json({
@@ -504,6 +533,8 @@ Future<Engine> createEngine({bool initialize = true}) async {
 /// Select this factory with `routed deploy --cloudflare-factory environment`
 /// and configure an R2 binding named `FILES`.
 Future<Engine> createCloudflareEngine(CloudflareEnvironment environment) async {
+  final databases = DatabaseManager()
+    ..registerFactory('default', () => openCloudflareD1(environment));
   final r2 = CloudflareR2Filesystem(
     bucket: environment.r2('FILES'),
     prefix: 'routed-storage',
@@ -515,7 +546,14 @@ Future<Engine> createCloudflareEngine(CloudflareEnvironment environment) async {
     cloudflareTextBinding(environment, 'STORAGE_SIGNING_KEY'),
   );
   final engine = createSampleEngine(
-    providers: <ServiceProvider>[RoutedStorageProvider(manager: manager)],
+    providers: <ServiceProvider>[
+      RoutedStorageProvider(manager: manager),
+      RoutedDatabaseProvider(
+        manager: databases,
+        migrations: routedLiveMigrations,
+        migrateOnBoot: true,
+      ),
+    ],
   );
   engine
     ..signedStorage(

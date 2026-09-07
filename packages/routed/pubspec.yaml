@@ -15,6 +15,7 @@ dependencies:
   routed_cache: ">=0.2.0 <1.0.0"
   routed_core: ">=0.5.0 <1.0.0"
   routed_http: ">=0.1.0 <1.0.0"
+  routed_jobs: ">=0.1.0 <1.0.0"
   routed_logging: ">=0.2.0 <1.0.0"
   routed_observability: ">=0.1.0 <1.0.0"
   routed_openapi: ">=0.1.0 <1.0.0"

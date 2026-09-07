@@ -13,6 +13,8 @@ manifests in this checkout as of 2026-08-29.
 | [`routed_auth_cloudflare`](https://github.com/kingwill101/routed/tree/master/packages/routed_auth_cloudflare) | `0.1.1` | Durable Cloudflare D1 `AuthStore` adapter and typed migrations |
 | [`routed_auth_sqlite`](https://github.com/kingwill101/routed/tree/master/packages/routed_auth_sqlite) | `0.1.1` | Durable Dart IO SQLite `AuthStore` adapter and typed migrations |
 | [`routed_cache`](https://github.com/kingwill101/routed/tree/master/packages/routed_cache) | `0.2.1` | Cache services and context helpers for Routed |
+| [`routed_database`](https://github.com/kingwill101/routed/tree/master/packages/routed_database) | `0.1.0` | Ormed database manager, provider, middleware, and context access |
+| [`routed_jobs`](https://github.com/kingwill101/routed/tree/master/packages/routed_jobs) | `0.1.0` | Laravel-inspired typed jobs, queue dispatch, portable processing outcomes, and scheduler ticks |
 | [`routed_logging`](https://github.com/kingwill101/routed/tree/master/packages/routed_logging) | `0.2.1` | HTTP logging provider and request logger helpers |
 | [`routed_observability`](https://github.com/kingwill101/routed/tree/master/packages/routed_observability) | `0.1.1` | Health, metrics, tracing, and error observation |
 | [`routed_rate_limit`](https://github.com/kingwill101/routed/tree/master/packages/routed_rate_limit) | `0.1.1` | Rate-limit service and middleware integration |
@@ -30,7 +32,7 @@ manifests in this checkout as of 2026-08-29.
 | Package | Version | Role |
 | --- | --- | --- |
 | [`routed_io`](https://github.com/kingwill101/routed/tree/master/packages/routed_io) | `0.1.2` | `dart:io` server transport |
-| [`routed_node`](https://github.com/kingwill101/routed/tree/master/packages/routed_node) | `0.2.1` | Node.js, Bun, Deno, and Fetch/Cloudflare edge transports and bindings |
+| [`routed_node`](https://github.com/kingwill101/routed/tree/master/packages/routed_node) | `0.2.1` | Node.js, Bun, Deno, and Fetch/Cloudflare edge transports, bindings, Queue consumers, scheduler ticks, and Cron exports |
 | [`server_native`](https://github.com/kingwill101/routed/tree/master/packages/server_native) | `0.1.7` | Rust-backed native HTTP server runtime |
 
 ## Server runtimes and contracts

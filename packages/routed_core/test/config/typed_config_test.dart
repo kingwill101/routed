@@ -55,13 +55,28 @@ void main() {
   group('RuntimeContext', () {
     test('parses typed environment values', () {
       final runtime = RuntimeContext(
-        environment: RuntimeEnvironment({'PORT': '8080', 'DEBUG': 'yes'}),
+        environment: RuntimeEnvironment(
+          {'PORT': '8080', 'DEBUG': 'yes'},
+          arguments: const ['serve'],
+          isWindows: true,
+        ),
         secrets: RuntimeSecrets({'TOKEN': 'private'}),
       );
 
       expect(runtime.environment.requiredInteger('PORT'), 8080);
       expect(runtime.environment.boolean('DEBUG'), isTrue);
+      expect(runtime.environment.arguments, ['serve']);
+      expect(runtime.environment.isWindows, isTrue);
       expect(runtime.secrets.requiredString('TOKEN'), 'private');
+    });
+
+    test('can snapshot an environment supplied by a host adapter', () {
+      final runtime = RuntimeContext(
+        environmentSource: _TestEnvironmentSource(),
+      );
+
+      expect(runtime.environment.string('APP_ENV'), 'test');
+      expect(runtime.environment.arguments, ['check']);
     });
 
     test('does not expose secret values in the secret object string', () {
@@ -81,6 +96,14 @@ class _TestConfig implements ValidatableConfiguration {
   void validate(ConfigValidationContext context) {
     context.require(port > 0, 'port', 'port must be greater than zero');
   }
+}
+
+final class _TestEnvironmentSource implements RuntimeEnvironmentSource {
+  @override
+  RuntimeEnvironment snapshot() => RuntimeEnvironment(
+    {'APP_ENV': 'test'},
+    arguments: const ['check'],
+  );
 }
 
 class _TestProvider extends ServiceProvider

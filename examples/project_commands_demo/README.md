@@ -7,6 +7,9 @@ user-defined tasks.
 ```bash
 dart pub get
 dart run routed_cli project:list
+dart run routed_cli schedule
 ```
 
-Great starting point for building your own CLI command packs.
+The `schedule` command is contributed by `RoutedSchedulerProvider`; it is
+discovered from the same engine provider list used by the server. This is a
+great starting point for building your own CLI command packs.

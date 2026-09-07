@@ -55,10 +55,31 @@ import 'package:routed_core/routed_core.dart';
 import 'package:routed_node/node.dart';
 
 Future<void> main() async {
-  final engine = await Engine.create(providers: Engine.defaultProviders);
+  // Construct synchronously; serveNode performs async provider boot after it
+  // has attached the Node event-loop bootstrap.
+  final engine = Engine(providers: Engine.defaultProviders);
   final handle = await serveNode(engine, host: '0.0.0.0', port: 8080);
   await handle.close();
 }
+```
+
+When configuration needs host values before provider boot, use the runtime
+environment source supplied by this package:
+
+```dart
+final runtime = RuntimeContext(
+  environmentSource: const NodeRuntimeEnvironment(),
+);
+final engine = Engine(runtime: runtime);
+```
+
+If the application exposes `createEngine()` from `lib/app.dart`, the Routed
+CLI can generate and compile this Node listener entrypoint while retaining
+provider and project CLI commands:
+
+```bash
+routed build --target node
+node build/server.js
 ```
 
 Bun and Deno use the same application engine:
@@ -153,6 +174,106 @@ final rows = await session
     .all<Map<String, Object?>>();
 final nextBookmark = await session.getBookmark();
 ```
+
+For application-level database access, `routed_database` provides a shared
+Ormed manager and `ctx.db()` helper. The Cloudflare adapter creates the Ormed
+handle from the native D1 binding, so the application does not need to pass a
+connection string or use `package:web`:
+
+```dart
+import 'package:routed_core/routed_core.dart';
+import 'package:routed_database/routed_database.dart';
+import 'package:routed_node/cloudflare.dart';
+
+final databases = DatabaseManager()
+  ..registerFactory('default', () => openCloudflareD1(environment, binding: 'DB'));
+final engine = await Engine.create(
+  providers: [
+    ...Engine.defaultProviders,
+    RoutedDatabaseProvider(manager: databases),
+  ],
+);
+
+engine.get('/users', (ctx) async {
+  final rows = await ctx.db().queryRaw('SELECT * FROM users');
+  return ctx.json({'users': rows});
+});
+```
+
+This path is codegen-optional: generated Ormed registries can be supplied to
+`openCloudflareD1` when typed models are desired, while raw queries and Ormed's
+fluent runtime APIs work without `build_runner`.
+
+Connect a Cloudflare Queue binding through the Routed-owned adapter. The
+adapter sends portable `JobMessage` JSON, while the queue export maps
+`JobConsumer.process` results to Cloudflare's per-message acknowledgement and
+retry API. Cron Triggers can wake `RoutedScheduler`, which evaluates application
+frequencies and dispatches due jobs through the same queue.
+
+```dart
+import 'package:routed_core/routed_core.dart';
+import 'package:routed_jobs/routed_jobs.dart';
+import 'package:routed_node/cloudflare.dart';
+
+final jobs = RoutedJobs(
+  queue: CloudflareJobQueue(environment.queue('JOBS')),
+  definitions: [sendWelcomeEmail],
+);
+
+final engine = await Engine.create(options: [withJobs(jobs)]);
+```
+
+Register the event exports in the Worker entrypoint (the module wrapper calls
+these globals from its `queue()` and `scheduled()` handlers):
+
+```dart
+defineCloudflareJobsQueueExportFactoryWithEnvironmentAsync(
+  (environment) async => RoutedJobs(
+    queue: CloudflareJobQueue(environment.queue('JOBS')),
+    definitions: [sendWelcomeEmail],
+  ),
+);
+
+defineCloudflareSchedulerExportFactoryWithEnvironmentAsync((environment) async {
+  final jobs = RoutedJobs(
+    queue: CloudflareJobQueue(environment.queue('JOBS')),
+    definitions: [sendWelcomeEmail],
+  );
+  return RoutedScheduler(
+    dispatcher: jobs,
+    store: CloudflareScheduleStore(
+      store: CloudflareDurableObjectStore(
+        namespace: environment.durableObjectNamespace('SCHEDULE_STORE'),
+      ),
+    ),
+    schedules: [
+      ScheduleDefinition.job(
+        name: 'mail.every-five-minutes',
+        frequency: ScheduleFrequency.every(const Duration(minutes: 5)),
+        job: sendWelcomeEmail,
+        args: 'person@example.com',
+      ),
+    ],
+  );
+});
+```
+
+`processCloudflareJobBatch` acknowledges terminal results, retries portable
+retry results with their requested delay, and retries unexpected processing
+errors. Configure one Queue consumer and (for repeated failures) a dead-letter
+queue in Wrangler. Configure one fixed Cron Trigger (usually `* * * * *`) as a
+wake-up; the application schedule does not need its own Cloudflare trigger.
+`CloudflareScheduleStore` uses the owner-aware lock operation and durable
+ledger of a `CloudflareDurableObjectStore` to prevent duplicate occurrences.
+Cloudflare Queue delivery is at-least-once, so job handlers must be idempotent.
+
+Ormed migrations can be passed to `RoutedDatabaseProvider` with
+`migrateOnBoot: true` for a single-owner bootstrap. The provider initializes
+the connection and awaits the migration from `ServiceProvider.boot`, before
+Routed accepts requests. Do not start migrations from routing/request events:
+those EventManager streams are notifications and are not an awaited startup
+barrier. For a normal multi-instance deployment, apply the same list explicitly
+with `await databases.migrate(appMigrations)` as a coordinated release step.
 
 Durable Object IDs and request stubs follow the current Workers namespace API:
 
@@ -284,6 +405,22 @@ Future<Engine> createCloudflareEngine(
   await engine.initialize();
   return engine;
 }
+```
+
+The deployment command is also owned by this runtime adapter. Add the
+conditional CLI providers to the VM-facing `createEngine()` factory so
+`routed_cli` can discover it while Cloudflare/JavaScript builds select an
+empty provider implementation:
+
+```dart
+import 'package:routed_node/cli_provider.dart';
+
+final engine = Engine(
+  providers: [
+    ...Engine.defaultProviders,
+    ...routedNodeCliProviders(),
+  ],
+);
 ```
 
 Deploy that factory and binding together:

@@ -26,3 +26,4 @@ export 'src/node_views.dart'
 export 'src/node_websocket.dart'
     show NodeRoutedWebSocket, NodeWebSocketUpgradeResponse;
 export 'src/server_boot.dart' show serveNode;
+export 'cli_provider.dart' show routedNodeCliProviders;

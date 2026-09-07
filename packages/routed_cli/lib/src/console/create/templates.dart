@@ -27,7 +27,9 @@ class TemplateContext {
   /// Authentication plugin identifiers selected for the scaffold.
   ///
   /// The set controls which typed auth dependencies and provider wiring are
-  /// emitted by the selected template. An empty set leaves auth unconfigured.
+  /// emitted by the selected template. An empty set leaves auth unconfigured
+  /// for local templates; the Cloudflare template includes its D1 auth setup
+  /// by default.
   final Set<String> authPlugins;
 
   /// JSON for the sample todo data used by starter templates.
@@ -90,7 +92,8 @@ class ScaffoldTemplate {
 
 /// Registry and renderer for the built-in Routed scaffolds.
 ///
-/// The available identifiers are `basic`, `api`, `web`, and `fullstack`.
+/// The available identifiers are `basic`, `api`, `web`, `fullstack`, and
+/// `cloudflare`.
 /// `CreateCommand` uses this registry to generate typed Dart configuration in
 /// `lib/config.dart`; provider selection is code-owned rather than YAML-owned.
 /// For example, the equivalent command-line workflow is:
@@ -112,6 +115,9 @@ class Templates {
     'api': _buildTemplate(
       id: 'api',
       description: 'JSON-first API skeleton with sample routes and tests.',
+      extraDependencies: const {
+        'routed_http': '>=0.1.0 <1.0.0',
+      },
       extraDevDependencies: const {
         'routed_testing': '>=0.4.0 <1.0.0',
         'server_testing': '^0.4.0',
@@ -128,10 +134,25 @@ class Templates {
     'fullstack': _buildTemplate(
       id: 'fullstack',
       description: 'Combined HTML + JSON starter, handy for SPAs or HTMX.',
-      extraDependencies: const {'routed_views': '>=0.2.0 <1.0.0'},
+      extraDependencies: const {
+        'routed_http': '>=0.1.0 <1.0.0',
+        'routed_views': '>=0.2.0 <1.0.0',
+      },
       extraDevDependencies: const {
         'routed_testing': '>=0.4.0 <1.0.0',
         'server_testing': '^0.4.0',
+      },
+    ),
+    'cloudflare': _buildTemplate(
+      id: 'cloudflare',
+      description:
+          'Cloudflare Worker starter with D1, auth, and typed migrations.',
+      extraDependencies: const {
+        'routed_auth': '>=0.2.0 <1.0.0',
+        'routed_auth_cloudflare': '>=0.1.1 <1.0.0',
+        'routed_node': '>=0.2.1 <1.0.0',
+        'routed_sessions': '>=0.2.1 <1.0.0',
+        'server_auth': '>=0.2.0 <1.0.0',
       },
     ),
   };
@@ -170,7 +191,12 @@ ScaffoldTemplate _buildTemplate({
     description: description,
     files: files,
     readme: readmeBuilder,
-    extraDependencies: {'routed_core': '>=0.5.0 <1.0.0', ...?extraDependencies},
+    extraDependencies: {
+      if (id != 'cloudflare') 'ormed_sqlite': '>=0.4.0 <1.0.0',
+      'routed_core': '>=0.5.0 <1.0.0',
+      'routed_database': '>=0.1.0 <1.0.0',
+      ...?extraDependencies,
+    },
     extraDevDependencies: extraDevDependencies,
   );
 }
@@ -215,9 +241,18 @@ String _renderConfigTemplate(
 }) {
   final imports = <String>[
     "import 'package:routed_core/routed_core.dart';",
-    if (context.authPlugins.isNotEmpty)
+    "import 'package:routed_database/routed_database.dart';",
+    if (templateId == 'cloudflare')
+      "import 'package:routed_node/cloudflare.dart';",
+    if (templateId == 'cloudflare') "import 'auth.dart';",
+    if (templateId == 'cloudflare')
+      "import 'package:routed_auth/routed_auth.dart';",
+    if (templateId == 'cloudflare')
+      "import 'package:routed_sessions/routed_sessions.dart';",
+    "import 'database.dart';",
+    if (context.authPlugins.isNotEmpty && templateId != 'cloudflare')
       "import 'package:routed_auth/routed_auth.dart' show RoutedAuthDeploymentBinding;",
-    if (context.authPlugins.isNotEmpty)
+    if (context.authPlugins.isNotEmpty && templateId != 'cloudflare')
       "import 'package:server_auth/server_auth.dart' show AuthDeploymentPresets, UsernamePlugin;",
     if (templateId == 'web')
       "import 'package:routed_storage/routed_storage.dart';",
@@ -248,7 +283,8 @@ String _renderConfigTemplate(
     _ => '',
   };
   final hasUsername = context.authPlugins.contains('username');
-  final authSetup = hasUsername
+  final hasLocalUsername = hasUsername && templateId != 'cloudflare';
+  final authSetup = hasLocalUsername
       ? '''
   final auth = AuthDeploymentPresets.localDevelopment<EngineContext>(
     providers: const [],
@@ -257,11 +293,36 @@ String _renderConfigTemplate(
   );
 '''
       : '';
-  final authProvider = hasUsername ? '      auth.serviceProvider(),\n' : '';
-  final authArguments = hasUsername
+  final authProvider = hasLocalUsername
+      ? '      auth.serviceProvider(),\n'
+      : '';
+  final authArguments = hasLocalUsername
       ? '''
     engineConfig: auth.engineConfig(),
     options: [auth.bindTo],
+'''
+      : '';
+
+  final configDeclaration = templateId == 'cloudflare'
+      ? 'Future<AppConfig> config(CloudflareEnvironment environment) async'
+      : 'AppConfig config()';
+  final databaseManager = templateId == 'cloudflare'
+      ? 'createDatabaseManager(environment)'
+      : 'createDatabaseManager()';
+  final cloudflareAuthSetup = templateId == 'cloudflare'
+      ? '  final auth = await createCloudflareAuthSetup(\n'
+            '    environment,\n'
+            '    includeUsername: ${hasUsername ? 'true' : 'false'},\n'
+            '  );\n'
+      : '';
+  final cloudflareAuthProviders = templateId == 'cloudflare'
+      ? '''      RoutedSessionsProvider(auth.sessions),
+      auth.deployment.serviceProvider(),
+'''
+      : '';
+  final cloudflareAuthArguments = templateId == 'cloudflare'
+      ? '''    engineConfig: auth.deployment.engineConfig(),
+    options: [auth.deployment.bindTo],
 '''
       : '';
 
@@ -296,19 +357,48 @@ final class AppConfig {
   );
 }
 
-AppConfig config() {
-$authSetup  return AppConfig(
+$configDeclaration {
+$authSetup$cloudflareAuthSetup  return AppConfig(
+$cloudflareAuthArguments$authArguments
     providers: [
       CoreServiceProvider(),
       RoutingServiceProvider(),
+      RoutedDatabaseProvider(
+        manager: $databaseManager,
+        migrations: appMigrations,
+        migrateOnBoot: true,
+      ),
 $optionalProviders
+$cloudflareAuthProviders
 $authProvider    ],
-$authArguments  );
+  );
 }
 ''';
 }
 
 String _wireApplicationConfig(String content, {required String templateId}) {
+  if (templateId == 'cloudflare') {
+    // The Cloudflare source owns its environment-aware provider composition;
+    // only add the generated config import here. Replacing the side-effect
+    // free local `createEngine` would incorrectly introduce a Worker
+    // environment parameter into CLI route inspection.
+    var source = content;
+    if (!source.contains('package:routed_node/cli_provider.dart')) {
+      source = source.replaceFirst(
+        "import 'package:routed_node/cloudflare.dart';",
+        "import 'package:routed_node/cloudflare.dart';\n"
+            "import 'package:routed_node/cli_provider.dart';",
+      );
+    }
+    if (!source.contains('...routedNodeCliProviders()')) {
+      source = source.replaceFirst(
+        '      RoutingServiceProvider(),',
+        '      RoutingServiceProvider(),\n      ...routedNodeCliProviders(),',
+      );
+    }
+    return "import 'config.dart';\n\n$source";
+  }
+
   const configuredBlock = '''
   final setup = config();
   final engine = setup.buildEngine();''';
@@ -348,6 +438,10 @@ String _wireApplicationConfig(String content, {required String templateId}) {
   }
   if (templateId == 'web') {
     configured = configured.replaceFirst(
+      "import 'package:routed_storage/routed_storage.dart';\n",
+      '',
+    );
+    configured = configured.replaceFirst(
       "  engine.static('/assets', 'public');\n\n",
       '',
     );
@@ -371,11 +465,25 @@ FileBuilder _resolveReadme(String templateId) {
 String _withTypedConfigGuide(String readme, {required String templateId}) {
   final selectedProviders = switch (templateId) {
     'web' =>
-      '`ViewServiceProvider`, `RoutedStorageProvider`, and '
-          '`RoutedStaticProvider`',
-    'fullstack' => '`ViewServiceProvider`',
-    _ => 'only the core and routing providers',
+      'RoutedDatabaseProvider, ViewServiceProvider, '
+          'RoutedStorageProvider, and RoutedStaticProvider',
+    'fullstack' => 'RoutedDatabaseProvider and ViewServiceProvider',
+    'cloudflare' => 'RoutedDatabaseProvider backed by Cloudflare D1',
+    _ => 'RoutedDatabaseProvider plus the core and routing providers',
   };
+  final databaseGuide = templateId == 'cloudflare'
+      ? 'The generated lib/database.dart owns the Cloudflare D1 factory and '
+            'codegen-free Ormed migrations; use ctx.db() from handlers.'
+      : 'The generated lib/database.dart owns the SQLite factory and '
+            'codegen-free Ormed migrations; use ctx.db() from handlers. '
+            'For Cloudflare, replace the SQLite factory with openCloudflareD1 '
+            'in an environment-aware engine.';
+  final authGuide = templateId == 'cloudflare'
+      ? 'The Cloudflare starter also composes routed_auth with a D1-backed '
+            'credential store and secure cookie sessions; set AUTH_ORIGIN and '
+            'SESSION_KEY before boot.'
+      : 'Add auth server and client plugins only when the application uses '
+            'them; the scaffold does not install optional auth behavior.';
 
   return '''
 ${readme.trimRight()}
@@ -385,11 +493,11 @@ ${readme.trimRight()}
 `lib/config.dart` is the single public composition point used by the server and
 Routed CLI tooling. This template selects $selectedProviders. Add another
 provider by importing its public package and constructing it there with its
-typed configuration. Add auth server and client plugins only when the
-application uses them; the scaffold does not install optional auth behavior.
+typed configuration. $authGuide
 
-Do not add YAML configuration or a driver registry. Environment values and
-secrets should be read by application code and passed into typed constructors.
+Do not add YAML configuration or a driver registry. $databaseGuide Environment
+values and secrets should be read by application code and passed into typed
+constructors.
 ''';
 }
 
