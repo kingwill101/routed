@@ -54,9 +54,11 @@ final class RoutedJobsProvider extends ServiceProvider
   final JobsConfig configuration;
 
   late RoutedJobs _jobs;
+  Container? _rootContainer;
 
   @override
   void register(Container container) {
+    _rootContainer = container;
     _jobs = configuration.create();
     container
       ..instance<RoutedJobs>(_jobs)
@@ -65,7 +67,12 @@ final class RoutedJobsProvider extends ServiceProvider
   }
 
   @override
-  Future<void> cleanup(Container container) => _jobs.close();
+  Future<void> cleanup(Container container) async {
+    // Request teardown invokes every provider with a child container. Jobs are
+    // shared by the engine and must remain available to later requests.
+    if (!identical(container, _rootContainer)) return;
+    await _jobs.close();
+  }
 }
 
 /// Typed configuration for [RoutedSchedulerProvider].

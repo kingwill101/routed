@@ -652,57 +652,76 @@ final class RoutedScheduler {
 
     for (final schedule in schedules) {
       if (!schedule.enabled) continue;
-      final occurrences = schedule.frequency.occurrencesBetween(
-        startedAt.subtract(lookback),
-        startedAt,
-        limit: schedule.maxCatchUp,
-      );
-      for (final scheduledAt in occurrences) {
-        considered += 1;
-        final occurrence = ScheduleOccurrence(
-          scheduleName: schedule.name,
-          scheduledAt: scheduledAt,
-        );
-        final claim = await store.claim(occurrence, lease: claimLease);
-        if (claim == null) {
-          skipped += 1;
-          continue;
-        }
-        claimed += 1;
-        try {
-          await schedule.action(
-            ScheduleContext(
-              dispatcher: dispatcher,
-              occurrence: occurrence,
-              now: startedAt,
-            ),
+      var windowStart = startedAt.subtract(lookback);
+      var remainingClaims = schedule.maxCatchUp;
+      while (remainingClaims > 0) {
+        // Fetch at most the remaining claim budget, then advance the window
+        // past completed occurrences. This keeps maxCatchUp scoped to
+        // claimable work rather than letting old completed entries consume it.
+        final batchLimit = remainingClaims;
+        final occurrences = schedule.frequency
+            .occurrencesBetween(
+              windowStart,
+              startedAt,
+              limit: batchLimit,
+            )
+            .toList();
+        if (occurrences.isEmpty) break;
+
+        for (final scheduledAt in occurrences) {
+          considered += 1;
+          final occurrence = ScheduleOccurrence(
+            scheduleName: schedule.name,
+            scheduledAt: scheduledAt,
           );
-        } on Object catch (error, stackTrace) {
-          await store.release(claim);
-          failures.add(
-            ScheduleFailure(
-              occurrence: occurrence,
-              error: error,
-              stackTrace: stackTrace,
-            ),
-          );
-          continue;
+          final claim = await store.claim(occurrence, lease: claimLease);
+          if (claim == null) {
+            skipped += 1;
+            continue;
+          }
+          remainingClaims -= 1;
+          claimed += 1;
+          try {
+            await schedule.action(
+              ScheduleContext(
+                dispatcher: dispatcher,
+                occurrence: occurrence,
+                now: startedAt,
+              ),
+            );
+          } on Object catch (error, stackTrace) {
+            await store.release(claim);
+            failures.add(
+              ScheduleFailure(
+                occurrence: occurrence,
+                error: error,
+                stackTrace: stackTrace,
+              ),
+            );
+            continue;
+          }
+
+          try {
+            await store.complete(claim);
+            completed += 1;
+          } on Object catch (error, stackTrace) {
+            // Keep the claim in place. The lease can expire and replay an
+            // uncertain dispatch, which is safer than falsely marking it done.
+            failures.add(
+              ScheduleFailure(
+                occurrence: occurrence,
+                error: error,
+                stackTrace: stackTrace,
+              ),
+            );
+          }
         }
 
-        try {
-          await store.complete(claim);
-          completed += 1;
-        } on Object catch (error, stackTrace) {
-          // Keep the claim in place. The lease can expire and replay an
-          // uncertain dispatch, which is safer than falsely marking it done.
-          failures.add(
-            ScheduleFailure(
-              occurrence: occurrence,
-              error: error,
-              stackTrace: stackTrace,
-            ),
-          );
-        }
+        // A short batch means the frequency has no more occurrences in the
+        // lookback window. A full batch may have consisted entirely of skips,
+        // so continue from its last item to find the next claimable entry.
+        if (occurrences.length < batchLimit) break;
+        windowStart = occurrences.last;
       }
     }
 

@@ -72,6 +72,7 @@ Future<Engine> createEngine({bool initialize = true}) async {
     );
     expect(source, contains('engine.container.get<CliCommandRegistry>()'));
     expect(source, contains("runner.run(const ['serve'])"));
+    expect(source, contains('await Completer<void>().future;'));
 
     expect(executable, isNotNull);
     expect(arguments, contains('-DFEATURE=enabled'));

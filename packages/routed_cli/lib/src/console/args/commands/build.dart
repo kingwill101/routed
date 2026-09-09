@@ -226,7 +226,7 @@ final class BuildCommand extends BaseCommand {
     final isNode = target == _BuildTarget.node;
     final runtimeImport = isNode
         ? "import 'dart:async';\nimport 'package:routed_node/node.dart';\n"
-        : '';
+        : "import 'dart:async';\n";
     final environmentExpression = isNode
         ? 'NodeRuntimeEnvironment.current()'
         : 'RuntimeEnvironment(readProcessEnvironment(), '
@@ -244,6 +244,7 @@ final class BuildCommand extends BaseCommand {
 '''
         : '''
     await engine.serve(host: host, port: port);
+    await Completer<void>().future;
 ''';
     final projectImport = includeProjectCommands
         ? "import '../../lib/commands.dart' as project_commands;\n"

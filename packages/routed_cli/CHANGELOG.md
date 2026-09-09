@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Generated native `routed build` servers now remain alive after binding the
+  listener instead of closing the engine immediately.
 - Added `routed build` (also available as `routed cli build`) to compile a
   self-contained native server binary or a Node.js JavaScript server bundle.
   Both generated entrypoints boot the normal application engine and provision

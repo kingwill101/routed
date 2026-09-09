@@ -155,6 +155,44 @@ void main() {
       expect(attempts, 2);
     });
 
+    test('completed occurrences do not consume the catch-up budget', () async {
+      final now = DateTime.utc(2026, 1, 1, 0, 3);
+      final store = InMemoryScheduleStore(clock: () => now);
+      final oldest = ScheduleOccurrence(
+        scheduleName: 'backfill',
+        scheduledAt: DateTime.utc(2026, 1, 1, 0, 1),
+      );
+      final completedClaim = await store.claim(
+        oldest,
+        lease: const Duration(minutes: 1),
+      );
+      await store.complete(completedClaim!);
+
+      DateTime? dispatchedAt;
+      final scheduler = RoutedScheduler(
+        dispatcher: RoutedJobs(queue: InMemoryJobQueue()),
+        store: store,
+        lookback: const Duration(minutes: 3),
+        schedules: [
+          ScheduleDefinition(
+            name: 'backfill',
+            frequency: ScheduleFrequency.everyMinute(),
+            action: (context) async {
+              dispatchedAt = context.occurrence.scheduledAt;
+            },
+          ),
+        ],
+      );
+
+      final report = await scheduler.tick(now: now);
+
+      expect(report.skipped, 1);
+      expect(report.claimed, 1);
+      expect(report.completed, 1);
+      expect(dispatchedAt, DateTime.utc(2026, 1, 1, 0, 2));
+      await scheduler.close();
+    });
+
     test(
       "does not let an expired claim complete another runtime's lease",
       () async {
@@ -343,6 +381,33 @@ void main() {
 
       await engine.close();
       expect(scheduler.isRunning, isFalse);
+    });
+
+    test('request cleanup does not close shared jobs', () async {
+      final queue = InMemoryJobQueue();
+      final job = JobDefinition<String, String>(
+        name: 'request-safe',
+        encode: (value) => {'value': value},
+        decode: (payload) => payload['value']! as String,
+        handle: (_, value) async => value,
+      );
+      final engine = await Engine.create(
+        providers: [
+          RoutedJobsProvider(
+            JobsConfig(queue: queue, definitions: [job]),
+          ),
+        ],
+      );
+      addTearDown(engine.close);
+
+      await engine.cleanupRequestContainer(engine.container.createChild());
+      final receipt = await engine.container.get<JobDispatcher>().dispatch(
+        job,
+        'still-open',
+      );
+
+      expect(receipt.name, job.name);
+      expect(queue.messages, hasLength(1));
     });
 
     test('provider registers its schedule command on the engine', () async {

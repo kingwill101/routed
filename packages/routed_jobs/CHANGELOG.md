@@ -1,5 +1,7 @@
 ## Unreleased
 
+- Shared jobs now close only during root engine cleanup, and completed schedule
+  occurrences no longer consume the per-tick catch-up budget.
 - Failed Stem-backed schedule occurrences remain due for retry, and scheduler
   provider cleanup is limited to the root engine container.
 
