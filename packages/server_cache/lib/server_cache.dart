@@ -5,7 +5,8 @@
 /// prefixes, and cache instrumentation. `DataCacheManager` keeps named stores
 /// and their repositories together during application composition.
 ///
-/// The package includes in-memory, file, Redis, and no-op stores. Store
+/// The package includes in-memory, file, Ormed database, Redis, and no-op
+/// stores. Store
 /// construction is typed: pair a `StoreFactory` with its matching
 /// `StoreConfiguration` instead of passing an unstructured configuration map.
 ///
@@ -28,6 +29,7 @@ export 'src/cache.dart';
 export 'src/file_store.dart';
 export 'src/file_store_factory.dart';
 export 'src/null_store.dart';
+export 'src/orm_cache_store.dart';
 export 'src/redis_store.dart';
 export 'src/redis_store_factory.dart';
 export 'src/repository.dart';

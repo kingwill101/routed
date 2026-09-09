@@ -1,6 +1,7 @@
 # server_cache
 
-Framework-agnostic cache runtime for array, file, Redis, and null-backed stores.
+Framework-agnostic cache runtime for array, file, Ormed database, Redis, and
+null-backed stores.
 
 Stores are concrete objects. Reusable construction uses typed options rather
 than string-keyed configuration maps:
@@ -16,6 +17,30 @@ final manager = DataCacheManager()
 
 final repository = manager.store('memory');
 ```
+
+## Ormed database store
+
+`OrmCacheStore` uses Ormed's codegen-free query builder and accepts an already
+opened `OrmDatabase`. It does not choose a database driver, so the same store
+works with SQLite, Cloudflare D1, and other Ormed adapters. Register its
+migration with the application's normal database provider before serving
+requests:
+
+```dart
+final cache = OrmCacheStore(database);
+await database.migrate([cache.migration]);
+
+final manager = DataCacheManager()..registerStore('database', cache);
+final repository = manager.store('database');
+```
+
+In a Routed application, pass the same `cache.migration` entry to
+`RoutedDatabaseProvider` with `migrateOnBoot: true` instead of calling
+`database.migrate` directly.
+
+Cache values are JSON encoded. The store does not automatically create or
+drop tables, and it does not provide distributed locks; use a lock-capable
+store when a read-modify-write operation must be serialized across workers.
 
 `FileStoreConfiguration`, `RedisStoreConfiguration`,
 `ArrayStoreConfiguration`, and `NullStoreConfiguration` are the built-in

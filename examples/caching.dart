@@ -1,17 +1,34 @@
+import 'dart:io';
+
+import 'package:ormed_sqlite/ormed_sqlite.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_database/routed_database.dart';
 
 void main() async {
-  // Initialize cache manager with stores
-  final cacheManager = CacheManager()
-    ..registerStore('array', ArrayStore())
-    ..registerStoreFactory(
-      'file',
-      FileStoreFactory(),
-      const FileStoreConfiguration(path: 'cache'),
-    );
+  final databasePath =
+      Platform.environment['DATABASE_PATH'] ?? 'storage/cache.sqlite';
+  File(databasePath).absolute.parent.createSync(recursive: true);
+  final database = await SqliteDatabase.connect(path: databasePath);
+  final cache = OrmCacheStore(database);
 
-  // Create engine with cache manager
-  final engine = Engine(options: [withCacheManager(cacheManager)]);
+  // Initialize the cache manager with a durable Ormed-backed store. The
+  // migration is run by RoutedDatabaseProvider before requests are accepted.
+  final cacheManager = CacheManager()..registerStore('database', cache);
+
+  final engine = await Engine.create(
+    providers: [
+      ...Engine.defaultProviders.where(
+        (provider) => provider is! RoutedCacheProvider,
+      ),
+      RoutedCacheProvider(CacheConfig(store: cache)),
+      RoutedDatabaseProvider(
+        manager: DatabaseManager()..register('default', database),
+        migrations: [cache.migration],
+        migrateOnBoot: true,
+      ),
+    ],
+    options: [withCacheManager(cacheManager)],
+  );
 
   // Example route demonstrating basic cache operations
   engine.get('/cached-value', (ctx) async {
