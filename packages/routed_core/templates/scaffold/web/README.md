@@ -10,4 +10,6 @@ dart run routed_cli dev
 ```
 
 Visit `http://localhost:8080` to see the landing page. Edit
-`lib/app.dart` to customise HTML output or introduce templating.
+`lib/app.dart` to customise HTML output or introduce templating. The generated
+`GET /db/health` route checks the file-backed SQLite database and Ormed
+migration ledger configured by `RoutedDatabaseProvider`.

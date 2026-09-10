@@ -611,6 +611,155 @@ CloudflareExecutionContext cloudflareExecutionContextFromJavaScript(
   Object executionContext,
 ) => _CloudflareExecutionContext(_object(executionContext));
 
+/// Installs a JavaScript Worker Queue consumer export.
+void defineCloudflareQueueExport(
+  CloudflareQueueHandler handler, {
+  String name = '__routed_queue__',
+}) {
+  if (name.trim().isEmpty) {
+    throw ArgumentError.value(
+      name,
+      'name',
+      'Queue entry name must not be empty',
+    );
+  }
+  final callback = ((JSAny batch, JSAny environment, JSAny context) {
+    return _handleCloudflareQueue(
+      handler,
+      _cloudflareQueueBatchFromJavaScript(_object(batch)),
+      cloudflareEnvironmentFromJavaScript(environment),
+      cloudflareExecutionContextFromJavaScript(context),
+    ).toJS;
+  }).toJS;
+  globalContext.setProperty(name.toJS, callback);
+}
+
+Future<JSAny?> _handleCloudflareQueue(
+  CloudflareQueueHandler handler,
+  CloudflareQueueBatch batch,
+  CloudflareEnvironment environment,
+  CloudflareExecutionContext context,
+) async {
+  await handler(batch, environment, context);
+  return null;
+}
+
+CloudflareQueueBatch _cloudflareQueueBatchFromJavaScript(JSObject batch) {
+  final rawMessages = _property(batch, 'messages');
+  final messages = <CloudflareQueueDelivery>[];
+  if (rawMessages is JSArray) {
+    for (final value in rawMessages.toDart) {
+      if (value is JSObject) {
+        messages.add(_cloudflareQueueDeliveryFromJavaScript(value));
+      }
+    }
+  }
+  return CloudflareQueueBatch(
+    queue: _string(_dartify(_property(batch, 'queue'))) ?? '',
+    messages: messages,
+    acknowledgeAll: () {
+      _call(batch, 'ackAll', const <JSAny?>[]);
+    },
+    retryAllHandler: (delay) {
+      _call(batch, 'retryAll', <JSAny?>[?_queueRetryOptions(delay)]);
+    },
+  );
+}
+
+CloudflareQueueDelivery _cloudflareQueueDeliveryFromJavaScript(
+  JSObject message,
+) {
+  return CloudflareQueueDelivery(
+    id: _string(_dartify(_property(message, 'id'))) ?? '',
+    timestamp: _queueTimestamp(message),
+    attempts: _int(_dartify(_property(message, 'attempts'))) ?? 1,
+    body: _dartify(_property(message, 'body')),
+    acknowledge: () {
+      _call(message, 'ack', const <JSAny?>[]);
+    },
+    retryHandler: (delay) {
+      _call(message, 'retry', <JSAny?>[?_queueRetryOptions(delay)]);
+    },
+  );
+}
+
+DateTime _queueTimestamp(JSObject message) {
+  final value = _dartify(_property(message, 'timestamp'));
+  final parsed = _dateTime(value);
+  if (parsed != null) return parsed.toUtc();
+  final timestamp = _property(message, 'timestamp');
+  if (timestamp is JSObject) {
+    final millis = _int(_dartify(_call(timestamp, 'getTime', const [])));
+    if (millis != null) {
+      return DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true);
+    }
+  }
+  return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+}
+
+JSAny? _queueRetryOptions(Duration? delay) {
+  if (delay == null || delay <= Duration.zero) return null;
+  final seconds = (delay.inMilliseconds + 999) ~/ 1000;
+  return _jsify({'delaySeconds': seconds < 1 ? 1 : seconds});
+}
+
+/// Installs a JavaScript Worker Cron Trigger export.
+void defineCloudflareScheduledExport(
+  CloudflareScheduledHandler handler, {
+  String name = '__routed_scheduled__',
+}) {
+  if (name.trim().isEmpty) {
+    throw ArgumentError.value(
+      name,
+      'name',
+      'Scheduled entry name must not be empty',
+    );
+  }
+  final callback = ((JSAny controller, JSAny environment, JSAny context) {
+    return _handleCloudflareScheduled(
+      handler,
+      _cloudflareScheduledEventFromJavaScript(_object(controller)),
+      cloudflareEnvironmentFromJavaScript(environment),
+      cloudflareExecutionContextFromJavaScript(context),
+    ).toJS;
+  }).toJS;
+  globalContext.setProperty(name.toJS, callback);
+}
+
+Future<JSAny?> _handleCloudflareScheduled(
+  CloudflareScheduledHandler handler,
+  CloudflareScheduledEvent event,
+  CloudflareEnvironment environment,
+  CloudflareExecutionContext context,
+) async {
+  await handler(event, environment, context);
+  return null;
+}
+
+CloudflareScheduledEvent _cloudflareScheduledEventFromJavaScript(
+  JSObject controller,
+) {
+  final rawTime = _property(controller, 'scheduledTime');
+  final value = _dartify(rawTime);
+  var scheduledTime = _dateTime(value);
+  if (scheduledTime == null && rawTime is JSObject) {
+    final millis = _int(_dartify(_call(rawTime, 'getTime', const [])));
+    if (millis != null) {
+      scheduledTime = DateTime.fromMillisecondsSinceEpoch(
+        millis,
+        isUtc: true,
+      );
+    }
+  }
+  return CloudflareScheduledEvent(
+    scheduledTime: (scheduledTime ?? DateTime.now().toUtc()).toUtc(),
+    cron: _string(_dartify(_property(controller, 'cron'))),
+    noRetryHandler: () {
+      _call(controller, 'noRetry', const <JSAny?>[]);
+    },
+  );
+}
+
 final class _CloudflareEnvironment implements CloudflareEnvironment {
   _CloudflareEnvironment(this._delegate);
 

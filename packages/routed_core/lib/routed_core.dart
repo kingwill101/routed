@@ -1,5 +1,7 @@
 export 'dart:io' show HttpHeaders, HttpStatus;
 
+export 'src/cli/command_registry.dart'
+    show CliCommandFactory, CliCommandRegistration, CliCommandRegistry;
 export 'src/config/specs/logging.dart'
     show
         ConsoleLoggingChannelConfig,

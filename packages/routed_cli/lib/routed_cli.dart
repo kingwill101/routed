@@ -10,7 +10,7 @@
 /// `--help` and `--version` behavior:
 ///
 /// ```dart
-/// import 'package:args/command_runner.dart';
+/// import 'package:artisanal/args.dart';
 /// import 'package:routed_cli/routed_cli.dart';
 ///
 /// Future<void> main(List<String> args) async {
@@ -22,8 +22,9 @@
 ///
 /// For a new application, start with `routed create`. The generated
 /// `lib/config.dart` is the source of truth for typed provider composition;
-/// use `routed dev` locally and `routed deploy --target cloudflare` when the
-/// app is ready for a Worker deployment.
+/// use `routed dev` locally and, when the app includes a runtime adapter such
+/// as `routed_node`, use its provider-owned `routed deploy` command for a
+/// Worker deployment.
 library;
 
 import 'dart:async';
@@ -31,6 +32,9 @@ import 'dart:io';
 
 import 'package:routed_cli/src/console/util/dart_exec.dart';
 
+export 'src/console/args/base_command.dart' show BaseCommand;
+export 'src/console/args/commands/build.dart'
+    show BuildCommand, BuildProcessRunner;
 export 'src/console/args/provider_commands.dart'
     show
         ProviderArtisanalCommandRegistration,
@@ -38,7 +42,8 @@ export 'src/console/args/provider_commands.dart'
         ProviderCommandRegistration,
         ProviderCommandRegistry,
         registerProviderArtisanalCommands,
-        registerProviderCommands;
+        registerProviderCommands,
+        registerRoutedCliCommands;
 export 'src/console/args/runner.dart' show RoutedCommandRunner;
 export 'src/console/create/templates.dart'
     show FileBuilder, ScaffoldTemplate, TemplateContext, Templates;
@@ -51,6 +56,8 @@ export 'src/console/project/commands_loader.dart'
         ProjectCommandOption,
         ProjectCommandsLoader,
         shouldLoadProjectCommands;
+export 'src/console/util/dart_exec.dart' show resolveDartExecutable;
+export 'src/console/util/pubspec.dart' show readPackageName;
 
 /// Resolves the version string displayed by the CLI.
 ///

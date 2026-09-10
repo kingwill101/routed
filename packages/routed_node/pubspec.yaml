@@ -1,6 +1,6 @@
 name: routed_node
 description: Node.js host transport for Routed — IncomingMessage/ServerResponse adapters on RequestAdapter/ResponseAdapter/ServerTransport.
-version: 0.2.1
+version: 0.2.2
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed_node
 tags:
   - routed
@@ -17,10 +17,15 @@ environment:
   sdk: '>=3.12.0 <4.0.0'
 
 dependencies:
+  artisanal: ^0.5.0
   crypto: ^3.0.0
+  file: ^7.0.1
+  ormed: ">=0.3.0 <1.0.0"
   ormed_d1: ^0.2.0
   path: ^1.9.1
+  routed_cli: ">=0.4.0 <1.0.0"
   routed_core: ">=0.4.0 <1.0.0"
+  routed_jobs: ">=0.1.0 <1.0.0"
   server_contracts: ">=0.1.0 <1.0.0"
   storage_fs: ">=0.1.0 <1.0.0"
   web: ^1.1.1

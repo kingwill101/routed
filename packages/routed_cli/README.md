@@ -8,6 +8,7 @@ Routed's CLI surface, including:
 - `CliLogger`
 - `CliVersion`
 - `RoutedCommandRunner`
+- `BuildCommand`
 - `ProjectCommandsLoader`
 - `DevServerRunner`
 
@@ -19,7 +20,52 @@ a development dependency and run commands with
 `dart run routed_cli:routed ...`; keep runtime provider initialization in
 `routed` or the relevant adapter package. The executable discovers
 `lib/commands.dart` and exposes its `buildProjectCommands()` commands alongside
-the built-in CLI commands.
+the built-in CLI commands. It also bootstraps `lib/app.dart` for project
+command discovery, so commands registered by the application's service
+providers through `CliCommandRegistry` are available from the same CLI.
+Provider discovery uses the conventional top-level `createEngine()` entrypoint
+in `lib/app.dart`; Worker-only entrypoints such as
+`createCloudflareEngine(environment)` remain host-specific.
+
+Deployment adapters own their target-specific options. Applications using
+`routed_node` can add `...routedNodeCliProviders()` to the providers returned by
+`createEngine()`; that contributes `routed deploy` with Cloudflare, Netlify, and
+Vercel options without coupling `routed_cli` to a runtime host.
+
+Build a native server binary with the same engine and provider command
+registrations used by the application:
+
+```bash
+routed cli build
+# equivalent shorthand:
+routed build
+./build/server                 # starts the HTTP server
+./build/server schedule:work   # runs a provider-owned command
+```
+
+The build writes a generated entrypoint under `.dart_tool/routed`, compiles it
+with `dart compile exe`, and includes commands registered by providers and by
+`lib/commands.dart`. Use `--output`, `--entry`, or repeatable `--define` to
+customize the build.
+
+For a JavaScript Node.js host, use the Node target. It generates a listener
+entrypoint backed by `package:routed_node/node.dart`, compiles with dart2js,
+and keeps the same provider and project command registration. The generated
+entrypoint reads command arguments from Node's `process.argv`, since dart2js
+does not populate `main(args)` for a standalone Node bundle:
+
+```bash
+routed build --target node
+node build/server.js
+node build/server.js schedule:work
+```
+
+Runtime packages should contribute commands from their
+`ServiceProvider.registerCliCommands` hook. This keeps the command's
+implementation with the feature package while leaving `routed_cli` as the
+host adapter. For example, installing `RoutedSchedulerProvider` makes
+`routed schedule` available without importing `routed_cli` from
+`routed_jobs`.
 
 New projects created by `routed create` use a typed `lib/config.dart` bootstrap.
 Add provider-owned configuration there and let `lib/app.dart` continue to own
@@ -27,19 +73,26 @@ routes. The CLI loads `createEngine()`, so route inspection, OpenAPI generation,
 and deployment use the same typed provider setup as the running application.
 
 Template selection controls optional provider composition. `basic` and `api`
-start with only `CoreServiceProvider` and `RoutingServiceProvider`; `fullstack`
-adds `ViewServiceProvider`; and `web` adds typed view, storage, and static-mount
-providers. The generated config imports each provider's public package and
-constructs it explicitly:
+include `RoutedDatabaseProvider` with a file-backed SQLite manager and Ormed
+migration support. `fullstack` adds `ViewServiceProvider`, while `web` adds
+typed view, storage, and static-mount providers. The generated config imports
+each provider's public package and constructs it explicitly:
 
 ```dart
 import 'package:routed_core/routed_core.dart';
+import 'package:routed_database/routed_database.dart';
 import 'package:routed_storage/routed_storage.dart';
+import 'database.dart';
 
 AppConfig config() => AppConfig(
   providers: [
     CoreServiceProvider(),
     RoutingServiceProvider(),
+    RoutedDatabaseProvider(
+      manager: createDatabaseManager(),
+      migrations: appMigrations,
+      migrateOnBoot: true,
+    ),
     RoutedStorageProvider(
       configuration: StorageConfig(root: 'storage/app'),
     ),
@@ -47,9 +100,35 @@ AppConfig config() => AppConfig(
 );
 ```
 
-Add authentication and its server/client plugins only when the application
-uses them. Configuration is ordinary typed Dart code: generated projects do
-not use YAML files, string-key lookups, or a global driver registry.
+The generated `lib/database.dart` uses SQLite for local development and keeps
+the migration list codegen-free. Handlers can query it through `ctx.db()`.
+For Cloudflare D1, replace the SQLite factory with `openCloudflareD1` in an
+environment-aware engine while keeping the same Routed database provider.
+
+For a Worker that is ready for D1 and Routed authentication, start with the
+Cloudflare template:
+
+```bash
+routed create --name edge_app --template cloudflare
+cd edge_app
+wrangler d1 create edge_app-db
+wrangler secret put SESSION_KEY
+routed deploy --target cloudflare \
+  --cloudflare-factory environment \
+  --d1 DB=edge_app-db:DATABASE_ID \
+  --var AUTH_ORIGIN=https://edge-app.example.com
+```
+
+The generated Worker uses `routed_auth` with `routed_auth_cloudflare` and
+stores credentials in the same D1 binding under a namespaced schema. Set
+`AUTH_ORIGIN` to the exact HTTPS browser origin and keep `SESSION_KEY` in a
+secret binding. The generated `AllowAllAuthRateLimiter` is an explicit starter
+placeholder; replace it with a durable application limiter before production.
+
+For the local templates, add authentication and its server/client plugins only
+when the application uses them. Configuration is ordinary typed Dart code:
+generated projects do not use YAML files, string-key lookups, or a global driver
+registry.
 
 The username-first server plugin can be selected at creation time; no other
 auth plugin is added with it:

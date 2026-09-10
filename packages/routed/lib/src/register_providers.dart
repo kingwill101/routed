@@ -2,6 +2,7 @@ import 'package:routed_auth/routed_auth.dart';
 import 'package:routed_cache/routed_cache.dart';
 import 'package:routed_core/routed_core.dart' show Engine;
 import 'package:routed_http/routed_http.dart';
+import 'package:routed_jobs/routed_jobs.dart';
 import 'package:routed_logging/routed_logging.dart';
 import 'package:routed_observability/routed_observability.dart';
 import 'package:routed_rate_limit/routed_rate_limit.dart';
@@ -41,5 +42,6 @@ void registerRoutedProviders() {
   registerRoutedStorageProviders();
   registerRoutedRateLimitProviders();
   registerRoutedHttpProviders();
+  registerRoutedJobsProviders();
   registerRoutedSecurityProviders();
 }

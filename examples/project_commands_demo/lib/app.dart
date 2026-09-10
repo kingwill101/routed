@@ -1,7 +1,13 @@
 import 'package:routed/routed.dart';
 
 Future<Engine> createEngine() async {
-  final engine = await Engine.create(providers: Engine.defaultProviders);
+  final engine = await Engine.create(
+    providers: [
+      ...Engine.defaultProviders,
+      RoutedJobsProvider(),
+      RoutedSchedulerProvider(),
+    ],
+  );
 
   engine.get('/', (ctx) async {
     return ctx.json({'message': 'Hello from the project commands demo!'});

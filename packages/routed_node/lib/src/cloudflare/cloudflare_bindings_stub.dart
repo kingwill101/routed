@@ -74,3 +74,15 @@ void defineCloudflareDurableObjects(
 ) {
   throw UnsupportedError('Cloudflare bindings require a JavaScript runtime.');
 }
+
+/// VM stub for a JavaScript Worker Queue consumer export.
+Never defineCloudflareQueueExport(CloudflareQueueHandler handler) {
+  throw UnsupportedError('Cloudflare Queue exports require a JavaScript host.');
+}
+
+/// VM stub for a JavaScript Worker Cron Trigger export.
+Never defineCloudflareScheduledExport(CloudflareScheduledHandler handler) {
+  throw UnsupportedError(
+    'Cloudflare scheduled exports require a JavaScript host.',
+  );
+}

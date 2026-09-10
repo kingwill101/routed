@@ -7,7 +7,7 @@ void main() {
     () {
       expect(officialProvidersRegistered, isTrue);
       final providers = Engine.builtins;
-      expect(providers, hasLength(15));
+      expect(providers, hasLength(17));
       expect(
         ProviderRegistry.instance.registrations.map((entry) => entry.id),
         containsAll(<String>[
@@ -25,6 +25,8 @@ void main() {
           'routed.static',
           'routed.rate_limit',
           'routed.compression',
+          'routed.jobs',
+          'routed.scheduler',
           'routed.security',
         ]),
       );

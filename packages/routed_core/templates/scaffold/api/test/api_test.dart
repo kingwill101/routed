@@ -23,5 +23,12 @@ void main() {
         json.has('data').etc();
       });
     });
+
+    test('exposes the initialized database', () async {
+      final response = await client.get('/db/health');
+      response.assertStatus(200).assertJson((json) {
+        json.has('ok').has('migrations').etc();
+      });
+    });
   });
 }

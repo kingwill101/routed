@@ -3,7 +3,7 @@ import 'dart:collection';
 import 'dart:io' as io;
 import 'dart:isolate';
 
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 import 'package:file/file.dart' as fs;
 import 'package:path/path.dart' as p;
 import 'package:routed_cli/src/console/args/base_command.dart';
@@ -25,6 +25,7 @@ typedef PubGetInvoker = Future<int> Function(fs.Directory projectDir);
 /// routed create --name api_app --template api
 /// routed create --name web_app --template web
 /// routed create --name full_app --template fullstack
+/// routed create --name edge_app --template cloudflare
 /// ```
 ///
 /// Each scaffold includes a typed `lib/config.dart` composition point. Select
@@ -43,7 +44,8 @@ typedef PubGetInvoker = Future<int> Function(fs.Directory projectDir);
 /// - --name/-n: Project name used for the pubspec and folder when writing to
 ///   the current directory.
 /// - --output/-o: Destination directory (defaults to current directory)
-/// - --template/-t: Template to use (`basic`, `api`, `web`, `fullstack`)
+/// - --template/-t: Template to use (`basic`, `api`, `web`, `fullstack`,
+///   `cloudflare`)
 /// - --auth-plugin: Optional typed auth plugin to compose (`username`)
 /// - --force/-f: Overwrite existing files when the target directory exists
 class CreateCommand extends BaseCommand {
@@ -67,7 +69,9 @@ class CreateCommand extends BaseCommand {
       ..addOption(
         'template',
         abbr: 't',
-        help: 'Application template to scaffold (basic, api, web, fullstack).',
+        help:
+            'Application template to scaffold '
+            '(basic, api, web, fullstack, cloudflare).',
         valueHelp: 'basic',
         defaultsTo: 'basic',
       )

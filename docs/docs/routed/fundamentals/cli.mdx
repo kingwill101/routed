@@ -31,7 +31,8 @@ application configuration directory or `.env` file.
 
 - `--name/-n` – project & package name (required when scaffolding into the current directory).
 - `--output/-o` – destination directory (defaults to `.`).
-- `--template/-t` – template to use (`basic`, `api`, `web`, or `fullstack`).
+- `--template/-t` – template to use (`basic`, `api`, `web`, `fullstack`, or
+  `cloudflare`).
 - `--force/-f` – overwrite conflicting files.
 
 After generating files, `create` automatically runs `dart pub get` using the resolved Dart executable. If dependency resolution fails the CLI prints the exit code and keeps the "Next steps" list so you can retry manually.
@@ -64,7 +65,22 @@ Use this during development; fall back to `dart run bin/server.dart` for single 
 
 ## `deploy`
 
-Build and deploy the application to a supported edge or serverless target:
+Deployment adapters contribute this command through the application's engine.
+For Cloudflare, Netlify, or Vercel, add `routed_node` and include its
+conditional providers in the VM-facing `createEngine()`:
+
+```dart
+import 'package:routed_node/cli_provider.dart';
+
+final engine = Engine(
+  providers: [
+    ...Engine.defaultProviders,
+    ...routedNodeCliProviders(),
+  ],
+);
+```
+
+The discovered command then builds and deploys the application:
 
 ```bash
 dart run routed_cli deploy \
@@ -74,11 +90,12 @@ dart run routed_cli deploy \
   [--dry-run]
 ```
 
-The command locates the project from its `pubspec.yaml`, ensures the
-`routed_node` adapter is available, compiles the Dart entrypoint to JavaScript,
-and then invokes the target's official CLI through `npx`. Your entrypoint must
-export a `createEngine()` function. If omitted, the command uses the project's
-`package:<package-name>/app.dart` entrypoint.
+The provider-owned command locates the project from its `pubspec.yaml`,
+compiles the Dart entrypoint to JavaScript, and invokes the target's official
+CLI through `npx`. Your entrypoint must export a `createEngine()` function. If
+omitted, the command uses the project's `package:<package-name>/app.dart`
+entrypoint. A project that does not include a deployment adapter has no
+`deploy` command.
 
 ### Targets
 

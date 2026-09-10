@@ -1,3 +1,4 @@
+export 'commands/build.dart';
 export 'commands/create.dart';
 export 'commands/dev.dart';
 export 'commands/provider.dart';

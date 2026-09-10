@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io' as io;
 
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 import 'package:file/file.dart' as fs;
 import 'package:file/memory.dart';
 import 'package:routed_cli/routed_cli.dart' show CliLogger;

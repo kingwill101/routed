@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2 - 2026-09-09
+
+- Export and register the new `routed_jobs` typed jobs and queue integration.
+- Re-export the general-purpose Routed scheduler and schedule provider through
+  the batteries-included facade.
+
 ## 0.5.1 - 2026-08-25
 
 - Adopted `very_good_analysis` and completed public API documentation for the

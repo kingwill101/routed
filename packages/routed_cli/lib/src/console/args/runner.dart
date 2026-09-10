@@ -9,9 +9,9 @@ import 'package:routed_cli/routed_cli.dart';
 ///
 /// The runner registers Routed's built-in provider catalog in its constructor,
 /// then provides global `--help` and `--version` handling. Add application
-/// commands with [register] before calling [run]. The nested
-/// `openapi generate` spelling is normalized to the legacy
-/// `openapi:generate` command name.
+/// commands with [register] before calling [run]. The nested `openapi generate`
+/// spelling is normalized to the `openapi:generate` command name, and
+/// `cli build` is normalized to `build` for the documented build workflow.
 ///
 /// ```dart
 /// final runner = RoutedCommandRunner()
@@ -64,14 +64,18 @@ class RoutedCommandRunner extends CommandRunner<void> {
   /// selected subcommand.
   @override
   Future<void> run(Iterable<String> args) async {
-    // Accept the documented nested spelling while retaining the existing
-    // colon-separated command names used by older projects.
+    // Accept the documented nested spelling alongside colon-separated command
+    // names exposed by the same runner.
     final normalizedArgs = args.toList(growable: false);
     final commandArgs =
         normalizedArgs.length >= 2 &&
             normalizedArgs[0] == 'openapi' &&
             normalizedArgs[1] == 'generate'
         ? <String>['openapi:generate', ...normalizedArgs.skip(2)]
+        : normalizedArgs.length >= 2 &&
+              normalizedArgs[0] == 'cli' &&
+              normalizedArgs[1] == 'build'
+        ? <String>['build', ...normalizedArgs.skip(2)]
         : normalizedArgs;
 
     // Parse top-level args first to support global flags (like --help/--version)

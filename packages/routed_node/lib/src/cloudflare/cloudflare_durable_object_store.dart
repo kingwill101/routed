@@ -105,6 +105,51 @@ final class CloudflareDurableObjectStore implements Store, LockProvider {
     return response['stored'] == true;
   }
 
+  /// Records a schedule completion only while [owner] still owns [lockName].
+  ///
+  /// Claim completion is a fenced operation: the lock owner is checked and
+  /// the completion record is written within one Durable Object request. A
+  /// worker whose lease was taken over therefore cannot acknowledge the
+  /// occurrence after the new owner has acquired it.
+  Future<bool> completeScheduleClaim({
+    required String lockName,
+    required String owner,
+    required String completedKey,
+    required int completedSeconds,
+  }) async {
+    final response = await _request(
+      'lock_complete',
+      key: lockName,
+      payload: <String, Object?>{
+        'name': lockName,
+        'owner': owner,
+        'completedKey': completedKey,
+        'seconds': completedSeconds,
+      },
+    );
+    return response['completed'] == true;
+  }
+
+  /// Checks a schedule completion marker on the claim's Durable Object shard.
+  ///
+  /// Schedule lock and completion keys have different names and would
+  /// normally hash to different shards. This method deliberately routes by
+  /// [lockName] so it observes the marker written by
+  /// [completeScheduleClaim].
+  Future<bool> scheduleCompletionExists({
+    required String lockName,
+    required String completedKey,
+  }) async {
+    final response = await _request(
+      'schedule_completed',
+      key: lockName,
+      payload: <String, Object?>{
+        'completedKey': completedKey,
+      },
+    );
+    return response['completed'] == true;
+  }
+
   @override
   Future<bool> add(String key, dynamic value, int seconds) async {
     final response = await _request(
@@ -344,6 +389,15 @@ class CloudflareDurableObjectStoreObject extends CloudflareDurableObject {
         return _lockAcquire(_name(payload), _owner(payload), _seconds(payload));
       case 'lock_release':
         return _lockRelease(_name(payload), _owner(payload));
+      case 'lock_complete':
+        return _lockComplete(
+          _name(payload),
+          _owner(payload),
+          _requiredString(payload, 'completedKey'),
+          _seconds(payload),
+        );
+      case 'schedule_completed':
+        return _scheduleCompleted(_requiredString(payload, 'completedKey'));
       case 'lock_force_release':
         return _lockForceRelease(_name(payload));
       case 'lock_owner':
@@ -511,6 +565,43 @@ class CloudflareDurableObjectStoreObject extends CloudflareDurableObject {
         .toArray()
         .isNotEmpty;
     return _json(<String, Object?>{'released': released});
+  }
+
+  CloudflareResponse _lockComplete(
+    String name,
+    String owner,
+    String completedKey,
+    int seconds,
+  ) {
+    _deleteExpiredLock(name);
+    final rows = _sql.exec(
+      'SELECT owner FROM routed_store_locks WHERE lock_name = ?',
+      <Object?>[name],
+    ).toArray();
+    if (rows.isEmpty || rows.single['owner'] != owner) {
+      return _json(<String, Object?>{'completed': false});
+    }
+
+    // Durable Object requests execute synchronously between awaits. Keeping
+    // the owner check, completion write, and owner-fenced release in this
+    // request prevents a lease takeover from interleaving with completion.
+    _sql.exec(
+      'INSERT INTO routed_store_entries(cache_key, value_json, expires_at) '
+      'VALUES (?, ?, ?) ON CONFLICT(cache_key) DO UPDATE SET '
+      'value_json = excluded.value_json, expires_at = excluded.expires_at',
+      <Object?>[completedKey, jsonEncode('completed'), _expiresAt(seconds)],
+    );
+    _sql.exec(
+      'DELETE FROM routed_store_locks WHERE lock_name = ? AND owner = ?',
+      <Object?>[name, owner],
+    );
+    return _json(<String, Object?>{'completed': true});
+  }
+
+  CloudflareResponse _scheduleCompleted(String completedKey) {
+    return _json(<String, Object?>{
+      'completed': _getValue(completedKey) != null,
+    });
   }
 
   CloudflareResponse _lockForceRelease(String name) {

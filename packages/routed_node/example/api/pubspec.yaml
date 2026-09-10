@@ -10,7 +10,8 @@ environment:
 
 dependencies:
   routed_core: ">=0.4.0 <1.0.0"
-  routed_node: ">=0.1.0 <1.0.0"
+  routed_database: ">=0.1.0 <1.0.0"
+  routed_node: ">=0.2.1 <1.0.0"
   routed_storage: ">=0.2.0 <1.0.0"
   web: ^1.1.1
 

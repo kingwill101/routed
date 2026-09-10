@@ -1,15 +1,15 @@
 import 'dart:convert';
 
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 import 'package:file/memory.dart';
-import 'package:routed_cli/src/console/args/commands/deploy.dart';
-import 'package:routed_cli/src/console/args/runner.dart';
+import 'package:routed_cli/routed_cli.dart';
+import 'package:routed_node/cli.dart';
 import 'package:test/test.dart';
 
 void main() {
   test('deploy command exposes the seamless cloudflare workflow', () async {
     final fs = MemoryFileSystem();
-    final command = DeployCommand(fileSystem: fs);
+    final command = RoutedNodeDeployCommand(fileSystem: fs);
     final root = fs.directory('/workspace/app')..createSync(recursive: true);
     fs.currentDirectory = root;
     final pubspec = fs.file('${root.path}/pubspec.yaml')
@@ -143,7 +143,7 @@ void main() {
       ..writeAsStringSync('console.log("legacy");');
 
     final processes = <(String, List<String>, String)>[];
-    final command = DeployCommand(
+    final command = RoutedNodeDeployCommand(
       fileSystem: fs,
       processRunner: (executable, arguments, workingDirectory) async {
         processes.add((executable, arguments, workingDirectory));
@@ -260,7 +260,7 @@ void main() {
         ..createSync(recursive: true)
         ..writeAsStringSync('export default {};');
 
-      final command = DeployCommand(
+      final command = RoutedNodeDeployCommand(
         fileSystem: fs,
         processRunner: (_, _, _) async => 0,
       );
@@ -293,7 +293,7 @@ void main() {
         'name: demo_app\ndependencies:\n  routed_node: ^0.1.0\n',
       );
     final processes = <(String, List<String>, String)>[];
-    final command = DeployCommand(
+    final command = RoutedNodeDeployCommand(
       fileSystem: fs,
       processRunner: (executable, arguments, workingDirectory) async {
         processes.add((executable, arguments, workingDirectory));
@@ -356,7 +356,7 @@ void main() {
         );
 
       Future<void> expectUsage(List<String> arguments) async {
-        final command = DeployCommand(
+        final command = RoutedNodeDeployCommand(
           fileSystem: fs,
           processRunner: (_, _, _) async => 0,
         );

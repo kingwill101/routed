@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io' as io;
 
-import 'package:args/command_runner.dart' show UsageException;
+import 'package:artisanal/args.dart' show UsageException;
 import 'package:path/path.dart' as p;
 import 'package:routed_cli/routed_cli.dart' show CliLogger;
 import 'package:routed_cli/src/console/args/commands.dart' as cmds;
@@ -83,6 +83,10 @@ void main() {
         shouldLoadProjectCommands(const ['project-command'], runner),
         isTrue,
       );
+      expect(
+        shouldLoadProjectCommands(const ['cli', 'build'], runner),
+        isFalse,
+      );
     });
 
     test('supports async buildProjectCommands factories', () async {
@@ -93,7 +97,7 @@ void main() {
 import 'dart:async';
 import 'dart:io';
 
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 
 class AsyncHelloCommand extends Command<void> {
   @override
@@ -135,7 +139,7 @@ Future<List<Command<void>>> buildProjectCommands() async {
         commandName: 'broken',
         commandsSource: '''
 import 'dart:async';
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 
 FutureOr<List<Command<void>>> buildProjectCommands() async {
   return [42];
@@ -193,7 +197,7 @@ name: project_app
 environment:
   sdk: ">=3.9.2 <4.0.0"
 dependencies:
-  args: any
+  artisanal: any
 ''';
 
   final pubspecFile = io.File(p.join(projectDir.path, 'pubspec.yaml'));
@@ -215,7 +219,7 @@ void main(List<String> args) {}
 import 'dart:async';
 import 'dart:io';
 
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 
 class $className extends Command<void> {
   $className() {

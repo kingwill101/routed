@@ -14,7 +14,9 @@ workspace:
   - packages/routed_cache
   - packages/routed_sessions
   - packages/routed_storage
+  - packages/routed_database
   - packages/routed_rate_limit
+  - packages/routed_jobs
   - packages/routed_io
   - packages/routed_node
   - packages/routed_node/example/api
@@ -42,6 +44,7 @@ workspace:
   - examples/localization
   - examples/auth_demo
   - examples/cloudflare_auth
+  - examples/cloudflare_jobs
   - examples/static_mounts
   - examples/oauth_keycloak
   - examples/kitchen_sink
@@ -52,6 +55,9 @@ workspace:
   - examples/rate_limiting
   - examples/openapi_demo
   - examples/full_stack
+  - examples/architecture/database_app
+  - examples/architecture/tenant_app
+  - examples/architecture/cloudflare_d1
 
 funding:
   - https://www.buymeacoffee.com/kingwill101
@@ -61,6 +67,7 @@ environment:
 dependencies:
   contextual: ^2.2.0
   liquify: ^1.4.2
+  routed_node: ^0.2.1
   uuid: ^4.5.2
 
 dependency_overrides:

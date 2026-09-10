@@ -46,7 +46,6 @@ Future<void> main(List<String> args) async {
   try {
     stdout.writeln('Provisioning disposable Cloudflare resources…');
     await _provision(resources);
-    await _executeD1Schema(resources);
 
     await _deployFixtureWorker(
       temp: temp,
@@ -104,7 +103,9 @@ Future<void> main(List<String> args) async {
     final workerUrl = _workerUrl(deployOutput, resources.workerName);
     stdout.writeln('Live Worker: $workerUrl');
     await _runChecks(workerUrl, containerEnabled: containerEnabled);
-    stdout.writeln('Cloudflare live smoke test passed.');
+    stdout.writeln(
+      'Cloudflare live smoke test passed, including the Ormed D1 migration.',
+    );
   } finally {
     if (options.keep) {
       stdout.writeln(
@@ -299,19 +300,6 @@ Future<void> _waitForSecret(_Resources resources) async {
   }
 }
 
-Future<void> _executeD1Schema(_Resources resources) async {
-  await _wrangler([
-    'd1',
-    'execute',
-    resources.d1Name,
-    '--remote',
-    '--yes',
-    '--command',
-    'CREATE TABLE IF NOT EXISTS routed_live_checks '
-        '(id INTEGER PRIMARY KEY AUTOINCREMENT, marker TEXT NOT NULL)',
-  ]);
-}
-
 Future<void> _deployFixtureWorker({
   required Directory temp,
   required File source,
@@ -421,7 +409,8 @@ Future<void> _runChecks(
     '/health': (body) => Future.value(body['ok'] == true),
     '/bindings/request': (body) => Future.value(body['ok'] == true),
     '/bindings/cache': (body) => Future.value(body['ok'] == true),
-    '/bindings/d1': (body) => Future.value(body['ok'] == true),
+    '/bindings/d1': (body) =>
+        Future.value(body['ok'] == true && body['migrationCount'] == 1),
     '/bindings/durable-object': (body) => Future.value(body['ok'] == true),
     '/bindings/r2': (body) =>
         Future.value(body['ok'] == true && body['listed'] == true),

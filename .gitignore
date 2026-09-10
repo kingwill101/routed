@@ -31,6 +31,7 @@ packages/server_testing/server_testing/test_screenshots/
 # Local Cloudflare Wrangler state
 .wrangler/
 examples/cloudflare_auth/build/
+examples/cloudflare_jobs/build/
 .tmp/
 
 # Local Netlify folder

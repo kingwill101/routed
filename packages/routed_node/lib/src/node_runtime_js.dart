@@ -289,13 +289,21 @@ List<String> _objectKeys(JSObject obj) {
 }
 
 /// Keeps standalone dart2js Node processes attached to the event loop.
-void keepNodeEventLoopAlive() {
+///
+/// Set [persistent] to `false` when an entrypoint needs one event-loop turn to
+/// finish asynchronous startup (for example, before dispatching a CLI command)
+/// without keeping a command-only process alive after it exits.
+void keepNodeEventLoopAlive({bool persistent = true}) {
   // dart:async's JS timer implementation expects the browser-style `self`
   // global, while Node exposes the same global object as `globalThis`.
   if (globalContext.getProperty('self'.toJS) == null) {
     globalContext.setProperty('self'.toJS, globalContext);
   }
-  Timer.periodic(const Duration(minutes: 1), (_) {});
+  if (persistent) {
+    Timer.periodic(const Duration(minutes: 1), (_) {});
+  } else {
+    Timer.run(() {});
+  }
 }
 
 /// Bind [engine] using Node `http.createServer`.

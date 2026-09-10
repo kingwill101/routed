@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:routed_core/src/cli/command_registry.dart';
 import 'package:routed_core/src/container/container.dart';
 
 /// Base class for service providers that register services with the container.
@@ -9,6 +10,13 @@ import 'package:routed_core/src/container/container.dart';
 abstract class ServiceProvider {
   /// Registers bindings, instances, and aliases with [container].
   void register(Container container);
+
+  /// Registers commands exposed by this provider for application CLI tools.
+  ///
+  /// The command registry belongs to the bootstrapped engine. Runtime
+  /// packages can override this hook without importing the optional
+  /// `routed_cli` package.
+  void registerCliCommands(CliCommandRegistry registry) {}
 
   /// Runs after all providers have registered their bindings.
   Future<void> boot(Container container) async {}

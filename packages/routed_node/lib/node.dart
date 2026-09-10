@@ -12,4 +12,6 @@ export 'src/runtime/runtime.dart'
         NodeRuntimeExtension,
         nodeCapabilities;
 export 'src/runtime/lifecycle.dart';
+export 'src/node_environment.dart' show NodeRuntimeEnvironment;
 export 'src/server_boot.dart' show serveNode;
+export 'src/node_runtime.dart' show keepNodeEventLoopAlive;

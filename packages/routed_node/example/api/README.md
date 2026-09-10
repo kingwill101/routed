@@ -7,6 +7,7 @@ compiled for JavaScript.
 ```
 example/api/
 ├── lib/app.dart          # routes + in-memory store
+├── lib/migrations.dart    # Ormed D1 migration entries
 ├── bin/server.dart       # serveNode entry (Node host)
 ├── bin/smoke.dart        # same routes via handlePortable (Dart VM)
 ├── package.json
@@ -27,7 +28,7 @@ example/api/
 | `GET` | `/capabilities` | Runtime capability matrix |
 | `GET` | `/stream` | Progressive response / flush |
 | `POST` | `/echo` | Request body and header echo |
-| `GET` | `/bindings/d1` | Live D1 write/read check |
+| `GET` | `/bindings/d1` | Live D1 migration + write/read check |
 | `GET` | `/bindings/durable-object` | Live SQLite Durable Object check |
 | `GET` | `/bindings/r2` | Fixed-key native R2 binding check |
 | `GET` | `/storage/r2` | Fixed-key `storage_fs` R2 check |
@@ -82,7 +83,9 @@ covered by the WebSocket echo integration. Deno uses the native
 
 ## Deploy to Cloudflare
 
-From this project, the Routed CLI performs dependency setup, Dart JS
+This sample adds `routedNodeCliProviders()` to its VM-facing `createEngine()`,
+so the deployment command is discovered from `routed_node` rather than being
+hard-coded in `routed_cli`. The Routed CLI then performs dependency setup, Dart JS
 compilation, Fetch bootstrap generation, Wrangler configuration, and upload:
 
 ```bash
@@ -113,14 +116,30 @@ rejected before R2 is read. A real application must authenticate and authorize
 the exact object before issuing a URL; the public mint route exists only to
 make this fixed demo fixture easy to validate.
 
-The D1 smoke route expects this table in the remote database:
+The environment-aware factory registers `RoutedDatabaseProvider`; its awaited
+provider boot initializes D1 and applies the demo's Ormed migration before the
+Worker handles requests. The route then exercises the migrated table through
+`routed_database`'s `ctx.db()` helper and the Ormed D1 driver. Repeated Worker
+initialization is safe because Ormed records the migration in its
+`orm_migrations` ledger and skips an already-applied migration. Routing and
+request events are intentionally not used for schema work because they do not
+form an awaited startup barrier.
 
-```sql
-CREATE TABLE IF NOT EXISTS routed_live_checks (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  marker TEXT NOT NULL
-);
+The migration source is [`lib/migrations.dart`](lib/migrations.dart). For a
+normal Routed application, keep entries like these in an application-owned
+`migrations.dart` file and run them as a controlled release/startup step:
+
+```dart
+final database = await openCloudflareD1(environment, binding: 'DB');
+final databases = DatabaseManager()..register('default', database);
+await databases.initialize();
+await databases.migrate(appMigrations);
 ```
+
+`RoutedDatabaseProvider` also accepts `migrations` plus
+`migrateOnBoot: true` for local development or a single-owner bootstrap. Keep
+that flag off by default in multi-instance production deployments and run the
+same migration list once per release instead.
 
 Use `--dry-run` to compile and validate without uploading. Authentication is
 handled by Wrangler (`wrangler login` or `CLOUDFLARE_API_TOKEN`). No Worker entrypoint, shell script, or hand-written `wrangler.jsonc` is required.

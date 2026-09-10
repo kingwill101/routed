@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:routed_core/src/cli/command_registry.dart';
 import 'package:routed_core/src/config/typed.dart';
 import 'package:routed_core/src/container/container.dart';
 import 'package:routed_core/src/engine/providers/request.dart'
@@ -41,6 +42,9 @@ mixin ContainerMixin {
   /// for request-scoped containers.
   final Container _container = Container();
 
+  /// Commands registered by service providers for this engine instance.
+  final CliCommandRegistry _cliCommandRegistry = CliCommandRegistry();
+
   /// List of registered service providers.
   ///
   /// These providers are responsible for registering and managing services
@@ -66,6 +70,9 @@ mixin ContainerMixin {
   /// This container holds application-wide services and can be used
   /// to resolve dependencies outside of request handling.
   Container get container => _container;
+
+  /// The command registrations contributed by this engine's providers.
+  CliCommandRegistry get cliCommandRegistry => _cliCommandRegistry;
 
   /// Typed application configuration resolved before provider boot.
   ConfigStore get configStore => _configStore;
@@ -106,6 +113,7 @@ mixin ContainerMixin {
     }
     _providers.add(provider);
     provider.register(_container);
+    provider.registerCliCommands(_cliCommandRegistry);
     if (_booted) {
       _scheduleProviderBoot(provider);
     }

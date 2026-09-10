@@ -5,6 +5,7 @@ import 'package:collection/collection.dart';
 import 'package:fuzzywuzzy/fuzzywuzzy.dart' as fuzzy;
 import 'package:http2/http2.dart' as http2;
 import 'package:meta/meta.dart' show internal, visibleForTesting;
+import 'package:routed_core/src/cli/command_registry.dart';
 import 'package:routed_core/src/config/typed.dart';
 import 'package:routed_core/src/container/container.dart';
 import 'package:routed_core/src/container/container_mixin.dart';
@@ -438,6 +439,9 @@ class Engine with ContainerMixin {
 
   void _registerBareDefaults({EngineConfig? config}) {
     final engineConfig = config ?? EngineConfig();
+    if (!container.has<CliCommandRegistry>()) {
+      container.instance<CliCommandRegistry>(cliCommandRegistry);
+    }
     if (!container.has<EngineConfig>()) {
       container.instance<EngineConfig>(engineConfig);
     }

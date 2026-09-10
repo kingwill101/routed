@@ -1,4 +1,4 @@
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 import 'package:routed_cli/src/console/args/base_command.dart';
 import 'package:routed_cli/src/console/args/commands/provider_metadata.dart';
 import 'package:routed_core/routed_core.dart';

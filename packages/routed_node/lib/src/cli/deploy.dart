@@ -1,12 +1,11 @@
 import 'dart:convert';
 import 'dart:io' as io;
 
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 import 'package:file/file.dart' as fs;
 import 'package:path/path.dart' as p;
-import 'package:routed_cli/src/console/args/base_command.dart';
-import 'package:routed_cli/src/console/util/dart_exec.dart';
-import 'package:routed_cli/src/console/util/pubspec.dart';
+import 'package:routed_cli/routed_cli.dart'
+    show BaseCommand, readPackageName, resolveDartExecutable;
 
 /// Executes an external deployment process and returns its exit code.
 ///
@@ -21,10 +20,11 @@ typedef DeploymentProcessRunner =
       String workingDirectory,
     );
 
-/// Builds and deploys a Routed application without user-authored shell files.
+/// Builds and deploys a Routed application on a Node-compatible target without
+/// user-authored shell files.
 ///
-/// Cloudflare Workers is the default target. An application that exports
-/// `createEngine` can use the default factory:
+/// Cloudflare Workers, Netlify, and Vercel are supported targets. An
+/// application that exports `createEngine` can use the default factory:
 ///
 /// ```text
 /// routed deploy --target cloudflare
@@ -52,17 +52,16 @@ typedef DeploymentProcessRunner =
 ///   --container API=ApiContainer|ghcr.io/example/api:latest|8080|2
 /// ```
 ///
-/// Use `--dry-run` to compile the Worker and ask Wrangler to validate the
-/// generated configuration without uploading. Netlify and Vercel are also
-/// available through `--target netlify` and `--target vercel`; Vercel accepts
+/// Use `--dry-run` to compile and validate the generated deployment without
+/// uploading. Netlify and Vercel use the same command; Vercel accepts
 /// `--runtime node` or `--runtime edge`.
-class DeployCommand extends BaseCommand {
+final class RoutedNodeDeployCommand extends BaseCommand {
   /// Creates the deployment command.
-  DeployCommand({
+  RoutedNodeDeployCommand({
     super.logger,
     super.fileSystem,
-    DeploymentProcessRunner? processRunner,
-  }) : _processRunner = processRunner {
+    this._processRunner,
+  }) {
     argParser
       ..addOption(
         'target',
@@ -525,6 +524,7 @@ class DeployCommand extends BaseCommand {
   "launcherType": "Nodejs",
   "supportsResponseStreaming": true
 }
+
 ''');
     await outputRoot.fileSystem
         .file(p.join(outputRoot.path, 'config.json'))
@@ -1390,6 +1390,9 @@ export const config = { path: "/*" };
     return normalized.isEmpty ? 'routed-worker' : normalized;
   }
 }
+
+/// Alias for integrations that refer to the Cloudflare deployment workflow.
+typedef CloudflareDeployCommand = RoutedNodeDeployCommand;
 
 final class _CloudflareDurableObjectBinding {
   const _CloudflareDurableObjectBinding({
