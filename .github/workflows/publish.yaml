@@ -1,5 +1,10 @@
 name: Publish
 
+# The workflow only needs to read the source repository. Publishing receives
+# its short-lived pub.dev credential through the job-level OIDC permission.
+permissions:
+  contents: read
+
 # When a pull request is opened or updated the job will run the validation
 # steps (using firehose, this checks for correct pubspec versioning, changelog entries, etc.).
 # When you push a tag (for a package), firehose will attempt to publish that package.
@@ -14,16 +19,50 @@ on:
       # Package names are part of the tag so Firehose can select the package.
       # The trailing glob also accepts Dart build metadata such as +1.
       - '[0-9A-z]+-v[0-9]+.[0-9]+.[0-9]+*'
-  workflow_dispatch:
 
 jobs:
-  publish:
-    # server_native's native binaries and generated metadata use a dedicated
-    # release workflow, while its Dart package uses this publisher like the
-    # other workspace packages.
-    # This job uses the common publish workflow provided by the ecosystem.
-    # See https://github.com/dart-lang/ecosystem/wiki/Publishing-automation
-    uses: dart-lang/ecosystem/.github/workflows/publish.yaml@main
+  validate:
+    name: Validate package metadata
+    if: ${{ github.event_name == 'pull_request' }}
+
+    # Keep pull-request validation on the shared workflow. It remains
+    # responsible for Firehose validation and PR comments.
+    uses: dart-lang/ecosystem/.github/workflows/publish.yaml@1bdafd85bb97b331ddd683577f48a5dfa7f4cb49
+    with:
+      use-flutter: false
+    # Checkout and PR comments need repository read and pull-request write;
+    # id-token is retained for compatibility with the reusable workflow.
     permissions:
+      contents: read
       id-token: write
       pull-requests: write
+
+  publish:
+    name: Publish packages
+    if: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
+
+    # Run publication in this repository so the OIDC job has explicit read
+    # access to the repository as well as permission to request an ID token.
+    # The shared workflow's publish job currently narrows the token to
+    # id-token only.
+    runs-on: ubuntu-latest
+    # Checkout needs repository read; setup-dart uses id-token for pub.dev.
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260
+        with:
+          sdk: stable
+      - name: Install firehose
+        env:
+          # The OIDC token is only needed for the package upload. Keep it out
+          # of dependency resolution, where pub forwards it to hosted package
+          # downloads and pub.dev rejects the service token for dependencies.
+          XDG_CONFIG_HOME: ${{ runner.temp }}/firehose-pub-config
+        run: dart pub global activate --source git https://github.com/dart-lang/ecosystem --git-path pkgs/firehose/ --git-ref 1bdafd85bb97b331ddd683577f48a5dfa7f4cb49
+      - name: Publish packages
+        run: dart pub global run firehose --publish --no-use-flutter --tag-prefix v
