@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.2 - 2026-09-09
 
 - Export and register the new `routed_jobs` typed jobs and queue integration.
 - Re-export the general-purpose Routed scheduler and schedule provider through

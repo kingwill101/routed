@@ -1,4 +1,4 @@
-## Unreleased
+## 0.5.2 - 2026-09-09
 
 - Added the host-neutral `RuntimeEnvironmentSource` contract and immutable
   process metadata fields used by runtime adapters during configuration.

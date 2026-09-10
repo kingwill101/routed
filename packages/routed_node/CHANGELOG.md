@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.2 - 2026-09-09
 
 - Added the provider-owned `routed deploy` command and CLI provider discovery
   for Cloudflare, Netlify, and Vercel deployments. The CLI contribution is

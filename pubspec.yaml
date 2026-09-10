@@ -71,14 +71,6 @@ dependencies:
   uuid: ^4.5.2
 
 dependency_overrides:
-  # Internal-only temporary pin while Routed's jobs layer targets Stem PR #32.
-  # Stem types must not cross the public Routed jobs/session API. Remove after
-  # the portable runtime surface lands in a published Stem release.
-  stem:
-    git:
-      url: https://github.com/kingwill101/stem.git
-      ref: refs/pull/32/head
-      path: packages/stem
   # native_prebuilt 0.4.0 has not widened its code_assets constraint yet;
   # keep the workspace on the current code-assets protocol while its manifest
   # recipe and prebuilt resolver remain source-compatible with it.

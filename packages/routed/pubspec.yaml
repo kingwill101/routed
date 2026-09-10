@@ -1,6 +1,6 @@
 name: routed
 description: Batteries-included Routed framework — core engine plus official feature packages.
-version: 0.5.1
+version: 0.5.2
 repository: https://github.com/kingwill101/routed/tree/master/packages/routed
 tags:
   - routed

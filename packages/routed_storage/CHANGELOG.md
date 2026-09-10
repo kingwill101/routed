@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.2 - 2026-09-09
 
 - Static mounts can now serve storage-only `storage_fs` filesystems registered
   with `StorageManager.registerFilesystem()`, including native Cloudflare R2

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 - 2026-09-09
 
 - Generated native `routed build` servers now remain alive after binding the
   listener instead of closing the engine immediately.

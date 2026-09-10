@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.0 - 2026-09-09
 
 - Shared jobs now close only during root engine cleanup, and completed schedule
   occurrences no longer consume the per-tick catch-up budget.

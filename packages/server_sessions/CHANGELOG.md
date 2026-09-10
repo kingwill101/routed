@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.3 - 2026-09-09
 
 - Widened the `storage_fs` dependency to `>=0.1.0 <1.0.0` so compatible 0.x
   filesystem adapters can resolve in the same application.
