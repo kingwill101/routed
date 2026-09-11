@@ -352,7 +352,7 @@ class CreateCommand extends BaseCommand {
     final versionConstraint = _versionConstraint(routedVersion);
     final dependencies = SplayTreeMap<String, String>.from({
       'args': '^2.5.0',
-      'artisanal': '^0.1.2',
+      'artisanal': '^0.5.0',
       'routed': versionConstraint,
       ...template.extraDependencies,
       ...extraDependencies,

@@ -14,7 +14,7 @@ environment:
 dependencies:
   artisanal: ^0.5.0
   routed_core: ">=0.5.0 <1.0.0"
-  stem: ">=0.4.0 <1.0.0"
+  stem: ^0.4.2
 dev_dependencies:
   test: ^1.29.0
   very_good_analysis: ^10.0.0
