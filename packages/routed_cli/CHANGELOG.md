@@ -16,6 +16,7 @@
 - Generated basic, API, web, and fullstack projects now include the
   `routed_database` provider, codegen-free SQLite/Ormed migrations, and a
   `/db/health` example route.
+- New project scaffolds now target the hosted Artisanal `^0.5.0` release.
 - Added a Cloudflare scaffold with environment-backed D1 migrations, a
   Fetch-compatible Worker entrypoint, and D1-backed `routed_auth` sessions.
 - **Breaking:** deployment target flags now come from runtime adapter

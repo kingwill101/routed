@@ -12,7 +12,7 @@ dependencies:
   routed_http: ^0.1.2
   routed_io:
     path: ../../packages/routed_io
-  stem: ^0.2.1
+  stem: ^0.4.2
 
 dev_dependencies:
   lints: ^6.0.0

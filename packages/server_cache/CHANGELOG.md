@@ -6,7 +6,7 @@
   filesystem adapters can resolve in the same application.
 - Added `OrmCacheStore`, a driver-neutral Ormed-backed cache store, and its
   migration helper for SQLite, D1, and other Ormed databases.
-- The Ormed dependency starts at `0.3.1`, which includes the ad-hoc table write
+- The Ormed dependency starts at `0.4.0`, which includes the ad-hoc table write
   support used by this store.
 
 ## 0.2.1 - 2026-08-25

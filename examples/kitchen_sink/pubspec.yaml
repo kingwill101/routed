@@ -9,6 +9,8 @@ environment:
 resolution: workspace
 
 dependencies:
+  ormed: ^0.4.0
+  ormed_sqlite: ^0.4.1
   routed:
   routed_validation:
   http: ^1.5.0
