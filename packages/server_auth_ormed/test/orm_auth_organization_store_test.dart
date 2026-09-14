@@ -227,6 +227,59 @@ void main() {
     await db.close();
   });
 
+  test(
+    'hard deletion removes email-indexed verification and OTP state',
+    () async {
+      final db = await SqliteDatabase.connect(path: ':memory:');
+      addTearDown(db.close);
+      const authSchema = OrmAuthSchema(tablePrefix: 'hard_delete_email_test');
+      await authSchema.migrate(db);
+      final authStore = OrmAuthStore(db, schema: authSchema);
+      final user = AuthUser(
+        id: 'hard-delete-email-user',
+        email: 'Delete-Email@Example.com',
+      );
+      await authStore.users.create(user);
+      final now = DateTime.utc(2030);
+      await authStore.verificationTokens.save(
+        AuthVerificationToken(
+          identifier: 'delete-email@example.com',
+          token: 'verification-token',
+          expiresAt: now.add(const Duration(minutes: 5)),
+        ),
+      );
+      await authStore.emailOtps.save(
+        AuthEmailOtp(
+          id: 'hard-delete-email-otp',
+          email: 'delete-email@example.com',
+          codeHash: 'code-hash',
+          type: AuthEmailOtpType.signIn,
+          createdAt: now,
+          expiresAt: now.add(const Duration(minutes: 5)),
+          maxAttempts: 3,
+        ),
+      );
+
+      expect(await authStore.deleteUserForAdministration(user.id), isTrue);
+      expect(
+        await authStore.verificationTokens.consume(
+          'delete-email@example.com',
+          'verification-token',
+        ),
+        isNull,
+      );
+      expect(
+        (await authStore.emailOtps.verifyDigest(
+          'delete-email@example.com',
+          AuthEmailOtpType.signIn,
+          'code-hash',
+          now: now,
+        )).status,
+        AuthEmailOtpVerificationStatus.invalid,
+      );
+    },
+  );
+
   test('passes the organization store ownership conformance suite', () async {
     await verifyAuthOrganizationStoreOwnershipConformance(store);
   });

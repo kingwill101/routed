@@ -4,6 +4,7 @@ import 'package:ormed_sqlite/ormed_sqlite.dart';
 import 'package:rate_limiting_example/migrations.dart';
 import 'package:rate_limiting_example/sqlite_store.dart';
 import 'package:routed_database/routed_database.dart';
+import 'package:server_contracts/server_contracts.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -77,4 +78,21 @@ void main() {
             .single;
     expect(updated['expires_at'], expiresAt);
   });
+
+  test(
+    'provides a database-backed LockProvider for rate-limit state',
+    () async {
+      final store = SqliteRateLimitStore(database);
+      expect(store, isA<LockProvider>());
+
+      final first = await store.lock('rate-limit-lock', 5, 'first-owner');
+      final second = await store.lock('rate-limit-lock', 5, 'second-owner');
+      expect(await first.acquire(), isTrue);
+      expect(await second.acquire(), isFalse);
+      expect(await second.getCurrentOwner(), 'first-owner');
+      expect(await first.release(), isTrue);
+      expect(await second.acquire(), isTrue);
+      expect(await second.release(), isTrue);
+    },
+  );
 }

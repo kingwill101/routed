@@ -282,7 +282,9 @@ final class OrmAuthStore
 
   Future<bool> _deleteCore(String userId) async {
     final id = userId.trim();
-    if (id.isEmpty || await _findKey(_userKey(id)) == null) return false;
+    final record = id.isEmpty ? null : await _findKey(_userKey(id));
+    if (record == null) return false;
+    final user = _userFromRecord(record);
     await _deleteWhere(ownerId: id);
     await _deleteWhere(kind: 'user', lookup: id);
     await _deleteKey(_userKey(id));
@@ -291,6 +293,18 @@ final class OrmAuthStore
     await _deleteWhere(kind: 'email_change', ownerId: id);
     await _deleteWhere(kind: 'device', ownerId: id);
     await _deleteWhere(kind: 'jwt', ownerId: id);
+    if (user.email != null) {
+      final email = user.email!;
+      await _deleteWhere(kind: 'verification', lookup: email);
+      await _deleteWhere(
+        kind: 'verification',
+        lookup: normalizeAuthEmail(email),
+      );
+      await _deleteWhere(
+        kind: 'otp',
+        lookup: normalizeAuthEmailOtpEmail(email),
+      );
+    }
     final now = _now;
     await _insert(
       _Record(
@@ -990,18 +1004,44 @@ final class _OrmPasswordResetTokens implements AuthPasswordResetTokenStore {
     );
   });
   @override
-  Future<AuthPasswordResetToken?> consume(String token) =>
-      root._transaction(() async {
-        if (token.trim().isEmpty) return null;
-        final hash = hashOpaqueToken(token);
-        final row = await root._findKey('password_reset:$hash');
-        if (row == null) return null;
-        await root._deleteKey(row.key);
+  Future<AuthPasswordResetToken?> consume(String token) async {
+    if (token.trim().isEmpty) return null;
+    final key = 'password_reset:${hashOpaqueToken(token)}';
+    final metadata = root.database.driver.metadata;
+    if (!metadata.supportsTransactions &&
+        !metadata.supportsCapability(DriverCapability.atomicBatches)) {
+      throw StateError(
+        'Password-reset consumption requires a transactional or atomic-batch '
+        'database driver.',
+      );
+    }
+    if (!metadata.supportsTransactions &&
+        metadata.supportsCapability(DriverCapability.atomicBatches)) {
+      return root._transaction(() async {
+        final results = await root.database.atomicBatch([
+          root._table().whereEquals('record_key', key).batchSelect(),
+          root._table().whereEquals('record_key', key).batchDelete(),
+        ]);
+        final rows = results.first.rows;
+        if (rows.isEmpty) return null;
+        final row = _Record.fromRow(AdHocRow(rows.first));
         if (row.expiresAt == null || !root._now.isBefore(row.expiresAt!)) {
           return null;
         }
         return _passwordResetFromRecord(row);
       });
+    }
+    return root._transaction(() async {
+      final row = await root._findKey(key);
+      if (row == null) return null;
+      await root._deleteKey(row.key);
+      if (row.expiresAt == null || !root._now.isBefore(row.expiresAt!)) {
+        return null;
+      }
+      return _passwordResetFromRecord(row);
+    });
+  }
+
   @override
   Future<AuthPasswordResetToken?> findActive(String token) =>
       root._transaction(() async {

@@ -345,6 +345,17 @@ final class OrmAuthOrganizationStore
         (mutation.kind == AuthOrganizationMembershipMutationKind.remove ||
             !replacementRoles!.contains(creatorRole));
     if (removesCreator) {
+      final metadata = database.driver.metadata;
+      if (!metadata.supportsTransactions) {
+        _require(_supportsAtomicBatch, 'atomicity_unavailable');
+        return _mutateCreatorMembershipAtomically(
+          mutation: mutation,
+          organizationId: organizationId,
+          target: target,
+          creatorRole: creatorRole,
+          replacementRoles: replacementRoles,
+        );
+      }
       final owners = await _creatorCount(organizationId, creatorRole);
       _require(owners > 1, 'last_owner');
     }
@@ -371,6 +382,86 @@ final class OrmAuthOrganizationStore
     });
     return target;
   });
+
+  /// Applies an owner-removing mutation through one backend-native batch.
+  ///
+  /// D1 does not expose callback transactions, so the owner-preservation
+  /// check must be part of the write predicate itself. The guarded write can
+  /// only affect the target while another owner row still exists; concurrent
+  /// batches therefore allow one winner and make the other a no-op.
+  Future<AuthOrganizationMember> _mutateCreatorMembershipAtomically({
+    required AuthOrganizationMembershipMutation mutation,
+    required String organizationId,
+    required AuthOrganizationMember target,
+    required String creatorRole,
+    required List<String>? replacementRoles,
+  }) async {
+    final targetQuery = _where(_table(_members), {
+      'organization_id': organizationId,
+      'user_id': target.userId,
+    });
+    final anotherOwner = _table(_members)
+        .whereEquals('organization_id', organizationId)
+        .whereNotEquals('user_id', target.userId)
+        .whereRaw('EXISTS (SELECT 1 FROM json_each(roles) WHERE value = ?)', [
+          creatorRole,
+        ]);
+    final guardedTarget = targetQuery.whereExists(anotherOwner);
+    if (mutation.kind == AuthOrganizationMembershipMutationKind.replaceRoles) {
+      final results = await database.atomicBatch([
+        guardedTarget.batchUpdate({'roles': jsonEncode(replacementRoles)}),
+      ]);
+      if (results.first.affectedRows == 0) {
+        await _requireUnchangedOrThrow(
+          organizationId,
+          target,
+          missingCode: 'member_not_found',
+        );
+        throw AuthFlowException('last_owner');
+      }
+      return target.copyWith(roles: replacementRoles);
+    }
+
+    final teams = await _query(
+      _table(_teams).whereEquals('organization_id', organizationId),
+    );
+    final teamIds = teams.map((row) => row['id']).whereType<Object>();
+    final operations = <AtomicBatchOperation>[guardedTarget.batchDelete()];
+    if (teamIds.isNotEmpty) {
+      operations.add(
+        _where(_table(_teamMembers), {'user_id': target.userId})
+            .whereIn('team_id', teamIds)
+            // Only clear team memberships after the guarded member delete
+            // removed the target. This keeps a losing concurrent operation
+            // from changing unrelated state.
+            .whereNotExists(targetQuery)
+            .batchDelete(),
+      );
+    }
+    final results = await database.atomicBatch(operations);
+    if (results.first.affectedRows == 0) {
+      await _requireUnchangedOrThrow(
+        organizationId,
+        target,
+        missingCode: 'member_not_found',
+      );
+      throw AuthFlowException('last_owner');
+    }
+    return target;
+  }
+
+  Future<void> _requireUnchangedOrThrow(
+    String organizationId,
+    AuthOrganizationMember expected, {
+    required String missingCode,
+  }) async {
+    final current = await _findMember(organizationId, expected.userId);
+    _require(current != null, missingCode);
+    _require(
+      _sameMembershipSnapshot(current!, expected),
+      'organization_membership_changed',
+    );
+  }
 
   @override
   Future<AuthOrganizationInvitation?> findInvitation(String invitationId) =>
