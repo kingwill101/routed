@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:ormed/ormed.dart';
+
 enum RecipeCategory { breakfast, lunch, dinner, dessert }
 
 class Recipe {
@@ -48,6 +52,33 @@ class Recipe {
       image: json['image'] as String,
     );
   }
+
+  factory Recipe.fromRow(AdHocRow row) {
+    final rawIngredients = row['ingredients']?.toString() ?? '[]';
+    return Recipe(
+      id: row['id']!.toString(),
+      name: row['name']!.toString(),
+      description: row['description']?.toString() ?? '',
+      ingredients: (jsonDecode(rawIngredients) as List).cast<String>(),
+      instructions: row['instructions']?.toString() ?? '',
+      prepTime: (row['prep_time'] as num?)?.toInt() ?? 0,
+      cookTime: (row['cook_time'] as num?)?.toInt() ?? 0,
+      category: RecipeCategory.values.byName(row['category']!.toString()),
+      image: row['image']?.toString() ?? '',
+    );
+  }
+
+  Map<String, Object?> toStorage() => {
+    'id': id,
+    'name': name,
+    'description': description,
+    'ingredients': jsonEncode(ingredients),
+    'instructions': instructions,
+    'prep_time': prepTime,
+    'cook_time': cookTime,
+    'category': category.name,
+    'image': image,
+  };
 
   Recipe copyWith({
     String? id,

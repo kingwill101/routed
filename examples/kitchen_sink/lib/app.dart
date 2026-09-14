@@ -1,20 +1,38 @@
+import 'dart:io';
+
+import 'package:ormed_sqlite/ormed_sqlite.dart';
 import 'package:kitchen_sink_example/consts.dart';
 import 'package:kitchen_sink_example/handlers/api.dart' as api;
 import 'package:kitchen_sink_example/handlers/web.dart' as web;
 import 'package:kitchen_sink_example/middleware/middleware.dart';
+import 'package:kitchen_sink_example/services/recipe_service.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_database/routed_database.dart';
 
-Engine buildApp({String? viewsPath}) {
+import 'migrations.dart';
+
+Future<Engine> buildApp({
+  String? viewsPath,
+  String databasePath = 'storage/kitchen_sink.sqlite',
+  String cachePath = 'storage/kitchen_sink-cache',
+  bool initialize = true,
+}) async {
   final resolvedViewsPath = viewsPath ?? templateDirectory;
+  if (databasePath != ':memory:') {
+    File(databasePath).absolute.parent.createSync(recursive: true);
+  }
+  final database = await SqliteDatabase.connect(path: databasePath);
+  final databases = DatabaseManager()..register('default', database);
+  final recipeProvider = RoutedDatabaseProvider(
+    manager: databases,
+    migrations: appMigrations,
+    migrateOnBoot: true,
+  );
   final appKey = 'base64:AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=';
-  final arrayStore = ArrayStore();
-  final cacheManager = CacheManager()
-    ..registerStore('array', arrayStore)
-    ..registerStoreFactory(
-      'file',
-      FileStoreFactory(),
-      const FileStoreConfiguration(path: 'cache'),
-    );
+  final cacheStore = FileStoreFactory().create(
+    FileStoreConfiguration(path: cachePath),
+  );
+  final cacheManager = CacheManager()..registerStore('file', cacheStore);
   final sessionStore = CookieStore(
     codecs: [SecureCookie(useEncryption: true, useSigning: true, key: appKey)],
   );
@@ -25,14 +43,15 @@ Engine buildApp({String? viewsPath}) {
       appKey: appKey,
       multipart: MultipartConfig(
         maxFileSize: 1024 * 1024,
-        allowedExtensions: {'.jpg', '.png'},
+        allowedExtensions: {'jpg', 'png'},
       ),
       templateDirectory: resolvedViewsPath,
       views: ViewConfig(viewPath: resolvedViewsPath),
     ),
     providers: [
+      recipeProvider,
       ...Engine.defaultProviders,
-      RoutedCacheProvider(CacheConfig(store: arrayStore)),
+      RoutedCacheProvider(CacheConfig(store: cacheStore)),
       RoutedSessionsProvider(
         SessionConfig(store: sessionStore, cookieName: 'kitchen_sink_session'),
       ),
@@ -100,12 +119,22 @@ Engine buildApp({String? viewsPath}) {
   engine.use(apiRouter);
   engine.use(webRouter);
 
+  if (initialize) {
+    await engine.initialize();
+    await RecipeService.configure(database);
+  }
   return engine;
 }
 
 /// Entrypoint consumed by `routed deploy` for host adapters.
-Future<Engine> createEngine({bool initialize = true}) async {
-  final engine = buildApp();
-  if (initialize) await engine.initialize();
-  return engine;
+Future<Engine> createEngine({
+  bool initialize = true,
+  String databasePath = 'storage/kitchen_sink.sqlite',
+  String cachePath = 'storage/kitchen_sink-cache',
+}) async {
+  return buildApp(
+    databasePath: databasePath,
+    cachePath: cachePath,
+    initialize: initialize,
+  );
 }

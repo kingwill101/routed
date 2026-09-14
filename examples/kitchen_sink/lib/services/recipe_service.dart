@@ -1,41 +1,86 @@
+import 'package:ormed/ormed.dart';
 import 'package:kitchen_sink_example/consts.dart';
 import 'package:kitchen_sink_example/models/recipe.dart';
 
 class RecipeService {
-  static List<Recipe> getPaginatedRecipes(int offset, int limit) {
-    return recipes.skip(offset).take(limit).toList();
+  static const _columns = <AdHocColumn>[
+    AdHocColumn(
+      name: 'id',
+      dartType: 'String',
+      columnType: 'TEXT',
+      isNullable: false,
+      isPrimaryKey: true,
+    ),
+    AdHocColumn(name: 'name', dartType: 'String', isNullable: false),
+    AdHocColumn(name: 'description', dartType: 'String', isNullable: false),
+    AdHocColumn(name: 'ingredients', dartType: 'String', isNullable: false),
+    AdHocColumn(name: 'instructions', dartType: 'String', isNullable: false),
+    AdHocColumn(name: 'prep_time', dartType: 'int', isNullable: false),
+    AdHocColumn(name: 'cook_time', dartType: 'int', isNullable: false),
+    AdHocColumn(name: 'category', dartType: 'String', isNullable: false),
+    AdHocColumn(name: 'image', dartType: 'String', isNullable: false),
+  ];
+
+  static late OrmDatabase _database;
+
+  static Future<void> configure(OrmDatabase database) async {
+    _database = database;
+    if ((await _query().limit(1).get()).isNotEmpty) return;
+    await create(
+      Recipe(
+        category: RecipeCategory.breakfast,
+        cookTime: 54,
+        description: 'A quick breakfast recipe.',
+        id: uuid.v4(),
+        image: '',
+        ingredients: ['eggs', 'toast'],
+        instructions: 'Cook and serve.',
+        name: 'Simple Breakfast',
+        prepTime: 11,
+      ),
+    );
   }
 
-  static Recipe? getById(String id) {
-    try {
-      return recipes.firstWhere((r) => r.id == id);
-    } catch (_) {
-      return null;
-    }
+  static Future<List<Recipe>> getPaginatedRecipes(int offset, int limit) async {
+    final rows = await _query().orderBy('id').offset(offset).limit(limit).get();
+    return rows.map(Recipe.fromRow).toList();
   }
 
-  static Recipe create(Recipe recipe) {
-    recipes.add(recipe);
-    recipeStreamController.add(recipes);
+  static Future<Recipe?> getById(String id) async {
+    final rows = await _query().whereEquals('id', id).limit(1).get();
+    return rows.isEmpty ? null : Recipe.fromRow(rows.first);
+  }
+
+  static Future<Recipe> create(Recipe recipe) async {
+    await _query().insertManyInputs([recipe.toStorage()], returning: false);
+    await _publish();
     return recipe;
   }
 
-  static Recipe update(String id, Recipe recipe) {
-    final index = recipes.indexWhere((r) => r.id == id);
-    if (index == -1) {
+  static Future<Recipe> update(String id, Recipe recipe) async {
+    if (await getById(id) == null) {
       throw StateError('Recipe not found');
     }
-    recipes[index] = recipe;
-    recipeStreamController.add(recipes);
+    await _query().whereEquals('id', id).update(recipe.toStorage());
+    await _publish();
     return recipe;
   }
 
-  static void delete(String id) {
-    recipes.removeWhere((r) => r.id == id);
-    recipeStreamController.add(recipes);
+  static Future<bool> delete(String id) async {
+    final deleted = await _query().whereEquals('id', id).delete();
+    if (deleted > 0) await _publish();
+    return deleted > 0;
   }
 
-  static List<Recipe> getAll() {
-    return List.unmodifiable(recipes);
+  static Future<List<Recipe>> getAll() async {
+    final rows = await _query().orderBy('id').get();
+    return rows.map(Recipe.fromRow).toList(growable: false);
+  }
+
+  static Query<AdHocRow> _query() =>
+      _database.table('recipes', columns: _columns);
+
+  static Future<void> _publish() async {
+    recipeStreamController.add(await getAll());
   }
 }

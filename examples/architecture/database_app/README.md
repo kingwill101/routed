@@ -8,7 +8,8 @@ This is the smallest normal Routed composition using `routed_database`:
 4. Handlers use `ctx.db()` and never construct a connection per request.
 
 There are no generated models and no `build_runner`. The default database is
-in-memory; set `DATABASE_PATH=storage/app.sqlite` for a file-backed database.
+the file-backed `storage/app.sqlite`; set `DATABASE_PATH` to choose another
+SQLite path.
 
 ```bash
 dart run bin/server.dart

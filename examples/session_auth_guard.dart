@@ -1,25 +1,26 @@
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:ormed_sqlite/ormed_sqlite.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_database/routed_database.dart';
+import 'package:server_auth_ormed/server_auth_ormed.dart';
 
 const _appKey =
     'base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Ng==';
 
-final Map<String, Map<String, dynamic>> _users = <String, Map<String, dynamic>>{
-  'taylor': {
-    'password': 'password123',
-    'roles': ['admin'],
-    'name': 'Taylor',
-  },
-  'sasha': {
-    'password': 'password123',
-    'roles': ['support'],
-    'name': 'Sasha',
-  },
-};
-
 Future<void> main() async {
-  SessionAuth.configure(rememberStore: InMemoryRememberTokenStore());
+  final databasePath =
+      Platform.environment['AUTH_DATABASE_PATH'] ??
+      'storage/session_auth_guard.sqlite';
+  File(databasePath).absolute.parent.createSync(recursive: true);
+  final database = await SqliteDatabase.connect(path: databasePath);
+  final schema = const OrmAuthSchema(tablePrefix: 'session_auth_guard');
+  final store = OrmAuthStore(database, schema: schema);
+  final databases = DatabaseManager()..register('default', database);
+  SessionAuth.configure(
+    rememberStore: OrmRememberTokenStore(database, schema: schema),
+  );
 
   guardRegistry
     ..register('authenticated', requireAuthenticated(realm: 'Example App'))
@@ -36,12 +37,25 @@ Future<void> main() async {
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),
     providers: [
+      RoutedDatabaseProvider(
+        manager: databases,
+        migrations: schema.migrations,
+        migrateOnBoot: true,
+      ),
       ...Engine.defaultProviders,
       RoutedSessionsProvider(
         SessionConfig.cookie(appKey: _appKey, cookieName: 'example_session'),
       ),
     ],
   );
+
+  final authOptions = AuthOptions<EngineContext>(
+    providers: [CredentialsProvider()],
+    store: store,
+    storeMode: AuthStoreMode.durable,
+    runtimeMode: AuthRuntimeMode.localDevelopment,
+  );
+  engine.container.instance<AuthOptions>(authOptions);
 
   engine.addGlobalMiddleware(sessionMiddleware());
   engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
@@ -59,6 +73,14 @@ Future<void> main() async {
     });
   });
 
+  await engine.initialize();
+  await _seedUsers(store);
+  final authManager = AuthManager(
+    authOptions,
+    sessionAuth: SessionAuth.instance,
+  );
+  engine.container.instance<AuthManager>(authManager);
+
   engine.post('/login', (ctx) async {
     Map<String, dynamic> payload;
     try {
@@ -73,26 +95,38 @@ Future<void> main() async {
     final password = payload['password']?.toString() ?? '';
     final remember = payload['remember'] == true;
 
-    final record = _users[username];
-    if (record == null || record['password'] != password) {
+    final user = await store.users.findById(username);
+    if (user == null) {
       ctx.status(HttpStatus.unauthorized);
       ctx.write('Invalid credentials');
       return ctx.string('');
     }
-
-    final principal = AuthPrincipal(
-      id: username,
-      roles: List<String>.from(record['roles'] as List),
-      attributes: {'name': record['name']},
-    );
-
-    await SessionAuth.login(ctx, principal, rememberMe: remember);
-
-    return ctx.json({
-      'id': principal.id,
-      'roles': principal.roles,
-      'remember': remember,
-    });
+    try {
+      final provider = authManager.runtime.providers
+          .whereType<CredentialsProvider>()
+          .first;
+      final result = await authManager.signInWithCredentials(
+        ctx,
+        provider,
+        AuthCredentials(email: user.email!, password: password),
+      );
+      if (remember) {
+        await SessionAuth.login(
+          ctx,
+          result.user.toPrincipal(),
+          rememberMe: true,
+        );
+      }
+      return ctx.json({
+        'id': result.session.user.id,
+        'roles': result.session.user.roles,
+        'remember': remember,
+      });
+    } on AuthFlowException {
+      ctx.status(HttpStatus.unauthorized);
+      ctx.write('Invalid credentials');
+      return ctx.string('');
+    }
   });
 
   engine.get(
@@ -138,8 +172,6 @@ Future<void> main() async {
     return ctx.json({'message': 'Signed out'});
   });
 
-  await engine.initialize();
-
   print('Session auth guard example listening on http://localhost:8080');
   print('1) Sign in as admin and store cookies:');
   print('''   curl -i -c cookies.txt -H "Content-Type: application/json" \\''');
@@ -154,4 +186,40 @@ Future<void> main() async {
   print('   curl -i -b cookies.txt -X POST http://localhost:8080/logout');
 
   await engine.serve(host: 'localhost', port: 8080);
+}
+
+Future<void> _seedUsers(OrmAuthStore store) async {
+  final hasher = Argon2idPasswordHasher(
+    iterations: 1,
+    memoryKiB: 8,
+    derivedKeyLength: 16,
+  );
+  final now = DateTime.now().toUtc();
+  for (final user in <AuthUser>[
+    AuthUser(
+      id: 'taylor',
+      name: 'Taylor',
+      email: 'taylor@session.example',
+      roles: ['admin'],
+    ),
+    AuthUser(
+      id: 'sasha',
+      name: 'Sasha',
+      email: 'sasha@session.example',
+      roles: ['support'],
+    ),
+  ]) {
+    if (await store.users.findById(user.id) != null) continue;
+    await store.credentials.register(
+      user,
+      AuthPasswordCredential(
+        id: 'credential-${user.id}',
+        userId: user.id,
+        identifier: user.email!,
+        passwordHash: hasher.hash('password123'),
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+  }
 }

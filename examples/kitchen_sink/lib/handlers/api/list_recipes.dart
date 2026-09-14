@@ -14,6 +14,9 @@ Future<Response> listRecipes(EngineContext ctx) async {
   final limit = 10;
   final offset = (currentPage - 1) * limit;
 
-  final paginatedRecipes = RecipeService.getPaginatedRecipes(offset, limit);
+  final paginatedRecipes = await RecipeService.getPaginatedRecipes(
+    offset,
+    limit,
+  );
   return ctx.json(paginatedRecipes.map((r) => r.toJson()).toList());
 }

@@ -13,16 +13,16 @@ Future<Response> getRecipe(EngineContext ctx) async {
   final cacheKey = '${kRecipeCacheKeyPrefix}_$id';
 
   // Try cache first
-  final cachedJson = await ctx.getCache(cacheKey, store: 'array');
+  final cachedJson = await ctx.getCache(cacheKey, store: 'file');
   if (cachedJson != null) {
     return ctx.json(jsonDecode(cachedJson as String));
   }
 
-  final recipe = RecipeService.getById(id);
+  final recipe = await RecipeService.getById(id);
   if (recipe == null) {
     return ctx.string('Recipe not found', statusCode: HttpStatus.notFound);
   }
 
-  await ctx.cache(cacheKey, jsonEncode(recipe.toJson()), 60, store: 'array');
+  await ctx.cache(cacheKey, jsonEncode(recipe.toJson()), 60, store: 'file');
   return ctx.json(recipe.toJson());
 }

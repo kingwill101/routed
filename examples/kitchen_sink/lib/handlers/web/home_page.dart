@@ -7,7 +7,7 @@ Future<Response> homePage(EngineContext ctx) async {
     'page': {'title': 'Recipes', 'heading': 'Recipes'},
   });
 
-  final recipes = RecipeService.getAll()
+  final recipes = (await RecipeService.getAll())
       .map((recipe) => recipeView(ctx, recipe))
       .toList(growable: false);
 

@@ -32,7 +32,7 @@ int? _toInt(Object? value) =>
 
 Future<Response> updateRecipe(EngineContext ctx) async {
   final id = ctx.mustGetParam('id');
-  final existingRecipe = RecipeService.getById(id);
+  final existingRecipe = await RecipeService.getById(id);
 
   if (existingRecipe == null) {
     return ctx.string('Recipe not found', statusCode: HttpStatus.notFound);
@@ -64,6 +64,6 @@ Future<Response> updateRecipe(EngineContext ctx) async {
     image: data.image ?? existingRecipe.image,
   );
 
-  final savedRecipe = RecipeService.update(id, updatedRecipe);
+  final savedRecipe = await RecipeService.update(id, updatedRecipe);
   return ctx.json(savedRecipe.toJson());
 }

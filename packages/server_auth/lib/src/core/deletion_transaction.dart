@@ -35,6 +35,15 @@ abstract interface class AuthUserDeletionPlan {
   AuthUserDeletionDomain get domain;
 }
 
+/// A deletion plan that can participate in a backend-owned durable
+/// transaction. The backend invokes [apply] while its database transaction is
+/// open; implementations must not start a nested transaction.
+abstract interface class AuthDurableUserDeletionPlan
+    implements AuthUserDeletionPlan {
+  /// Applies the namespace deletion inside the coordinator transaction.
+  FutureOr<void> apply();
+}
+
 /// Domain-bound namespace marker for plugins whose user state is stored wholly
 /// inside core persistence and therefore needs no additional mutation.
 final class AuthNoopUserDeletionPlan implements AuthUserDeletionPlan {

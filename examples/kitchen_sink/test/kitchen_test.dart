@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:file/local.dart';
 import 'package:kitchen_sink_example/app.dart';
@@ -7,20 +8,31 @@ import 'package:test/test.dart';
 
 void main() {
   late Engine engine;
+  late Directory databaseDirectory;
   final fs = const LocalFileSystem();
 
-  setUp(() {
-    engine = buildApp(
+  setUp(() async {
+    databaseDirectory = await Directory.systemTemp.createTemp(
+      'routed-kitchen-sink-',
+    );
+    engine = await buildApp(
       viewsPath: fs.path.join(
         fs.currentDirectory.path,
         'examples',
         'kitchen_sink',
         'templates',
       ),
+      databasePath: '${databaseDirectory.path}/kitchen.sqlite',
+      cachePath: '${databaseDirectory.path}/cache',
     );
   });
 
-  tearDown(() => engine.close());
+  tearDown(() async {
+    await engine.close();
+    if (databaseDirectory.existsSync()) {
+      await databaseDirectory.delete(recursive: true);
+    }
+  });
 
   Future<PortableResponse> request(
     String method,

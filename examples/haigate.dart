@@ -1,25 +1,25 @@
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:ormed_sqlite/ormed_sqlite.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_database/routed_database.dart';
+import 'package:server_auth_ormed/server_auth_ormed.dart';
 
 const _appKey =
     'base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Ng==';
 
-final users = <String, Map<String, Object?>>{
-  'editor': {
-    'password': 'password123',
-    'roles': ['publisher'],
-    'name': 'Casey',
-  },
-  'viewer': {
-    'password': 'password123',
-    'roles': ['viewer'],
-    'name': 'Morgan',
-  },
-};
-
 Future<void> main() async {
-  SessionAuth.configure(rememberStore: InMemoryRememberTokenStore());
+  final databasePath =
+      Platform.environment['AUTH_DATABASE_PATH'] ?? 'storage/haigate.sqlite';
+  File(databasePath).absolute.parent.createSync(recursive: true);
+  final database = await SqliteDatabase.connect(path: databasePath);
+  final schema = const OrmAuthSchema(tablePrefix: 'haigate');
+  final store = OrmAuthStore(database, schema: schema);
+  final databases = DatabaseManager()..register('default', database);
+  SessionAuth.configure(
+    rememberStore: OrmRememberTokenStore(database, schema: schema),
+  );
 
   guardRegistry.register(
     'authenticated',
@@ -37,6 +37,11 @@ Future<void> main() async {
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),
     providers: [
+      RoutedDatabaseProvider(
+        manager: databases,
+        migrations: schema.migrations,
+        migrateOnBoot: true,
+      ),
       ...Engine.defaultProviders,
       RoutedSessionsProvider(
         SessionConfig.cookie(appKey: _appKey, cookieName: 'haigate_session'),
@@ -44,8 +49,24 @@ Future<void> main() async {
     ],
   );
 
+  final authOptions = AuthOptions<EngineContext>(
+    providers: [CredentialsProvider()],
+    store: store,
+    storeMode: AuthStoreMode.durable,
+    runtimeMode: AuthRuntimeMode.localDevelopment,
+  );
+  engine.container.instance<AuthOptions>(authOptions);
+
   engine.addGlobalMiddleware(sessionMiddleware());
   engine.addGlobalMiddleware(SessionAuth.sessionAuthMiddleware());
+
+  await engine.initialize();
+  await _seedUsers(store);
+  final authManager = AuthManager(
+    authOptions,
+    sessionAuth: SessionAuth.instance,
+  );
+  engine.container.instance<AuthManager>(authManager);
 
   engine.post('/login', (ctx) async {
     final body = jsonDecode(await ctx.body()) as Map<String, Object?>;
@@ -53,21 +74,28 @@ Future<void> main() async {
     final username = body['username']?.toString() ?? '';
     final password = body['password']?.toString() ?? '';
 
-    final record = users[username];
-    if (record == null || record['password'] != password) {
+    final user = await store.users.findById(username);
+    if (user == null) {
       ctx.status(HttpStatus.unauthorized);
       ctx.write('Invalid credentials');
       return ctx.string('');
     }
-
-    final principal = AuthPrincipal(
-      id: username,
-      roles: List<String>.from(record['roles'] as List),
-      attributes: {'name': record['name']},
-    );
-
-    await SessionAuth.login(ctx, principal, rememberMe: true);
-    return ctx.json({'status': 'ok', 'roles': principal.roles});
+    try {
+      final provider = authManager.runtime.providers
+          .whereType<CredentialsProvider>()
+          .first;
+      final result = await authManager.signInWithCredentials(
+        ctx,
+        provider,
+        AuthCredentials(email: user.email!, password: password),
+      );
+      await SessionAuth.login(ctx, result.user.toPrincipal(), rememberMe: true);
+      return ctx.json({'status': 'ok', 'roles': result.session.user.roles});
+    } on AuthFlowException {
+      ctx.status(HttpStatus.unauthorized);
+      ctx.write('Invalid credentials');
+      return ctx.string('');
+    }
   });
 
   engine.get(
@@ -96,7 +124,6 @@ Future<void> main() async {
     return ctx.json({'status': 'signed-out'});
   });
 
-  await engine.initialize();
   print('Haigate example listening on http://localhost:8080');
   print('1) Login as publisher:');
   print(
@@ -111,4 +138,40 @@ Future<void> main() async {
   print('   curl -i -b cookies.txt -X POST http://localhost:8080/logout');
 
   await engine.serve(host: 'localhost', port: 8080);
+}
+
+Future<void> _seedUsers(OrmAuthStore store) async {
+  final hasher = Argon2idPasswordHasher(
+    iterations: 1,
+    memoryKiB: 8,
+    derivedKeyLength: 16,
+  );
+  final now = DateTime.now().toUtc();
+  for (final user in <AuthUser>[
+    AuthUser(
+      id: 'editor',
+      name: 'Casey',
+      email: 'editor@haigate.example',
+      roles: ['publisher'],
+    ),
+    AuthUser(
+      id: 'viewer',
+      name: 'Morgan',
+      email: 'viewer@haigate.example',
+      roles: ['viewer'],
+    ),
+  ]) {
+    if (await store.users.findById(user.id) != null) continue;
+    await store.credentials.register(
+      user,
+      AuthPasswordCredential(
+        id: 'credential-${user.id}',
+        userId: user.id,
+        identifier: user.email!,
+        passwordHash: hasher.hash('password123'),
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+  }
 }

@@ -34,24 +34,49 @@ library;
 import 'dart:isolate';
 import 'dart:io' as io;
 
+import 'package:ormed_sqlite/ormed_sqlite.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_database/routed_database.dart';
 import 'package:openapi_demo/metadata_routes.dart';
 
-Future<Engine> createEngine({bool initialize = true}) async {
-  final engine = Engine(providers: Engine.defaultProviders);
+import 'migrations.dart';
+
+const _userColumns = <AdHocColumn>[
+  AdHocColumn(
+    name: 'id',
+    dartType: 'int',
+    columnType: 'INTEGER',
+    isNullable: false,
+    isPrimaryKey: true,
+  ),
+  AdHocColumn(name: 'name', dartType: 'String', isNullable: false),
+  AdHocColumn(name: 'email', dartType: 'String', isNullable: false),
+];
+
+Future<Engine> createEngine({
+  String databasePath = 'storage/openapi_demo.sqlite',
+  bool initialize = true,
+}) async {
+  if (databasePath != ':memory:') {
+    io.File(databasePath).absolute.parent.createSync(recursive: true);
+  }
+  final database = await SqliteDatabase.connect(path: databasePath);
+  final databases = DatabaseManager()..register('default', database);
+  final engine = Engine(
+    providers: [
+      RoutedDatabaseProvider(
+        manager: databases,
+        migrations: appMigrations,
+        migrateOnBoot: true,
+      ),
+      ...Engine.defaultProviders,
+    ],
+  );
 
   if (initialize) {
     await engine.initialize();
+    await _seedUsers(database);
   }
-
-  // -------------------------------------------------------------------------
-  // In-memory data store
-  // -------------------------------------------------------------------------
-
-  final users = <String, Map<String, dynamic>>{
-    '1': {'id': '1', 'name': 'Ada Lovelace', 'email': 'ada@example.com'},
-    '2': {'id': '2', 'name': 'Alan Turing', 'email': 'alan@example.com'},
-  };
 
   // -------------------------------------------------------------------------
   // API routes — each carries a RouteSchema describing its contract
@@ -67,7 +92,7 @@ Future<Engine> createEngine({bool initialize = true}) async {
       router
           .get(
             '/users',
-            (ctx) async => ctx.json({'data': users.values.toList()}),
+            (ctx) async => ctx.json({'data': await _listUsers(ctx.db())}),
           )
           .summary('List all users')
           .description(
@@ -84,7 +109,7 @@ Future<Engine> createEngine({bool initialize = true}) async {
           .get('/users/{id}', (ctx) async {
             final id = ctx.mustGetParam<String>('id');
             final user = await ctx.fetchOr404(
-              () async => users[id],
+              () async => _findUser(ctx.db(), int.tryParse(id)),
               message: 'User not found',
             );
             return ctx.json(user);
@@ -107,13 +132,23 @@ Future<Engine> createEngine({bool initialize = true}) async {
             final payload = Map<String, dynamic>.from(
               await ctx.bindJSON({}) as Map? ?? const {},
             );
-            final id = (users.length + 1).toString();
+            final latest = await _users(
+              ctx.db(),
+            ).orderBy('id', descending: true).limit(1).get();
+            final id = ((latest.isEmpty ? 0 : latest.first['id'] as int) + 1)
+                .toString();
             final created = {
               'id': id,
               'name': payload['name'] ?? 'user-$id',
               'email': payload['email'] ?? 'user$id@example.com',
             };
-            users[id] = created;
+            await _users(ctx.db()).insertManyInputs([
+              {
+                'id': int.parse(id),
+                'name': created['name'],
+                'email': created['email'],
+              },
+            ], returning: false);
             return ctx.json(created, statusCode: HttpStatus.created);
           })
           .summary('Create a new user')
@@ -131,7 +166,11 @@ Future<Engine> createEngine({bool initialize = true}) async {
       router
           .delete('/users/{id}', (ctx) async {
             final id = ctx.mustGetParam<String>('id');
-            if (users.remove(id) == null) {
+            final userId = int.tryParse(id);
+            final deleted = userId == null
+                ? 0
+                : await _users(ctx.db()).whereEquals('id', userId).delete();
+            if (deleted == 0) {
               return ctx.json({
                 'error': 'User not found',
               }, statusCode: HttpStatus.notFound);
@@ -189,6 +228,34 @@ Future<Engine> createEngine({bool initialize = true}) async {
   });
 
   return engine;
+}
+
+Query<AdHocRow> _users(OrmDatabase database) =>
+    database.table('users', columns: _userColumns);
+
+Future<List<Map<String, dynamic>>> _listUsers(OrmDatabase database) async {
+  final rows = await _users(database).orderBy('id').get();
+  return rows.map(_userJson).toList();
+}
+
+Future<Map<String, dynamic>?> _findUser(OrmDatabase database, int? id) async {
+  if (id == null) return null;
+  final rows = await _users(database).whereEquals('id', id).limit(1).get();
+  return rows.isEmpty ? null : _userJson(rows.first);
+}
+
+Map<String, dynamic> _userJson(AdHocRow row) => {
+  'id': row['id'].toString(),
+  'name': row['name'],
+  'email': row['email'],
+};
+
+Future<void> _seedUsers(OrmDatabase database) async {
+  if ((await _users(database).limit(1).get()).isNotEmpty) return;
+  await _users(database).insertManyInputs([
+    {'id': 1, 'name': 'Ada Lovelace', 'email': 'ada@example.com'},
+    {'id': 2, 'name': 'Alan Turing', 'email': 'alan@example.com'},
+  ], returning: false);
 }
 
 Future<String> _resolveProjectRoot() async {

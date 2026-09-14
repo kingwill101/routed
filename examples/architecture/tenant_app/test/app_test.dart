@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:routed_architecture_tenant_app/app.dart';
+import 'package:routed_database/routed_database.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
 
@@ -59,6 +60,73 @@ void main() {
       );
       beta.assertStatus(HttpStatus.forbidden);
       expect(beta.json()['error'], 'organization_forbidden');
+    },
+  );
+
+  test(
+    'durable auth and organization records survive an engine restart',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'routed-tenant-example-',
+      );
+      addTearDown(() async {
+        if (directory.existsSync()) await directory.delete(recursive: true);
+      });
+      final databasePath = '${directory.path}/tenant.sqlite';
+
+      final firstEngine = await createEngine(databasePath: databasePath);
+      final firstClient = TestClient(RoutedRequestHandler(firstEngine));
+      addTearDown(firstClient.close);
+      addTearDown(firstEngine.close);
+      final firstRows = await firstEngine.container
+          .get<DatabaseManager>()
+          .database()
+          .table('routed_auth_organizations')
+          .get();
+      expect(firstRows, hasLength(2));
+      final firstLogin = await firstClient.postJson(
+        '/auth/signin/credentials',
+        <String, dynamic>{
+          'email': 'alice@example.com',
+          'password': 'password123',
+        },
+      );
+      firstLogin.assertStatus(HttpStatus.ok);
+      final firstSession = firstLogin.cookie('tenant_example_session');
+      expect(firstSession, isNotNull);
+      await firstEngine.close();
+      await firstClient.close();
+
+      final secondEngine = await createEngine(databasePath: databasePath);
+      addTearDown(secondEngine.close);
+      final secondClient = TestClient(RoutedRequestHandler(secondEngine));
+      addTearDown(secondClient.close);
+      final resumed = await secondClient.get(
+        '/api/me',
+        headers: <String, List<String>>{
+          HttpHeaders.cookieHeader: <String>[_cookie(firstSession!)],
+        },
+      );
+      resumed.assertStatus(HttpStatus.ok);
+      expect(resumed.json()['id'], aliceId);
+      final login = await secondClient.postJson(
+        '/auth/signin/credentials',
+        <String, dynamic>{
+          'email': 'alice@example.com',
+          'password': 'password123',
+        },
+      );
+      login.assertStatus(HttpStatus.ok);
+      final secondRows = await secondEngine.container
+          .get<DatabaseManager>()
+          .database()
+          .table('routed_auth_organizations')
+          .get();
+      expect(secondRows, hasLength(2));
+      expect(
+        secondRows.map((row) => row['slug']),
+        containsAll(<String>['acme', 'beta']),
+      );
     },
   );
 }

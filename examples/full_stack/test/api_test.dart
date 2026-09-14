@@ -7,13 +7,15 @@ void main() {
   test('GET /api/todos returns seeded data', () async {
     final engine = await app.createEngine();
     final client = TestClient(RoutedRequestHandler(engine));
+    addTearDown(() async {
+      await client.close();
+      await engine.close();
+    });
 
     final response = await client.get('/api/todos');
     response.assertStatus(200);
     final json = response.json() as Map<String, dynamic>;
     expect(json['data'], isA<List>());
     expect(json['data'], isNotEmpty);
-
-    await client.close();
   });
 }

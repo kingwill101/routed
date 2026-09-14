@@ -6,6 +6,7 @@ workspace:
   - packages/routed_analyzer
   - packages/server_contracts
   - packages/server_auth
+  - packages/server_auth_ormed
   - packages/server_cache
   - packages/server_sessions
   - packages/server_storage
@@ -68,7 +69,11 @@ dependencies:
   contextual: ^2.2.0
   liquify: ^1.4.2
   ormed_sqlite: ^0.4.1
+  routed_database:
+    path: packages/routed_database
   routed_node: ^0.2.1
+  server_auth_ormed:
+    path: packages/server_auth_ormed
   uuid: ^4.5.2
 
 dependency_overrides:
