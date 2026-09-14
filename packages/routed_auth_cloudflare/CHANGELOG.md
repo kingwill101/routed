@@ -1,5 +1,8 @@
 ## 0.1.1 - 2026-08-25
 
+- Raise the minimum Dart SDK to 3.13 to match the hosted Stem 0.5.0 runtime
+  pulled in through `routed_node`.
+
 - Re-read migration markers and retry transient concurrent-startup failures so
   multiple Worker isolates do not fail permanently on the same migration.
 - Keep request throttling in the built-in `server_rate_limit` and Routed

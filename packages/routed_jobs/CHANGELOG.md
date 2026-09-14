@@ -1,5 +1,8 @@
 ## 0.1.0 - 2026-09-09
 
+- Update the Stem dependency to 0.5.0; Routed Jobs now requires Dart 3.13 or
+  newer to match Stem's supported SDK range.
+
 - Shared jobs now close only during root engine cleanup, and completed schedule
   occurrences no longer consume the per-tick catch-up budget.
 - Failed Stem-backed schedule occurrences remain due for retry, and scheduler

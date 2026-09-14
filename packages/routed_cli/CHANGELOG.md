@@ -2,6 +2,9 @@
 
 ## 0.4.1 - 2026-09-09
 
+- Raise the minimum Dart SDK to 3.13 to match the hosted Stem 0.5.0 runtime
+  pulled in through the `routed` facade.
+
 - Generated native `routed build` servers now remain alive after binding the
   listener instead of closing the engine immediately.
 - Added `routed build` (also available as `routed cli build`) to compile a

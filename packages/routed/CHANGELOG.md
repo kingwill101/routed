@@ -2,6 +2,9 @@
 
 ## 0.5.2 - 2026-09-09
 
+- Raise the minimum Dart SDK to 3.13 to match the hosted Stem 0.5.0 release
+  required by `routed_jobs`.
+
 - Export and register the new `routed_jobs` typed jobs and queue integration.
 - Re-export the general-purpose Routed scheduler and schedule provider through
   the batteries-included facade.
