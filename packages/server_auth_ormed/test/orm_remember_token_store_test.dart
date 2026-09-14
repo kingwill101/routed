@@ -66,4 +66,29 @@ void main() {
 
     expect(await store.read('expired-token'), isNull);
   });
+
+  test('tombstoning a user removes remember tokens', () async {
+    final database = await SqliteDatabase.connect(path: ':memory:');
+    addTearDown(database.close);
+    final schema = const OrmAuthSchema(tablePrefix: 'remember_tombstone_test');
+    await schema.migrate(database);
+    final auth = OrmAuthStore(database, schema: schema);
+    final store = OrmRememberTokenStore(database, schema: schema);
+    final user = AuthUser(id: 'tombstone-user', email: 'tombstone@example.com');
+    await auth.users.create(user);
+    await store.save(
+      'tombstone-token',
+      AuthPrincipal(id: user.id),
+      DateTime.utc(2030).add(const Duration(minutes: 5)),
+    );
+
+    expect(
+      await auth.tombstoneUserForAdministration(
+        user.id,
+        deletedAt: DateTime.utc(2030),
+      ),
+      isTrue,
+    );
+    expect(await store.read('tombstone-token'), isNull);
+  });
 }

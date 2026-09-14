@@ -71,6 +71,7 @@ Future<Cookie> _login(
 }) async {
   final response = await client.postJson('/api/v1/login', {
     'id': id,
+    'password': 'password123',
     'role': 'editor',
   }, headers: _csrfHeaders(csrf));
   response.assertStatus(HttpStatus.ok);
@@ -135,10 +136,22 @@ void main() {
       final createResponse = await client.postJson('/api/v1/users', {
         'name': 'Grace',
         'email': 'grace@example.com',
+        'password': 'grace-password',
       }, headers: _csrfHeaders(csrf));
       createResponse.assertStatus(HttpStatus.created);
       final createdJson = createResponse.json() as Map<String, dynamic>;
       expect(createdJson['name'], equals('Grace'));
+
+      final wrongPassword = await client.postJson('/api/v1/login', {
+        'id': createdJson['id'],
+        'password': 'wrong-password',
+      }, headers: _csrfHeaders(csrf));
+      wrongPassword.assertStatus(HttpStatus.unauthorized);
+      final createdLogin = await client.postJson('/api/v1/login', {
+        'id': createdJson['id'],
+        'password': 'grace-password',
+      }, headers: _csrfHeaders(csrf));
+      createdLogin.assertStatus(HttpStatus.ok);
     });
 
     test('project policies enforce access', () async {

@@ -132,23 +132,23 @@ Future<Engine> createEngine({
             final payload = Map<String, dynamic>.from(
               await ctx.bindJSON({}) as Map? ?? const {},
             );
-            final latest = await _users(
-              ctx.db(),
-            ).orderBy('id', descending: true).limit(1).get();
-            final id = ((latest.isEmpty ? 0 : latest.first['id'] as int) + 1)
-                .toString();
-            final created = {
-              'id': id,
-              'name': payload['name'] ?? 'user-$id',
-              'email': payload['email'] ?? 'user$id@example.com',
-            };
-            await _users(ctx.db()).insertManyInputs([
-              {
-                'id': int.parse(id),
-                'name': created['name'],
-                'email': created['email'],
-              },
-            ], returning: false);
+            final created = await ctx.db().transaction(() async {
+              final inserted = await _users(ctx.db()).insertManyInputs([
+                {
+                  'name': payload['name']?.toString() ?? '',
+                  'email': payload['email']?.toString() ?? '',
+                },
+              ]);
+              final id = inserted.first['id']!.toString();
+              final name = payload['name']?.toString() ?? 'user-$id';
+              final email =
+                  payload['email']?.toString() ?? 'user$id@example.com';
+              await _users(ctx.db()).whereEquals('id', int.parse(id)).update({
+                'name': name,
+                'email': email,
+              });
+              return {'id': id, 'name': name, 'email': email};
+            });
             return ctx.json(created, statusCode: HttpStatus.created);
           })
           .summary('Create a new user')

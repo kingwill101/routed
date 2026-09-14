@@ -4,6 +4,7 @@ import 'package:ormed/ormed.dart';
 import 'package:server_auth/server_auth.dart';
 
 import 'orm_auth_schema.dart';
+import 'orm_transaction_gate.dart';
 
 /// Transactional Ormed persistence for Routed remember-me tokens.
 ///
@@ -17,7 +18,8 @@ final class OrmRememberTokenStore implements RememberTokenStore {
     this.database, {
     this.schema = const OrmAuthSchema(),
     DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now {
+  }) : _clock = clock ?? DateTime.now,
+       _gate = transactionGateFor(database) {
     if (!database.isOpen) {
       throw ArgumentError.value(database, 'database', 'must be open');
     }
@@ -29,13 +31,14 @@ final class OrmRememberTokenStore implements RememberTokenStore {
   /// Schema used by the paired [OrmAuthStore].
   final OrmAuthSchema schema;
   final DateTime Function() _clock;
+  final OrmAuthTransactionGate _gate;
 
   @override
   Future<void> save(
     String token,
     AuthPrincipal principal,
     DateTime expiresAt,
-  ) => database.transaction(() async {
+  ) => _gate.run(database, () async {
     if (token.trim().isEmpty) {
       throw ArgumentError.value(token, 'token', 'must be non-empty');
     }
@@ -81,20 +84,18 @@ final class OrmRememberTokenStore implements RememberTokenStore {
   }
 
   @override
-  Future<AuthPrincipal?> consume(String token) => database.transaction(
-    () async {
-      if (token.trim().isEmpty) return null;
-      final rows = await _table().whereEquals('record_key', _key(token)).get();
-      if (rows.isEmpty) return null;
-      final row = rows.first;
-      final expiresAt = DateTime.tryParse(row['expires_at']?.toString() ?? '');
-      await _table().whereEquals('record_key', _key(token)).delete();
-      if (expiresAt == null || !_clock().toUtc().isBefore(expiresAt.toUtc())) {
-        return null;
-      }
-      return _principal(row);
-    },
-  );
+  Future<AuthPrincipal?> consume(String token) => _gate.run(database, () async {
+    if (token.trim().isEmpty) return null;
+    final rows = await _table().whereEquals('record_key', _key(token)).get();
+    if (rows.isEmpty) return null;
+    final row = rows.first;
+    final expiresAt = DateTime.tryParse(row['expires_at']?.toString() ?? '');
+    await _table().whereEquals('record_key', _key(token)).delete();
+    if (expiresAt == null || !_clock().toUtc().isBefore(expiresAt.toUtc())) {
+      return null;
+    }
+    return _principal(row);
+  });
 
   @override
   Future<void> remove(String token) async {
@@ -106,13 +107,14 @@ final class OrmRememberTokenStore implements RememberTokenStore {
       database.table(schema.table('records'), columns: _columns);
 
   Future<void> _removeExpired(DateTime now) async {
-    final rows = await _table().whereEquals('kind', 'remember').get();
-    for (final row in rows) {
-      final expiry = DateTime.tryParse(row['expires_at']?.toString() ?? '');
-      if (expiry == null || !now.isBefore(expiry.toUtc())) {
-        await _table().whereEquals('record_key', row['record_key']).delete();
-      }
-    }
+    await _table()
+        .whereEquals('kind', 'remember')
+        .whereLessThanOrEqual('expires_at', now.toUtc().toIso8601String())
+        .delete();
+    await _table()
+        .whereEquals('kind', 'remember')
+        .whereNull('expires_at')
+        .delete();
   }
 
   static AuthPrincipal _principal(AdHocRow row) => AuthPrincipal.fromJson(

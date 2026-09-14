@@ -252,6 +252,7 @@ final class OrmAuthStore
     await _deleteWhere(kind: 'credential', ownerId: user.id);
     await _deleteWhere(kind: 'account', ownerId: user.id);
     await _deleteWhere(kind: 'session', ownerId: user.id);
+    await _deleteWhere(kind: 'remember', ownerId: user.id);
     await _deleteWhere(kind: 'password_reset', ownerId: user.id);
     await _deleteWhere(kind: 'verification', ownerId: user.id);
     await _deleteWhere(kind: 'email_change', ownerId: user.id);

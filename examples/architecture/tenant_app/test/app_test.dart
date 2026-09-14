@@ -84,6 +84,12 @@ void main() {
           .table('routed_auth_organizations')
           .get();
       expect(firstRows, hasLength(2));
+      await firstEngine.container
+          .get<DatabaseManager>()
+          .database()
+          .table('routed_auth_organizations')
+          .whereEquals('id', acmeId)
+          .update({'name': 'Acme durable mutation', 'slug': 'acme-durable'});
       final firstLogin = await firstClient.postJson(
         '/auth/signin/credentials',
         <String, dynamic>{
@@ -125,7 +131,11 @@ void main() {
       expect(secondRows, hasLength(2));
       expect(
         secondRows.map((row) => row['slug']),
-        containsAll(<String>['acme', 'beta']),
+        containsAll(<String>['acme-durable', 'beta']),
+      );
+      expect(
+        secondRows.singleWhere((row) => row['id'] == acmeId)['name'],
+        'Acme durable mutation',
       );
     },
   );

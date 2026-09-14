@@ -12,9 +12,14 @@ Future<DataSource> createDataSource() async {
   final projectDirectory = await _projectDirectory();
   final config = loadOrmConfig(projectDirectory);
   final configuredDatabase = config.driver.option('database');
-  final databasePath = configuredDatabase == null
+  final configuredFile = configuredDatabase == null
       ? null
-      : File('${projectDirectory.path}/$configuredDatabase').absolute.path;
+      : File(configuredDatabase.toString());
+  final databasePath = configuredFile == null
+      ? null
+      : configuredFile.isAbsolute
+      ? configuredFile.path
+      : File('${projectDirectory.path}/${configuredFile.path}').absolute.path;
   final resolvedConfig = databasePath == null
       ? config
       : config.updateActiveConnection(

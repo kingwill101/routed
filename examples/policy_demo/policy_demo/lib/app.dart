@@ -33,6 +33,9 @@ class Project {
   Map<String, dynamic> toJson() => {'id': id, 'name': name, 'ownerId': ownerId};
 }
 
+Argon2idPasswordHasher _demoPasswordHasher() =>
+    Argon2idPasswordHasher(iterations: 1, memoryKiB: 8, derivedKeyLength: 16);
+
 const _projectColumns = <AdHocColumn>[
   AdHocColumn(
     name: 'id',
@@ -164,6 +167,10 @@ Future<Engine> createEngine({
           await ctx.bindJSON({}) as Map? ?? const {},
         );
         final id = payload['id']?.toString() ?? 'viewer';
+        final password = payload['password']?.toString() ?? '';
+        if (password.isEmpty) {
+          return ctx.json({'error': 'invalid_credentials'}, statusCode: 401);
+        }
         final user = await authStore.users.findById(id);
         if (user == null) {
           return ctx.json({'error': 'invalid_credentials'}, statusCode: 401);
@@ -176,7 +183,7 @@ Future<Engine> createEngine({
           final result = await manager.signInWithCredentials(
             ctx,
             provider,
-            AuthCredentials(email: user.email, password: 'password123'),
+            AuthCredentials(email: user.email, password: password),
           );
           return ctx.json({
             'status': 'ok',
@@ -319,14 +326,35 @@ Future<Engine> createEngine({
         final payload = Map<String, dynamic>.from(
           await ctx.bindJSON({}) as Map? ?? const {},
         );
-        final users = await authStore.listUsersForAdministration();
-        final id = (users.length + 1).toString();
+        final password = payload['password']?.toString() ?? '';
+        if (password.isEmpty) {
+          return ctx.json({
+            'error': 'password_required',
+          }, statusCode: HttpStatus.unprocessableEntity);
+        }
+        final id = 'user-${secureRandomToken(length: 16)}';
         final created = AuthUser(
           id: id,
           name: payload['name']?.toString() ?? 'user-$id',
           email: payload['email']?.toString() ?? 'user$id@example.com',
         );
-        await authStore.users.create(created);
+        final now = DateTime.now().toUtc();
+        final registered = await authStore.credentials.register(
+          created,
+          AuthPasswordCredential(
+            id: 'credential-$id',
+            userId: id,
+            identifier: created.email ?? id,
+            passwordHash: _demoPasswordHasher().hash(password),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+        if (registered == null) {
+          return ctx.json({
+            'error': 'user_exists',
+          }, statusCode: HttpStatus.conflict);
+        }
         return ctx.json({
           'id': created.id,
           'name': created.name,

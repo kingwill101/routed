@@ -55,4 +55,26 @@ void main() {
 
     expect(await persisted.get('persistent'), <String, Object?>{'ok': true});
   });
+
+  test('increment preserves an existing expiration window', () async {
+    final store = SqliteRateLimitStore(database);
+    await store.put('windowed', 1, 60);
+    final row =
+        (await database
+                .table('rate_limit_entries')
+                .whereEquals('key', 'windowed')
+                .get())
+            .single;
+    final expiresAt = row['expires_at'];
+
+    expect(await store.increment('windowed'), 2);
+
+    final updated =
+        (await database
+                .table('rate_limit_entries')
+                .whereEquals('key', 'windowed')
+                .get())
+            .single;
+    expect(updated['expires_at'], expiresAt);
+  });
 }

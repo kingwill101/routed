@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:file/local.dart';
 import 'package:kitchen_sink_example/app.dart';
+import 'package:kitchen_sink_example/services/recipe_service.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_database/routed_database.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -151,4 +153,20 @@ void main() {
     expect(fallback.statusCode, 200);
     expect(await responseBody(fallback), 'fallback');
   });
+
+  test(
+    'does not reseed recipes after the last durable recipe is deleted',
+    () async {
+      final database = engine.container.get<DatabaseManager>().database();
+      final recipes = await RecipeService.getAll();
+      expect(recipes, isNotEmpty);
+      for (final recipe in recipes) {
+        expect(await RecipeService.delete(recipe.id), isTrue);
+      }
+
+      await RecipeService.configure(database);
+
+      expect(await RecipeService.getAll(), isEmpty);
+    },
+  );
 }

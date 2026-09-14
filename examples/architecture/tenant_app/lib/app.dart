@@ -32,9 +32,7 @@ Argon2idPasswordHasher _demoPasswordHasher() =>
     Argon2idPasswordHasher(iterations: 1, memoryKiB: 8, derivedKeyLength: 16);
 
 /// Builds the local multi-tenant reference application.
-Future<Engine> createEngine({
-  String databasePath = 'storage/tenant.sqlite',
-}) async {
+Future<Engine> createEngine({String databasePath = ':memory:'}) async {
   if (databasePath != ':memory:') {
     File(databasePath).absolute.parent.createSync(recursive: true);
   }

@@ -21,24 +21,48 @@ class RecipeService {
     AdHocColumn(name: 'image', dartType: 'String', isNullable: false),
   ];
 
+  static const _metadataColumns = <AdHocColumn>[
+    AdHocColumn(
+      name: 'key',
+      dartType: 'String',
+      columnType: 'TEXT',
+      isNullable: false,
+      isPrimaryKey: true,
+    ),
+    AdHocColumn(name: 'value', dartType: 'String', isNullable: false),
+  ];
+
   static late OrmDatabase _database;
 
   static Future<void> configure(OrmDatabase database) async {
     _database = database;
-    if ((await _query().limit(1).get()).isNotEmpty) return;
-    await create(
-      Recipe(
-        category: RecipeCategory.breakfast,
-        cookTime: 54,
-        description: 'A quick breakfast recipe.',
-        id: uuid.v4(),
-        image: '',
-        ingredients: ['eggs', 'toast'],
-        instructions: 'Cook and serve.',
-        name: 'Simple Breakfast',
-        prepTime: 11,
-      ),
-    );
+    await _database.transaction(() async {
+      final marker = await _database
+          .table('recipe_metadata', columns: _metadataColumns)
+          .whereEquals('key', 'seeded')
+          .limit(1)
+          .get();
+      if (marker.isNotEmpty) return;
+      await _query().insertManyInputs([
+        Recipe(
+          category: RecipeCategory.breakfast,
+          cookTime: 54,
+          description: 'A quick breakfast recipe.',
+          id: uuid.v4(),
+          image: '',
+          ingredients: ['eggs', 'toast'],
+          instructions: 'Cook and serve.',
+          name: 'Simple Breakfast',
+          prepTime: 11,
+        ).toStorage(),
+      ], returning: false);
+      await _database
+          .table('recipe_metadata', columns: _metadataColumns)
+          .insertManyInputs([
+            {'key': 'seeded', 'value': '1'},
+          ], returning: false);
+    });
+    await _publish();
   }
 
   static Future<List<Recipe>> getPaginatedRecipes(int offset, int limit) async {

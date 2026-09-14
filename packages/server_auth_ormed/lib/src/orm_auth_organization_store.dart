@@ -124,7 +124,9 @@ final class OrmAuthOrganizationStore
         replayed: true,
       );
     }
-    final organization = transaction.organization;
+    final organization = transaction.organization.copyWith(
+      slug: transaction.organization.slug.trim().toLowerCase(),
+    );
     final creator = transaction.creatorMembership;
     _require(
       await _findOrganization(organization.id) == null,
@@ -208,28 +210,31 @@ final class OrmAuthOrganizationStore
   @override
   Future<AuthOrganization> updateOrganization(AuthOrganization value) =>
       _transaction(() async {
+        final normalized = value.copyWith(
+          slug: value.slug.trim().toLowerCase(),
+        );
         _require(
-          await _findOrganization(value.id) != null,
+          await _findOrganization(normalized.id) != null,
           'organization_not_found',
         );
         final duplicate = await _query(
-          _table(
-            _organizations,
-          ).whereEquals('slug', value.slug).whereNotEquals('id', value.id),
+          _table(_organizations)
+              .whereEquals('slug', normalized.slug)
+              .whereNotEquals('id', normalized.id),
         );
         _require(duplicate.isEmpty, 'organization_slug_taken');
         await _update(
           _organizations,
-          {'id': value.id},
+          {'id': normalized.id},
           {
-            'name': value.name,
-            'slug': value.slug,
-            'logo': value.logo,
-            'metadata': _json(value.metadata),
-            'updated_at': _date(value.updatedAt),
+            'name': normalized.name,
+            'slug': normalized.slug,
+            'logo': normalized.logo,
+            'metadata': _json(normalized.metadata),
+            'updated_at': _date(normalized.updatedAt),
           },
         );
-        return value;
+        return normalized;
       });
 
   @override

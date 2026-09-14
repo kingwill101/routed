@@ -22,7 +22,7 @@ curl http://localhost:8080/api/v1/users
 # Login with a role that can create/update projects
 curl -i -c cookies.txt \
   -H "Content-Type: application/json" \
-  -d '{"id":"ada","role":"editor"}' \
+  -d '{"id":"ada","password":"password123"}' \
   http://localhost:8080/api/v1/login
 
 # Policy-protected routes

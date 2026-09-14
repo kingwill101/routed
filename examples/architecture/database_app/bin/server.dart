@@ -5,9 +5,12 @@ import 'package:routed_architecture_database_app/app.dart';
 import 'package:routed_io/routed_io.dart';
 
 Future<void> main() async {
-  final engine = await createEngine(
-    databasePath: Platform.environment['DATABASE_PATH'] ?? 'storage/app.sqlite',
-  );
+  final databasePath =
+      Platform.environment['DATABASE_PATH'] ?? 'storage/app.sqlite';
+  if (databasePath != ':memory:') {
+    File(databasePath).absolute.parent.createSync(recursive: true);
+  }
+  final engine = await createEngine(databasePath: databasePath);
   final host = Platform.environment['HOST'] ?? '127.0.0.1';
   final port = int.tryParse(Platform.environment['PORT'] ?? '') ?? 8080;
   print('Database architecture example listening on http://$host:$port');

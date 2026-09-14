@@ -275,4 +275,43 @@ void main() {
       );
     },
   );
+
+  test('normalizes organization slugs before durable persistence', () async {
+    final now = DateTime.utc(2030);
+    final organization = AuthOrganization(
+      id: 'normalized-organization',
+      name: 'Normalized',
+      slug: 'Mixed-Case',
+      createdAt: now,
+      updatedAt: now,
+    );
+    final owner = AuthOrganizationMember(
+      id: 'normalized-owner',
+      organizationId: organization.id,
+      userId: 'normalized-user',
+      roles: const ['owner'],
+      createdAt: now,
+    );
+    final created = await store.createOrganization(
+      AuthOrganizationCreateTransaction(
+        organization: organization,
+        creatorMembership: owner,
+        organizationLimit: null,
+      ),
+    );
+    expect(created.organization.slug, 'mixed-case');
+    expect(
+      (await store.findOrganizationBySlug('MIXED-CASE'))?.id,
+      organization.id,
+    );
+
+    final updated = await store.updateOrganization(
+      organization.copyWith(slug: 'Updated-Slug'),
+    );
+    expect(updated.slug, 'updated-slug');
+    expect(
+      (await store.findOrganizationBySlug('UPDATED-SLUG'))?.id,
+      organization.id,
+    );
+  });
 }
