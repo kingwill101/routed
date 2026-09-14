@@ -24,6 +24,11 @@ curl http://localhost:8080/api/v1/health
 curl http://localhost:8080/api/v1/users
 ```
 
+User records are persisted in `storage/openapi_demo.sqlite` through the
+`routed_database` provider and an Ormed migration. Set `DATABASE_PATH` in the
+server environment (or pass `databasePath` to `createEngine`) to use another
+SQLite file.
+
 The demo includes nested `/catalog/v2` and `/admin/v2` route groups. Nested
 prefixes may be arbitrarily deep; the runtime manifest flattens them into the
 paths served by the engine. See `lib/app.dart` and `lib/metadata_routes.dart`

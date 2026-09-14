@@ -21,6 +21,8 @@ dependencies:
     path: ../../../packages/routed_sessions
   routed_io:
     path: ../../../packages/routed_io
+  server_auth_ormed:
+    path: ../../../packages/server_auth_ormed
 
 dev_dependencies:
   lints: ^6.0.0

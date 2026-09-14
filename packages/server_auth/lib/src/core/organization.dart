@@ -392,9 +392,7 @@ final class OrganizationPlugin<TContext>
   @override
   Future<AuthUserDeletionPlan> createUserDeletionPlan(AuthUser user) async {
     final target = store;
-    if (target is! AuthOrganizationUserDeletionStore ||
-        target is! AuthInMemoryDeletionState ||
-        _deletionDomain is! AuthInMemoryUserDeletionDomain) {
+    if (target is! AuthOrganizationUserDeletionStore) {
       throw StateError(
         'The organization adapter has no plan for this persistence domain.',
       );
@@ -404,15 +402,36 @@ final class OrganizationPlugin<TContext>
       user.id,
       creatorRole: _creatorRole,
     );
-    return AuthInMemoryUserDeletionPlan(
-      domain: _deletionDomain as AuthInMemoryUserDeletionDomain,
-      userId: user.id,
-      namespace: userDataNamespace,
-      operation: _InMemoryOrganizationDeletionOperation(
-        store: deletionTarget,
+    if (target case final AuthOrganizationUserDeletionPlanFactory factory) {
+      return await factory.createOrganizationDeletionPlan(
+        domain: _deletionDomain,
         user: user,
+        namespace: userDataNamespace,
         creatorRole: _creatorRole,
-      ),
+      );
+    }
+    if (target case final AuthUserDeletionPlanFactory factory) {
+      return await factory.createDeletionPlan(
+        domain: _deletionDomain,
+        user: user,
+        namespace: userDataNamespace,
+      );
+    }
+    if (target is AuthInMemoryDeletionState &&
+        _deletionDomain is AuthInMemoryUserDeletionDomain) {
+      return AuthInMemoryUserDeletionPlan(
+        domain: _deletionDomain as AuthInMemoryUserDeletionDomain,
+        userId: user.id,
+        namespace: userDataNamespace,
+        operation: _InMemoryOrganizationDeletionOperation(
+          store: deletionTarget,
+          user: user,
+          creatorRole: _creatorRole,
+        ),
+      );
+    }
+    throw StateError(
+      'The organization adapter has no plan for this persistence domain.',
     );
   }
 

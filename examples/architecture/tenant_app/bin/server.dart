@@ -6,7 +6,8 @@ import 'package:routed_io/routed_io.dart';
 
 Future<void> main() async {
   final engine = await createEngine(
-    databasePath: Platform.environment['DATABASE_PATH'] ?? ':memory:',
+    databasePath:
+        Platform.environment['DATABASE_PATH'] ?? 'storage/tenant.sqlite',
   );
   final host = Platform.environment['HOST'] ?? '127.0.0.1';
   final port = int.tryParse(Platform.environment['PORT'] ?? '') ?? 8081;

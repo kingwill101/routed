@@ -1,11 +1,13 @@
 import 'package:kitchen_sink_example/services/recipe_service.dart';
 import 'package:routed/routed.dart';
 
-Response deleteRecipe(EngineContext ctx) {
+Future<Response> deleteRecipe(EngineContext ctx) async {
   final id = ctx.mustGetParam('id');
 
   try {
-    RecipeService.delete(id);
+    if (!await RecipeService.delete(id)) {
+      return ctx.string('Recipe not found', statusCode: HttpStatus.notFound);
+    }
     return ctx.string('Recipe deleted', statusCode: HttpStatus.noContent);
   } catch (e) {
     return ctx.string(

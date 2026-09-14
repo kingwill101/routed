@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:routed/routed.dart';
 import 'package:routed_database/routed_database.dart';
+import 'package:server_auth_ormed/server_auth_ormed.dart';
 import 'package:ormed_sqlite/ormed_sqlite.dart';
 
 import 'migrations.dart';
@@ -12,13 +15,36 @@ const bobId = 'user-bob';
 const acmeId = 'tenant-acme';
 const betaId = 'tenant-beta';
 
+const _projectColumns = <AdHocColumn>[
+  AdHocColumn(
+    name: 'id',
+    dartType: 'int',
+    columnType: 'INTEGER',
+    isNullable: false,
+    isPrimaryKey: true,
+  ),
+  AdHocColumn(name: 'tenant_id', dartType: 'String', isNullable: false),
+  AdHocColumn(name: 'owner_id', dartType: 'String', isNullable: false),
+  AdHocColumn(name: 'name', dartType: 'String', isNullable: false),
+];
+
 Argon2idPasswordHasher _demoPasswordHasher() =>
     Argon2idPasswordHasher(iterations: 1, memoryKiB: 8, derivedKeyLength: 16);
 
 /// Builds the local multi-tenant reference application.
 Future<Engine> createEngine({String databasePath = ':memory:'}) async {
-  final authStore = InMemoryAuthStore();
-  final organizationStore = InMemoryAuthOrganizationStore();
+  if (databasePath != ':memory:') {
+    File(databasePath).absolute.parent.createSync(recursive: true);
+  }
+  final database = await SqliteDatabase.connect(path: databasePath);
+  final authSchema = const OrmAuthSchema();
+  final organizationSchema = const OrmAuthOrganizationSchema();
+  final authStore = OrmAuthStore(database, schema: authSchema);
+  final organizationStore = OrmAuthOrganizationStore(
+    database,
+    schema: organizationSchema,
+  );
+  final rememberStore = OrmRememberTokenStore(database, schema: authSchema);
   final organizations = OrganizationPlugin<EngineContext>(
     store: organizationStore,
     options: AuthOrganizationOptions<EngineContext>(
@@ -44,22 +70,17 @@ Future<Engine> createEngine({String databasePath = ':memory:'}) async {
       },
     ),
   );
-  await _seedAuth(authStore, organizationStore);
-
-  final databases = DatabaseManager()
-    ..registerFactory(
-      'default',
-      () => SqliteDatabase.connect(path: databasePath),
-    );
+  final databases = DatabaseManager()..register('default', database);
   final sessionAuth = SessionAuth.configure(
-    rememberStore: InMemoryRememberTokenStore(),
+    rememberStore: rememberStore,
     rememberCookieName: 'tenant_example_remember',
   );
   final authManager = AuthManager(
     AuthOptions<EngineContext>(
       providers: <AuthProvider>[CredentialsProvider()],
       store: authStore,
-      storeMode: AuthStoreMode.ephemeral,
+      storeMode: AuthStoreMode.durable,
+      runtimeMode: AuthRuntimeMode.localDevelopment,
       plugins: <AuthServerPlugin<EngineContext>>[organizations],
       passwordHasher: _demoPasswordHasher(),
       enforceCsrf: false,
@@ -67,6 +88,11 @@ Future<Engine> createEngine({String databasePath = ':memory:'}) async {
     sessionAuth: sessionAuth,
   );
 
+  // Haigate and the guard registry are process-level facades. The example may
+  // be rebuilt by a test or a hot-reload cycle, so replace these example-only
+  // registrations before binding the callbacks to this engine's store.
+  guardRegistry.unregister('authenticated');
+  Haigate.unregister('projects.create');
   guardRegistry.register(
     'authenticated',
     requireAuthenticated(sessionAuth: sessionAuth, realm: 'Tenant example'),
@@ -95,7 +121,11 @@ Future<Engine> createEngine({String databasePath = ':memory:'}) async {
       ),
       RoutedDatabaseProvider(
         manager: databases,
-        migrations: appMigrations,
+        migrations: <MigrationEntry>[
+          ...authSchema.migrations,
+          ...organizationSchema.migrations,
+          ...appMigrations,
+        ],
         migrateOnBoot: true,
       ),
     ],
@@ -131,11 +161,9 @@ Future<Engine> createEngine({String databasePath = ':memory:'}) async {
     (ctx) async {
       final tenant = await _tenantOrRespond(ctx, organizations);
       if (tenant == null) return ctx.response;
-      final rows = await ctx.db().queryRaw(
-        'SELECT id, tenant_id, owner_id, name FROM projects '
-        'WHERE tenant_id = ? ORDER BY id',
-        [tenant.organization.id],
-      );
+      final rows = await _projects(
+        ctx.db(),
+      ).whereEquals('tenant_id', tenant.organization.id).orderBy('id').get();
       return ctx.json({'tenant': tenant.organization.slug, 'data': rows});
     },
     middlewares: <Middleware>[
@@ -156,10 +184,13 @@ Future<Engine> createEngine({String databasePath = ':memory:'}) async {
         return ctx.json({'error': 'name_required'}, statusCode: 422);
       }
       final principal = SessionAuth.current(ctx)!;
-      await ctx.db().executeRaw(
-        'INSERT INTO projects (tenant_id, owner_id, name) VALUES (?, ?, ?)',
-        [tenant.organization.id, principal.id, name],
-      );
+      await _projects(ctx.db()).insertManyInputs([
+        {
+          'tenant_id': tenant.organization.id,
+          'owner_id': principal.id,
+          'name': name,
+        },
+      ], returning: false);
       return ctx.json({
         'created': true,
         'tenant': tenant.organization.slug,
@@ -181,10 +212,11 @@ Future<Engine> createEngine({String databasePath = ':memory:'}) async {
       if (id == null) {
         return ctx.json({'error': 'invalid_id'}, statusCode: 400);
       }
-      final rows = await ctx.db().queryRaw(
-        'SELECT id, owner_id FROM projects WHERE id = ? AND tenant_id = ?',
-        [id, tenant.organization.id],
-      );
+      final rows = await _projects(ctx.db())
+          .whereEquals('id', id)
+          .whereEquals('tenant_id', tenant.organization.id)
+          .select(['id', 'owner_id'])
+          .get();
       if (rows.isEmpty) {
         return ctx.json({'error': 'not_found'}, statusCode: 404);
       }
@@ -199,10 +231,10 @@ Future<Engine> createEngine({String databasePath = ':memory:'}) async {
       if (!allowed) {
         return ctx.json({'error': 'forbidden'}, statusCode: 403);
       }
-      await ctx.db().executeRaw(
-        'DELETE FROM projects WHERE id = ? AND tenant_id = ?',
-        [id, tenant.organization.id],
-      );
+      await _projects(ctx.db())
+          .whereEquals('id', id)
+          .whereEquals('tenant_id', tenant.organization.id)
+          .delete();
       return ctx.json({'deleted': true, 'id': id});
     },
     middlewares: <Middleware>[
@@ -211,6 +243,9 @@ Future<Engine> createEngine({String databasePath = ':memory:'}) async {
   );
 
   await engine.initialize();
+  // RoutedDatabaseProvider opens the manager and applies both the auth and
+  // application migration ledgers before durable fixtures are read or seeded.
+  await _seedAuth(authStore, organizationStore);
   await _seedProjects(engine.container.get<DatabaseManager>().database());
   return engine;
 }
@@ -245,8 +280,8 @@ Future<AuthOrganizationAuthorizationContext<EngineContext>?> _tenantOrRespond(
 }
 
 Future<void> _seedAuth(
-  InMemoryAuthStore store,
-  InMemoryAuthOrganizationStore organizations,
+  AuthStore store,
+  AuthOrganizationStore organizations,
 ) async {
   final hasher = _demoPasswordHasher();
   final now = DateTime.now().toUtc();
@@ -254,36 +289,40 @@ Future<void> _seedAuth(
     AuthUser(id: aliceId, email: 'alice@example.com', name: 'Alice'),
     AuthUser(id: bobId, email: 'bob@example.com', name: 'Bob'),
   ]) {
-    await store.users.create(user);
-    await (store as AuthAdminStoreCapabilities)
-        .upsertCredentialForAdministration(
-          AuthPasswordCredential(
-            id: 'credential-${user.id}',
-            userId: user.id,
-            identifier: user.email!,
-            passwordHash: hasher.hash('password123'),
-            createdAt: now,
-            updatedAt: now,
-          ),
-        );
+    final existing = await store.users.findById(user.id);
+    if (existing == null) {
+      await store.credentials.register(
+        user,
+        AuthPasswordCredential(
+          id: 'credential-${user.id}',
+          userId: user.id,
+          identifier: user.email!,
+          passwordHash: hasher.hash('password123'),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+    }
   }
-  await _createTenant(
+  await _ensureTenant(
     organizations,
     id: acmeId,
     name: 'Acme',
     slug: 'acme',
     ownerId: aliceId,
   );
-  await organizations.addMember(
-    AuthOrganizationMember(
-      id: 'membership-acme-bob',
-      organizationId: acmeId,
-      userId: bobId,
-      roles: const <String>['member'],
-      createdAt: now,
-    ),
-  );
-  await _createTenant(
+  if (await organizations.findMember(acmeId, bobId) == null) {
+    await organizations.addMember(
+      AuthOrganizationMember(
+        id: 'membership-acme-bob',
+        organizationId: acmeId,
+        userId: bobId,
+        roles: const <String>['member'],
+        createdAt: now,
+      ),
+    );
+  }
+  await _ensureTenant(
     organizations,
     id: betaId,
     name: 'Beta',
@@ -292,13 +331,28 @@ Future<void> _seedAuth(
   );
 }
 
-Future<void> _createTenant(
-  InMemoryAuthOrganizationStore store, {
+Future<void> _ensureTenant(
+  AuthOrganizationStore store, {
   required String id,
   required String name,
   required String slug,
   required String ownerId,
 }) async {
+  final existing = await store.findOrganization(id);
+  if (existing != null) {
+    if (await store.findMember(id, ownerId) == null) {
+      await store.addMember(
+        AuthOrganizationMember(
+          id: 'membership-$slug-owner',
+          organizationId: id,
+          userId: ownerId,
+          roles: const <String>['owner'],
+          createdAt: DateTime.now().toUtc(),
+        ),
+      );
+    }
+    return;
+  }
   final now = DateTime.now().toUtc();
   await store.createOrganization(
     AuthOrganizationCreateTransaction(
@@ -322,16 +376,13 @@ Future<void> _createTenant(
 }
 
 Future<void> _seedProjects(OrmDatabase database) async {
-  final existing = await database.queryRaw(
-    'SELECT COUNT(*) AS count FROM projects',
-  );
-  if ((existing.first['count'] as num?)?.toInt() != 0) return;
-  await database.executeRaw(
-    'INSERT INTO projects (tenant_id, owner_id, name) VALUES (?, ?, ?)',
-    [acmeId, aliceId, 'Acme private project'],
-  );
-  await database.executeRaw(
-    'INSERT INTO projects (tenant_id, owner_id, name) VALUES (?, ?, ?)',
-    [betaId, bobId, 'Beta private project'],
-  );
+  final existing = await _projects(database).get();
+  if (existing.isNotEmpty) return;
+  await _projects(database).insertManyInputs([
+    {'tenant_id': acmeId, 'owner_id': aliceId, 'name': 'Acme private project'},
+    {'tenant_id': betaId, 'owner_id': bobId, 'name': 'Beta private project'},
+  ], returning: false);
 }
+
+Query<AdHocRow> _projects(OrmDatabase database) =>
+    database.table('projects', columns: _projectColumns);

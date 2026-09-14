@@ -49,10 +49,10 @@ Future<Response> saveRecipe(EngineContext ctx) async {
     );
 
     if (isUpdate) {
-      RecipeService.update(recipe.id, recipe);
+      await RecipeService.update(recipe.id, recipe);
       ctx.flash('Recipe updated successfully!', 'success');
     } else {
-      RecipeService.create(recipe);
+      await RecipeService.create(recipe);
       ctx.flash('Recipe created successfully!', 'success');
     }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:server_auth/src/core/deletion_transaction.dart';
 import 'package:server_auth/src/core/exceptions.dart';
+import 'package:server_auth/src/core/models.dart' show AuthUser;
 import 'package:server_auth/src/core/organization_models.dart';
 import 'package:server_auth/src/core/users.dart' show normalizeAuthEmail;
 
@@ -648,6 +649,21 @@ abstract interface class AuthOrganizationUserDeletionStore {
     String userId, {
     required String creatorRole,
     String? email,
+  });
+}
+
+/// Optional factory for backend-owned organization deletion plans.
+///
+/// Unlike the generic deletion-plan factory, this contract carries the
+/// configured creator role so custom organization topologies retain their
+/// ownership invariant inside the durable transaction.
+abstract interface class AuthOrganizationUserDeletionPlanFactory {
+  /// Creates a plan that applies inside the root store transaction.
+  FutureOr<AuthUserDeletionPlan> createOrganizationDeletionPlan({
+    required AuthUserDeletionDomain domain,
+    required AuthUser user,
+    required String namespace,
+    required String creatorRole,
   });
 }
 

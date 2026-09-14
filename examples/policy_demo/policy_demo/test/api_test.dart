@@ -4,6 +4,7 @@ import 'package:policy_demo/app.dart' show createEngine;
 import 'package:routed/routed.dart';
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import 'package:server_auth_ormed/server_auth_ormed.dart';
 
 const _sessionCookieName = 'policy_session';
 const _csrfCookieName = 'csrf_token';
@@ -70,6 +71,7 @@ Future<Cookie> _login(
 }) async {
   final response = await client.postJson('/api/v1/login', {
     'id': id,
+    'password': 'password123',
     'role': 'editor',
   }, headers: _csrfHeaders(csrf));
   response.assertStatus(HttpStatus.ok);
@@ -81,9 +83,15 @@ void main() {
   group('API', () {
     late Engine engine;
     late TestClient client;
+    late Directory databaseDirectory;
 
     setUpAll(() async {
-      engine = await createEngine();
+      databaseDirectory = await Directory.systemTemp.createTemp(
+        'routed-policy-demo-',
+      );
+      engine = await createEngine(
+        databasePath: '${databaseDirectory.path}/policy.sqlite',
+      );
       client = TestClient(
         RoutedRequestHandler(engine),
         mode: TransportMode.ephemeralServer,
@@ -93,6 +101,9 @@ void main() {
     tearDownAll(() async {
       await client.close();
       await engine.close();
+      if (databaseDirectory.existsSync()) {
+        await databaseDirectory.delete(recursive: true);
+      }
     });
 
     test('health check returns ok', () async {
@@ -107,6 +118,7 @@ void main() {
       expect(config.cookieName, _sessionCookieName);
       expect(config.secure, isFalse);
       expect(config.defaultOptions.secure, isFalse);
+      expect(engine.container.get<AuthOptions>().store, isA<OrmAuthStore>());
     });
 
     test('users endpoints return data', () async {
@@ -124,10 +136,22 @@ void main() {
       final createResponse = await client.postJson('/api/v1/users', {
         'name': 'Grace',
         'email': 'grace@example.com',
+        'password': 'grace-password',
       }, headers: _csrfHeaders(csrf));
       createResponse.assertStatus(HttpStatus.created);
       final createdJson = createResponse.json() as Map<String, dynamic>;
       expect(createdJson['name'], equals('Grace'));
+
+      final wrongPassword = await client.postJson('/api/v1/login', {
+        'id': createdJson['id'],
+        'password': 'wrong-password',
+      }, headers: _csrfHeaders(csrf));
+      wrongPassword.assertStatus(HttpStatus.unauthorized);
+      final createdLogin = await client.postJson('/api/v1/login', {
+        'id': createdJson['id'],
+        'password': 'grace-password',
+      }, headers: _csrfHeaders(csrf));
+      createdLogin.assertStatus(HttpStatus.ok);
     });
 
     test('project policies enforce access', () async {

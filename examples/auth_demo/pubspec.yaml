@@ -12,9 +12,12 @@ dependencies:
   ormed_sqlite: ^0.4.1
   routed:
     path: ../../packages/routed
+  routed_database:
+    path: ../../packages/routed_database
+  server_auth_ormed:
+    path: ../../packages/server_auth_ormed
 
 dev_dependencies:
   hotreloader: ^4.3.0
   lints: ^6.0.0
   test: ^1.26.3
-

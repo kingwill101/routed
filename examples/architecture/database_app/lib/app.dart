@@ -4,8 +4,22 @@ import 'package:routed_database/routed_database.dart';
 
 import 'migrations.dart';
 
+const _noteColumns = <AdHocColumn>[
+  AdHocColumn(
+    name: 'id',
+    dartType: 'int',
+    columnType: 'INTEGER',
+    isNullable: false,
+    isPrimaryKey: true,
+  ),
+  AdHocColumn(name: 'title', dartType: 'String', isNullable: false),
+  AdHocColumn(name: 'body', dartType: 'String', isNullable: false),
+];
+
 /// Builds a normal VM/Node-style Routed app.
-Future<Engine> createEngine({String databasePath = ':memory:'}) async {
+Future<Engine> createEngine({
+  String databasePath = 'storage/app.sqlite',
+}) async {
   final databases = DatabaseManager()
     ..registerFactory(
       'default',
@@ -31,9 +45,7 @@ Future<Engine> createEngine({String databasePath = ':memory:'}) async {
   });
 
   engine.get('/api/notes', (ctx) async {
-    final rows = await ctx.db().queryRaw(
-      'SELECT id, title, body FROM notes ORDER BY id',
-    );
+    final rows = await _notes(ctx.db()).orderBy('id').get();
     return ctx.json({'data': rows});
   });
 
@@ -48,13 +60,15 @@ Future<Engine> createEngine({String databasePath = ':memory:'}) async {
         'error': 'title_required',
       }, statusCode: HttpStatus.unprocessableEntity);
     }
-    await ctx.db().executeRaw('INSERT INTO notes (title, body) VALUES (?, ?)', [
-      title,
-      body,
-    ]);
+    await _notes(ctx.db()).insertManyInputs([
+      {'title': title, 'body': body},
+    ], returning: false);
     return ctx.json({'created': true}, statusCode: HttpStatus.created);
   });
 
   await engine.initialize();
   return engine;
 }
+
+Query<AdHocRow> _notes(OrmDatabase database) =>
+    database.table('notes', columns: _noteColumns);
