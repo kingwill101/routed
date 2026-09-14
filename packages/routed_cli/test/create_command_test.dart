@@ -59,6 +59,7 @@ void main() {
       expect(pubspec['name'], equals('demo_app'));
       final dependencies = pubspec['dependencies'] as YamlMap;
       expect(dependencies.containsKey('routed'), isTrue);
+      expect(dependencies['artisanal'], equals('^0.5.0'));
       expect(dependencies['routed_core'], equals('>=0.5.0 <1.0.0'));
       expect(dependencies.containsKey('routed_database'), isTrue);
       expect(dependencies.containsKey('ormed_sqlite'), isTrue);

@@ -9,6 +9,7 @@ environment:
 
 dependencies:
   args: ^2.5.0
+  ormed_sqlite: ^0.4.1
   routed:
     path: ../../packages/routed
 

@@ -8,9 +8,8 @@ Stem uses its in-memory broker and result backend. The HTTP API, typed provider
 configuration, idempotency behavior, authentication boundary, worker startup,
 and shutdown lifecycle are still real.
 
-This example is a standalone Dart project rather than part of the root
-workspace because the published Stem `0.2.1` release still targets the
-pre-`0.9.x` OpenTelemetry API used by this reference app.
+This example is a standalone Dart project so its process-local worker and
+explicit in-memory adapters remain isolated from the root workspace.
 
 The project follows the `routed_cli` application shape: `lib/config.dart`
 owns typed provider wiring, `lib/app.dart` owns routes, and `lib/commands.dart`

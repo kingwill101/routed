@@ -2,6 +2,9 @@
 
 ## 0.2.2 - 2026-09-09
 
+- Raise the minimum Dart SDK to 3.13 to support the hosted Stem 0.5.0 release
+  used by Routed Jobs.
+
 - Added the provider-owned `routed deploy` command and CLI provider discovery
   for Cloudflare, Netlify, and Vercel deployments. The CLI contribution is
   conditional on Dart VM builds so Worker bundles remain portable.

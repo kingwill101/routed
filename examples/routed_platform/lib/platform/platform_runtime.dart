@@ -1,4 +1,5 @@
 import 'package:stem/stem.dart';
+import 'package:stem/memory.dart';
 
 import 'platform_config.dart';
 

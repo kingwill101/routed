@@ -2,6 +2,9 @@
 
 ## 0.4.1 - 2026-09-09
 
+- Raise the minimum Dart SDK to 3.13 to match the hosted Stem 0.5.0 runtime
+  pulled in through the `routed` facade.
+
 - Generated native `routed build` servers now remain alive after binding the
   listener instead of closing the engine immediately.
 - Added `routed build` (also available as `routed cli build`) to compile a
@@ -16,6 +19,7 @@
 - Generated basic, API, web, and fullstack projects now include the
   `routed_database` provider, codegen-free SQLite/Ormed migrations, and a
   `/db/health` example route.
+- New project scaffolds now target the hosted Artisanal `^0.5.0` release.
 - Added a Cloudflare scaffold with environment-backed D1 migrations, a
   Fetch-compatible Worker entrypoint, and D1-backed `routed_auth` sessions.
 - **Breaking:** deployment target flags now come from runtime adapter
