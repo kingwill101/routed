@@ -1,3 +1,15 @@
+## 0.2.2 - 2026-09-07
+
+- Add the `AuthDurableUserDeletionPlan` contract so backend-owned stores can
+  coordinate plugin data cleanup inside one durable transaction.
+- Add the optional organization deletion-plan factory, including the
+  configured creator role in durable ownership checks.
+- Allow organization plugins to request backend-specific durable deletion
+  plans while retaining the existing in-memory path.
+- Document the Ormed-backed durable adapter in package selection guidance.
+- Allow the local-development deployment preset to accept an application-owned
+  durable store for restart-safe local examples.
+
 ## 0.2.1 - 2026-08-25
 
 - Adopt `very_good_analysis` with strict typing and public API documentation

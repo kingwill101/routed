@@ -5,7 +5,7 @@ import 'package:full_stack/src/database/datasource.dart';
 import 'package:full_stack/src/database/models/todo.dart';
 
 Future<Engine> createEngine() async {
-  final dataSource = createDataSource();
+  final dataSource = await createDataSource();
   await dataSource.init();
   DataSource.setDefault(dataSource);
 

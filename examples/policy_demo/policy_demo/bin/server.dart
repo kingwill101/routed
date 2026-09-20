@@ -8,6 +8,9 @@ Future<void> main(List<String> args) async {
   final host = Platform.environment['HOST'] ?? '127.0.0.1';
   final port = int.tryParse(Platform.environment['PORT'] ?? '8080') ?? 8080;
 
-  final Engine engine = await app.createEngine();
+  final Engine engine = await app.createEngine(
+    databasePath:
+        Platform.environment['DATABASE_PATH'] ?? 'storage/policy_demo.sqlite',
+  );
   await engine.serve(host: host, port: port);
 }

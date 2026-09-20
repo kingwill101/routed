@@ -14,6 +14,10 @@ dependencies:
   ormed_sqlite: ^0.4.1
   routed:
     path: ../../../packages/routed
+  routed_database:
+    path: ../../../packages/routed_database
+  server_auth_ormed:
+    path: ../../../packages/server_auth_ormed
 
 dev_dependencies:
   lints: ^6.0.0

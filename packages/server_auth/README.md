@@ -13,7 +13,7 @@ utilities) without requiring Routed-specific runtime types.
 
 ```yaml
 dependencies:
-  server_auth: ^0.2.0
+  server_auth: ^0.2.2
 ```
 
 ## Entry points
@@ -25,6 +25,8 @@ Use the package umbrella library for the public API.
 ## Package Selection
 
 - Use `server_auth` for auth runtime primitives and provider implementations.
+- Use `server_auth_ormed` for durable core auth and organization persistence
+  backed by Ormed's code-free query and migration APIs.
 - Use `server_contracts` for contract-only abstractions.
 - Use adapter packages (`routed`, `shelf_auth`, etc.) for framework-specific HTTP/session wiring.
 

@@ -1,6 +1,9 @@
 import 'dart:io';
 
+import 'package:ormed_sqlite/ormed_sqlite.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_auth_sqlite/routed_auth_sqlite.dart';
+import 'package:server_auth_ormed/server_auth_ormed.dart';
 import 'package:routed_cloudflare_auth_example/app.dart' as app;
 
 const _localSessionKey =
@@ -12,13 +15,23 @@ Future<void> main() async {
   final origin = Uri.parse(
     Platform.environment['AUTH_ORIGIN'] ?? 'http://$host:$port',
   );
+  final databasePath =
+      Platform.environment['AUTH_DATABASE_PATH'] ??
+      'storage/cloudflare_auth.sqlite';
+  File(databasePath).absolute.parent.createSync(recursive: true);
+  final database = await SqliteDatabase.connect(path: databasePath);
+  final store = await OrmAuthStore.open(database);
+  // OrmAuthStore owns core user/session data. API keys use a second durable
+  // SQLite adapter until server_auth_ormed exposes the API-key capability.
+  final apiKeyStore = await SqliteAuthStore.openPath('$databasePath.api-keys');
   String? environmentValue(String name) {
     final value = Platform.environment[name]?.trim();
     return value == null || value.isEmpty ? null : value;
   }
 
   final engine = await app.createEngine(
-    store: InMemoryAuthStore(),
+    store: store,
+    apiKeyStore: apiKeyStore.apiKeys,
     origin: origin,
     sessionKey: Platform.environment['SESSION_KEY'] ?? _localSessionKey,
     localDevelopment: true,
@@ -32,5 +45,10 @@ Future<void> main() async {
       telegramBotUsername: environmentValue('TELEGRAM_BOT_USERNAME'),
     ),
   );
-  await engine.serve(host: host, port: port);
+  try {
+    await engine.serve(host: host, port: port);
+  } finally {
+    apiKeyStore.close();
+    await database.close();
+  }
 }

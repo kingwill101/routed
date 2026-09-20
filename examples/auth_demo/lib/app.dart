@@ -1,6 +1,9 @@
 import 'dart:io';
 
+import 'package:ormed_sqlite/ormed_sqlite.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_database/routed_database.dart' hide Event;
+import 'package:server_auth_ormed/server_auth_ormed.dart';
 
 Future<void> _registerAuthEvents(Engine engine) async {
   final eventManager = await engine.container.make<EventManager>();
@@ -18,12 +21,27 @@ Future<void> _registerAuthEvents(Engine engine) async {
   });
 }
 
-Future<Engine> createEngine() async {
+Future<Engine> createEngine({
+  String databasePath = 'storage/auth_demo.sqlite',
+}) async {
+  registerRoutedProviders();
+  if (databasePath != ':memory:') {
+    File(databasePath).absolute.parent.createSync(recursive: true);
+  }
+  final database = await SqliteDatabase.connect(path: databasePath);
+  final schema = const OrmAuthSchema(tablePrefix: 'auth_demo');
+  final store = OrmAuthStore(database, schema: schema);
+  final databases = DatabaseManager()..register('default', database);
   final engine = await Engine.create(
     config: EngineConfig(
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),
     providers: [
+      RoutedDatabaseProvider(
+        manager: databases,
+        migrations: schema.migrations,
+        migrateOnBoot: true,
+      ),
       RoutedSessionsProvider(
         SessionConfig.cookie(
           options: SessionOptions(
@@ -39,16 +57,6 @@ Future<Engine> createEngine() async {
     options: [
       (engine) {
         final providers = <AuthProvider>[CredentialsProvider()];
-        final magicLink = MagicLinkPlugin<EngineContext>(
-          sendMagicLink: (delivery) async {
-            final callbackUrl = delivery.callbackUrl.isEmpty
-                ? 'http://localhost:8080/auth/callback/email'
-                : delivery.callbackUrl;
-            final link =
-                '$callbackUrl?token=${delivery.token}&email=${delivery.email}';
-            stdout.writeln('Magic link: $link');
-          },
-        );
 
         final githubClientId = Platform.environment['GITHUB_CLIENT_ID'];
         final githubClientSecret = Platform.environment['GITHUB_CLIENT_SECRET'];
@@ -70,9 +78,9 @@ Future<Engine> createEngine() async {
         engine.container.instance<AuthOptions>(
           AuthOptions(
             providers: providers,
-            plugins: [magicLink],
-            store: InMemoryAuthStore(),
-            storeMode: AuthStoreMode.ephemeral,
+            store: store,
+            storeMode: AuthStoreMode.durable,
+            runtimeMode: AuthRuntimeMode.localDevelopment,
             sessionStrategy: AuthSessionStrategy.session,
             callbacks: AuthCallbacks(
               signIn: (context) async {

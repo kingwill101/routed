@@ -6,7 +6,10 @@ import 'package:routed/routed.dart';
 import 'package:openapi_demo/commands.dart' as project_commands;
 
 Future<int> runCli(List<String> args) async {
-  await app.createEngine(initialize: false);
+  // Build the route graph for command discovery, then release the database
+  // handle because CLI commands do not serve requests in this process.
+  final bootstrap = await app.createEngine(initialize: false);
+  await bootstrap.close();
 
   final runner = CommandRunner<void>(
     'openapi_demo',

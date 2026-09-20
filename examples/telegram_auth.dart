@@ -33,10 +33,13 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:ormed_sqlite/ormed_sqlite.dart';
 import 'package:routed/routed.dart';
 import 'package:routed_auth/routed_auth.dart';
+import 'package:routed_database/routed_database.dart';
 import 'package:routed_sessions/routed_sessions.dart';
 import 'package:server_auth/server_auth.dart';
+import 'package:server_auth_ormed/server_auth_ormed.dart';
 import 'package:server_sessions/server_sessions.dart';
 
 void main() async {
@@ -59,6 +62,15 @@ void main() async {
     print('⚠️  Non-HTTPS base URL detected; session cookies will be insecure.');
   }
   print('');
+
+  final databasePath =
+      Platform.environment['AUTH_DATABASE_PATH'] ??
+      'storage/telegram_auth.sqlite';
+  File(databasePath).absolute.parent.createSync(recursive: true);
+  final database = await SqliteDatabase.connect(path: databasePath);
+  final schema = const OrmAuthSchema(tablePrefix: 'telegram_auth');
+  final store = OrmAuthStore(database, schema: schema);
+  final databases = DatabaseManager()..register('default', database);
 
   // Configure session
   final sessionConfig = SessionConfig.cookie(
@@ -89,8 +101,9 @@ void main() async {
   final authManager = AuthManager(
     AuthOptions(
       providers: [telegram],
-      store: InMemoryAuthStore(),
-      storeMode: AuthStoreMode.ephemeral,
+      store: store,
+      storeMode: AuthStoreMode.durable,
+      runtimeMode: AuthRuntimeMode.localDevelopment,
       sessionStrategy: AuthSessionStrategy.session,
       enforceCsrf: false, // Telegram widget doesn't support CSRF tokens
       callbacks: AuthCallbacks(
@@ -108,6 +121,11 @@ void main() async {
       security: const EngineSecurityFeatures(csrfProtection: false),
     ),
     providers: [
+      RoutedDatabaseProvider(
+        manager: databases,
+        migrations: schema.migrations,
+        migrateOnBoot: true,
+      ),
       ...Engine.defaultProviders,
       RoutedSessionsProvider(sessionConfig),
     ],

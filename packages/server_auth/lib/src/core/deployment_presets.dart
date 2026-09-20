@@ -28,16 +28,19 @@ import 'package:server_auth/src/core/store.dart';
 /// runtime and adapter settings but never register capabilities on behalf of
 /// the application.
 abstract final class AuthDeploymentPresets {
-  /// Ephemeral HTTP-friendly settings for local development and tests.
+  /// HTTP-friendly settings for local development and tests.
   ///
-  /// Uses an in-memory store, local-development posture, direct proxy policy,
-  /// and a development cookie policy with `secure: false`. [trustedOrigins]
-  /// accepts HTTP or HTTPS origins, which are lowercased, deduplicated, and
-  /// stripped of default ports before storage. Origins with credentials,
-  /// paths, queries, or fragments throw an [ArgumentError]. Lifecycle delivery
-  /// defaults to disabled, and [providers] and [plugins] remain caller-supplied.
+  /// Uses an in-memory store when [store] is omitted, or the supplied durable
+  /// store when applications need local data to survive restarts. Both paths
+  /// use the local-development posture, direct proxy policy, and a development
+  /// cookie policy with `secure: false`. [trustedOrigins] accepts HTTP or HTTPS
+  /// origins, which are lowercased, deduplicated, and stripped of default ports
+  /// before storage. Origins with credentials, paths, queries, or fragments
+  /// throw an [ArgumentError]. Lifecycle delivery defaults to disabled, and
+  /// [providers] and [plugins] remain caller-supplied.
   static AuthDeployment<TContext> localDevelopment<TContext>({
     required Iterable<AuthProvider> providers,
+    AuthStore? store,
     Iterable<AuthServerPlugin<TContext>> plugins = const [],
     Iterable<Uri> trustedOrigins = const [],
     AuthLifecycleDelivery<TContext>? lifecycleDelivery,
@@ -52,8 +55,10 @@ abstract final class AuthDeploymentPresets {
       options: AuthOptions<TContext>(
         providers: providers.toList(growable: false),
         plugins: _plugins(plugins),
-        store: InMemoryAuthStore(),
-        storeMode: AuthStoreMode.ephemeral,
+        store: store ?? InMemoryAuthStore(),
+        storeMode: store == null
+            ? AuthStoreMode.ephemeral
+            : AuthStoreMode.durable,
         runtimeMode: AuthRuntimeMode.localDevelopment,
         rateLimiter: rateLimiter,
         browserProtection: AuthBrowserProtectionOptions(

@@ -65,6 +65,6 @@ Future<Response> createRecipe(EngineContext ctx) async {
     image: data.image ?? '',
   );
 
-  final createdRecipe = RecipeService.create(recipe);
+  final createdRecipe = await RecipeService.create(recipe);
   return ctx.json(createdRecipe.toJson(), statusCode: HttpStatus.created);
 }

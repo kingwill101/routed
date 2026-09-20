@@ -59,10 +59,10 @@ final class CloudflareRateLimitStoreObject
 ///
 /// The application factory takes typed dependencies rather than reading
 /// environment variables or reaching into a host runtime. That is what lets
-/// the same routes run against D1, SQLite, or an in-memory store.
+/// the same routes run against Cloudflare D1 or file-backed SQLite.
 Future<Engine> createEngine({
   required AuthStore store,
-  AuthApiKeyStore? apiKeyStore,
+  required AuthApiKeyStore apiKeyStore,
   required Uri origin,
   required String sessionKey,
   Iterable<AuthProvider> socialProviders = const [],
@@ -82,7 +82,7 @@ Future<Engine> createEngine({
 
   registerRoutes(
     engine,
-    storeLabel: localDevelopment ? 'in_memory' : 'cloudflare_d1',
+    storeLabel: localDevelopment ? 'sqlite' : 'cloudflare_d1',
   );
   if (initialize) {
     await engine.initialize();

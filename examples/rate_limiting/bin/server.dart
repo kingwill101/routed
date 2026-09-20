@@ -13,11 +13,24 @@
 //   for i in $(seq 1 12); do curl -s -w "\n%{http_code}\n" http://localhost:3000/health; done
 import 'dart:io';
 
+import 'package:ormed_sqlite/ormed_sqlite.dart';
 import 'package:routed/routed.dart';
+import 'package:routed_database/routed_database.dart';
+
+import 'package:rate_limiting_example/migrations.dart';
+import 'package:rate_limiting_example/sqlite_store.dart';
 
 Future<void> main() async {
+  final databasePath =
+      Platform.environment['DATABASE_PATH'] ?? 'storage/rate_limiting.sqlite';
+  File(databasePath).absolute.parent.createSync(recursive: true);
+  final database = await SqliteDatabase.connect(path: databasePath);
   final backend = CacheRateLimiterBackend(
-    repository: RepositoryImpl(ArrayStore(), 'rate-limit', ''),
+    repository: RepositoryImpl(
+      SqliteRateLimitStore(database),
+      'rate-limit',
+      '',
+    ),
   );
   final service = RateLimitService(
     compileRateLimitPolicies(
@@ -75,11 +88,17 @@ Future<void> main() async {
       defaultFailover: RateLimitFailoverMode.allow,
     ),
   );
-  final providers =
-      Engine.builtins
-          .where((provider) => provider is! RoutedRateLimitProvider)
-          .toList()
-        ..add(RoutedRateLimitProvider(RateLimitConfig(service: service)));
+  final providers = <ServiceProvider>[
+    RoutedDatabaseProvider(
+      manager: DatabaseManager()..register('default', database),
+      migrations: appMigrations,
+      migrateOnBoot: true,
+    ),
+    ...Engine.builtins.where(
+      (provider) => provider is! RoutedRateLimitProvider,
+    ),
+    RoutedRateLimitProvider(RateLimitConfig(service: service)),
+  ];
   final engine = await Engine.create(providers: providers);
   engine.addGlobalMiddleware(rateLimitMiddleware(service));
 

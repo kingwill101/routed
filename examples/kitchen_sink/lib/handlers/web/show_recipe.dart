@@ -4,7 +4,7 @@ import 'package:routed/routed.dart';
 
 Future<Object> showRecipe(EngineContext ctx) async {
   final id = ctx.mustGetParam('id');
-  final recipe = RecipeService.getById(id);
+  final recipe = await RecipeService.getById(id);
 
   if (recipe == null) {
     return ctx.string('Recipe not found', statusCode: HttpStatus.notFound);

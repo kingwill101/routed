@@ -2,8 +2,6 @@
 
 import 'package:routed/routed.dart';
 
-final Map<String, String> db = {};
-
 void main() {
   final engine = Engine();
   engine.post("/post", (c) async {

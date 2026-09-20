@@ -5,6 +5,7 @@ import 'package:routed_cloudflare_auth_example/app.dart';
 import 'package:routed_auth/routed_auth.dart';
 import 'package:routed_core/routed_core.dart';
 import 'package:routed_testing/routed_testing.dart';
+import 'package:server_rate_limit/server_rate_limit.dart';
 import 'package:server_testing/server_testing.dart';
 
 const _origin = 'https://example.test';
@@ -53,8 +54,10 @@ void main() {
     store = await SqliteAuthStore.openInMemory();
     engine = await createEngine(
       store: store,
+      apiKeyStore: store.apiKeys,
       origin: Uri.parse(_origin),
       sessionKey: _sessionKey,
+      rateLimitService: RateLimitService(const []),
     );
     client = TestClient.inMemory(RoutedRequestHandler(engine));
   });
@@ -436,8 +439,10 @@ void main() {
       final socialStore = await SqliteAuthStore.openInMemory();
       final socialEngine = await createEngine(
         store: socialStore,
+        apiKeyStore: socialStore.apiKeys,
         origin: Uri.parse(_origin),
         sessionKey: _sessionKey,
+        rateLimitService: RateLimitService(const []),
         socialProviders: <AuthProvider>[
           githubProvider(
             const GitHubProviderOptions(

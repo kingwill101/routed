@@ -1,12 +1,13 @@
 import 'package:kitchen_sink_example/consts.dart';
+import 'package:kitchen_sink_example/services/recipe_service.dart';
 import 'package:routed/routed.dart';
 
 Future<Object> uploadImage(EngineContext ctx) async {
-  final id = ctx.param('id');
+  final id = ctx.param('id') ?? '';
 
   try {
-    final recipeIndex = recipes.indexWhere((r) => r.id == id);
-    if (recipeIndex == -1) {
+    final recipe = await RecipeService.getById(id);
+    if (recipe == null) {
       return ctx.string('Recipe not found', statusCode: HttpStatus.notFound);
     }
 
@@ -19,17 +20,15 @@ Future<Object> uploadImage(EngineContext ctx) async {
     final filePath = 'public/images/$imageName';
     await ctx.saveUploadedFile(imageFile, filePath);
     // For simplicity, we'll just store the filename and type.
-    recipes[recipeIndex] = recipes[recipeIndex].copyWith(
-      image: '/images/$imageName',
+    await RecipeService.update(
+      id,
+      recipe.copyWith(image: '/images/$imageName'),
     );
     ctx.removeCache(
       '${kRecipeCacheKeyPrefix}_$id',
-      store: 'array',
+      store: 'file',
     ); // Invalidate the recipe cache
-    ctx.removeCache(
-      kAllRecipesCacheKey,
-      store: 'array',
-    ); // Invalidate the cache
+    ctx.removeCache(kAllRecipesCacheKey, store: 'file'); // Invalidate the cache
     return await ctx.redirect('/');
   } catch (e) {
     return ctx.string(

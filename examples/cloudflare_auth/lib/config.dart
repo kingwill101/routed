@@ -8,8 +8,9 @@ import 'embedded_views.dart';
 ///
 /// The durable store is supplied by the host entrypoint. Cloudflare provides
 /// a D1-backed store, while tests can provide another `AuthStore` implementation
-/// without changing the application composition. Local development selects
-/// the auth preset's own ephemeral store.
+/// without changing the application composition. Every host must provide an
+/// API-key store alongside the core auth store so credentials are never kept
+/// only in process memory.
 final class AppConfig {
   AppConfig({
     required Iterable<ServiceProvider> providers,
@@ -40,7 +41,7 @@ final class AppConfig {
 /// details.
 AppConfig config({
   required AuthStore store,
-  AuthApiKeyStore? apiKeyStore,
+  required AuthApiKeyStore apiKeyStore,
   required Uri origin,
   required String sessionKey,
   Iterable<AuthProvider> socialProviders = const [],
@@ -59,17 +60,20 @@ AppConfig config({
       rateLimitService ??
       (localDevelopment
           ? RateLimitService(const [])
-          : createRateLimitService());
+          : (throw ArgumentError(
+              'A durable rateLimitService is required outside local development',
+            )));
   final authProviders = <AuthProvider>[
     CredentialsProvider(),
     ...socialProviders,
   ];
   final apiKeys = AuthApiKeyPlugin<EngineContext>(
-    store: apiKeyStore ?? InMemoryAuthApiKeyStore(),
+    store: apiKeyStore,
     sessionExchangeEnabled: true,
   );
   final deployment = localDevelopment
       ? AuthDeploymentPresets.localDevelopment<EngineContext>(
+          store: store,
           providers: authProviders,
           plugins: [apiKeys],
           trustedOrigins: [origin],
@@ -137,15 +141,10 @@ AppConfig config({
 
 /// Creates the application's built-in rate-limit service.
 ///
-/// A host can supply a durable [Repository] here. The Cloudflare Worker uses
-/// the SQLite-backed Durable Object store, while the default remains useful
-/// for local and test composition.
-RateLimitService createRateLimitService({Repository? repository}) {
-  final backend = CacheRateLimiterBackend(
-    repository:
-        repository ??
-        RepositoryImpl(ArrayStore(), 'routed-auth-rate-limit', ''),
-  );
+/// A host must supply a durable [Repository] here. The Cloudflare Worker uses
+/// the Durable Object store and local callers can use a file-backed adapter.
+RateLimitService createRateLimitService({required Repository repository}) {
+  final backend = CacheRateLimiterBackend(repository: repository);
   return RateLimitService(
     compileRateLimitPolicies(
       specs: const [
